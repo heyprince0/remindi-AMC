@@ -123,7 +123,7 @@ export const signInWithGoogle = async () => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+      redirectTo: 'https://anthora-amc.netlify.app/auth/callback',
     },
   })
   if (error) throw error
