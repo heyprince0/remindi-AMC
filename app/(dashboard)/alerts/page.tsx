@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,127 +13,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { supabase, type Contract, type Customer, type Technician, getDaysUntilService } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
 import { AlertTriangle, Clock, CalendarClock, CheckCircle2, UserPlus } from "lucide-react"
 
-const overdueServices = [
-  {
-    id: 1,
-    customer: "Sunrise Tower",
-    contract: "HVAC Maintenance",
-    serviceType: "AC",
-    dueDate: "2026-03-08",
-    daysOverdue: 2,
-    technician: null,
-  },
-  {
-    id: 2,
-    customer: "DataTech Inc",
-    contract: "UPS System Service",
-    serviceType: "UPS",
-    dueDate: "2026-03-07",
-    daysOverdue: 3,
-    technician: null,
-  },
-  {
-    id: 3,
-    customer: "Prime Enterprises",
-    contract: "Generator Check",
-    serviceType: "Generator",
-    dueDate: "2026-03-05",
-    daysOverdue: 5,
-    technician: "Robert Wilson",
-  },
-]
-
-const dueTodayServices = [
-  {
-    id: 4,
-    customer: "TechCorp Industries",
-    contract: "Annual AC Maintenance",
-    serviceType: "AC",
-    dueDate: "2026-03-10",
-    time: "10:00 AM",
-    technician: "Mike Johnson",
-  },
-  {
-    id: 5,
-    customer: "Global Solutions Ltd",
-    contract: "CCTV System Maintenance",
-    serviceType: "CCTV",
-    dueDate: "2026-03-10",
-    time: "2:00 PM",
-    technician: "Sarah Smith",
-  },
-  {
-    id: 6,
-    customer: "Metro Office Complex",
-    contract: "Fire Safety System",
-    serviceType: "Fire Safety",
-    dueDate: "2026-03-10",
-    time: "4:00 PM",
-    technician: null,
-  },
-]
-
-const upcomingServices = [
-  {
-    id: 7,
-    customer: "Prime Enterprises",
-    contract: "Elevator Service Agreement",
-    serviceType: "Lift",
-    dueDate: "2026-03-11",
-    technician: "John Davis",
-  },
-  {
-    id: 8,
-    customer: "Green Valley Apartments",
-    contract: "Generator Maintenance",
-    serviceType: "Generator",
-    dueDate: "2026-03-15",
-    technician: "Robert Wilson",
-  },
-  {
-    id: 9,
-    customer: "CloudNet Solutions",
-    contract: "UPS System Service",
-    serviceType: "UPS",
-    dueDate: "2026-03-15",
-    technician: null,
-  },
-  {
-    id: 10,
-    customer: "TechCorp Industries",
-    contract: "Annual AC Maintenance",
-    serviceType: "AC",
-    dueDate: "2026-03-15",
-    technician: "Mike Johnson",
-  },
-]
-
-const technicians = [
-  { id: 1, name: "Mike Johnson", status: "available" },
-  { id: 2, name: "Sarah Smith", status: "busy" },
-  { id: 3, name: "John Davis", status: "available" },
-  { id: 4, name: "Emily Brown", status: "available" },
-  { id: 5, name: "Robert Wilson", status: "busy" },
-  { id: 6, name: "Amanda Lee", status: "available" },
-]
-
-interface ServiceAlertCardProps {
-  service: {
-    id: number
-    customer: string
-    contract: string
-    serviceType: string
-    dueDate: string
-    daysOverdue?: number
-    time?: string
-    technician: string | null
-  }
-  variant: "overdue" | "due-today" | "upcoming"
+interface ServiceAlert {
+  id: string
+  customer: string
+  contract: string
+  serviceType: string
+  dueDate: string
+  daysOverdue?: number
+  time?: string
+  technician: string | null
 }
 
-function ServiceAlertCard({ service, variant }: ServiceAlertCardProps) {
+function ServiceAlertCard({ service, variant }: { service: ServiceAlert; variant: "overdue" | "due-today" | "upcoming" }) {
   const borderColor = {
     overdue: "border-l-alert-overdue",
     "due-today": "border-l-alert-due-today",
@@ -164,7 +60,7 @@ function ServiceAlertCard({ service, variant }: ServiceAlertCardProps) {
                   {variant === "overdue"
                     ? `${service.daysOverdue} days overdue`
                     : variant === "due-today"
-                    ? `Today at ${service.time}`
+                    ? `Today`
                     : service.dueDate}
                 </span>
               </div>
@@ -177,23 +73,6 @@ function ServiceAlertCard({ service, variant }: ServiceAlertCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!service.technician && (
-              <Select>
-                <SelectTrigger className="w-[180px]">
-                  <UserPlus className="mr-2 size-4" />
-                  <SelectValue placeholder="Assign Technician" />
-                </SelectTrigger>
-                <SelectContent>
-                  {technicians
-                    .filter((t) => t.status === "available")
-                    .map((tech) => (
-                      <SelectItem key={tech.id} value={tech.name}>
-                        {tech.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            )}
             <Button variant="outline" size="sm">
               <CheckCircle2 className="mr-2 size-4" />
               Mark Complete
@@ -206,6 +85,59 @@ function ServiceAlertCard({ service, variant }: ServiceAlertCardProps) {
 }
 
 export default function ServiceAlertsPage() {
+  const { user } = useAuth()
+  const [overdueServices, setOverdueServices] = useState<ServiceAlert[]>([])
+  const [dueTodayServices, setDueTodayServices] = useState<ServiceAlert[]>([])
+  const [upcomingServices, setUpcomingServices] = useState<ServiceAlert[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        if (!user?.id) return
+
+        const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
+        const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
+
+        const overdue: ServiceAlert[] = []
+        const dueToday: ServiceAlert[] = []
+        const upcoming: ServiceAlert[] = []
+
+        for (const contract of (contractsData as Contract[]) || []) {
+          const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+          const days = getDaysUntilService(contract.next_service_date)
+
+          const alert: ServiceAlert = {
+            id: contract.id,
+            customer: customer?.name || 'Unknown',
+            contract: contract.contract_name,
+            serviceType: contract.service_type,
+            dueDate: contract.next_service_date,
+            technician: null
+          }
+
+          if (days < 0) {
+            overdue.push({ ...alert, daysOverdue: Math.abs(days) })
+          } else if (days === 0) {
+            dueToday.push(alert)
+          } else if (days <= 7) {
+            upcoming.push(alert)
+          }
+        }
+
+        setOverdueServices(overdue)
+        setDueTodayServices(dueToday)
+        setUpcomingServices(upcoming)
+      } catch (error) {
+        console.error('Error loading service alerts:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadServices()
+  }, [user?.id])
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -276,25 +208,43 @@ export default function ServiceAlertsPage() {
 
           <TabsContent value="overdue" className="mt-6">
             <div className="flex flex-col gap-4">
-              {overdueServices.map((service) => (
-                <ServiceAlertCard key={service.id} service={service} variant="overdue" />
-              ))}
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : overdueServices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No overdue services</div>
+              ) : (
+                overdueServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="overdue" />
+                ))
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="today" className="mt-6">
             <div className="flex flex-col gap-4">
-              {dueTodayServices.map((service) => (
-                <ServiceAlertCard key={service.id} service={service} variant="due-today" />
-              ))}
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : dueTodayServices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No services due today</div>
+              ) : (
+                dueTodayServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="due-today" />
+                ))
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="upcoming" className="mt-6">
             <div className="flex flex-col gap-4">
-              {upcomingServices.map((service) => (
-                <ServiceAlertCard key={service.id} service={service} variant="upcoming" />
-              ))}
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : upcomingServices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No upcoming services this week</div>
+              ) : (
+                upcomingServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="upcoming" />
+                ))
+              )}
             </div>
           </TabsContent>
         </Tabs>

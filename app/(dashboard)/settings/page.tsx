@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,9 +16,82 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Building2, Bell, Users, Calendar, Save } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { supabase, type Profile } from "@/lib/supabase"
+import { Building2, Bell, Users, Calendar, Save, LogOut } from "lucide-react"
+import { toast } from "sonner"
 
 export default function SettingsPage() {
+  const { user } = useAuth()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [companyName, setCompanyName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [whatsapp, setWhatsapp] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        if (!user?.id) return
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+
+        if (error && error.code !== 'PGRST116') throw error
+
+        if (data) {
+          setProfile(data as Profile)
+          setCompanyName(data.company_name || "")
+          setPhone(data.phone || "")
+          setWhatsapp(data.whatsapp_number || "")
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProfile()
+  }, [user?.id])
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return
+
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: user.id,
+          company_name: companyName,
+          phone: phone,
+          whatsapp_number: whatsapp,
+        }, {
+          onConflict: 'user_id'
+        })
+
+      if (error) throw error
+      toast.success('Profile updated successfully')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save profile')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      window.location.href = '/login'
+    } catch (error) {
+      toast.error('Failed to logout')
+    }
+  }
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -56,34 +130,62 @@ export default function SettingsPage() {
                 <CardDescription>Update your company details and contact information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
-                    <Input id="company-name" defaultValue="Anthora Softwares" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="business-email">Business Email</Label>
-                    <Input id="business-email" type="email" defaultValue="contact@anthora.com" />
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input id="phone" defaultValue="+91 98765 00000" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="gst">GST Number</Label>
-                    <Input id="gst" defaultValue="27AADCA1234A1Z5" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Business Address</Label>
-                  <Input id="address" defaultValue="123 Business Park, Mumbai, Maharashtra 400001" />
-                </div>
-                <Button>
-                  <Save className="mr-2 size-4" />
-                  Save Changes
-                </Button>
+                {loading ? (
+                  <div className="text-muted-foreground">Loading profile...</div>
+                ) : (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-name">Company Name</Label>
+                        <Input 
+                          id="company-name" 
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="Your company name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="business-email">Email</Label>
+                        <Input 
+                          id="business-email" 
+                          type="email" 
+                          value={user?.email || ""}
+                          disabled
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input 
+                          id="phone" 
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="+91 XXXXX XXXXX"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="whatsapp">WhatsApp Number</Label>
+                        <Input 
+                          id="whatsapp" 
+                          value={whatsapp}
+                          onChange={(e) => setWhatsapp(e.target.value)}
+                          placeholder="+91 XXXXX XXXXX"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleSaveProfile} disabled={saving}>
+                        <Save className="mr-2 size-4" />
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </Button>
+                      <Button variant="outline" onClick={handleLogout}>
+                        <LogOut className="mr-2 size-4" />
+                        Logout
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
