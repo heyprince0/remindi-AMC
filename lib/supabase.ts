@@ -35,6 +35,7 @@ export interface Contract {
   start_date: string
   next_service_date: string
   status: string
+  notes?: string
   created_at?: string
 }
 

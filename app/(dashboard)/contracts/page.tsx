@@ -31,6 +31,16 @@ import { supabase, type Contract, type Customer, getDaysUntilService } from "@/l
 import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, MoreHorizontal, Eye, Edit, Filter, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { AddContractModal } from "@/components/add-contract-modal"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -66,6 +76,10 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [contractToDelete, setContractToDelete] = useState<string | null>(null)
 
   useEffect(() => {
     const loadContracts = async () => {
@@ -137,21 +151,75 @@ export default function ContractsPage() {
   }, [searchTerm, filterType, filterStatus, contracts])
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this contract?')) {
-      try {
-        const { error } = await supabase
-          .from('contracts')
-          .delete()
-          .eq('id', id)
+    setContractToDelete(id)
+    setDeleteDialogOpen(true)
+  }
 
-        if (error) throw error
-        setContracts(contracts.filter(c => c.id !== id))
-        toast.success('Contract deleted successfully')
+  const confirmDelete = async () => {
+    if (!contractToDelete) return
+
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .delete()
+        .eq('id', contractToDelete)
+
+      if (error) throw error
+      setContracts(contracts.filter(c => c.id !== contractToDelete))
+      toast.success('Contract deleted successfully')
+    } catch (error) {
+      console.error('Error deleting contract:', error)
+      toast.error('Failed to delete contract')
+    } finally {
+      setDeleteDialogOpen(false)
+      setContractToDelete(null)
+    }
+  }
+
+  const handleEditClick = (contract: ContractDisplay) => {
+    setEditingContract(contract)
+    setModalOpen(true)
+  }
+
+  const handleAddClick = () => {
+    setEditingContract(null)
+    setModalOpen(true)
+  }
+
+  const handleModalSuccess = () => {
+    // Reload contracts after save
+    const loadContracts = async () => {
+      try {
+        if (!user?.id) return
+
+        const { data: contractsData, error: contractsError } = await supabase
+          .from('contracts')
+          .select('*')
+          .eq('user_id', user.id)
+
+        if (contractsError) throw contractsError
+
+        const { data: customersData } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('user_id', user.id)
+
+        const displayed = (contractsData as Contract[]).map(contract => {
+          const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+          return {
+            ...contract,
+            customerName: customer?.name || 'Unknown'
+          }
+        })
+
+        setContracts(displayed)
+        setFilteredContracts(displayed)
       } catch (error) {
-        console.error('Error deleting contract:', error)
-        toast.error('Failed to delete contract')
+        console.error('Error loading contracts:', error)
       }
     }
+
+    loadContracts()
   }
 
   return (
@@ -163,7 +231,7 @@ export default function ContractsPage() {
             <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
             <p className="text-muted-foreground">Manage your AMC contracts and service agreements</p>
           </div>
-          <Button onClick={() => window.location.href = '/contracts?action=add'}>
+          <Button onClick={handleAddClick}>
             <Plus className="mr-2 size-4" />
             Add Contract
           </Button>
@@ -263,11 +331,7 @@ export default function ContractsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 size-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditClick(contract)}>
                                 <Edit className="mr-2 size-4" />
                                 Edit Contract
                               </DropdownMenuItem>
@@ -287,6 +351,35 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add/Edit Contract Modal */}
+      <AddContractModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onSuccess={handleModalSuccess}
+        editingContract={editingContract}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Contract</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this contract? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   )
 }
