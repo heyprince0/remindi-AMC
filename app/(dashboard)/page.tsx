@@ -149,8 +149,8 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData()
 
-    // Set up realtime subscription for contracts
-    const subscription = supabase
+    // Set up realtime subscriptions
+    const contractsSubscription = supabase
       .channel('contracts_changes')
       .on('postgres_changes', {
         event: '*',
@@ -163,8 +163,22 @@ export default function DashboardPage() {
       })
       .subscribe()
 
+    const customersSubscription = supabase
+      .channel('customers_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'customers',
+        filter: `user_id=eq.${user?.id}`
+      }, (payload) => {
+        console.log('[v0] Customer changed:', payload)
+        loadData()
+      })
+      .subscribe()
+
     return () => {
-      subscription.unsubscribe()
+      contractsSubscription.unsubscribe()
+      customersSubscription.unsubscribe()
     }
   }, [user?.id])
 

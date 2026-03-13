@@ -16,6 +16,7 @@ import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, MoreHorizontal, Eye, Edit, Phone, MapPin, FileText, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { AddCustomerModal } from "@/components/add-customer-modal"
 
 export default function CustomersPage() {
   const { user } = useAuth()
@@ -23,42 +24,44 @@ export default function CustomersPage() {
   const [filteredCustomers, setFilteredCustomers] = useState<(Customer & { contractCount: number })[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+
+  const loadCustomers = async () => {
+    try {
+      if (!user?.id) return
+
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', user.id)
+
+      if (customersError) throw customersError
+
+      const { data: contractsData } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('user_id', user.id)
+
+      const customersWithContracts = (customersData as Customer[]).map(customer => {
+        const contractCount = (contractsData as Contract[])?.filter(c => c.customer_id === customer.id).length || 0
+        return {
+          ...customer,
+          contractCount
+        }
+      })
+
+      setCustomers(customersWithContracts)
+      setFilteredCustomers(customersWithContracts)
+    } catch (error) {
+      console.error('Error loading customers:', error)
+      toast.error('Failed to load customers')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const loadCustomers = async () => {
-      try {
-        if (!user?.id) return
-
-        const { data: customersData, error: customersError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('user_id', user.id)
-
-        if (customersError) throw customersError
-
-        const { data: contractsData } = await supabase
-          .from('contracts')
-          .select('*')
-          .eq('user_id', user.id)
-
-        const customersWithContracts = (customersData as Customer[]).map(customer => {
-          const contractCount = (contractsData as Contract[])?.filter(c => c.customer_id === customer.id).length || 0
-          return {
-            ...customer,
-            contractCount
-          }
-        })
-
-        setCustomers(customersWithContracts)
-        setFilteredCustomers(customersWithContracts)
-      } catch (error) {
-        console.error('Error loading customers:', error)
-        toast.error('Failed to load customers')
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadCustomers()
   }, [user?.id])
 
@@ -89,6 +92,20 @@ export default function CustomersPage() {
       }
     }
   }
+
+  const handleAddClick = () => {
+    setEditingCustomer(null)
+    setModalOpen(true)
+  }
+
+  const handleEditClick = (customer: Customer & { contractCount: number }) => {
+    setEditingCustomer(customer)
+    setModalOpen(true)
+  }
+
+  const handleModalSuccess = () => {
+    loadCustomers()
+  }
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -98,7 +115,7 @@ export default function CustomersPage() {
             <h1 className="text-2xl font-bold text-foreground">Customers</h1>
             <p className="text-muted-foreground">Manage your customers and their contact information</p>
           </div>
-          <Button onClick={() => window.location.href = '/customers?action=add'}>
+          <Button onClick={handleAddClick}>
             <Plus className="mr-2 size-4" />
             Add Customer
           </Button>
@@ -152,11 +169,7 @@ export default function CustomersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="mr-2 size-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditClick(customer)}>
                           <Edit className="mr-2 size-4" />
                           Edit Customer
                         </DropdownMenuItem>
@@ -189,6 +202,17 @@ export default function CustomersPage() {
             ))
           )}
         </div>
+
+        {/* Add/Edit Customer Modal */}
+        {user && (
+          <AddCustomerModal
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+            onSuccess={handleModalSuccess}
+            editingCustomer={editingCustomer}
+            userId={user.id}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
