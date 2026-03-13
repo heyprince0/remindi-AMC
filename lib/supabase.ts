@@ -121,10 +121,14 @@ export const signOut = async () => {
 }
 
 export const signInWithGoogle = async () => {
+  const redirectUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/auth/callback`
+    : 'http://localhost:3000/auth/callback'
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'https://anthora-amc.netlify.app/auth/callback',
+      redirectTo: redirectUrl,
     },
   })
   if (error) throw error
