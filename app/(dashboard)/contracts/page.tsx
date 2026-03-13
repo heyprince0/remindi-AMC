@@ -29,8 +29,9 @@ import {
 } from "@/components/ui/select"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, MoreHorizontal, Eye, Edit, Filter, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Eye, Edit, Filter, Trash2, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
+import { AddContractModal } from "@/components/add-contract-modal"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -66,42 +67,10 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingContract, setEditingContract] = useState<Contract | null>(null)
 
   useEffect(() => {
-    const loadContracts = async () => {
-      try {
-        if (!user?.id) return
-
-        const { data: contractsData, error: contractsError } = await supabase
-          .from('contracts')
-          .select('*')
-          .eq('user_id', user.id)
-
-        if (contractsError) throw contractsError
-
-        const { data: customersData } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('user_id', user.id)
-
-        const displayed = (contractsData as Contract[]).map(contract => {
-          const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
-          return {
-            ...contract,
-            customerName: customer?.name || 'Unknown'
-          }
-        })
-
-        setContracts(displayed)
-        setFilteredContracts(displayed)
-      } catch (error) {
-        console.error('Error loading contracts:', error)
-        toast.error('Failed to load contracts')
-      } finally {
-        setLoading(false)
-      }
-    }
-
     loadContracts()
   }, [user?.id])
 
@@ -154,6 +123,54 @@ export default function ContractsPage() {
     }
   }
 
+  const handleEditClick = (contract: ContractDisplay) => {
+    setEditingContract(contract as Contract)
+    setModalOpen(true)
+  }
+
+  const handleAddClick = () => {
+    setEditingContract(null)
+    setModalOpen(true)
+  }
+
+  const handleModalSuccess = () => {
+    loadContracts()
+  }
+
+  const loadContracts = async () => {
+    try {
+      if (!user?.id) return
+
+      const { data: contractsData, error: contractsError } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('user_id', user.id)
+
+      if (contractsError) throw contractsError
+
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', user.id)
+
+      const displayed = (contractsData as Contract[]).map(contract => {
+        const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        return {
+          ...contract,
+          customerName: customer?.name || 'Unknown'
+        }
+      })
+
+      setContracts(displayed)
+      setFilteredContracts(displayed)
+    } catch (error) {
+      console.error('Error loading contracts:', error)
+      toast.error('Failed to load contracts')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -163,7 +180,7 @@ export default function ContractsPage() {
             <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
             <p className="text-muted-foreground">Manage your AMC contracts and service agreements</p>
           </div>
-          <Button onClick={() => window.location.href = '/contracts?action=add'}>
+          <Button onClick={handleAddClick}>
             <Plus className="mr-2 size-4" />
             Add Contract
           </Button>
@@ -263,11 +280,7 @@ export default function ContractsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="mr-2 size-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditClick(contract)}>
                                 <Edit className="mr-2 size-4" />
                                 Edit Contract
                               </DropdownMenuItem>
@@ -286,6 +299,17 @@ export default function ContractsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Add/Edit Contract Modal */}
+        {user && (
+          <AddContractModal
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+            onSuccess={handleModalSuccess}
+            editingContract={editingContract}
+            userId={user.id}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
