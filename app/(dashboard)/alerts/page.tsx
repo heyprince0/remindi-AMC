@@ -16,6 +16,7 @@ import {
 import { supabase, type Contract, type Customer, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { AlertTriangle, Clock, CalendarClock, CheckCircle2, UserPlus } from "lucide-react"
+import { MarkCompleteModal } from "@/components/mark-complete-modal"
 
 interface ServiceAlert {
   id: string
@@ -26,9 +27,10 @@ interface ServiceAlert {
   daysOverdue?: number
   time?: string
   technician: string | null
+  contractData?: Contract
 }
 
-function ServiceAlertCard({ service, variant }: { service: ServiceAlert; variant: "overdue" | "due-today" | "upcoming" }) {
+function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "overdue" | "due-today" | "upcoming"; onMarkComplete: (contract: Contract) => void }) {
   const borderColor = {
     overdue: "border-l-alert-overdue",
     "due-today": "border-l-alert-due-today",
@@ -73,7 +75,11 @@ function ServiceAlertCard({ service, variant }: { service: ServiceAlert; variant
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => service.contractData && onMarkComplete(service.contractData)}
+            >
               <CheckCircle2 className="mr-2 size-4" />
               Mark Complete
             </Button>
@@ -90,53 +96,65 @@ export default function ServiceAlertsPage() {
   const [dueTodayServices, setDueTodayServices] = useState<ServiceAlert[]>([])
   const [upcomingServices, setUpcomingServices] = useState<ServiceAlert[]>([])
   const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
 
-  useEffect(() => {
-    const loadServices = async () => {
-      try {
-        if (!user?.id) return
+  const loadServices = async () => {
+    try {
+      if (!user?.id) return
 
-        const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
-        const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
+      const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
+      const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
 
-        const overdue: ServiceAlert[] = []
-        const dueToday: ServiceAlert[] = []
-        const upcoming: ServiceAlert[] = []
+      const overdue: ServiceAlert[] = []
+      const dueToday: ServiceAlert[] = []
+      const upcoming: ServiceAlert[] = []
 
-        for (const contract of (contractsData as Contract[]) || []) {
-          const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
-          const days = getDaysUntilService(contract.next_service_date)
+      for (const contract of (contractsData as Contract[]) || []) {
+        const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        const days = getDaysUntilService(contract.next_service_date)
 
-          const alert: ServiceAlert = {
-            id: contract.id,
-            customer: customer?.name || 'Unknown',
-            contract: contract.contract_name,
-            serviceType: contract.service_type,
-            dueDate: contract.next_service_date,
-            technician: null
-          }
-
-          if (days < 0) {
-            overdue.push({ ...alert, daysOverdue: Math.abs(days) })
-          } else if (days === 0) {
-            dueToday.push(alert)
-          } else if (days <= 7) {
-            upcoming.push(alert)
-          }
+        const alert: ServiceAlert = {
+          id: contract.id,
+          customer: customer?.name || 'Unknown',
+          contract: contract.contract_name,
+          serviceType: contract.service_type,
+          dueDate: contract.next_service_date,
+          technician: null,
+          contractData: contract
         }
 
-        setOverdueServices(overdue)
-        setDueTodayServices(dueToday)
-        setUpcomingServices(upcoming)
-      } catch (error) {
-        console.error('Error loading service alerts:', error)
-      } finally {
-        setLoading(false)
+        if (days < 0) {
+          overdue.push({ ...alert, daysOverdue: Math.abs(days) })
+        } else if (days === 0) {
+          dueToday.push(alert)
+        } else if (days <= 7) {
+          upcoming.push(alert)
+        }
       }
-    }
 
+      setOverdueServices(overdue)
+      setDueTodayServices(dueToday)
+      setUpcomingServices(upcoming)
+    } catch (error) {
+      console.error('Error loading service alerts:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     loadServices()
   }, [user?.id])
+
+  const handleMarkComplete = (contract: Contract) => {
+    setSelectedContract(contract)
+    setModalOpen(true)
+  }
+
+  const handleModalSuccess = () => {
+    loadServices()
+  }
 
   return (
     <DashboardLayout>
@@ -214,7 +232,7 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No overdue services</div>
               ) : (
                 overdueServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="overdue" />
+                  <ServiceAlertCard key={service.id} service={service} variant="overdue" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
@@ -228,7 +246,7 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No services due today</div>
               ) : (
                 dueTodayServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="due-today" />
+                  <ServiceAlertCard key={service.id} service={service} variant="due-today" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
@@ -242,12 +260,23 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No upcoming services this week</div>
               ) : (
                 upcomingServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="upcoming" />
+                  <ServiceAlertCard key={service.id} service={service} variant="upcoming" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Mark Complete Modal */}
+        {user && (
+          <MarkCompleteModal
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+            contract={selectedContract}
+            userId={user.id}
+            onSuccess={handleModalSuccess}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
