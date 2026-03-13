@@ -24,6 +24,7 @@ import {
 import { supabase, type ServiceHistory, type Contract, type Technician, type Customer } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { Search, Download, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react"
+import { ExportModal } from "@/components/export-modal"
 
 interface ServiceRecord extends ServiceHistory {
   customerName: string
@@ -67,6 +68,7 @@ export default function ServiceHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
+  const [exportModalOpen, setExportModalOpen] = useState(false)
 
   useEffect(() => {
     const loadServiceHistory = async () => {
@@ -135,7 +137,10 @@ export default function ServiceHistoryPage() {
             <h1 className="text-2xl font-bold text-foreground">Service History</h1>
             <p className="text-muted-foreground">View completed services and maintenance records</p>
           </div>
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            onClick={() => setExportModalOpen(true)}
+          >
             <Download className="mr-2 size-4" />
             Export Report
           </Button>
@@ -230,6 +235,13 @@ export default function ServiceHistoryPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Export Modal */}
+        <ExportModal
+          open={exportModalOpen}
+          onOpenChange={setExportModalOpen}
+          records={filteredRecords}
+        />
       </div>
     </DashboardLayout>
   )
