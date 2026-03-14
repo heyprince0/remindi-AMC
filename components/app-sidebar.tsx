@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -23,6 +24,8 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import { supabase, type Profile } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
 
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -37,17 +40,67 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const [companyName, setCompanyName] = useState("Anthora")
+  const [companySubtitle, setCompanySubtitle] = useState("Softwares")
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        if (!user?.id) return
+
+        const { data } = await supabase
+          .from('profiles')
+          .select('company_name')
+          .eq('user_id', user.id)
+          .single()
+
+        if (data?.company_name) {
+          // Split company name into main and subtitle for display
+          const names = data.company_name.split(' ')
+          setCompanyName(names[0] || "Anthora")
+          setCompanySubtitle(names.slice(1).join(' ') || "")
+        }
+      } catch (error) {
+        console.error('Error loading company name:', error)
+      }
+    }
+
+    loadProfile()
+
+    // Subscribe to profile changes
+    const subscription = supabase
+      .channel('profile_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles',
+        filter: `user_id=eq.${user?.id}`
+      }, (payload) => {
+        const profile = payload.new as Profile
+        if (profile?.company_name) {
+          const names = profile.company_name.split(' ')
+          setCompanyName(names[0] || "Anthora")
+          setCompanySubtitle(names.slice(1).join(' ') || "")
+        }
+      })
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [user?.id])
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <Link href="/" className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <span className="text-sm font-bold">A</span>
+            <span className="text-sm font-bold">{companyName.charAt(0).toUpperCase()}</span>
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold text-sidebar-foreground">Anthora</span>
-            <span className="text-xs text-sidebar-foreground/70">Softwares</span>
+            <span className="text-sm font-semibold text-sidebar-foreground">{companyName}</span>
+            {companySubtitle && <span className="text-xs text-sidebar-foreground/70">{companySubtitle}</span>}
           </div>
         </Link>
       </SidebarHeader>

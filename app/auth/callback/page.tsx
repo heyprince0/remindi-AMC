@@ -22,11 +22,32 @@ export default function AuthCallback() {
         }
 
         if (session) {
-          console.log('[v0] Session found, redirecting to dashboard')
-          // Small delay to ensure session is fully established
-          setTimeout(() => {
-            router.push('/dashboard')
-          }, 500)
+          console.log('[v0] Session found, checking profile')
+          
+          // Check if user has completed profile setup
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('company_name')
+            .eq('user_id', session.user.id)
+            .single()
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            console.log('[v0] Profile check error:', profileError)
+            throw profileError
+          }
+
+          // If no profile or empty company_name, redirect to setup
+          if (!profileData || !profileData.company_name) {
+            console.log('[v0] No profile found, redirecting to profile setup')
+            setTimeout(() => {
+              router.push('/profile-setup')
+            }, 500)
+          } else {
+            console.log('[v0] Profile found, redirecting to dashboard')
+            setTimeout(() => {
+              router.push('/dashboard')
+            }, 500)
+          }
         } else {
           console.log('[v0] No session found, redirecting to login')
           router.push('/login')

@@ -21,12 +21,16 @@ import { supabase, type Profile } from "@/lib/supabase"
 import { Building2, Bell, Users, Calendar, Save, LogOut } from "lucide-react"
 import { toast } from "sonner"
 
+const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control', 'Generator', 'Fire Safety', 'UPS', 'Other']
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [companyName, setCompanyName] = useState("")
   const [phone, setPhone] = useState("")
   const [whatsapp, setWhatsapp] = useState("")
+  const [city, setCity] = useState("")
+  const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -48,6 +52,8 @@ export default function SettingsPage() {
           setCompanyName(data.company_name || "")
           setPhone(data.phone || "")
           setWhatsapp(data.whatsapp_number || "")
+          setCity(data.city || "")
+          setSelectedServices(data.service_types || [])
         }
       } catch (error) {
         console.error('Error loading profile:', error)
@@ -71,17 +77,27 @@ export default function SettingsPage() {
           company_name: companyName,
           phone: phone,
           whatsapp_number: whatsapp,
+          city: city,
+          service_types: selectedServices.length > 0 ? selectedServices : null,
         }, {
           onConflict: 'user_id'
         })
 
       if (error) throw error
-      toast.success('Profile updated successfully')
+      toast.success('Settings saved!')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
       setSaving(false)
     }
+  }
+
+  const toggleService = (service: string) => {
+    setSelectedServices(prev =>
+      prev.includes(service)
+        ? prev.filter(s => s !== service)
+        : [...prev, service]
+    )
   }
 
   const handleLogout = async () => {
@@ -150,6 +166,7 @@ export default function SettingsPage() {
                           id="business-email" 
                           type="email" 
                           value={user?.email || ""}
+                          placeholder="company@gmail.com"
                           disabled
                         />
                       </div>
@@ -172,6 +189,34 @@ export default function SettingsPage() {
                           onChange={(e) => setWhatsapp(e.target.value)}
                           placeholder="+91 XXXXX XXXXX"
                         />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="city">City</Label>
+                      <Input 
+                        id="city" 
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="Nashik"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Service Types</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {SERVICE_TYPES.map(service => (
+                          <button
+                            key={service}
+                            type="button"
+                            onClick={() => toggleService(service)}
+                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                              selectedServices.includes(service)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary text-foreground hover:bg-secondary/80'
+                            }`}
+                          >
+                            {service}
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <div className="flex gap-2">

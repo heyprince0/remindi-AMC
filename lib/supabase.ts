@@ -12,6 +12,8 @@ export interface Profile {
   company_name: string
   phone: string
   whatsapp_number: string
+  city?: string
+  service_types?: string[]
   created_at?: string
 }
 
