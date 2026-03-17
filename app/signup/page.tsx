@@ -38,11 +38,10 @@ export default function SignupPage() {
     setLoading(true)
     try {
       await signUp(email, password)
-      toast.success('Account created! Redirecting to login...')
-      setTimeout(() => router.push('/login'), 2000)
+      toast.success('Account created! Redirecting...')
+      router.push('/auth/callback')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Signup failed')
-    } finally {
       setLoading(false)
     }
   }

@@ -1,9 +1,45 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://xgiwnrhdduybbuiyquxd.supabase.co'
-const supabaseAnonKey = 'sb_publishable_ZCwEuyyKASPdUosoJ2QEyg_AAX2zHm_'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(
+  supabaseUrl, 
+  supabaseAnonKey
+)
+
+export const signIn = async (
+  email: string, password: string) => {
+  const { data, error } = await supabase.auth
+    .signInWithPassword({ email, password })
+  if (error) throw error
+  return data
+}
+
+export const signUp = async (
+  email: string, password: string) => {
+  const { data, error } = await supabase.auth
+    .signUp({ email, password })
+  if (error) throw error
+  return data
+}
+
+export const signInWithGoogle = async () => {
+  const { error } = await supabase.auth
+    .signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin + 
+          '/auth/callback'
+      }
+    })
+  if (error) throw error
+}
+
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+}
 
 // Types
 export interface Profile {
@@ -91,49 +127,4 @@ export const getDaysUntilService = (nextServiceDate: string): number => {
   serviceDate.setHours(0, 0, 0, 0)
   const diff = serviceDate.getTime() - today.getTime()
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
-}
-
-// Auth functions
-export const getAuthUser = async () => {
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error) throw error
-  return user
-}
-
-export const signUp = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  })
-  if (error) throw error
-  return data
-}
-
-export const signIn = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-  if (error) throw error
-  return data
-}
-
-export const signOut = async () => {
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
-}
-
-export const signInWithGoogle = async () => {
-  const redirectUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/auth/callback`
-    : 'http://localhost:3000/auth/callback'
-  
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: redirectUrl,
-    },
-  })
-  if (error) throw error
-  return data
 }
