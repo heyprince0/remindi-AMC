@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { signIn, signInWithGoogle } from '@/lib/supabase'
+import { supabase, signInWithGoogle } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Mail, Lock, Chrome } from 'lucide-react'
 
@@ -28,11 +28,30 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      await signIn(email, password)
-      toast.success('Logged in successfully!')
-      router.push('/auth/callback')
+      const { data, error } = await supabase.auth
+        .signInWithPassword({ email, password })
+      
+      if (error) throw error
+      
+      if (data.session) {
+        toast.success('Logged in successfully!')
+        
+        // Check if profile exists
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('company_name')
+          .eq('id', data.session.user.id)
+          .single()
+        
+        if (!profile?.company_name) {
+          router.push('/profile-setup')
+        } else {
+          router.push('/dashboard')
+        }
+      }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Login failed'
+      const errorMessage = error instanceof Error 
+        ? error.message : 'Login failed'
       setError(errorMessage)
       toast.error(errorMessage)
     } finally {
