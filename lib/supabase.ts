@@ -44,3 +44,55 @@ export const signOut = async () => {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
+
+export const calculateNextServiceDate = (
+  startDate: string,
+  frequencyDays: number
+): string => {
+  const date = new Date(startDate)
+  date.setDate(date.getDate() + frequencyDays)
+  return date.toISOString().split('T')[0]
+}
+
+export type Customer = {
+  id: string
+  user_id: string
+  name: string
+  phone: string
+  address: string
+  created_at: string
+}
+
+export type Contract = {
+  id: string
+  user_id: string
+  customer_id: string
+  contract_name: string
+  service_type: string
+  frequency_days: number
+  start_date: string
+  next_service_date: string
+  status: string
+  notes: string
+  created_at: string
+}
+
+export type Technician = {
+  id: string
+  user_id: string
+  name: string
+  phone: string
+  specialization: string
+  status: string
+  created_at: string
+}
+
+export type ServiceHistory = {
+  id: string
+  contract_id: string
+  technician_id: string
+  service_date: string
+  status: string
+  notes: string
+  created_at: string
+}
