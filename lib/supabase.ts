@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.https://xgiwnrhdduybbuiyquxd.supabase.co
-const supabaseAnonKey = process.env.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhnaXducmhkZHV5YmJ1aXlxdXhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjIwMTgsImV4cCI6MjA4ODczODAxOH0.4_Sho7D91ghC8vuznQeQfmYeQF3GWk9GoOTOsnveIl0
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(
-  supabaseUrl, 
+  supabaseUrl,
   supabaseAnonKey
 )
 
 export const signIn = async (
-  email: string, 
+  email: string,
   password: string
 ) => {
   const { data, error } = await supabase.auth
@@ -19,7 +19,7 @@ export const signIn = async (
 }
 
 export const signUp = async (
-  email: string, 
+  email: string,
   password: string
 ) => {
   const { data, error } = await supabase.auth
@@ -33,7 +33,7 @@ export const signInWithGoogle = async () => {
     .signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + 
+        redirectTo: window.location.origin +
           '/auth/callback'
       }
     })
