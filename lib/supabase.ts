@@ -97,4 +97,14 @@ export type ServiceHistory = {
   created_at: string
 }
 
+export type Profile = {
+  id: string
+  full_name: string | null
+  company_name: string | null
+  phone: string | null
+  whatsapp_number: string | null
+  city: string | null
+  service_types: string[] | null
+}
+
 export const getDaysUntilService = calculateNextServiceDate

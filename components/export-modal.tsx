@@ -44,7 +44,7 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
         const { data } = await supabase
           .from('profiles')
           .select('company_name')
-          .eq('user_id', user.id)
+          .eq('id', user.id)
           .single()
 
         if (data) {

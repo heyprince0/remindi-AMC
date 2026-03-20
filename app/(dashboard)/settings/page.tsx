@@ -45,7 +45,7 @@ export default function SettingsPage() {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('id', user.id)
           .single()
 
         if (error && error.code !== 'PGRST116') throw error
@@ -77,7 +77,7 @@ export default function SettingsPage() {
       const { error } = await supabase
         .from('profiles')
         .upsert({
-          user_id: user.id,
+          id: user.id,
           full_name: fullName,
           company_name: companyName,
           phone: phone,
@@ -85,7 +85,7 @@ export default function SettingsPage() {
           city: city,
           service_types: selectedServices.length > 0 ? selectedServices : null,
         }, {
-          onConflict: 'user_id'
+          onConflict: 'id'
         })
 
       if (error) throw error

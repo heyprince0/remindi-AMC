@@ -52,7 +52,7 @@ export function AppSidebar() {
         const { data } = await supabase
           .from('profiles')
           .select('company_name')
-          .eq('user_id', user.id)
+          .eq('id', user.id)
           .single()
 
         if (data?.company_name) {
