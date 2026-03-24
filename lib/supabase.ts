@@ -107,4 +107,17 @@ export type Profile = {
   service_types: string[] | null
 }
 
-export const getDaysUntilService = calculateNextServiceDate
+export const getDaysUntilService = (nextServiceDate: string): number => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const serviceDate = new Date(nextServiceDate)
+  serviceDate.setHours(0, 0, 0, 0)
+  if (isNaN(serviceDate.getTime())) return 0
+  const diffTime = serviceDate.getTime() - today.getTime()
+  return Math.round(diffTime / (1000 * 60 * 60 * 24))
+}
+
+export const getAuthUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+}
