@@ -43,6 +43,7 @@ export function AppSidebar() {
   const { user } = useAuth()
   const [companyName, setCompanyName] = useState("Anthora")
   const [companySubtitle, setCompanySubtitle] = useState("Softwares")
+  const [fullName, setFullName] = useState("")
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -51,15 +52,17 @@ export function AppSidebar() {
 
         const { data } = await supabase
           .from('profiles')
-          .select('company_name')
+          .select('company_name, full_name')
           .eq('id', user.id)
           .single()
 
         if (data?.company_name) {
-          // Split company name into main and subtitle for display
           const names = data.company_name.split(' ')
           setCompanyName(names[0] || "Anthora")
           setCompanySubtitle(names.slice(1).join(' ') || "")
+        }
+        if (data?.full_name) {
+          setFullName(data.full_name)
         }
       } catch (error) {
         console.error('Error loading company name:', error)
@@ -68,7 +71,6 @@ export function AppSidebar() {
 
     loadProfile()
 
-    // Subscribe to profile changes
     const subscription = supabase
       .channel('profile_changes')
       .on('postgres_changes', {
@@ -82,6 +84,9 @@ export function AppSidebar() {
           const names = profile.company_name.split(' ')
           setCompanyName(names[0] || "Anthora")
           setCompanySubtitle(names.slice(1).join(' ') || "")
+        }
+        if (profile?.full_name) {
+          setFullName(profile.full_name)
         }
       })
       .subscribe()
@@ -129,10 +134,16 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
-            <span className="text-xs font-medium">JD</span>
+            <span className="text-xs font-medium">
+              {fullName
+                ? fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                : user?.email?.[0]?.toUpperCase() ?? '?'}
+            </span>
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-medium text-sidebar-foreground">John Doe</span>
+            <span className="text-sm font-medium text-sidebar-foreground">
+              {fullName || user?.email || 'User'}
+            </span>
             <span className="text-xs text-sidebar-foreground/70">Administrator</span>
           </div>
         </div>

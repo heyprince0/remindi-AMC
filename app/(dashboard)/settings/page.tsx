@@ -335,11 +335,15 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between rounded-lg border border-border p-4">
                     <div className="flex items-center gap-4">
                       <div className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <span className="text-sm font-medium">JD</span>
+                        <span className="text-sm font-medium">
+                          {fullName
+                            ? fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                            : user?.email?.[0]?.toUpperCase() ?? '?'}
+                        </span>
                       </div>
                       <div>
-                        <p className="font-medium">John Doe</p>
-                        <p className="text-sm text-muted-foreground">john@anthora.com</p>
+                        <p className="font-medium">{fullName || user?.email || 'User'}</p>
+                        <p className="text-sm text-muted-foreground">{user?.email || ''}</p>
                       </div>
                     </div>
                     <Select defaultValue="admin">
