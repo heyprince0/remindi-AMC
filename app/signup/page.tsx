@@ -61,7 +61,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Logo/Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">Anthora</h1>
+          <h1 className="text-3xl font-bold text-foreground">Remindi</h1>
           <p className="text-muted-foreground">AMC Management System</p>
         </div>
 
