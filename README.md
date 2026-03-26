@@ -34,7 +34,7 @@ To learn more, take a look at the following resources:
 
 <a href="https://v0.app/chat/api/kiro/clone/heyPrakash/anthora-AMC" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
 
-### Then run ok :
+### Then run ok all sets:
 
 ```bash id="fixlast1"
 git add .
