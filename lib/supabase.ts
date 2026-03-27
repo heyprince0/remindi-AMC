@@ -95,6 +95,7 @@ export type ServiceHistory = {
   service_date: string
   status: string
   notes: string
+  price: number | null
   created_at: string
 }
 

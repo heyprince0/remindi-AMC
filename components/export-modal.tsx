@@ -24,6 +24,7 @@ interface ServiceRecord {
   service_date: string
   status: string
   notes: string
+  contractPrice: number | null
 }
 
 interface ExportModalProps {
@@ -61,7 +62,7 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
   const generateCSV = () => {
     setLoading(true)
     try {
-      const headers = ['Customer Name', 'Contract Name', 'Service Type', 'Technician', 'Service Date', 'Status', 'Notes']
+      const headers = ['Customer Name', 'Contract Name', 'Service Type', 'Technician', 'Service Date', 'Price (₹)', 'Status', 'Notes']
       const csvContent = [
         headers.join(','),
         ...records.map(record =>
@@ -71,6 +72,7 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
             `"${record.serviceType}"`,
             `"${record.technicianName}"`,
             `"${record.service_date}"`,
+            `"${record.contractPrice != null ? record.contractPrice : ''}"`,
             `"${record.status}"`,
             `"${(record.notes || '').replace(/"/g, '""')}"`,
           ].join(',')
@@ -129,13 +131,14 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
 
       const startY = 28
       const columns = [
-        { header: 'Customer Name', dataKey: 'customerName', width: 35 },
-        { header: 'Contract Name', dataKey: 'contractName', width: 35 },
-        { header: 'Service Type', dataKey: 'serviceType', width: 25 },
-        { header: 'Technician', dataKey: 'technicianName', width: 30 },
-        { header: 'Service Date', dataKey: 'service_date', width: 28 },
-        { header: 'Status', dataKey: 'status', width: 20 },
-        { header: 'Notes', dataKey: 'notes', width: 40 },
+        { header: 'Customer Name', dataKey: 'customerName', width: 33 },
+        { header: 'Contract Name', dataKey: 'contractName', width: 33 },
+        { header: 'Service Type', dataKey: 'serviceType', width: 22 },
+        { header: 'Technician', dataKey: 'technicianName', width: 28 },
+        { header: 'Service Date', dataKey: 'service_date', width: 25 },
+        { header: 'Price (₹)', dataKey: 'contractPrice', width: 22 },
+        { header: 'Status', dataKey: 'status', width: 18 },
+        { header: 'Notes', dataKey: 'notes', width: 36 },
       ]
 
       let currentY = startY

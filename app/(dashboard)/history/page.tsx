@@ -31,6 +31,7 @@ interface ServiceRecord extends ServiceHistory {
   contractName: string
   serviceType: string
   technicianName: string
+  contractPrice: number | null
 }
 
 function getStatusBadge(status: string) {
@@ -90,7 +91,8 @@ export default function ServiceHistoryPage() {
             customerName: customer?.name || 'Unknown',
             contractName: contract?.contract_name || 'Unknown',
             serviceType: contract?.service_type || 'Unknown',
-            technicianName: technician?.name || 'Unknown'
+            technicianName: technician?.name || 'Unknown',
+            contractPrice: contract?.contracts_price ?? null
           }
         })
 
@@ -202,6 +204,7 @@ export default function ServiceHistoryPage() {
                     <TableHead>Type</TableHead>
                     <TableHead>Technician</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead>Price</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="max-w-[200px]">Notes</TableHead>
                   </TableRow>
@@ -221,6 +224,11 @@ export default function ServiceHistoryPage() {
                         <div className="flex flex-col">
                           <span>{record.service_date}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {record.contractPrice != null
+                          ? `₹${record.contractPrice.toLocaleString('en-IN')}`
+                          : '—'}
                       </TableCell>
                       <TableCell>{getStatusBadge(record.status)}</TableCell>
                       <TableCell className="max-w-[200px]">
