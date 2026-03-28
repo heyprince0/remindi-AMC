@@ -1,0 +1,193 @@
+Create a stunning, professional SaaS landing page 
+for "Remindi" - an AMC (Annual Maintenance Contract) 
+management software for Indian service contractors.
+
+Target customers: Lift, AC, RO Water Purifier, 
+CCTV, Pest Control, Generator service contractors 
+in India.
+
+DESIGN REQUIREMENTS:
+- Modern, clean, professional SaaS design
+- Primary color: Deep blue #1E40AF
+- Accent color: Orange #F97316
+- White background with subtle gradients
+- Mobile responsive — perfect on all devices
+- Smooth animations on scroll
+- Trust-building design for Indian SMBs
+
+SEO META TAGS:
+- Title: "Remindi - AMC Management Software for 
+  Service Contractors India"
+- Description: "Manage your AMC contracts, never 
+  miss a service visit, track all clients. 
+  Built for Indian lift, AC, CCTV, RO 
+  service contractors. Free to use."
+- Keywords: AMC management software India, 
+  service contractor software, lift AMC software,
+  AC maintenance software India, free AMC software
+
+SECTIONS TO BUILD:
+
+1. NAVBAR
+- Logo: "Remindi" with wrench icon
+- Nav links: Features, How it Works, 
+  About, Contact
+- CTA button: "Get Started Free" (orange)
+- Sticky on scroll
+- Mobile hamburger menu
+
+2. HERO SECTION
+- Badge: "🇮🇳 Built for Indian Contractors • 100% Free"
+- Headline: "Never Miss a Service Visit Again"
+- Subheadline: "Manage all your AMC clients, 
+  track service dates, get automatic alerts — 
+  completely free. Built for Indian lift, AC, 
+  CCTV, RO service contractors."
+- One big CTA button: "Get Started Free →" (blue)
+- Below button: "No credit card • No payment • 
+  Free forever"
+- Hero image: Clean dashboard mockup
+- Stats below:
+  * 100% Free
+  * All Features Included
+  * Secure Data
+
+3. TRUSTED BY SECTION
+- "Built for these service businesses:"
+- Badges: Lift ✓ AC ✓ RO Water ✓ CCTV ✓ 
+  Pest Control ✓ Generator ✓ Fire Safety ✓
+
+4. PROBLEM SECTION
+- Headline: "Still Managing AMC on WhatsApp 
+  and Notebooks?"
+- 3 pain point cards with icons:
+  * 😫 "Forgetting service dates costs you clients"
+  * ⏰ "Manual reminders waste hours every day"
+  * 📋 "No record of who visited which building"
+
+5. FEATURES SECTION
+- Headline: "Everything You Need — Completely Free"
+- 6 feature cards:
+  * 📋 Smart Contract Management
+    "Track all AMC contracts, auto calculate 
+    next service date"
+  * 🔔 Automatic Service Alerts
+    "Instant alerts for overdue and upcoming 
+    service visits"
+  * 👥 Client Management
+    "All client details, addresses and 
+    service history in one place"
+  * 🔧 Technician Tracking
+    "Assign technicians and track who 
+    visited which client"
+  * 📊 Service History
+    "Complete record of every service 
+    visit with notes"
+  * 📥 Export Reports
+    "Download professional PDF reports 
+    to share with clients"
+
+6. HOW IT WORKS
+- Headline: "Get Started in 3 Simple Steps"
+- Step 1: 
+  Icon: 👤
+  Title: "Create your account"
+  Desc: "Sign up free in 2 minutes. 
+  No credit card needed."
+- Step 2:
+  Icon: ➕
+  Title: "Add your clients and contracts"
+  Desc: "Enter your AMC clients and 
+  set service frequencies."
+- Step 3:
+  Icon: ✅
+  Title: "Never miss a service again"
+  Desc: "Get alerts automatically when 
+  services are due or overdue."
+
+7. TESTIMONIALS SECTION
+- Headline: "What Contractors Say About Remindi"
+- 3 testimonial cards in English:
+
+  "Remindi has completely transformed how I 
+  manage my lift maintenance business. I used 
+  to miss service visits regularly — now I 
+  never miss a single one."
+  — Rajesh Kumar
+  Lift Contractor, Nashik
+  ⭐⭐⭐⭐⭐
+
+  "Before Remindi I was managing 150 AC clients 
+  on WhatsApp and a notebook. Now everything is 
+  organized and my clients are much happier 
+  with on-time service."
+  — Suresh Patil
+  AC Service Contractor, Pune
+  ⭐⭐⭐⭐⭐
+
+  "The service alerts feature is incredible. 
+  I manage 200 CCTV clients and Remindi tells 
+  me exactly who needs service today. 
+  Highly recommend to every contractor."
+  — Amit Singh
+  CCTV & Security Contractor, Mumbai
+  ⭐⭐⭐⭐⭐
+
+8. FAQ SECTION
+- Headline: "Frequently Asked Questions"
+- 5 FAQs accordion style:
+
+  Q: Is Remindi really free?
+  A: Yes! Remindi is completely free to use. 
+  All features included, no hidden charges ever.
+
+  Q: Is my data safe?
+  A: Yes, all data is encrypted and stored 
+  securely. Only you can access your data.
+
+  Q: Can I use it on my phone?
+  A: Yes! Remindi works perfectly on mobile, 
+  tablet and desktop browsers.
+
+  Q: Do I need technical knowledge?
+  A: No! If you can use WhatsApp, 
+  you can use Remindi. Very easy to learn.
+
+  Q: How many clients can I add?
+  A: Add unlimited clients and contracts 
+  completely free. No restrictions.
+
+9. CTA SECTION
+- Blue gradient background
+- Headline: "Start Managing Your AMC 
+  Business Smarter Today"
+- Subheadline: "Join contractors already 
+  using Remindi — completely free"
+- Button: "Get Started Free →" (white/orange)
+- Below: "✓ Free forever  ✓ No credit card  
+  ✓ Setup in 5 minutes"
+
+10. FOOTER
+- Logo: "Remindi"
+- Tagline: "Smart AMC Management for 
+  Indian Contractors"
+- Links: Features, How it Works, 
+  Contact, Privacy Policy
+- Email: support@remindi.in
+- Bottom: "© 2025 Remindi. Made with ❤️ in India"
+
+TECHNICAL REQUIREMENTS:
+- Pure HTML + CSS + JavaScript
+- No frameworks
+- Smooth scroll
+- Mobile hamburger menu
+- Hover animations on cards
+- Scroll reveal animations
+- Google Fonts: Poppins
+- All CTA buttons link to: 
+  https://remindi.vercel.app/login
+- Schema markup JSON-LD for SEO
+- Open Graph meta tags
+- Fast loading — no heavy libraries
+
+Make it look premium and professional.
