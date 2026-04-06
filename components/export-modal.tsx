@@ -104,91 +104,173 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
   const generatePDF = () => {
     setLoading(true)
     try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
-      })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const pageW = 297
+      const pageH = 210
+      const margin = 14
 
-      // Colors
-      const headerBg = [51, 65, 85] // slate-700
-      const headerText = [255, 255, 255]
-      const rowBg = [248, 250, 252] // slate-50
-      const alternateRowBg = [255, 255, 255]
-      const textColor = [15, 23, 42] // slate-900
+      // ── Palette ──────────────────────────────────────────
+      const skyBlue: [number, number, number]   = [41, 171, 226]
+      const darkHeader: [number, number, number] = [22, 45, 60]
+      const white: [number, number, number]      = [255, 255, 255]
+      const rowAlt: [number, number, number]     = [240, 249, 255]
+      const rowWhite: [number, number, number]   = [255, 255, 255]
+      const textDark: [number, number, number]   = [15, 23, 42]
+      const textMid: [number, number, number]    = [71, 85, 105]
+      const borderCol: [number, number, number]  = [203, 213, 225]
 
-      // Add title
-      doc.setFontSize(16)
-      doc.setTextColor(...headerText)
-      doc.setFillColor(...headerBg)
-      doc.rect(0, 0, 297, 15, 'F')
-      doc.text(companyName || 'Service History Report', 15, 12)
+      const addPageContent = (pageNum: number, totalPages: number) => {
+        // ── Top header bar ────────────────────────────────
+        doc.setFillColor(...darkHeader)
+        doc.rect(0, 0, pageW, 18, 'F')
 
-      // Add export date
-      doc.setFontSize(10)
-      doc.setTextColor(100, 116, 139)
-      doc.text(`Exported on: ${new Date().toLocaleDateString()}`, 15, 22)
+        // Sky-blue accent strip
+        doc.setFillColor(...skyBlue)
+        doc.rect(0, 18, pageW, 2, 'F')
 
-      const startY = 28
+        // Company name
+        doc.setFontSize(15)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...white)
+        doc.text(companyName || 'Service History Report', margin, 12)
+
+        // Right-align: "Service History Report" label
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(180, 210, 230)
+        doc.text('SERVICE HISTORY REPORT', pageW - margin, 12, { align: 'right' })
+
+        // ── Sub-header meta row ───────────────────────────
+        doc.setFontSize(8.5)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(...textMid)
+        const exportDate = `Exported: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+        const totalRecords = `Total Records: ${records.length}`
+        doc.text(exportDate, margin, 27)
+        doc.text(totalRecords, margin + 60, 27)
+        doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: 'right' })
+
+        // ── Footer ────────────────────────────────────────
+        doc.setFillColor(...skyBlue)
+        doc.rect(0, pageH - 8, pageW, 8, 'F')
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...white)
+        doc.text('remindi', margin, pageH - 3)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(180, 230, 248)
+        doc.text('— Smart AMC Management for Indian Contractors  •  www.remindi.online', margin + 14, pageH - 3)
+        doc.setTextColor(...white)
+        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 3, { align: 'right' })
+      }
+
       const columns = [
-        { header: 'Customer Name', dataKey: 'customerName', width: 33 },
-        { header: 'Contract Name', dataKey: 'contractName', width: 33 },
-        { header: 'Service Type', dataKey: 'serviceType', width: 22 },
-        { header: 'Technician', dataKey: 'technicianName', width: 28 },
-        { header: 'Service Date', dataKey: 'service_date', width: 25 },
-        { header: 'Price (₹)', dataKey: 'contractPrice', width: 22 },
-        { header: 'Status', dataKey: 'status', width: 18 },
-        { header: 'Notes', dataKey: 'notes', width: 36 },
+        { header: 'Customer Name',  dataKey: 'customerName',   width: 36 },
+        { header: 'Contract',       dataKey: 'contractName',   width: 34 },
+        { header: 'Service Type',   dataKey: 'serviceType',    width: 24 },
+        { header: 'Technician',     dataKey: 'technicianName', width: 28 },
+        { header: 'Date',           dataKey: 'service_date',   width: 24 },
+        { header: 'Price (₹)',      dataKey: 'contractPrice',  width: 22 },
+        { header: 'Status',         dataKey: 'status',         width: 20 },
+        { header: 'Notes',          dataKey: 'notes',          width: 81 },
       ]
+      const tableWidth = columns.reduce((s, c) => s + c.width, 0)
+      const rowH = 9
+      const colHeaderH = 9
+      const tableStartY = 33
+      const maxY = pageH - 12
 
-      let currentY = startY
-
-      // Draw header row
-      doc.setFillColor(...headerBg)
-      doc.setTextColor(...headerText)
-      doc.setFontSize(10)
-      doc.setFont(undefined, 'bold')
-
-      let xPos = 15
-      for (const col of columns) {
-        doc.rect(xPos, currentY - 5, col.width, 8, 'F')
-        doc.text(col.header, xPos + 2, currentY, { maxWidth: col.width - 4 })
-        xPos += col.width
+      // Count pages
+      let tempY = tableStartY + colHeaderH
+      let totalPages = 1
+      for (let i = 0; i < records.length; i++) {
+        if (tempY + rowH > maxY) { totalPages++; tempY = tableStartY + colHeaderH }
+        tempY += rowH
       }
 
-      currentY += 8
+      // ── Page 1 header ─────────────────────────────────
+      let currentPage = 1
+      addPageContent(currentPage, totalPages)
 
-      // Draw rows
-      doc.setFont(undefined, 'normal')
-      doc.setFontSize(9)
-      let rowIndex = 0
-
-      for (const record of records) {
-        const rowHeight = 10
-        doc.setTextColor(...textColor)
-        doc.setFillColor(...(rowIndex % 2 === 0 ? rowBg : alternateRowBg))
-        doc.rect(15, currentY - 4, 267, rowHeight, 'F')
-
-        xPos = 15
+      const drawColHeaders = (y: number) => {
+        doc.setFillColor(...darkHeader)
+        doc.rect(margin, y, tableWidth, colHeaderH, 'F')
+        doc.setFontSize(8.5)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...white)
+        let x = margin
         for (const col of columns) {
-          const cellValue = String(record[col.dataKey as keyof typeof record] || '')
-          doc.text(cellValue, xPos + 2, currentY + 2, { maxWidth: col.width - 4 })
-          xPos += col.width
-        }
-
-        currentY += rowHeight
-        rowIndex++
-
-        // Add new page if needed
-        if (currentY > 270) {
-          doc.addPage()
-          currentY = 15
+          doc.text(col.header, x + 2, y + 6, { maxWidth: col.width - 4 })
+          x += col.width
         }
       }
+
+      let currentY = tableStartY
+      drawColHeaders(currentY)
+      currentY += colHeaderH
+
+      // ── Rows ──────────────────────────────────────────
+      doc.setFontSize(8.5)
+      doc.setFont('helvetica', 'normal')
+
+      for (let i = 0; i < records.length; i++) {
+        if (currentY + rowH > maxY) {
+          // New page
+          doc.addPage()
+          currentPage++
+          addPageContent(currentPage, totalPages)
+          currentY = tableStartY
+          drawColHeaders(currentY)
+          currentY += colHeaderH
+        }
+
+        const record = records[i]
+        const isAlt = i % 2 === 0
+
+        // Row background
+        doc.setFillColor(...(isAlt ? rowAlt : rowWhite))
+        doc.rect(margin, currentY, tableWidth, rowH, 'F')
+
+        // Row border bottom
+        doc.setDrawColor(...borderCol)
+        doc.setLineWidth(0.2)
+        doc.line(margin, currentY + rowH, margin + tableWidth, currentY + rowH)
+
+        // Status badge colour
+        const status = String(record.status || '').toLowerCase()
+        const statusColor: [number, number, number] =
+          status === 'completed' ? [22, 163, 74] :
+          status === 'pending'   ? [202, 138, 4]  :
+          status === 'cancelled' ? [220, 38, 38]  : [71, 85, 105]
+
+        doc.setTextColor(...textDark)
+        let x = margin
+        for (const col of columns) {
+          let cellValue = String(record[col.dataKey as keyof typeof record] ?? '')
+          if (col.dataKey === 'contractPrice') {
+            cellValue = cellValue ? `Rs.${Number(cellValue).toLocaleString('en-IN')}` : '—'
+          }
+          if (col.dataKey === 'status') {
+            doc.setTextColor(...statusColor)
+            doc.setFont('helvetica', 'bold')
+          } else {
+            doc.setTextColor(...textDark)
+            doc.setFont('helvetica', 'normal')
+          }
+          doc.text(cellValue || '—', x + 2, currentY + 6, { maxWidth: col.width - 4 })
+          x += col.width
+        }
+
+        currentY += rowH
+      }
+
+      // Outer table border
+      doc.setDrawColor(...borderCol)
+      doc.setLineWidth(0.4)
+      doc.rect(margin, tableStartY, tableWidth, currentY - tableStartY)
 
       const fileName = `service-history-${new Date().toISOString().split('T')[0]}.pdf`
       doc.save(fileName)
-
       toast.success('PDF exported successfully')
       onOpenChange(false)
     } catch (error) {
