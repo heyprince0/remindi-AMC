@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Bell, Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
@@ -99,15 +98,6 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
       <SidebarTrigger className="md:hidden" />
-
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder="Search contracts, customers..."
-          className="pl-10 bg-secondary border-0"
-        />
-      </div>
 
       <div className="flex items-center gap-2 ml-auto">
         <DropdownMenu>

@@ -14,10 +14,9 @@ import {
 } from "recharts"
 import {
   TrendingUp, TrendingDown, FileText, CheckCircle2, IndianRupee,
-  Activity, Download, Minus
+  Activity, Minus
 } from "lucide-react"
 import { toast } from "sonner"
-import jsPDF from "jspdf"
 
 type DateRange = "week" | "month" | "last_month" | "year"
 
@@ -237,7 +236,7 @@ export default function ReportsPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [serviceTypeData, setServiceTypeData] = useState<ServiceTypeData[]>([])
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
+
   const [currentHistory, setCurrentHistory] = useState<HistoryRow[]>([])
 
   const fetchData = useCallback(async () => {
@@ -317,163 +316,6 @@ export default function ReportsPage() {
     fetchData()
   }, [fetchData])
 
-  const exportPDF = () => {
-    setExporting(true)
-    try {
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
-      const pageW = 297
-      const pageH = 210
-      const margin = 14
-
-      // ── Palette ───────────────────────────────────────────
-      const skyBlue: [number, number, number]    = [41, 171, 226]
-      const darkHeader: [number, number, number] = [22, 45, 60]
-      const white: [number, number, number]      = [255, 255, 255]
-      const rowAlt: [number, number, number]     = [240, 249, 255]
-      const rowWhite: [number, number, number]   = [255, 255, 255]
-      const textDark: [number, number, number]   = [15, 23, 42]
-      const textMid: [number, number, number]    = [71, 85, 105]
-      const borderCol: [number, number, number]  = [203, 213, 225]
-
-      const addPageChrome = (pageNum: number, totalPages: number) => {
-        // Header bar
-        doc.setFillColor(...darkHeader)
-        doc.rect(0, 0, pageW, 18, "F")
-        // Sky-blue accent
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, 18, pageW, 2, "F")
-        // Title
-        doc.setFontSize(15)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(...white)
-        doc.text(`remindi — ${RANGE_LABELS[range]} Report`, margin, 12)
-        // Right label
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(180, 210, 230)
-        doc.text("SERVICE REPORT", pageW - margin, 12, { align: "right" })
-        // Meta row
-        doc.setFontSize(8.5)
-        doc.setTextColor(...textMid)
-        const dateStr = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-        doc.text(`Exported: ${dateStr}`, margin, 27)
-        if (stats) {
-          doc.text(
-            `Services: ${stats.totalServices}  •  Completed: ${stats.completedServices}  •  Active Contracts: ${stats.activeContracts}  •  Earnings: Rs.${stats.totalEarnings.toLocaleString("en-IN")}`,
-            margin + 48, 27
-          )
-        }
-        doc.setTextColor(...textMid)
-        doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: "right" })
-        // Footer
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, pageH - 8, pageW, 8, "F")
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(...white)
-        doc.text("remindi", margin, pageH - 3)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(180, 230, 248)
-        doc.text("— Smart AMC Management for Indian Contractors  •  www.remindi.online", margin + 14, pageH - 3)
-        doc.setTextColor(...white)
-        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 3, { align: "right" })
-      }
-
-      const columns = [
-        { header: "Service Date",  dataKey: "service_date", width: 36 },
-        { header: "Contract ID",   dataKey: "contract_id",  width: 120 },
-        { header: "Status",        dataKey: "status",       width: 36 },
-      ]
-      const tableWidth = columns.reduce((s, c) => s + c.width, 0)
-      const rowH = 9
-      const colHeaderH = 9
-      const tableStartY = 33
-      const maxY = pageH - 12
-
-      // Count pages
-      let tempY = tableStartY + colHeaderH
-      let totalPages = 1
-      for (let i = 0; i < currentHistory.length; i++) {
-        if (tempY + rowH > maxY) { totalPages++; tempY = tableStartY + colHeaderH }
-        tempY += rowH
-      }
-
-      let currentPage = 1
-      addPageChrome(currentPage, totalPages)
-
-      const drawColHeaders = (y: number) => {
-        doc.setFillColor(...darkHeader)
-        doc.rect(margin, y, tableWidth, colHeaderH, "F")
-        doc.setFontSize(8.5)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(...white)
-        let x = margin
-        for (const col of columns) {
-          doc.text(col.header, x + 2, y + 6, { maxWidth: col.width - 4 })
-          x += col.width
-        }
-      }
-
-      let currentY = tableStartY
-      drawColHeaders(currentY)
-      currentY += colHeaderH
-
-      doc.setFontSize(8.5)
-      doc.setFont("helvetica", "normal")
-
-      for (let i = 0; i < currentHistory.length; i++) {
-        if (currentY + rowH > maxY) {
-          doc.addPage()
-          currentPage++
-          addPageChrome(currentPage, totalPages)
-          currentY = tableStartY
-          drawColHeaders(currentY)
-          currentY += colHeaderH
-        }
-
-        const record = currentHistory[i]
-        const status = String(record.status || "").toLowerCase()
-        const statusColor: [number, number, number] =
-          status === "completed" ? [22, 163, 74] :
-          status === "pending"   ? [202, 138, 4]  :
-          status === "cancelled" ? [220, 38, 38]  : [71, 85, 105]
-
-        doc.setFillColor(...(i % 2 === 0 ? rowAlt : rowWhite))
-        doc.rect(margin, currentY, tableWidth, rowH, "F")
-        doc.setDrawColor(...borderCol)
-        doc.setLineWidth(0.2)
-        doc.line(margin, currentY + rowH, margin + tableWidth, currentY + rowH)
-
-        let x = margin
-        for (const col of columns) {
-          const val = String(record[col.dataKey as keyof typeof record] || "")
-          if (col.dataKey === "status") {
-            doc.setTextColor(...statusColor)
-            doc.setFont("helvetica", "bold")
-          } else {
-            doc.setTextColor(...textDark)
-            doc.setFont("helvetica", "normal")
-          }
-          doc.text(val || "—", x + 2, currentY + 6, { maxWidth: col.width - 4 })
-          x += col.width
-        }
-        currentY += rowH
-      }
-
-      // Outer border
-      doc.setDrawColor(...borderCol)
-      doc.setLineWidth(0.4)
-      doc.rect(margin, tableStartY, tableWidth, currentY - tableStartY)
-
-      doc.save(`remindi-report-${range}-${new Date().toISOString().split("T")[0]}.pdf`)
-      toast.success("PDF exported successfully")
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to export PDF")
-    } finally {
-      setExporting(false)
-    }
-  }
 
   return (
     <DashboardLayout>
@@ -496,10 +338,6 @@ export default function ReportsPage() {
                 <SelectItem value="year">This Year</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={exportPDF} disabled={exporting || loading}>
-              <Download className="mr-2 size-4" />
-              Export PDF
-            </Button>
           </div>
         </div>
 
