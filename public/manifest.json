@@ -2,7 +2,7 @@
   "name": "Remindi",
   "short_name": "Remindi",
   "description": "Smart AMC Management for Indian Contractors",
-  "start_url": "https://www.remindi.online/signup",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
