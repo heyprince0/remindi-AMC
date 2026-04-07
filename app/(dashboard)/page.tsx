@@ -43,6 +43,8 @@ function getStatusBadge(status: string) {
 }
 
 import { AddContractModal } from "@/components/add-contract-modal"
+import { subscribeToNotifications } from "@/lib/push-notifications"
+import { Bell } from "lucide-react"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -206,6 +208,10 @@ export default function DashboardPage() {
             <p className="text-muted-foreground">Welcome back! Here{"'"}s your service overview.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => user && subscribeToNotifications(user.id)} title="Enable push notifications">
+              <Bell className="mr-2 size-4" />
+              Enable Notifications
+            </Button>
             <Button variant="outline" size="sm" onClick={() => window.location.href = '/customers'} title="Go to customers page">
               <Plus className="mr-2 size-4" />
               Add Customer

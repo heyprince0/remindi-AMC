@@ -28,3 +28,24 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
+
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  const options = {
+    body: data.body || 'You have a new notification',
+    icon: '/icons-192.png',
+    badge: '/icons-192.png',
+    vibrate: [200, 100, 200],
+    data: { url: data.url || '/' }
+  };
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Remindi', options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url)
+  );
+});
