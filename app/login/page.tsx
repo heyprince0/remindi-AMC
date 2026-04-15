@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { supabase, signInWithGoogle } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 
@@ -14,7 +15,6 @@ export default function LoginPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
 
-  // If user is already logged in, send them to the dashboard
   useEffect(() => {
     if (!authLoading && user) {
       router.replace('/')
@@ -52,7 +52,6 @@ export default function LoginPage() {
     }
   }
 
-  // Show nothing while checking auth state to avoid flash
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -61,7 +60,6 @@ export default function LoginPage() {
     )
   }
 
-  // Already logged in — will redirect via useEffect, render nothing
   if (user) return null
 
   return (
@@ -109,8 +107,9 @@ export default function LoginPage() {
           <button
             onClick={signInWithGoogle}
             disabled={loading}
-            className="w-full border py-3 rounded-md font-medium hover:bg-gray-50 disabled:opacity-60"
+            className="w-full border py-3 rounded-md font-medium hover:bg-gray-50 disabled:opacity-60 flex items-center justify-center gap-2"
           >
+            <Image src="/google-logo.png" alt="Google" width={18} height={18} style={{ width: 18, height: 18 }} />
             Sign in with Google
           </button>
           <p className="text-center text-sm text-gray-500 mt-4">

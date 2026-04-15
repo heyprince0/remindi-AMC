@@ -3,18 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signUp, signInWithGoogle } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
-import { Mail, Lock, Chrome } from 'lucide-react'
+import { Mail, Lock } from 'lucide-react'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -28,14 +28,9 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!email || !password || !confirmPassword) {
-      toast.error('Please fill in all fields')
-      return
-    }
 
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match')
+    if (!email || !password) {
+      toast.error('Please fill in all fields')
       return
     }
 
@@ -77,20 +72,17 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
       <div className="w-full max-w-md space-y-6">
-        {/* Logo/Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Remindi</h1>
           <p className="text-muted-foreground">AMC Management System</p>
         </div>
 
-        {/* Signup Card */}
         <Card>
           <CardHeader>
             <CardTitle>Create Account</CardTitle>
             <CardDescription>Sign up to manage your AMC contracts</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Signup Form */}
             <form onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium text-foreground">
@@ -128,25 +120,6 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="confirm-password" className="text-sm font-medium text-foreground">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
-              {/* Terms & Conditions Checkbox */}
               <div className="flex items-start gap-3">
                 <input
                   id="terms"
@@ -173,7 +146,6 @@ export default function SignupPage() {
               </Button>
             </form>
 
-            {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-border"></div>
@@ -183,7 +155,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Google Sign Up */}
             <Button
               type="button"
               variant="outline"
@@ -191,11 +162,10 @@ export default function SignupPage() {
               onClick={handleGoogleSignup}
               disabled={loading}
             >
-              <Chrome className="mr-2 size-4" />
+              <Image src="/google-logo.png" alt="Google" width={18} height={18} style={{ width: 18, height: 18 }} className="mr-2" />
               Sign up with Google
             </Button>
 
-            {/* Sign In Link */}
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link href="/login" className="text-primary hover:underline font-medium">
