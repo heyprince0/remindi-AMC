@@ -7,7 +7,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { signUp, signIn, signInWithGoogle } from '@/lib/supabase'
+import { signUp, signInWithGoogle } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { Mail, Lock } from 'lucide-react'
@@ -17,6 +17,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
 
@@ -46,18 +47,24 @@ export default function SignupPage() {
 
     setLoading(true)
     try {
-      await signUp(email, password)
-      await signIn(email, password)
-      toast.success('Account created! Welcome to Remindi.')
-      router.replace('/profile-setup')
+      const data = await signUp(email, password)
+
+      if (data.session) {
+        toast.success('Account created! Welcome to Remindi.')
+        router.replace('/profile-setup')
+      } else {
+        setEmailSent(true)
+        toast.success('Account created! Please check your email to confirm your account.')
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Signup failed'
-      if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists')) {
+      if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('already been registered')) {
         toast.error('This email is already registered. Please sign in instead.')
         router.replace('/login')
       } else {
         toast.error(msg)
       }
+    } finally {
       setLoading(false)
     }
   }
@@ -74,6 +81,29 @@ export default function SignupPage() {
       toast.error(error instanceof Error ? error.message : 'Google signup failed')
       setLoading(false)
     }
+  }
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader>
+              <CardTitle>Check your email</CardTitle>
+              <CardDescription>We sent a confirmation link to <strong>{email}</strong></CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Please open your email and click the confirmation link to activate your account. Once confirmed, you can sign in.
+              </p>
+              <Button className="w-full" onClick={() => router.replace('/login')}>
+                Go to Sign In
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (

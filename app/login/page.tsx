@@ -31,7 +31,16 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
+      if (error) {
+        if (error.message.toLowerCase().includes('email not confirmed') || error.message.toLowerCase().includes('not confirmed')) {
+          setError('Your email is not confirmed yet. Please check your inbox and click the confirmation link.')
+        } else if (error.message.toLowerCase().includes('invalid login credentials') || error.message.toLowerCase().includes('invalid credentials')) {
+          setError('Incorrect email or password. Please try again.')
+        } else {
+          setError(error.message)
+        }
+        return
+      }
       if (data.session) {
         const { data: profile } = await supabase
           .from('profiles')
@@ -44,9 +53,8 @@ export default function LoginPage() {
           router.replace('/')
         }
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Login failed'
-      setError(msg)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -94,7 +102,11 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading}
