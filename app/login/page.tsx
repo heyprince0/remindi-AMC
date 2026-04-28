@@ -6,7 +6,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { supabase, signInWithGoogle } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import { Download } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -18,7 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace('/')
+      router.replace('/(dashboard)')
     }
   }, [user, authLoading, router])
 
@@ -76,15 +75,6 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold">Remindi</h1>
           <p className="text-gray-500">AMC Management System</p>
         </div>
-        <a
-          href="/remindi.apk"
-          download="Remindi.apk"
-          type="application/vnd.android.package-archive"
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 font-medium text-white shadow hover:bg-green-700"
-        >
-          <Download className="size-5" />
-          Download Android APK
-        </a>
         <div className="bg-white p-8 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-6">Sign In</h2>
           <form onSubmit={handleEmailLogin} className="space-y-4">
