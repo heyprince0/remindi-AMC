@@ -207,7 +207,7 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back! Here{"'"}s your service overview.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => user && subscribeToNotifications(user.id)} title="Enable push notifications">
               <Bell className="mr-2 size-4" />
               Enable Notifications
