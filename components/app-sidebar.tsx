@@ -12,7 +12,6 @@ import {
   History,
   BarChart3,
   Settings,
-  Download,
 } from "lucide-react"
 import {
   Sidebar,
@@ -133,15 +132,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-4 space-y-3">
-        <a
-          href="/remindi.apk"
-          download="Remindi.apk"
-          type="application/vnd.android.package-archive"
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium bg-sidebar-primary text-sidebar-primary-foreground hover:opacity-90 transition-opacity group-data-[collapsible=icon]:justify-center"
-        >
-          <Download className="size-4 shrink-0" />
-          <span className="group-data-[collapsible=icon]:hidden">Install App</span>
-        </a>
+        
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
             <span className="text-xs font-medium">
