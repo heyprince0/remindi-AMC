@@ -105,7 +105,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-foreground">13. Contact Us</h2>
             <p className="text-muted-foreground">For any questions regarding these Terms, contact us at:</p>
             <div className="space-y-1 text-muted-foreground">
-              <p>📧 <a href="mailto:remindisupport@gamil.com" className="text-primary hover:underline">remindisupport@gamil.com</a></p>
+              <p>📧 <a href="mailto:remindisupport@gmail.com" className="text-primary hover:underline">remindisupport@gmail.com</a></p>
               <p>🌐 <a href="https://remindi.online" className="text-primary hover:underline">remindi.online</a></p>
             </div>
           </section>
