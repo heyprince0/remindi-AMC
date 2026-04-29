@@ -30,7 +30,7 @@ export default function TermsPage() {
               <li>You must provide accurate and complete information when creating an account.</li>
               <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
               <li>You are responsible for all activities that occur under your account.</li>
-              <li>You must notify us immediately at <a href="mailto:remindisupport@gamil.com" className="text-primary hover:underline">remindisupport@gamil.com</a> if you suspect unauthorized use.</li>
+              <li>You must notify us immediately at <a href="mailto:remindisupport@gmail.com" className="text-primary hover:underline">remindisupport@gmail.com</a> if you suspect unauthorized use.</li>
             </ul>
           </section>
 
