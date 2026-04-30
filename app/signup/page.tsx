@@ -22,7 +22,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.replace('/')
+      router.replace('/profile-setup')
     }
   }, [user, authLoading, router])
 
