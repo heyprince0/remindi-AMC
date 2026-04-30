@@ -12,7 +12,7 @@ export default function Home() {
       if (user) {
         router.replace('/dashboard')
       } else {
-        router.replace('/landing')
+        router.replace('/landing.html')
       }
     }
   }, [user, loading, router])
