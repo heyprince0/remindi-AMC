@@ -120,7 +120,7 @@ export default function PrivacyPage() {
               <li>Request deletion of your account and data</li>
               <li>Withdraw consent at any time</li>
             </ul>
-            <p className="text-muted-foreground">To exercise these rights, contact us at <a href="mailto:remindisupport@gmail.com" className="text-primary hover:underline">remindisupport@gmail.com</a></p>
+            <p className="text-muted-foreground">To exercise these rights, contact us at <a href="mailto:support@remindi.online" className="text-primary hover:underline">support@remindi.online</a></p>
           </section>
 
           <section className="space-y-3">
@@ -132,7 +132,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-foreground">13. Contact Us</h2>
             <p className="text-muted-foreground">If you have any questions about this Privacy Policy, contact us at:</p>
             <div className="space-y-1 text-muted-foreground">
-              <p>📧 <a href="mailto:remindisupport@gmail.com" className="text-primary hover:underline">remindisupport@gmail.com</a></p>
+              <p>📧 <a href="mailto:support@remindi.online" className="text-primary hover:underline">support@remindi.online</a></p>
               <p>🌐 <a href="https://remindi.online" className="text-primary hover:underline">remindi.online</a></p>
             </div>
           </section>
