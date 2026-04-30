@@ -4,5 +4,18 @@
       "path": "/api/check-contracts",
       "schedule": "0 9 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/landing.html",
+      "has": [
+        {
+          "type": "cookie",
+          "key": "sb-access-token",
+          "value": "(?!.*)"
+        }
+      ]
+    }
   ]
 }
