@@ -11,7 +11,7 @@ export default function Home() {
   useEffect(() => {
     if (loading) return
     if (user) {
-      router.replace('/dashboard')
+      router.replace('/alerts')  // logged in → go to first real page
     } else {
       window.location.href = '/landing.html'
     }
