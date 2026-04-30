@@ -1,21 +1,19 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 
 export default function Home() {
   const { user, loading } = useAuth()
-  const router = useRouter()
 
   useEffect(() => {
     if (loading) return
     if (user) {
-      router.replace('/alerts')  // logged in → go to first real page
+      window.location.href = '/'
     } else {
       window.location.href = '/landing.html'
     }
-  }, [user, loading, router])
+  }, [user, loading])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
