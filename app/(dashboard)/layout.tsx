@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 
 export default function DashboardLayout({
@@ -10,13 +9,12 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const { user, loading } = useAuth()
-  const router = useRouter()
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace('/login')
+      window.location.href = '/landing.html'
     }
-  }, [user, loading, router])
+  }, [user, loading])
 
   if (loading) {
     return (
