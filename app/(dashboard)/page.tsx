@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { AddContractModal } from "@/components/add-contract-modal"
 import { subscribeToNotifications } from "@/lib/push-notifications"
+import { toast } from "sonner"
 
 interface UpcomingService {
   id: string
@@ -53,6 +54,25 @@ export default function DashboardPage() {
   const [upcomingServices, setUpcomingServices] = useState<UpcomingService[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [notificationLoading, setNotificationLoading] = useState(false)
+
+  const handleEnableNotifications = async () => {
+    if (!user?.id) {
+      toast.error('User not found')
+      return
+    }
+
+    setNotificationLoading(true)
+    const result = await subscribeToNotifications(user.id)
+    
+    if (result.success) {
+      toast.success('Notifications enabled successfully!')
+    } else {
+      toast.error(result.error || 'Failed to enable notifications')
+    }
+    
+    setNotificationLoading(false)
+  }
 
   // ✅ AUTH CHECK
   useEffect(() => {
@@ -195,9 +215,14 @@ export default function DashboardPage() {
             <p className="text-muted-foreground">Welcome back! Here{"'"}s your service overview.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => user && subscribeToNotifications(user.id)}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleEnableNotifications}
+              disabled={notificationLoading}
+            >
               <Bell className="mr-2 size-4" />
-              Enable Notifications
+              {notificationLoading ? 'Enabling...' : 'Enable Notifications'}
             </Button>
             <Button variant="outline" size="sm" onClick={() => window.location.href = '/customers'}>
               <Plus className="mr-2 size-4" />
