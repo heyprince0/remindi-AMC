@@ -1188,7 +1188,6 @@
 
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
-      <li><a href="#how-it-works">How it Works</a></li>
       <li><a href="#pricing">Pricing</a></li>
       <li><a href="#faq">FAQ</a></li>
       <li><a href="#install-app">Install App</a></li>
@@ -1202,7 +1201,6 @@
   </div>
   <div class="mobile-menu" id="mobile-menu">
     <a href="#features" onclick="closeMobileMenu()">Features</a>
-    <a href="#how-it-works" onclick="closeMobileMenu()">How it Works</a>
     <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
     <a href="#faq" onclick="closeMobileMenu()">FAQ</a>
     <a href="#install-app" onclick="closeMobileMenu()">Install App</a>
@@ -1392,29 +1390,84 @@
   </div>
 </section>
 
-<!-- HOW IT WORKS -->
-<section class="how" id="how-it-works">
+<!-- PRICING -->
+<section class="pricing" id="pricing">
   <div class="container text-center">
-    <div class="section-badge reveal">Simple Process</div>
-    <h2 class="section-title reveal">Get Started in 3 Simple Steps</h2>
-    <p class="section-subtitle reveal">Up and running in under 5 minutes. No technical knowledge needed.</p>
-    <div class="steps">
-      <div class="step reveal reveal-delay-1">
-        <div class="step-num">👤</div>
-        <h3>Create your account</h3>
-        <p>Sign up in 2 minutes. Just your email and you're in, ready to manage your business.</p>
+    <div class="section-badge reveal">Pricing</div>
+    <h2 class="section-title reveal">Simple, Transparent Pricing</h2>
+    <p class="section-subtitle reveal">Start free for 30 days. No credit card required.</p>
+
+    <div class="pricing-grid">
+
+      <!-- Free Trial -->
+      <div class="pricing-card reveal reveal-delay-1">
+        <div class="pricing-plan-name">Free Trial</div>
+        <div class="pricing-price free">
+          <span class="amount">FREE</span>
+        </div>
+        <div class="pricing-desc">for 30 days &nbsp;·&nbsp; No credit card required</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li><span class="pf-check">✓</span> All features unlocked</li>
+          <li><span class="pf-check">✓</span> Unlimited contracts</li>
+          <li><span class="pf-check">✓</span> Unlimited customers</li>
+          <li><span class="pf-check">✓</span> Unlimited technicians</li>
+          <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
+          <li><span class="pf-check">✓</span> Full dashboard</li>
+          <li><span class="pf-check">✓</span> No credit card required</li>
+        </ul>
+        <a href="/signup" class="btn-pricing">Start Free Trial</a>
       </div>
-      <div class="step reveal reveal-delay-2">
-        <div class="step-num">➕</div>
-        <h3>Add your clients and contracts</h3>
-        <p>Enter your AMC clients and set service frequencies. Import as many as you need.</p>
+
+      <!-- Basic -->
+      <div class="pricing-card reveal reveal-delay-2">
+        <div class="pricing-plan-name">Basic</div>
+        <div class="pricing-price">
+          <span class="currency">₹</span>
+          <span class="amount">399</span>
+          <span class="period">/month</span>
+        </div>
+        <div class="pricing-desc">Perfect for small contractors just getting started</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li><span class="pf-check">✓</span> Up to 50 contracts</li>
+          <li><span class="pf-check">✓</span> Unlimited customers</li>
+          <li><span class="pf-check">✓</span> Up to 5 technicians</li>
+          <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
+          <li><span class="pf-check">✓</span> Full dashboard</li>
+          <li><span class="pf-check">✓</span> Service history</li>
+          <li><span class="pf-check">✓</span> Reports</li>
+          <li><span class="pf-check">✓</span> Priority support</li>
+        </ul>
+        <a href="/signup" class="btn-pricing">Get Started</a>
       </div>
-      <div class="step reveal reveal-delay-3">
-        <div class="step-num">✅</div>
-        <h3>Never miss a service again</h3>
-        <p>Get alerts automatically when services are due or overdue. remindi does the tracking for you.</p>
+
+      <!-- Pro -->
+      <div class="pricing-card pro reveal reveal-delay-3">
+        <div class="pricing-popular-badge">⭐ Most Popular</div>
+        <div class="pricing-plan-name">Pro</div>
+        <div class="pricing-price">
+          <span class="currency">₹</span>
+          <span class="amount">599</span>
+          <span class="period">/month</span>
+        </div>
+        <div class="pricing-desc">For growing businesses managing large client bases</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li><span class="pf-check">✓</span> Unlimited contracts</li>
+          <li><span class="pf-check">✓</span> Unlimited customers</li>
+          <li><span class="pf-check">✓</span> Unlimited technicians</li>
+          <li><span class="pf-check">✓</span> Everything in Basic</li>
+          <li><span class="pf-check">✓</span> Advanced reports</li>
+          <li><span class="pf-check">✓</span> Data export</li>
+          <li><span class="pf-check">✓</span> Dedicated support</li>
+        </ul>
+        <a href="/signup" class="btn-pricing btn-pricing-pro">Get Started</a>
       </div>
+
     </div>
+
+    <p class="pricing-note reveal"><span>All plans include free updates. Cancel anytime.</span></p>
   </div>
 </section>
 
@@ -1547,87 +1600,6 @@
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- PRICING -->
-<section class="pricing" id="pricing">
-  <div class="container text-center">
-    <div class="section-badge reveal">Pricing</div>
-    <h2 class="section-title reveal">Simple, Transparent Pricing</h2>
-    <p class="section-subtitle reveal">Start free for 30 days. No credit card required.</p>
-
-    <div class="pricing-grid">
-
-      <!-- Free Trial -->
-      <div class="pricing-card reveal reveal-delay-1">
-        <div class="pricing-plan-name">Free Trial</div>
-        <div class="pricing-price free">
-          <span class="amount">FREE</span>
-        </div>
-        <div class="pricing-desc">for 30 days &nbsp;·&nbsp; No credit card required</div>
-        <div class="pricing-divider"></div>
-        <ul class="pricing-features">
-          <li><span class="pf-check">✓</span> All features unlocked</li>
-          <li><span class="pf-check">✓</span> Unlimited contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Unlimited technicians</li>
-          <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
-          <li><span class="pf-check">✓</span> Full dashboard</li>
-          <li><span class="pf-check">✓</span> No credit card required</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Start Free Trial</a>
-      </div>
-
-      <!-- Basic -->
-      <div class="pricing-card reveal reveal-delay-2">
-        <div class="pricing-plan-name">Basic</div>
-        <div class="pricing-price">
-          <span class="currency">₹</span>
-          <span class="amount">399</span>
-          <span class="period">/month</span>
-        </div>
-        <div class="pricing-desc">Perfect for small contractors just getting started</div>
-        <div class="pricing-divider"></div>
-        <ul class="pricing-features">
-          <li><span class="pf-check">✓</span> Up to 50 contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Up to 5 technicians</li>
-          <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
-          <li><span class="pf-check">✓</span> Full dashboard</li>
-          <li><span class="pf-check">✓</span> Service history</li>
-          <li><span class="pf-check">✓</span> Reports</li>
-          <li><span class="pf-check">✓</span> Priority support</li>
-        </ul>
-        <a href="/signup" class="btn-pricing">Get Started</a>
-      </div>
-
-      <!-- Pro -->
-      <div class="pricing-card pro reveal reveal-delay-3">
-        <div class="pricing-popular-badge">⭐ Most Popular</div>
-        <div class="pricing-plan-name">Pro</div>
-        <div class="pricing-price">
-          <span class="currency">₹</span>
-          <span class="amount">599</span>
-          <span class="period">/month</span>
-        </div>
-        <div class="pricing-desc">For growing businesses managing large client bases</div>
-        <div class="pricing-divider"></div>
-        <ul class="pricing-features">
-          <li><span class="pf-check">✓</span> Unlimited contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Unlimited technicians</li>
-          <li><span class="pf-check">✓</span> Everything in Basic</li>
-          <li><span class="pf-check">✓</span> Advanced reports</li>
-          <li><span class="pf-check">✓</span> Data export</li>
-          <li><span class="pf-check">✓</span> Dedicated support</li>
-        </ul>
-        <a href="/signup" class="btn-pricing btn-pricing-pro">Get Started</a>
-      </div>
-
-    </div>
-
-    <p class="pricing-note reveal"><span>All plans include free updates. Cancel anytime.</span></p>
   </div>
 </section>
 
