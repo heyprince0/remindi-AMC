@@ -28,7 +28,6 @@ export default function ProfileSetupPage() {
   const [fullName, setFullName] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [phone, setPhone] = useState('')
-  const [whatsapp, setWhatsapp] = useState('')
   const [city, setCity] = useState('')
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -69,7 +68,6 @@ export default function ProfileSetupPage() {
     if (!fullName.trim()) newErrors.fullName = 'Your name is required'
     if (!companyName.trim()) newErrors.companyName = 'Company name is required'
     if (!phone.trim()) newErrors.phone = 'Phone number is required'
-    if (!whatsapp.trim()) newErrors.whatsapp = 'WhatsApp number is required'
     if (!city.trim()) newErrors.city = 'City is required'
 
     setErrors(newErrors)
@@ -91,7 +89,6 @@ export default function ProfileSetupPage() {
     full_name: fullName,
     company_name: companyName,
     phone: phone,
-    whatsapp_number: whatsapp,
     city: city,
     service_types: selectedServices.length > 0 
       ? selectedServices : null,
@@ -175,19 +172,6 @@ export default function ProfileSetupPage() {
                 className={errors.phone ? 'border-red-500' : ''}
               />
               {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
-            </div>
-
-            {/* WhatsApp Number */}
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp">WhatsApp Number *</Label>
-              <Input
-                id="whatsapp"
-                placeholder="+91 XXXXX XXXXX"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                className={errors.whatsapp ? 'border-red-500' : ''}
-              />
-              {errors.whatsapp && <p className="text-sm text-red-500">{errors.whatsapp}</p>}
             </div>
 
             {/* City */}

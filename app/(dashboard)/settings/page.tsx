@@ -21,7 +21,6 @@ export default function SettingsPage() {
   const [fullName, setFullName] = useState("")
   const [companyName, setCompanyName] = useState("")
   const [phone, setPhone] = useState("")
-  const [whatsapp, setWhatsapp] = useState("")
   const [city, setCity] = useState("")
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,7 +44,6 @@ export default function SettingsPage() {
           setFullName(data.full_name || "")
           setCompanyName(data.company_name || "")
           setPhone(data.phone || "")
-          setWhatsapp(data.whatsapp_number || "")
           setCity(data.city || "")
           setSelectedServices(data.service_types || [])
         }
@@ -71,7 +69,6 @@ export default function SettingsPage() {
           full_name: fullName,
           company_name: companyName,
           phone: phone,
-          whatsapp_number: whatsapp,
           city: city,
           service_types: selectedServices.length > 0 ? selectedServices : null,
         }, {
@@ -153,25 +150,14 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91 XXXXX XXXXX"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                    <Input
-                      id="whatsapp"
-                      value={whatsapp}
-                      onChange={(e) => setWhatsapp(e.target.value)}
-                      placeholder="+91 XXXXX XXXXX"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 XXXXX XXXXX"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
