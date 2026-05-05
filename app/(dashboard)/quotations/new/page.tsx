@@ -90,9 +90,13 @@ export default function NewQuotationPage() {
       const nextNumber = ((existingQuotes?.length || 0) + 1).toString().padStart(3, "0")
       const quoteNo = `QT-${nextNumber}`
 
-      // Split GST into SGST and CGST (equal split)
-      const sgst = includeGst ? gstAmount / 2 : 0
-      const cgst = includeGst ? gstAmount / 2 : 0
+      // Calculate totals correctly
+      const calculatedSubtotal = items.reduce((sum, item) => {
+        return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
+      }, 0)
+      const sgst = includeGst ? (calculatedSubtotal * gstRate) / 100 : 0
+      const cgst = includeGst ? (calculatedSubtotal * gstRate) / 100 : 0
+      const grand_total = calculatedSubtotal + sgst + cgst
 
       const { data, error } = await supabase
         .from("quotations")
@@ -105,11 +109,12 @@ export default function NewQuotationPage() {
           client_gstin: "",
           subject: "",
           items: items,
-          subtotal: subtotal,
+          subtotal: calculatedSubtotal,
           sgst: sgst,
           cgst: cgst,
-          grand_total: total,
+          grand_total: grand_total,
           include_gst: includeGst,
+          gst_rate: gstRate,
           notes: notes,
           status: "Draft",
           valid_till: null,

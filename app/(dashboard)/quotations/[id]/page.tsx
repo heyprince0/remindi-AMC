@@ -94,6 +94,11 @@ export default function ViewQuotationPage() {
       const margin = 12
       const themeColor = companyProfile.theme_color || "#3b82f6"
 
+      // Helper functions for safe value conversion
+      const safeStr = (val: any): string => String(val ?? '-')
+      const safeNum = (val: any): string => String(Number(val ?? 0).toLocaleString('en-IN'))
+      const safeDate = (val: any): string => val ? new Date(val).toLocaleDateString('en-IN') : '-'
+
       // Convert hex to RGB
       const hexToRgb = (hex: string): [number, number, number] => {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -116,20 +121,20 @@ export default function ViewQuotationPage() {
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(200, 200, 200)
-      doc.text(quotation.quotation_number, margin + 10, margin + 20)
+      doc.text(safeStr(quotation.quotation_number), margin + 10, margin + 20)
 
       // Company details on the right
       doc.setFontSize(8)
       doc.setTextColor(200, 200, 200)
       const rightX = pageW - margin - 50
       if (companyProfile.company_name) {
-        doc.text(companyProfile.company_name, rightX, margin + 12)
+        doc.text(safeStr(companyProfile.company_name), rightX, margin + 12)
       }
       if (companyProfile.company_phone) {
-        doc.text(companyProfile.company_phone, rightX, margin + 17)
+        doc.text(safeStr(companyProfile.company_phone), rightX, margin + 17)
       }
       if (companyProfile.company_email) {
-        doc.text(companyProfile.company_email, rightX, margin + 22)
+        doc.text(safeStr(companyProfile.company_email), rightX, margin + 22)
       }
 
       let yPosition = margin + 40
@@ -144,27 +149,27 @@ export default function ViewQuotationPage() {
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(0, 0, 0)
-      doc.text(quotation.customer_name, margin, yPosition)
+      doc.text(safeStr(quotation.customer_name), margin, yPosition)
       yPosition += 5
 
       if (quotation.customer_phone) {
         doc.setFontSize(8)
         doc.setTextColor(80, 80, 80)
-        doc.text(`Phone: ${quotation.customer_phone}`, margin, yPosition)
+        doc.text(`Phone: ${safeStr(quotation.customer_phone)}`, margin, yPosition)
         yPosition += 4
       }
 
       if (quotation.customer_email) {
         doc.setFontSize(8)
         doc.setTextColor(80, 80, 80)
-        doc.text(`Email: ${quotation.customer_email}`, margin, yPosition)
+        doc.text(`Email: ${safeStr(quotation.customer_email)}`, margin, yPosition)
         yPosition += 4
       }
 
       if (quotation.customer_address) {
         doc.setFontSize(8)
         doc.setTextColor(80, 80, 80)
-        const lines = doc.splitTextToSize(`Address: ${quotation.customer_address}`, 80)
+        const lines = doc.splitTextToSize(`Address: ${safeStr(quotation.customer_address)}`, 80)
         doc.text(lines, margin, yPosition)
         yPosition += lines.length * 4 + 3
       }
@@ -173,10 +178,10 @@ export default function ViewQuotationPage() {
 
       // Items Table
       const itemsData = (quotation.items ?? []).map((item) => [
-        item.description ?? '-',
-        (item.quantity ?? 0).toString(),
-        `₹${((item.unit_price ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }))}`,
-        `₹${((item.amount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }))}`,
+        safeStr(item.description),
+        String(item.quantity ?? 0),
+        `Rs. ${safeNum(item.unit_price)}`,
+        `Rs. ${safeNum(item.amount)}`,
       ])
 
       autoTable(doc, {
@@ -212,22 +217,32 @@ export default function ViewQuotationPage() {
 
       // Totals Section
       const rightCol = pageW - margin - 50
+      const subtotal = Number(quotation.subtotal ?? 0)
+      const sgst = Number(quotation.sgst ?? 0)
+      const cgst = Number(quotation.cgst ?? 0)
+      const grandTotal = subtotal + sgst + cgst
 
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(80, 80, 80)
       doc.text("Subtotal:", rightCol, yPosition)
       doc.setTextColor(0, 0, 0)
-      doc.text(`₹${((quotation.subtotal ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }))}`, pageW - margin - 5, yPosition, { align: "right" })
+      doc.text(`Rs. ${subtotal.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
 
       yPosition += 5
 
       if (quotation.include_gst) {
         doc.setFontSize(9)
         doc.setTextColor(80, 80, 80)
-        doc.text(`GST (${quotation.gst_rate ?? 0}%):`, rightCol, yPosition)
+        doc.text(`SGST (${safeStr(quotation.gst_rate ?? 0)}%):`, rightCol, yPosition)
         doc.setTextColor(0, 0, 0)
-        doc.text(`₹${((quotation.gst_amount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }))}`, pageW - margin - 5, yPosition, { align: "right" })
+        doc.text(`Rs. ${sgst.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
+        yPosition += 5
+
+        doc.setTextColor(80, 80, 80)
+        doc.text(`CGST (${safeStr(quotation.gst_rate ?? 0)}%):`, rightCol, yPosition)
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Rs. ${cgst.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
         yPosition += 5
       }
 
@@ -240,17 +255,17 @@ export default function ViewQuotationPage() {
       doc.setFont("helvetica", "bold")
       doc.setTextColor(...themeRgb)
       doc.text("TOTAL:", rightCol, yPosition + 4)
-      doc.text(`₹${((quotation.total_amount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }))}`, pageW - margin - 5, yPosition + 4, { align: "right" })
+      doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition + 4, { align: "right" })
 
       yPosition += 12
 
       // Amount in words
-      if ((quotation.total_amount ?? 0) > 0) {
+      if (grandTotal > 0) {
         doc.setFontSize(8)
         doc.setFont("helvetica", "italic")
         doc.setTextColor(80, 80, 80)
-        const amountInWords = numberToWords(quotation.total_amount ?? 0)
-        const lines = doc.splitTextToSize(`Amount in words: ${amountInWords}`, pageW - 2 * margin - 10)
+        const amountInWords = numberToWords(grandTotal)
+        const lines = doc.splitTextToSize(`Amount in words: ${safeStr(amountInWords)}`, pageW - 2 * margin - 10)
         doc.text(lines, margin, yPosition)
         yPosition += lines.length * 4 + 3
       }
@@ -267,7 +282,7 @@ export default function ViewQuotationPage() {
         doc.setFontSize(8)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(80, 80, 80)
-        const noteLines = doc.splitTextToSize(quotation.notes, pageW - 2 * margin - 10)
+        const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin - 10)
         doc.text(noteLines, margin, yPosition)
       }
 
@@ -275,13 +290,13 @@ export default function ViewQuotationPage() {
       doc.setFontSize(7)
       doc.setTextColor(150, 150, 150)
       doc.text(
-        `Generated on ${new Date().toLocaleDateString("en-IN")} | Quotation ID: ${quotation.id}`,
+        `Generated on ${safeDate(new Date())} | Quotation ID: ${safeStr(quotation.id)}`,
         pageW / 2,
         pageH - 8,
         { align: "center" }
       )
 
-      doc.save(`${quotation.quotation_number}.pdf`)
+      doc.save(`${safeStr(quotation.quotation_number)}.pdf`)
       toast.success("PDF generated successfully")
     } catch (error) {
       console.error("Error generating PDF:", error)
