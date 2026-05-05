@@ -3,27 +3,61 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Quotation, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, Download, FileText, MessageCircle, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Download,
+  MessageCircle,
+  Edit,
+  ChevronDown,
+  Loader2,
+  FileText,
+} from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+const safeStr = (val: any) => String(val ?? "-")
+const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
+const safeDate = (val: any) =>
+  val ? new Date(val).toLocaleDateString("en-IN") : "-"
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+}
 
 function getStatusBadge(status: string) {
-  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-    draft: { bg: "bg-slate-100", text: "text-slate-700", label: "Draft" },
-    sent: { bg: "bg-blue-100", text: "text-blue-700", label: "Sent" },
-    accepted: { bg: "bg-green-100", text: "text-green-700", label: "Accepted" },
-    rejected: { bg: "bg-red-100", text: "text-red-700", label: "Rejected" },
-    expired: { bg: "bg-orange-100", text: "text-orange-700", label: "Expired" },
-  }
-  const config = statusConfig[status] || statusConfig.draft
-  return <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
+  const s = (status ?? "draft").toLowerCase()
+  if (s === "draft") return <Badge className="bg-slate-100 text-slate-700 border-0">Draft</Badge>
+  if (s === "sent") return <Badge className="bg-blue-100 text-blue-700 border-0">Sent</Badge>
+  if (s === "accepted") return <Badge className="bg-green-100 text-green-700 border-0">Accepted</Badge>
+  if (s === "rejected") return <Badge className="bg-red-100 text-red-700 border-0">Rejected</Badge>
+  return <Badge className="bg-slate-100 text-slate-700 border-0">{status}</Badge>
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [24, 95, 165]
 }
 
 export default function ViewQuotationPage() {
@@ -31,306 +65,35 @@ export default function ViewQuotationPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [quotation, setQuotation] = useState<Quotation | null>(null)
-  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null)
+  const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [updating, setUpdating] = useState(false)
   const id = params.id as string
 
   useEffect(() => {
-    loadData()
+    if (user?.id && id) loadData()
   }, [id, user?.id])
 
   const loadData = async () => {
+    setLoading(true)
     try {
-      if (!user?.id || !id) return
-
-      // Load quotation
-      const { data: quotationData, error: quotationError } = await supabase
-        .from("quotations")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .single()
-
-      if (quotationError) throw quotationError
-      
-      if (!quotationData) {
-        throw new Error("Quotation not found")
-      }
-      
-      setQuotation(quotationData as Quotation)
-
-      // Load company profile
-      const { data: profileData } = await supabase
-        .from("company_profile")
-        .select("*")
-        .eq("user_id", user.id)
-        .single()
-
-      if (profileData) {
-        setCompanyProfile(profileData as CompanyProfile)
-      }
-    } catch (error) {
-      console.error("Error loading quotation:", error)
+      const [{ data: qData, error: qErr }, { data: pData }] = await Promise.all([
+        supabase.from("quotations").select("*").eq("id", id).eq("user_id", user!.id).single(),
+        supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
+      ])
+      if (qErr) throw qErr
+      setQuotation(qData as Quotation)
+      if (pData) setProfile(pData as CompanyProfile)
+    } catch (err) {
+      console.error(err)
       toast.error("Failed to load quotation")
-      setQuotation(null)
     } finally {
       setLoading(false)
     }
   }
 
-  const generatePDF = async () => {
-    if (!quotation || !companyProfile) {
-      toast.error("Missing quotation or company data")
-      return
-    }
-
-    setGeneratingPdf(true)
-    try {
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
-      const pageW = 210
-      const pageH = 297
-      const margin = 12
-      const themeColor = companyProfile.theme_color || "#3b82f6"
-
-      // Helper functions for safe string conversion
-      const safeStr = (val: any) => String(val ?? '-')
-      const safeNum = (val: any) => String(Number(val ?? 0).toLocaleString('en-IN'))
-      const safeDate = (val: any) => val 
-        ? new Date(val).toLocaleDateString('en-IN') 
-        : '-'
-
-      // Convert hex to RGB
-      const hexToRgb = (hex: string): [number, number, number] => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-        return result
-          ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-          : [59, 130, 246]
-      }
-
-      const themeRgb = hexToRgb(themeColor)
-
-      // Header with company info and theme color
-      doc.setFillColor(...themeRgb)
-      doc.rect(margin, margin, pageW - 2 * margin, 35, "F")
-
-      doc.setFontSize(24)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(255, 255, 255)
-      doc.text("QUOTATION", margin + 10, margin + 12)
-
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(200, 200, 200)
-      doc.text(safeStr(quotation.quote_no ?? ('QT-' + quotation.id)), margin + 10, margin + 20)
-
-      // Company details on the right
-      doc.setFontSize(8)
-      doc.setTextColor(200, 200, 200)
-      const rightX = pageW - margin - 50
-      if (companyProfile.company_name) {
-        doc.text(safeStr(companyProfile.company_name), rightX, margin + 12)
-      }
-      if (companyProfile.company_phone) {
-        doc.text(safeStr(companyProfile.company_phone), rightX, margin + 17)
-      }
-      if (companyProfile.company_email) {
-        doc.text(safeStr(companyProfile.company_email), rightX, margin + 22)
-      }
-
-      let yPosition = margin + 40
-
-      // Bill To Section
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(...themeRgb)
-      doc.text("BILL TO:", margin, yPosition)
-
-      yPosition += 6
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(quotation.client_name), margin, yPosition)
-      yPosition += 5
-
-      if (quotation.customer_phone) {
-        doc.setFontSize(8)
-        doc.setTextColor(80, 80, 80)
-        doc.text(`Phone: ${safeStr(quotation.customer_phone)}`, margin, yPosition)
-        yPosition += 4
-      }
-
-      if (quotation.customer_email) {
-        doc.setFontSize(8)
-        doc.setTextColor(80, 80, 80)
-        doc.text(`Email: ${safeStr(quotation.customer_email)}`, margin, yPosition)
-        yPosition += 4
-      }
-
-      if (quotation.client_address) {
-        doc.setFontSize(8)
-        doc.setTextColor(80, 80, 80)
-        const lines = doc.splitTextToSize(`Address: ${safeStr(quotation.client_address)}`, 80)
-        doc.text(lines, margin, yPosition)
-        yPosition += lines.length * 4 + 3
-      }
-
-      yPosition += 3
-
-      // Items Table
-      const itemsData = (quotation.items ?? []).map((item: any) => [
-        safeStr(item.description ?? item.particulars ?? item.name),
-        safeStr(item.quantity ?? 1),
-        'Rs. ' + safeNum(item.unit_price ?? item.rate ?? 0),
-        'Rs. ' + safeNum(item.amount ?? (Number(item.quantity ?? 0) * Number(item.rate ?? 0)) ?? 0),
-      ])
-
-      autoTable(doc, {
-        startY: yPosition,
-        head: [["Description", "Quantity", "Unit Price", "Amount"]],
-        body: itemsData,
-        headStyles: {
-          fillColor: themeRgb,
-          textColor: [255, 255, 255],
-          fontSize: 9,
-          fontStyle: "bold",
-          cellPadding: 4,
-          borderColor: themeRgb,
-        },
-        bodyStyles: {
-          fontSize: 8,
-          cellPadding: 3,
-          borderColor: [200, 200, 200],
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        columnStyles: {
-          0: { halign: "left" },
-          1: { halign: "center", cellWidth: 25 },
-          2: { halign: "right", cellWidth: 35 },
-          3: { halign: "right", cellWidth: 35 },
-        },
-        margin: { left: margin, right: margin },
-      })
-
-      yPosition = (doc as any).lastAutoTable.finalY + 8
-
-      // Totals Section
-      const rightCol = pageW - margin - 50
-
-      // Calculate totals from items
-      const subtotal = Number(quotation.subtotal ?? 0)
-      const sgst = Number(quotation.sgst ?? 0)
-      const cgst = Number(quotation.cgst ?? 0)
-      const grandTotal = subtotal + sgst + cgst
-
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(80, 80, 80)
-      doc.text("Subtotal:", rightCol, yPosition)
-      doc.setTextColor(0, 0, 0)
-      doc.text(`Rs. ${subtotal.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
-
-      yPosition += 5
-
-      if (quotation.include_gst && (sgst > 0 || cgst > 0)) {
-        doc.setFontSize(9)
-        doc.setTextColor(80, 80, 80)
-        doc.text(`SGST (9%):`, rightCol, yPosition)
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Rs. ${sgst.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
-        yPosition += 5
-
-        doc.setFontSize(9)
-        doc.setTextColor(80, 80, 80)
-        doc.text(`CGST (9%):`, rightCol, yPosition)
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Rs. ${cgst.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition, { align: "right" })
-        yPosition += 5
-      }
-
-      // Total with border
-      doc.setDrawColor(...themeRgb)
-      doc.setLineWidth(0.5)
-      doc.line(rightCol - 5, yPosition - 2, pageW - margin - 5, yPosition - 2)
-
-      doc.setFontSize(12)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(...themeRgb)
-      doc.text("TOTAL:", rightCol, yPosition + 4)
-      doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, pageW - margin - 5, yPosition + 4, { align: "right" })
-
-      yPosition += 12
-
-      // Amount in words
-      if (grandTotal > 0) {
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "italic")
-        doc.setTextColor(80, 80, 80)
-        const amountInWords = numberToWords(grandTotal)
-        const lines = doc.splitTextToSize(`Amount in words: ${amountInWords}`, pageW - 2 * margin - 10)
-        doc.text(lines, margin, yPosition)
-        yPosition += lines.length * 4 + 3
-      }
-
-      // Notes
-      if (quotation.notes) {
-        yPosition += 3
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(...themeRgb)
-        doc.text("Notes:", margin, yPosition)
-        yPosition += 5
-
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(80, 80, 80)
-        const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin - 10)
-        doc.text(noteLines, margin, yPosition)
-      }
-
-      // Footer
-      doc.setFontSize(7)
-      doc.setTextColor(150, 150, 150)
-      doc.text(
-        `Generated on ${new Date().toLocaleDateString("en-IN")} | Quotation ID: ${quotation.id}`,
-        pageW / 2,
-        pageH - 8,
-        { align: "center" }
-      )
-
-      doc.save(`${safeStr(quotation.quote_no)}.pdf`)
-      toast.success("PDF generated successfully")
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      toast.error("Failed to generate PDF")
-    } finally {
-      setGeneratingPdf(false)
-    }
-  }
-
-  const numberToWords = (num: number): string => {
-    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
-    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
-    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
-
-    const convert = (n: number): string => {
-      if (n === 0) return ""
-      if (n < 10) return ones[n]
-      if (n < 20) return teens[n - 10]
-      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "")
-      if (n < 1000) return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " " + convert(n % 100) : "")
-      if (n < 100000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convert(n % 1000) : "")
-      if (n < 10000000) return convert(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convert(n % 100000) : "")
-      return convert(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convert(n % 10000000) : "")
-    }
-
-    return convert(Math.floor(num)) + " Rupees"
-  }
-
-  const handleUpdateStatus = async (newStatus: Quotation["status"]) => {
+  const handleUpdateStatus = async (newStatus: string) => {
     if (!quotation) return
     setUpdating(true)
     try {
@@ -338,46 +101,253 @@ export default function ViewQuotationPage() {
         .from("quotations")
         .update({ status: newStatus })
         .eq("id", quotation.id)
-
       if (error) throw error
-      setQuotation({ ...quotation, status: newStatus })
-      toast.success(`Quotation marked as ${newStatus}`)
-    } catch (error) {
-      console.error("Error updating status:", error)
+      setQuotation({ ...quotation, status: newStatus as Quotation["status"] })
+      toast.success(`Status updated to ${newStatus}`)
+    } catch (err) {
+      console.error(err)
       toast.error("Failed to update status")
     } finally {
       setUpdating(false)
     }
   }
 
-  const handleSendWhatsApp = () => {
-    if (!quotation || !quotation.customer_phone) {
-      toast.error("Customer phone number is required")
-      return
-    }
+  const getMappedItems = () => {
+    return (quotation?.items ?? []).map((item: any, index: number) => ({
+      sr: index + 1,
+      description: item.particulars ?? item.description ?? item.name ?? "-",
+      qty: item.qty ?? item.quantity ?? 1,
+      rate: Number(item.rate ?? item.unit_price ?? 0),
+      amount: Number(item.amount ?? ((item.qty ?? item.quantity ?? 0) * (item.rate ?? item.unit_price ?? 0)) ?? 0),
+    }))
+  }
 
-    // Format phone number (remove spaces, dashes, etc.)
-    let phoneNumber = quotation.customer_phone.replace(/\D/g, "")
-    // Ensure it starts with country code
-    if (!phoneNumber.startsWith("91")) {
-      phoneNumber = "91" + phoneNumber
-    }
+  const getGrandTotal = () => {
+    if (!quotation) return 0
+    const subtotal = Number(quotation.subtotal ?? 0)
+    const sgst = Number(quotation.sgst ?? 0)
+    const cgst = Number(quotation.cgst ?? 0)
+    return (subtotal + sgst + cgst) > 0 ? (subtotal + sgst + cgst) : subtotal
+  }
 
-    // Create message
-    const itemsList = (quotation.items ?? [])
-      .map((item) => `• ${item.description ?? '-'} x${item.quantity ?? 0} = ₹${(item.amount ?? 0).toLocaleString("en-IN")}`)
-      .join("%0A")
+  const handleWhatsApp = () => {
+    if (!quotation) return
+    const grandTotal = getGrandTotal()
+    const items = quotation.items ?? []
+    const msg =
+      `*Quotation - ${safeStr(profile?.company_name)}*\n` +
+      `Quote No: ${safeStr(quotation.quote_no)}\n` +
+      `Date: ${safeDate(quotation.created_at)}\n` +
+      `Valid till: ${safeDate(quotation.valid_till)}\n\n` +
+      `*Customer:* ${safeStr(quotation.client_name)}\n\n` +
+      `─────────────────────\n` +
+      `*Services:*\n` +
+      items.map((i: any) =>
+        `• ${i.particulars ?? i.description ?? i.name ?? "-"} - Rs.${Number(i.amount ?? 0).toLocaleString("en-IN")}`
+      ).join("\n") + "\n" +
+      `─────────────────────\n` +
+      `*Subtotal:* Rs.${safeNum(quotation.subtotal)}\n` +
+      `*GST (18%):* Rs.${safeNum(Number(quotation.sgst ?? 0) + Number(quotation.cgst ?? 0))}\n` +
+      `*Total:* Rs.${safeNum(grandTotal)}\n` +
+      `─────────────────────\n\n` +
+      `To confirm reply YES or call ${safeStr(profile?.company_phone)}\n\n` +
+      `_Powered by Remindi_`
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg))
+  }
 
-    const message = encodeURIComponent(
-      `Hi ${quotation.customer_name ?? '-'},%0A%0AI wanted to share the quotation for your request.%0A%0A*Quotation #${quotation.quotation_number ?? '-'}*%0A%0AItems:%0A${itemsList}%0A%0A*Total: ₹${(quotation.total_amount ?? 0).toLocaleString("en-IN")}*%0A%0APlease reply if you have any questions or would like to proceed.%0A%0AThank you!`
-    )
+  const handleDownloadPdf = async () => {
+    if (!quotation) return
+    setGeneratingPdf(true)
+    try {
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+      const pageW = 210
+      const pageH = 297
+      const margin = 15
+      const themeColor = profile?.theme_color ?? "#185FA5"
+      const themeRgb = hexToRgb(themeColor)
 
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`
-    window.open(whatsappUrl, "_blank")
+      let y = margin
 
-    // Mark as sent
-    if (quotation.status === "draft") {
-      handleUpdateStatus("sent")
+      // Logo
+      try {
+        if (profile?.logo_url) {
+          doc.addImage(profile.logo_url, "PNG", margin, y, 25, 25)
+        }
+      } catch (e) { /* skip */ }
+
+      // Company header
+      const companyX = profile?.logo_url ? margin + 30 : margin
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(profile?.company_name), companyX, y + 8)
+
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(80, 80, 80)
+      if (profile?.company_address) {
+        doc.text(safeStr(profile.company_address), companyX, y + 14)
+      }
+      if (profile?.company_email) {
+        doc.text(safeStr(profile.company_email), companyX, y + 19)
+      }
+      if (profile?.company_phone) {
+        doc.text(safeStr(profile.company_phone), companyX, y + 24)
+      }
+
+      y += 32
+
+      // Theme separator line
+      doc.setDrawColor(...themeRgb)
+      doc.setLineWidth(1)
+      doc.line(margin, y, pageW - margin, y)
+      y += 6
+
+      // Quote No + Date
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(...themeRgb)
+      doc.text(`Quotation ${safeStr(quotation.quote_no ?? ("QT-" + quotation.id))}`, margin, y)
+
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(80, 80, 80)
+      doc.text(`Date: ${safeDate(quotation.created_at)}`, pageW - margin, y, { align: "right" })
+      if (quotation.valid_till) {
+        doc.text(`Valid Till: ${safeDate(quotation.valid_till)}`, pageW - margin, y + 5, { align: "right" })
+      }
+      y += 12
+
+      // Client info
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Bill To:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      doc.text(safeStr(quotation.client_name), margin, y)
+      y += 5
+      if (quotation.client_address) {
+        const addrLines = doc.splitTextToSize(safeStr(quotation.client_address), 90)
+        doc.text(addrLines, margin, y)
+        y += addrLines.length * 4
+      }
+      if (quotation.client_city) {
+        doc.text(safeStr(quotation.client_city), margin, y)
+        y += 4
+      }
+      if (quotation.client_gstin) {
+        doc.text(`GSTIN: ${safeStr(quotation.client_gstin)}`, margin, y)
+        y += 4
+      }
+      if (quotation.subject) {
+        y += 2
+        doc.setFont("helvetica", "bold")
+        doc.text(`Subject: ${safeStr(quotation.subject)}`, margin, y)
+        y += 5
+      }
+      y += 4
+
+      // Items table
+      const mappedItems = getMappedItems()
+      const tableBody = mappedItems.map((item) => [
+        String(item.sr),
+        safeStr(item.description),
+        String(item.qty),
+        `Rs. ${Number(item.rate).toLocaleString("en-IN")}`,
+        `Rs. ${Number(item.amount).toLocaleString("en-IN")}`,
+      ])
+
+      autoTable(doc, {
+        startY: y,
+        head: [["SR.", "Description", "Qty", "Unit Price", "Amount"]],
+        body: tableBody,
+        headStyles: {
+          fillColor: themeRgb,
+          textColor: [255, 255, 255],
+          fontSize: 9,
+          fontStyle: "bold",
+        },
+        bodyStyles: { fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 12 },
+          2: { halign: "center", cellWidth: 18 },
+          3: { halign: "right", cellWidth: 32 },
+          4: { halign: "right", cellWidth: 32 },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 8
+
+      // Totals
+      const subtotal = Number(quotation.subtotal ?? 0)
+      const sgst = Number(quotation.sgst ?? 0)
+      const cgst = Number(quotation.cgst ?? 0)
+      const grandTotal = getGrandTotal()
+      const rightCol = pageW - margin - 55
+
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(80, 80, 80)
+      doc.text("Subtotal:", rightCol, y)
+      doc.setTextColor(0, 0, 0)
+      doc.text(`Rs. ${subtotal.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
+      y += 5
+
+      if (sgst > 0 || cgst > 0) {
+        doc.setTextColor(80, 80, 80)
+        doc.text("SGST (9%):", rightCol, y)
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Rs. ${sgst.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
+        y += 5
+        doc.setTextColor(80, 80, 80)
+        doc.text("CGST (9%):", rightCol, y)
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Rs. ${cgst.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
+        y += 5
+      }
+
+      doc.setDrawColor(...themeRgb)
+      doc.setLineWidth(0.5)
+      doc.line(rightCol - 2, y, pageW - margin, y)
+      y += 5
+
+      doc.setFontSize(11)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(...themeRgb)
+      doc.text("Grand Total:", rightCol, y)
+      doc.text(`Rs. ${grandTotal.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
+      y += 10
+
+      // Notes
+      if (quotation.notes) {
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Notes:", margin, y)
+        y += 5
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin)
+        doc.text(noteLines, margin, y)
+      }
+
+      // Footer
+      doc.setFontSize(7)
+      doc.setTextColor(150, 150, 150)
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
+
+      const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
+      doc.save(filename)
+      toast.success("PDF downloaded")
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to generate PDF")
+    } finally {
+      setGeneratingPdf(false)
     }
   }
 
@@ -385,7 +355,7 @@ export default function ViewQuotationPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading quotation...</p>
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
@@ -404,184 +374,252 @@ export default function ViewQuotationPage() {
     )
   }
 
+  const mappedItems = getMappedItems()
+  const grandTotal = getGrandTotal()
+  const subtotal = Number(quotation.subtotal ?? 0)
+  const gstTotal = Number(quotation.sgst ?? 0) + Number(quotation.cgst ?? 0)
+  const statusLower = (quotation.status ?? "draft").toLowerCase()
+
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
             <Link href="/quotations">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="shrink-0 mt-1">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{quotation.quotation_number ?? '-'}</h1>
-              <p className="text-muted-foreground">
-                {quotation.created_at ? new Date(quotation.created_at).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                }) : '-'}
+              <h1 className="text-2xl font-bold text-foreground">
+                {quotation.quote_no ?? ("QT-" + quotation.id)}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {formatDate(quotation.created_at)}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {getStatusBadge(quotation.status)}
+
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              size="sm"
+            >
+              {generatingPdf ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Download className="mr-1.5 size-4" />
+              )}
+              Download PDF
+            </Button>
+
+            <Button
+              onClick={handleWhatsApp}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              size="sm"
+            >
+              <MessageCircle className="mr-1.5 size-4" />
+              WhatsApp
+            </Button>
+
+            <Link href={`/quotations/${id}/edit`}>
+              <Button variant="outline" size="sm">
+                <Edit className="mr-1.5 size-4" />
+                Edit
+              </Button>
+            </Link>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={updating}>
+                  {updating ? (
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  ) : (
+                    <ChevronDown className="mr-1.5 size-4" />
+                  )}
+                  Change Status
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleUpdateStatus("Draft")}>
+                  <span className="size-2 rounded-full bg-slate-400 mr-2 inline-block" />
+                  Draft
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdateStatus("Sent")}>
+                  <span className="size-2 rounded-full bg-blue-500 mr-2 inline-block" />
+                  Sent
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdateStatus("Accepted")}>
+                  <span className="size-2 rounded-full bg-green-500 mr-2 inline-block" />
+                  Accepted
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdateStatus("Rejected")}>
+                  <span className="size-2 rounded-full bg-red-500 mr-2 inline-block" />
+                  Rejected
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {statusLower === "accepted" && (
+              <Button
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                size="sm"
+                onClick={() => toast.info("Convert to Invoice coming soon")}
+              >
+                <FileText className="mr-1.5 size-4" />
+                Convert to Invoice
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Customer Information */}
+        {/* COMPANY INFO */}
+        {profile && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Company Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-start gap-4">
+                {profile.logo_url && (
+                  <img
+                    src={profile.logo_url}
+                    alt="Company logo"
+                    className="h-16 w-16 object-contain rounded border"
+                  />
+                )}
+                <div className="space-y-1">
+                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
+                  {profile.company_address && (
+                    <p className="text-sm text-muted-foreground">{profile.company_address}</p>
+                  )}
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted-foreground">
+                    {profile.company_email && <span>{profile.company_email}</span>}
+                    {profile.company_phone && <span>{profile.company_phone}</span>}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CUSTOMER INFORMATION */}
         <Card>
           <CardHeader>
-            <CardTitle>Customer Information</CardTitle>
+            <CardTitle className="text-base">Customer Information</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="text-sm text-muted-foreground">Name</p>
-              <p className="text-lg font-medium">{quotation.customer_name ?? '-'}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
+              <p className="font-medium">{quotation.client_name ?? "-"}</p>
             </div>
-            {quotation.customer_phone && (
-              <div>
-                <p className="text-sm text-muted-foreground">Phone</p>
-                <p className="text-lg font-medium">{quotation.customer_phone ?? '-'}</p>
-              </div>
-            )}
-            {quotation.customer_email && (
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="text-lg font-medium">{quotation.customer_email ?? '-'}</p>
-              </div>
-            )}
-            {quotation.customer_address && (
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client City</p>
+              <p className="font-medium">{quotation.client_city ?? "-"}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
+              <p className="font-medium">{quotation.client_address ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client GSTIN</p>
+              <p className="font-medium">{quotation.client_gstin ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid Till</p>
+              <p className="font-medium">{quotation.valid_till ? formatDate(quotation.valid_till) : "-"}</p>
+            </div>
+            {quotation.subject && (
               <div className="sm:col-span-2">
-                <p className="text-sm text-muted-foreground">Address</p>
-                <p className="text-lg font-medium">{quotation.customer_address ?? '-'}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
+                <p className="font-medium">{quotation.subject}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Items */}
+        {/* ITEMS TABLE */}
         <Card>
           <CardHeader>
-            <CardTitle>Items</CardTitle>
+            <CardTitle className="text-base">Items</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-2 font-semibold">Description</th>
-                    <th className="text-center py-2 px-2 font-semibold w-20">Qty</th>
-                    <th className="text-right py-2 px-2 font-semibold w-32">Unit Price</th>
-                    <th className="text-right py-2 px-2 font-semibold w-32">Amount</th>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="text-center py-3 px-4 font-semibold w-12">SR.</th>
+                    <th className="text-left py-3 px-4 font-semibold">Description</th>
+                    <th className="text-center py-3 px-4 font-semibold w-16">Qty</th>
+                    <th className="text-right py-3 px-4 font-semibold w-32">Unit Price</th>
+                    <th className="text-right py-3 px-4 font-semibold w-32">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(quotation.items ?? []).map((item, index) => (
-                    <tr key={item.id} className={index % 2 === 0 ? "bg-secondary/30" : ""}>
-                      <td className="py-2 px-2">{item.description ?? '-'}</td>
-                      <td className="text-center py-2 px-2">{item.quantity ?? 0}</td>
-                      <td className="text-right py-2 px-2">₹{((item.unit_price ?? 0).toLocaleString("en-IN"))}</td>
-                      <td className="text-right py-2 px-2 font-medium">₹{((item.amount ?? 0).toLocaleString("en-IN"))}</td>
+                  {mappedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                        No items found
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    mappedItems.map((item, i) => (
+                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr}</td>
+                        <td className="py-3 px-4">{item.description}</td>
+                        <td className="text-center py-3 px-4">{item.qty}</td>
+                        <td className="text-right py-3 px-4">₹{Number(item.rate).toLocaleString("en-IN")}</td>
+                        <td className="text-right py-3 px-4 font-medium">₹{Number(item.amount).toLocaleString("en-IN")}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </CardContent>
         </Card>
 
-        {/* Totals */}
+        {/* TOTALS */}
         <Card>
-          <CardContent className="pt-6 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-medium">₹{((quotation.subtotal ?? 0).toLocaleString("en-IN"))}</span>
-            </div>
-            {quotation.include_gst && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">GST ({quotation.gst_rate ?? 0}%):</span>
-                <span className="font-medium">₹{((quotation.gst_amount ?? 0).toLocaleString("en-IN"))}</span>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-end gap-2 max-w-xs ml-auto">
+              <div className="flex justify-between w-full text-sm">
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span className="font-medium">₹{subtotal.toLocaleString("en-IN")}</span>
               </div>
-            )}
-            <div className="border-t border-border pt-3 flex justify-between text-lg font-bold">
-              <span>Total:</span>
-              <span className="text-primary">₹{((quotation.total_amount ?? 0).toLocaleString("en-IN"))}</span>
+              {gstTotal > 0 && (
+                <div className="flex justify-between w-full text-sm">
+                  <span className="text-muted-foreground">GST (18%):</span>
+                  <span className="font-medium">₹{gstTotal.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="border-t border-border pt-2 mt-1 flex justify-between w-full">
+                <span className="text-base font-bold">Grand Total:</span>
+                <span className="text-base font-bold text-blue-600">
+                  ₹{grandTotal.toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Notes */}
+        {/* NOTES */}
         {quotation.notes && (
           <Card>
             <CardHeader>
-              <CardTitle>Notes</CardTitle>
+              <CardTitle className="text-base">Notes</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quotation.notes}</p>
             </CardContent>
           </Card>
         )}
-
-        {/* Actions */}
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-2 flex-wrap">
-            <Button onClick={generatePDF} disabled={generatingPdf} variant="outline">
-              {generatingPdf ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 size-4" />
-                  Download PDF
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={() => handleSendWhatsApp()}
-              disabled={!quotation.customer_phone}
-              variant="outline"
-            >
-              <MessageCircle className="mr-2 size-4" />
-              Send via WhatsApp
-            </Button>
-          </div>
-
-          {quotation.status === "draft" && (
-            <div className="flex gap-2 pt-2">
-              <Button
-                onClick={() => handleUpdateStatus("sent")}
-                disabled={updating}
-                className="flex-1"
-              >
-                {updating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <FileText className="mr-2 size-4" />}
-                Mark as Sent
-              </Button>
-              <Button
-                onClick={() => handleUpdateStatus("accepted")}
-                disabled={updating}
-                variant="outline"
-                className="flex-1"
-              >
-                {updating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <CheckCircle className="mr-2 size-4" />}
-                Mark as Accepted
-              </Button>
-              <Button
-                onClick={() => handleUpdateStatus("rejected")}
-                disabled={updating}
-                variant="outline"
-                className="flex-1"
-              >
-                {updating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <XCircle className="mr-2 size-4" />}
-                Mark as Rejected
-              </Button>
-            </div>
-          )}
-        </div>
       </div>
     </DashboardLayout>
   )

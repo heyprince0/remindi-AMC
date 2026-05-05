@@ -92,10 +92,10 @@ export default function NewQuotationPage() {
 
       // Calculate grand_total: subtotal + SGST + CGST
       const calculatedSubtotal = (items ?? []).reduce((sum, item) => {
-        return sum + (Number(item.qty ?? item.quantity ?? 0) * Number(item.rate ?? item.unit_price ?? 0))
+        return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
       }, 0)
-      const sgst = includeGst ? calculatedSubtotal * 0.09 : 0
-      const cgst = includeGst ? calculatedSubtotal * 0.09 : 0
+      const sgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
+      const cgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
       const grandTotal = calculatedSubtotal + sgst + cgst
 
       const { data, error } = await supabase
