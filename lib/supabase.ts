@@ -165,14 +165,21 @@ export type CompanyProfile = {
   id: string
   user_id: string
   company_name: string | null
-  company_email: string | null
-  company_phone: string | null
-  company_address: string | null
-  company_city: string | null
-  company_state: string | null
-  company_zip: string | null
+  tagline: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  gstin: string | null
+  pan: string | null
   logo_url: string | null
   theme_color: string
+  bank_name: string | null
+  account_no: string | null
+  ifsc: string | null
+  upi: string | null
   created_at: string
   updated_at: string
 }

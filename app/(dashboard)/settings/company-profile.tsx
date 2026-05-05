@@ -13,22 +13,30 @@ import { toast } from "sonner"
 
 export function CompanyProfileSettings() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   
+  // Form fields
   const [companyName, setCompanyName] = useState("")
-  const [companyEmail, setCompanyEmail] = useState("")
-  const [companyPhone, setCompanyPhone] = useState("")
-  const [companyAddress, setCompanyAddress] = useState("")
-  const [companyCity, setCompanyCity] = useState("")
-  const [companyState, setCompanyState] = useState("")
-  const [companyZip, setCompanyZip] = useState("")
-  const [themeColor, setThemeColor] = useState("#3b82f6")
+  const [tagline, setTagline] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [address, setAddress] = useState("")
+  const [city, setCity] = useState("")
+  const [state, setState] = useState("")
+  const [zipCode, setZipCode] = useState("")
+  const [gstin, setGstin] = useState("")
+  const [pan, setPan] = useState("")
   const [logoUrl, setLogoUrl] = useState("")
   const [logoPreview, setLogoPreview] = useState("")
+  const [themeColor, setThemeColor] = useState("#185FA5")
+  const [bankName, setBankName] = useState("")
+  const [accountNo, setAccountNo] = useState("")
+  const [ifsc, setIfsc] = useState("")
+  const [upi, setUpi] = useState("")
 
+  // Load existing profile data
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -43,17 +51,24 @@ export function CompanyProfileSettings() {
         if (error && error.code !== 'PGRST116') throw error
 
         if (data) {
-          setProfile(data as CompanyProfile)
-          setCompanyName(data.company_name || "")
-          setCompanyEmail(data.company_email || "")
-          setCompanyPhone(data.company_phone || "")
-          setCompanyAddress(data.company_address || "")
-          setCompanyCity(data.company_city || "")
-          setCompanyState(data.company_state || "")
-          setCompanyZip(data.company_zip || "")
-          setThemeColor(data.theme_color || "#3b82f6")
-          setLogoUrl(data.logo_url || "")
-          setLogoPreview(data.logo_url || "")
+          const profile = data as CompanyProfile
+          setCompanyName(profile.company_name || "")
+          setTagline(profile.tagline || "")
+          setEmail(profile.email || "")
+          setPhone(profile.phone || "")
+          setAddress(profile.address || "")
+          setCity(profile.city || "")
+          setState(profile.state || "")
+          setZipCode(profile.zip_code || "")
+          setGstin(profile.gstin || "")
+          setPan(profile.pan || "")
+          setLogoUrl(profile.logo_url || "")
+          setLogoPreview(profile.logo_url || "")
+          setThemeColor(profile.theme_color || "#185FA5")
+          setBankName(profile.bank_name || "")
+          setAccountNo(profile.account_no || "")
+          setIfsc(profile.ifsc || "")
+          setUpi(profile.upi || "")
         }
       } catch (error) {
         console.error('Error loading company profile:', error)
@@ -66,6 +81,61 @@ export function CompanyProfileSettings() {
     loadProfile()
   }, [user?.id])
 
+  // Handle logo upload to Supabase storage
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB')
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file')
+      return
+    }
+
+    setUploading(true)
+    try {
+      // Create a unique filename
+      const timestamp = Date.now()
+      const fileName = `${user.id}/${timestamp}-${file.name}`
+
+      // Upload to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(fileName, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data } = supabase.storage
+        .from('logos')
+        .getPublicUrl(fileName)
+
+      const publicUrl = data.publicUrl
+      setLogoUrl(publicUrl)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setLogoPreview(event.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+
+      toast.success('Logo uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to upload logo')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Save company profile with upsert
   const handleSaveProfile = async () => {
     if (!user?.id) return
 
@@ -75,52 +145,34 @@ export function CompanyProfileSettings() {
         .from('company_profile')
         .upsert({
           user_id: user.id,
-          company_name: companyName,
-          company_email: companyEmail,
-          company_phone: companyPhone,
-          company_address: companyAddress,
-          company_city: companyCity,
-          company_state: companyState,
-          company_zip: companyZip,
+          company_name: companyName || null,
+          tagline: tagline || null,
+          email: email || null,
+          phone: phone || null,
+          address: address || null,
+          city: city || null,
+          state: state || null,
+          zip_code: zipCode || null,
+          gstin: gstin || null,
+          pan: pan || null,
+          logo_url: logoUrl || null,
           theme_color: themeColor,
-          logo_url: logoUrl,
+          bank_name: bankName || null,
+          account_no: accountNo || null,
+          ifsc: ifsc || null,
+          upi: upi || null,
         }, {
           onConflict: 'user_id'
         })
 
       if (error) throw error
-      toast.success('Company profile saved!')
+      toast.success('Company profile saved successfully!')
     } catch (error) {
+      console.error('Error saving profile:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB')
-      return
-    }
-
-    // Create preview
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      setLogoPreview(event.target?.result as string)
-    }
-    reader.readAsDataURL(file)
-
-    // For now, we'll store the base64 data URL
-    // In production, you'd want to use Vercel Blob or similar
-    const reader2 = new FileReader()
-    reader2.onload = (event) => {
-      setLogoUrl(event.target?.result as string)
-    }
-    reader2.readAsDataURL(file)
   }
 
   if (loading) {
@@ -193,10 +245,10 @@ export function CompanyProfileSettings() {
               />
             </div>
             <div
-              className="w-10 h-10 rounded-lg border border-border"
+              className="w-10 h-10 rounded-lg border border-border flex-shrink-0"
               style={{ backgroundColor: themeColor }}
             />
-            <span className="text-sm text-muted-foreground">{themeColor}</span>
+            <span className="text-sm text-muted-foreground flex-shrink-0">{themeColor}</span>
           </div>
           <p className="text-xs text-muted-foreground">
             This color will be used in quotation PDFs and throughout your documents
@@ -218,66 +270,145 @@ export function CompanyProfileSettings() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="tagline">Tagline</Label>
+              <Input
+                id="tagline"
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="Company tagline or motto"
+              />
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="company-email">Email</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="company-email"
+                  id="email"
                   type="email"
-                  value={companyEmail}
-                  onChange={(e) => setCompanyEmail(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="company@example.com"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-phone">Phone</Label>
+                <Label htmlFor="phone">Phone</Label>
                 <Input
-                  id="company-phone"
-                  value={companyPhone}
-                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   placeholder="+91 XXXXX XXXXX"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="company-address">Address</Label>
+              <Label htmlFor="address">Address</Label>
               <Input
-                id="company-address"
-                value={companyAddress}
-                onChange={(e) => setCompanyAddress(e.target.value)}
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
                 placeholder="Street address"
               />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="company-city">City</Label>
+                <Label htmlFor="city">City</Label>
                 <Input
-                  id="company-city"
-                  value={companyCity}
-                  onChange={(e) => setCompanyCity(e.target.value)}
+                  id="city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
                   placeholder="City"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-state">State</Label>
+                <Label htmlFor="state">State</Label>
                 <Input
-                  id="company-state"
-                  value={companyState}
-                  onChange={(e) => setCompanyState(e.target.value)}
+                  id="state"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
                   placeholder="State"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-zip">ZIP Code</Label>
+                <Label htmlFor="zip-code">ZIP Code</Label>
                 <Input
-                  id="company-zip"
-                  value={companyZip}
-                  onChange={(e) => setCompanyZip(e.target.value)}
+                  id="zip-code"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
                   placeholder="ZIP code"
                 />
               </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="gstin">GSTIN</Label>
+                <Input
+                  id="gstin"
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value)}
+                  placeholder="27AAPFU0192R1Z5"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pan">PAN</Label>
+                <Input
+                  id="pan"
+                  value={pan}
+                  onChange={(e) => setPan(e.target.value)}
+                  placeholder="AAPFU0192R"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank Details */}
+        <div className="border-t border-border pt-6">
+          <h3 className="font-semibold text-sm mb-4">Bank Details</h3>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bank-name">Bank Name</Label>
+              <Input
+                id="bank-name"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="Bank name"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="account-no">Account Number</Label>
+                <Input
+                  id="account-no"
+                  value={accountNo}
+                  onChange={(e) => setAccountNo(e.target.value)}
+                  placeholder="Account number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ifsc">IFSC Code</Label>
+                <Input
+                  id="ifsc"
+                  value={ifsc}
+                  onChange={(e) => setIfsc(e.target.value)}
+                  placeholder="SBIN0000001"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="upi">UPI ID</Label>
+              <Input
+                id="upi"
+                value={upi}
+                onChange={(e) => setUpi(e.target.value)}
+                placeholder="yourname@bank"
+              />
             </div>
           </div>
         </div>
