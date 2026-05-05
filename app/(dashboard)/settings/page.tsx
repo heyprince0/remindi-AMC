@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context"
 import { supabase, type Profile, signOut } from "@/lib/supabase"
 import { Save, LogOut } from "lucide-react"
 import { toast } from "sonner"
+import { CompanyProfileSettings } from "./company-profile"
 
 const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control', 'Generator', 'Fire Safety', 'UPS', 'Other']
 
@@ -109,6 +110,8 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-muted-foreground">Manage your business settings and preferences</p>
         </div>
+
+        <CompanyProfileSettings />
 
         <Card>
           <CardHeader>

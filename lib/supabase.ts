@@ -130,3 +130,67 @@ export const getAuthUser = async () => {
   const { data: { user } } = await supabase.auth.getUser()
   return user
 }
+
+// Quotations
+export type QuotationItem = {
+  id: string
+  description: string
+  quantity: number
+  unit_price: number
+  amount: number
+}
+
+export type Quotation = {
+  id: string
+  user_id: string
+  customer_id: string | null
+  quotation_number: string
+  customer_name: string
+  customer_email: string | null
+  customer_phone: string | null
+  customer_address: string | null
+  items: QuotationItem[]
+  subtotal: number
+  gst_amount: number
+  total_amount: number
+  include_gst: boolean
+  gst_rate: number
+  notes: string | null
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
+  created_at: string
+  updated_at: string
+}
+
+export type CompanyProfile = {
+  id: string
+  user_id: string
+  company_name: string | null
+  company_email: string | null
+  company_phone: string | null
+  company_address: string | null
+  company_city: string | null
+  company_state: string | null
+  company_zip: string | null
+  logo_url: string | null
+  theme_color: string
+  created_at: string
+  updated_at: string
+}
+
+export type Invoice = {
+  id: string
+  user_id: string
+  quotation_id: string | null
+  invoice_number: string
+  customer_name: string
+  customer_email: string | null
+  customer_phone: string | null
+  customer_address: string | null
+  items: QuotationItem[]
+  subtotal: number
+  gst_amount: number
+  total_amount: number
+  status: 'draft' | 'sent' | 'paid' | 'overdue'
+  created_at: string
+  updated_at: string
+}
