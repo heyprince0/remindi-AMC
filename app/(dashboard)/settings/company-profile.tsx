@@ -7,27 +7,56 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/auth-context"
-import { supabase, type CompanyProfile } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 import { Save, Upload, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+
+export interface CompanyProfile {
+  id: string
+  user_id: string
+  company_name: string | null
+  tagline: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  gstin: string | null
+  pan: string | null
+  logo_url: string | null
+  theme_color: string
+  bank_name: string | null
+  account_no: string | null
+  ifsc: string | null
+  upi: string | null
+  created_at: string
+  updated_at: string
+}
 
 export function CompanyProfileSettings() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
   
   const [companyName, setCompanyName] = useState("")
-  const [companyEmail, setCompanyEmail] = useState("")
-  const [companyPhone, setCompanyPhone] = useState("")
-  const [companyAddress, setCompanyAddress] = useState("")
-  const [companyCity, setCompanyCity] = useState("")
-  const [companyState, setCompanyState] = useState("")
-  const [companyZip, setCompanyZip] = useState("")
-  const [themeColor, setThemeColor] = useState("#3b82f6")
+  const [tagline, setTagline] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [address, setAddress] = useState("")
+  const [city, setCity] = useState("")
+  const [state, setState] = useState("")
+  const [zipCode, setZipCode] = useState("")
+  const [gstin, setGstin] = useState("")
+  const [pan, setPan] = useState("")
+  const [themeColor, setThemeColor] = useState("#185FA5")
   const [logoUrl, setLogoUrl] = useState("")
   const [logoPreview, setLogoPreview] = useState("")
+  const [bankName, setBankName] = useState("")
+  const [accountNo, setAccountNo] = useState("")
+  const [ifsc, setIfsc] = useState("")
+  const [upi, setUpi] = useState("")
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -45,15 +74,22 @@ export function CompanyProfileSettings() {
         if (data) {
           setProfile(data as CompanyProfile)
           setCompanyName(data.company_name || "")
-          setCompanyEmail(data.company_email || "")
-          setCompanyPhone(data.company_phone || "")
-          setCompanyAddress(data.company_address || "")
-          setCompanyCity(data.company_city || "")
-          setCompanyState(data.company_state || "")
-          setCompanyZip(data.company_zip || "")
-          setThemeColor(data.theme_color || "#3b82f6")
+          setTagline(data.tagline || "")
+          setEmail(data.email || "")
+          setPhone(data.phone || "")
+          setAddress(data.address || "")
+          setCity(data.city || "")
+          setState(data.state || "")
+          setZipCode(data.zip_code || "")
+          setGstin(data.gstin || "")
+          setPan(data.pan || "")
+          setThemeColor(data.theme_color || "#185FA5")
           setLogoUrl(data.logo_url || "")
           setLogoPreview(data.logo_url || "")
+          setBankName(data.bank_name || "")
+          setAccountNo(data.account_no || "")
+          setIfsc(data.ifsc || "")
+          setUpi(data.upi || "")
         }
       } catch (error) {
         console.error('Error loading company profile:', error)
@@ -76,20 +112,27 @@ export function CompanyProfileSettings() {
         .upsert({
           user_id: user.id,
           company_name: companyName,
-          company_email: companyEmail,
-          company_phone: companyPhone,
-          company_address: companyAddress,
-          company_city: companyCity,
-          company_state: companyState,
-          company_zip: companyZip,
+          tagline: tagline,
+          email: email,
+          phone: phone,
+          address: address,
+          city: city,
+          state: state,
+          zip_code: zipCode,
+          gstin: gstin,
+          pan: pan,
           theme_color: themeColor,
           logo_url: logoUrl,
+          bank_name: bankName,
+          account_no: accountNo,
+          ifsc: ifsc,
+          upi: upi,
         }, {
           onConflict: 'user_id'
         })
 
       if (error) throw error
-      toast.success('Company profile saved!')
+      toast.success('Company profile saved successfully!')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
@@ -99,7 +142,13 @@ export function CompanyProfileSettings() {
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !user?.id) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file')
+      return
+    }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
@@ -114,13 +163,27 @@ export function CompanyProfileSettings() {
     }
     reader.readAsDataURL(file)
 
-    // For now, we'll store the base64 data URL
-    // In production, you'd want to use Vercel Blob or similar
-    const reader2 = new FileReader()
-    reader2.onload = (event) => {
-      setLogoUrl(event.target?.result as string)
+    // Upload to Supabase storage
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(fileName, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage
+        .from('logos')
+        .getPublicUrl(fileName)
+
+      setLogoUrl(data.publicUrl)
+      toast.success('Logo uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      toast.error('Failed to upload logo')
     }
-    reader2.readAsDataURL(file)
   }
 
   if (loading) {
@@ -137,7 +200,7 @@ export function CompanyProfileSettings() {
     <Card>
       <CardHeader>
         <CardTitle>Company Profile</CardTitle>
-        <CardDescription>Manage your company information and branding</CardDescription>
+        <CardDescription>Manage your company information, branding, and bank details</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Logo Upload */}
@@ -160,20 +223,19 @@ export function CompanyProfileSettings() {
                 <input
                   id="logo-upload"
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/jpg"
                   onChange={handleLogoChange}
                   className="hidden"
-                  disabled={uploading}
                 />
                 <Button type="button" variant="outline" className="w-full" asChild>
                   <span>
                     <Upload className="mr-2 size-4" />
-                    {uploading ? 'Uploading...' : 'Upload Logo'}
+                    Upload Logo
                   </span>
                 </Button>
               </label>
               <p className="text-xs text-muted-foreground mt-2">
-                PNG, JPG or GIF (Max. 5MB)
+                PNG or JPG (Max. 5MB)
               </p>
             </div>
           </div>
@@ -196,7 +258,7 @@ export function CompanyProfileSettings() {
               className="w-10 h-10 rounded-lg border border-border"
               style={{ backgroundColor: themeColor }}
             />
-            <span className="text-sm text-muted-foreground">{themeColor}</span>
+            <span className="text-sm text-muted-foreground font-mono">{themeColor}</span>
           </div>
           <p className="text-xs text-muted-foreground">
             This color will be used in quotation PDFs and throughout your documents
@@ -218,66 +280,150 @@ export function CompanyProfileSettings() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="tagline">Tagline</Label>
+              <Input
+                id="tagline"
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="Brief company description"
+              />
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="company-email">Email</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="company-email"
+                  id="email"
                   type="email"
-                  value={companyEmail}
-                  onChange={(e) => setCompanyEmail(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="company@example.com"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-phone">Phone</Label>
+                <Label htmlFor="phone">Phone</Label>
                 <Input
-                  id="company-phone"
-                  value={companyPhone}
-                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   placeholder="+91 XXXXX XXXXX"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="company-address">Address</Label>
+              <Label htmlFor="address">Address</Label>
               <Input
-                id="company-address"
-                value={companyAddress}
-                onChange={(e) => setCompanyAddress(e.target.value)}
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
                 placeholder="Street address"
               />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="company-city">City</Label>
+                <Label htmlFor="city">City</Label>
                 <Input
-                  id="company-city"
-                  value={companyCity}
-                  onChange={(e) => setCompanyCity(e.target.value)}
+                  id="city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
                   placeholder="City"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-state">State</Label>
+                <Label htmlFor="state">State</Label>
                 <Input
-                  id="company-state"
-                  value={companyState}
-                  onChange={(e) => setCompanyState(e.target.value)}
+                  id="state"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
                   placeholder="State"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-zip">ZIP Code</Label>
+                <Label htmlFor="zip-code">ZIP Code</Label>
                 <Input
-                  id="company-zip"
-                  value={companyZip}
-                  onChange={(e) => setCompanyZip(e.target.value)}
+                  id="zip-code"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
                   placeholder="ZIP code"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tax Information */}
+        <div className="border-t border-border pt-6">
+          <h3 className="font-semibold text-sm mb-4">Tax Information</h3>
+          
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="gstin">GSTIN</Label>
+              <Input
+                id="gstin"
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value)}
+                placeholder="GSTIN"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pan">PAN</Label>
+              <Input
+                id="pan"
+                value={pan}
+                onChange={(e) => setPan(e.target.value)}
+                placeholder="PAN"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Bank Details */}
+        <div className="border-t border-border pt-6">
+          <h3 className="font-semibold text-sm mb-4">Bank Details</h3>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bank-name">Bank Name</Label>
+              <Input
+                id="bank-name"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="Bank name"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="account-no">Account Number</Label>
+                <Input
+                  id="account-no"
+                  value={accountNo}
+                  onChange={(e) => setAccountNo(e.target.value)}
+                  placeholder="Account number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ifsc">IFSC Code</Label>
+                <Input
+                  id="ifsc"
+                  value={ifsc}
+                  onChange={(e) => setIfsc(e.target.value)}
+                  placeholder="IFSC code"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="upi">UPI ID</Label>
+              <Input
+                id="upi"
+                value={upi}
+                onChange={(e) => setUpi(e.target.value)}
+                placeholder="UPI ID"
+              />
             </div>
           </div>
         </div>
