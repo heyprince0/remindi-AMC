@@ -143,20 +143,21 @@ export type QuotationItem = {
 export type Quotation = {
   id: string
   user_id: string
-  customer_id: string | null
-  quotation_number: string
-  customer_name: string
-  customer_email: string | null
-  customer_phone: string | null
-  customer_address: string | null
+  quote_no: string
+  client_name: string
+  client_address: string | null
+  client_city: string | null
+  client_gstin: string | null
+  subject: string | null
   items: QuotationItem[]
   subtotal: number
-  gst_amount: number
-  total_amount: number
+  sgst: number
+  cgst: number
+  grand_total: number
   include_gst: boolean
-  gst_rate: number
   notes: string | null
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
+  status: string
+  valid_till: string | null
   created_at: string
   updated_at: string
 }

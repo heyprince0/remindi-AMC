@@ -79,30 +79,50 @@ export default function NewQuotationPage() {
 
     setSaving(true)
     try {
-      const quotationNumber = `QT-${Date.now()}`
+      // Generate quote_no: QT-001, QT-002, etc.
+      const { data: existingQuotes, error: countError } = await supabase
+        .from("quotations")
+        .select("quote_no", { count: "exact" })
+        .eq("user_id", user.id)
 
-      const { error } = await supabase
+      if (countError) throw countError
+
+      const nextNumber = ((existingQuotes?.length || 0) + 1).toString().padStart(3, "0")
+      const quoteNo = `QT-${nextNumber}`
+
+      // Split GST into SGST and CGST (equal split)
+      const sgst = includeGst ? gstAmount / 2 : 0
+      const cgst = includeGst ? gstAmount / 2 : 0
+
+      const { data, error } = await supabase
         .from("quotations")
         .insert({
           user_id: user.id,
-          quotation_number: quotationNumber,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_phone: customerPhone,
-          customer_address: customerAddress,
+          quote_no: quoteNo,
+          client_name: customerName,
+          client_address: customerAddress,
+          client_city: "",
+          client_gstin: "",
+          subject: "",
           items: items,
           subtotal: subtotal,
-          gst_amount: gstAmount,
-          total_amount: total,
+          sgst: sgst,
+          cgst: cgst,
+          grand_total: total,
           include_gst: includeGst,
-          gst_rate: gstRate,
           notes: notes,
-          status: "draft",
+          status: "Draft",
+          valid_till: null,
         })
+        .select()
 
       if (error) throw error
+      
+      const newQuotationId = data?.[0]?.id
+      if (!newQuotationId) throw new Error("Failed to get quotation ID")
+
       toast.success("Quotation created successfully")
-      router.push("/quotations")
+      router.push(`/quotations/${newQuotationId}`)
     } catch (error) {
       console.error("Error saving quotation:", error)
       toast.error(error instanceof Error ? error.message : "Failed to save quotation")

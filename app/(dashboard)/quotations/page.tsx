@@ -34,6 +34,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 
 function getStatusBadge(status: string) {
+  const statusLower = (status || "").toLowerCase()
   const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
     draft: { bg: "bg-slate-100", text: "text-slate-700", label: "Draft" },
     sent: { bg: "bg-blue-100", text: "text-blue-700", label: "Sent" },
@@ -41,7 +42,7 @@ function getStatusBadge(status: string) {
     rejected: { bg: "bg-red-100", text: "text-red-700", label: "Rejected" },
     expired: { bg: "bg-orange-100", text: "text-orange-700", label: "Expired" },
   }
-  const config = statusConfig[status] || statusConfig.draft
+  const config = statusConfig[statusLower] || statusConfig.draft
   return <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
 }
 
@@ -62,14 +63,14 @@ export default function QuotationsPage() {
 
     if (searchTerm) {
       filtered = filtered.filter(q =>
-        q.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.quotation_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.customer_phone?.includes(searchTerm)
+        (q.client_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.quote_no || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (q.client_gstin || "").includes(searchTerm)
       )
     }
 
     if (filterStatus !== "all") {
-      filtered = filtered.filter(q => q.status === filterStatus)
+      filtered = filtered.filter(q => (q.status || "").toLowerCase() === filterStatus.toLowerCase())
     }
 
     setFilteredQuotations(filtered)
@@ -191,23 +192,19 @@ export default function QuotationsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Quotation #</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Amount</TableHead>
+                      <TableHead>Quote No</TableHead>
+                      <TableHead>Client Name</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Grand Total</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
                       <TableHead className="w-[80px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredQuotations.map((quotation) => (
                       <TableRow key={quotation.id}>
-                        <TableCell className="font-medium">{quotation.quotation_number}</TableCell>
-                        <TableCell>{quotation.customer_name}</TableCell>
-                        <TableCell>{quotation.customer_phone || "—"}</TableCell>
-                        <TableCell>{formatCurrency(quotation.total_amount)}</TableCell>
-                        <TableCell>{getStatusBadge(quotation.status)}</TableCell>
+                        <TableCell className="font-medium">{quotation.quote_no}</TableCell>
+                        <TableCell>{quotation.client_name}</TableCell>
                         <TableCell>
                           {new Date(quotation.created_at).toLocaleDateString("en-IN", {
                             day: "2-digit",
@@ -215,6 +212,8 @@ export default function QuotationsPage() {
                             year: "numeric",
                           })}
                         </TableCell>
+                        <TableCell>{formatCurrency(quotation.grand_total)}</TableCell>
+                        <TableCell>{getStatusBadge(quotation.status)}</TableCell>
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
