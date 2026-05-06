@@ -122,7 +122,7 @@ export default function NewQuotationPage() {
           cgst: cgst,
           grand_total: grandTotal,
           include_gst: includeGst,
-          gst_rate: 18,
+          gst_rate: includeGst ? 18 : 0,
           notes: notes,
           status: "Draft",
           valid_till: null,
