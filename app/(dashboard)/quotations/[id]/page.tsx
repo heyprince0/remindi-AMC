@@ -366,18 +366,18 @@ export default function ViewQuotationPage() {
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
-        y += 2
+        y += 4
         doc.text('SGST (9%):', 150, y, { align: 'right' })
         doc.text('Rs. ' + sgst.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
-        y += 2
+        y += 4
         doc.text('CGST (9%):', 150, y, { align: 'right' })
         doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
         // Divider line above Grand Total
-        y += 3
+        y += 4
         doc.setDrawColor(0, 0, 0)
         doc.setLineWidth(0.3)
         doc.line(130, y, 195, y)
