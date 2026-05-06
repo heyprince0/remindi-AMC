@@ -23,7 +23,6 @@ export interface CompanyProfile {
   state: string | null
   zip_code: string | null
   gstin: string | null
-  pan: string | null
   logo_url: string | null
   theme_color: string
   bank_name: string | null
@@ -49,7 +48,6 @@ export function CompanyProfileSettings() {
   const [state, setState] = useState("")
   const [zipCode, setZipCode] = useState("")
   const [gstin, setGstin] = useState("")
-  const [pan, setPan] = useState("")
   const [themeColor, setThemeColor] = useState("#185FA5")
   const [logoUrl, setLogoUrl] = useState("")
   const [logoPreview, setLogoPreview] = useState("")
@@ -82,7 +80,6 @@ export function CompanyProfileSettings() {
           setState(data.state || "")
           setZipCode(data.zip_code || "")
           setGstin(data.gstin || "")
-          setPan(data.pan || "")
           setThemeColor(data.theme_color || "#185FA5")
           setLogoUrl(data.logo_url || "")
           setLogoPreview(data.logo_url || "")
@@ -107,6 +104,37 @@ export function CompanyProfileSettings() {
 
     setSaving(true)
     try {
+      let finalLogoUrl = logoUrl
+
+      // If there's a preview but no logoUrl (new upload), upload the file
+      if (logoPreview && logoPreview.startsWith('data:') && !logoUrl.startsWith('http')) {
+        // Get the actual file from the input
+        const fileInput = document.getElementById('logo-upload') as HTMLInputElement
+        const file = fileInput?.files?.[0]
+
+        if (file) {
+          try {
+            const fileName = `logo-${user.id}-${Date.now()}.png`
+            const { error: uploadError } = await supabase.storage
+              .from('logos')
+              .upload(fileName, file, { upsert: true })
+
+            if (uploadError) throw uploadError
+
+            const { data: urlData } = supabase.storage
+              .from('logos')
+              .getPublicUrl(fileName)
+
+            finalLogoUrl = urlData.publicUrl
+          } catch (error) {
+            console.error('Error uploading logo:', error)
+            toast.error('Failed to upload logo')
+            setSaving(false)
+            return
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('company_profile')
         .upsert({
@@ -120,9 +148,8 @@ export function CompanyProfileSettings() {
           state: state,
           zip_code: zipCode,
           gstin: gstin,
-          pan: pan,
           theme_color: themeColor,
-          logo_url: logoUrl,
+          logo_url: finalLogoUrl,
           bank_name: bankName,
           account_no: accountNo,
           ifsc: ifsc,
@@ -144,15 +171,16 @@ export function CompanyProfileSettings() {
     const file = e.target.files?.[0]
     if (!file || !user?.id) return
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file')
+    // Validate file type - only PNG, JPG, JPEG, WEBP
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload PNG, JPG, JPEG, or WEBP only')
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB')
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File size must be less than 2MB')
       return
     }
 
@@ -162,28 +190,11 @@ export function CompanyProfileSettings() {
       setLogoPreview(event.target?.result as string)
     }
     reader.readAsDataURL(file)
+  }
 
-    // Upload to Supabase storage
-    try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`
-      
-      const { error: uploadError } = await supabase.storage
-        .from('logos')
-        .upload(fileName, file, { upsert: true })
-
-      if (uploadError) throw uploadError
-
-      const { data } = supabase.storage
-        .from('logos')
-        .getPublicUrl(fileName)
-
-      setLogoUrl(data.publicUrl)
-      toast.success('Logo uploaded successfully')
-    } catch (error) {
-      console.error('Error uploading logo:', error)
-      toast.error('Failed to upload logo')
-    }
+  const handleRemoveLogo = () => {
+    setLogoUrl("")
+    setLogoPreview("")
   }
 
   if (loading) {
@@ -206,38 +217,40 @@ export function CompanyProfileSettings() {
         {/* Logo Upload */}
         <div className="space-y-3">
           <Label>Company Logo</Label>
-          <div className="flex gap-6">
-            <div className="flex-shrink-0">
-              {logoPreview ? (
-                <div className="w-24 h-24 rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center">
+          <div className="space-y-4">
+            {logoPreview && (
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center flex-shrink-0">
                   <img src={logoPreview} alt="Logo preview" className="w-full h-full object-contain p-2" />
                 </div>
-              ) : (
-                <div className="w-24 h-24 rounded-lg border-2 border-dashed border-border bg-secondary/30 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground text-center">No logo</span>
-                </div>
-              )}
-            </div>
-            <div className="flex-1">
-              <label htmlFor="logo-upload" className="cursor-pointer">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveLogo}
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
+            {!logoPreview && (
+              <label htmlFor="logo-upload" className="cursor-pointer block">
                 <input
                   id="logo-upload"
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={handleLogoChange}
                   className="hidden"
                 />
-                <Button type="button" variant="outline" className="w-full" asChild>
-                  <span>
-                    <Upload className="mr-2 size-4" />
-                    Upload Logo
-                  </span>
-                </Button>
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                  <Upload className="mx-auto size-8 mb-2 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">Click to upload logo</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Square image, PNG or JPG, max 2MB
+                  </p>
+                </div>
               </label>
-              <p className="text-xs text-muted-foreground mt-2">
-                PNG or JPG (Max. 5MB)
-              </p>
-            </div>
+            )}
           </div>
         </div>
 
@@ -358,25 +371,14 @@ export function CompanyProfileSettings() {
         <div className="border-t border-border pt-6">
           <h3 className="font-semibold text-sm mb-4">Tax Information</h3>
           
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="gstin">GSTIN</Label>
-              <Input
-                id="gstin"
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value)}
-                placeholder="GSTIN"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pan">PAN</Label>
-              <Input
-                id="pan"
-                value={pan}
-                onChange={(e) => setPan(e.target.value)}
-                placeholder="PAN"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="gstin">GSTIN</Label>
+            <Input
+              id="gstin"
+              value={gstin}
+              onChange={(e) => setGstin(e.target.value)}
+              placeholder="GSTIN"
+            />
           </div>
         </div>
 
