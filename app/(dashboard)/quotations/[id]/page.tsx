@@ -329,30 +329,69 @@ export default function ViewQuotationPage() {
         `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
       ])
 
-      // Add total row with GST breakdown
+      // Build totals row with GST breakdown
       const amountInWords = toWords(Math.round(grandTotal)).toUpperCase() + " ONLY"
-      if (includeGst) {
-        tableBody.push([
-          "",
-          `RUPEES ${amountInWords}`,
-          "",
-          `Total:\nSGST (9%):\nCGST (9%):\nGr. Total:`,
-          `Rs. ${subtotal.toLocaleString("en-IN")}\nRs. ${sgst.toLocaleString("en-IN")}\nRs. ${cgst.toLocaleString("en-IN")}\nRs. ${grandTotal.toLocaleString("en-IN")}`,
-        ])
-      } else {
-        tableBody.push([
-          "",
-          `RUPEES ${amountInWords}`,
-          "",
-          `Total:`,
-          `Rs. ${subtotal.toLocaleString("en-IN")}`,
-        ])
-      }
+      const footRows: any[][] = includeGst
+        ? [[
+            { 
+              content: 'RUPEES ' + amountInWords, 
+              colSpan: 3,
+              styles: { 
+                fontStyle: 'bold', 
+                textColor: [tr, tg, tb],
+                fillColor: [249, 249, 240]
+              } 
+            },
+            { 
+              content: 'Total:\nSGST (9%):\nCGST (9%):\nGr. Total:', 
+              styles: { 
+                fontStyle: 'bold',
+                halign: 'right',
+                fillColor: [249, 249, 240]
+              } 
+            },
+            { 
+              content: `Rs. ${subtotal.toLocaleString("en-IN")}\nRs. ${sgst.toLocaleString("en-IN")}\nRs. ${cgst.toLocaleString("en-IN")}\nRs. ${grandTotal.toLocaleString("en-IN")}`,
+              styles: { 
+                fontStyle: 'bold',
+                halign: 'right',
+                fillColor: [249, 249, 240]
+              } 
+            }
+          ]]
+        : [[
+            { 
+              content: 'RUPEES ' + amountInWords, 
+              colSpan: 3,
+              styles: { 
+                fontStyle: 'bold', 
+                textColor: [tr, tg, tb],
+                fillColor: [249, 249, 240]
+              } 
+            },
+            { 
+              content: 'Total:', 
+              styles: { 
+                fontStyle: 'bold',
+                halign: 'right',
+                fillColor: [249, 249, 240]
+              } 
+            },
+            { 
+              content: `Rs. ${subtotal.toLocaleString("en-IN")}`,
+              styles: { 
+                fontStyle: 'bold',
+                halign: 'right',
+                fillColor: [249, 249, 240]
+              } 
+            }
+          ]]
 
       autoTable(doc, {
         startY: y,
         head: [["SR.NO.", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
         body: tableBody,
+        foot: footRows,
         headStyles: {
           fillColor: [240, 240, 240],
           textColor: [0, 0, 0],
@@ -365,6 +404,13 @@ export default function ViewQuotationPage() {
           lineColor: [153, 153, 153],
           lineWidth: 0.5,
         },
+        footStyles: {
+          fillColor: [249, 249, 240],
+          textColor: [0, 0, 0],
+          fontSize: 9,
+          lineColor: [153, 153, 153],
+          lineWidth: 0.5,
+        },
         columnStyles: {
           0: { halign: "center", cellWidth: 14 },
           1: { halign: "left", cellWidth: 80 },
@@ -374,6 +420,7 @@ export default function ViewQuotationPage() {
         },
         margin: { left: margin, right: margin },
         didDrawPage: () => { /* prevent default */ },
+        showFoot: "lastPage",
       })
 
       y = (doc as any).lastAutoTable.finalY + 6
