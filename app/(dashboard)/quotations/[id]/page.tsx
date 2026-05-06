@@ -366,12 +366,12 @@ export default function ViewQuotationPage() {
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
-        y += 5
+        y += 4
         doc.text('SGST (9%):', 150, y, { align: 'right' })
         doc.text('Rs. ' + sgst.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
-        y += 5
+        y += 4
         doc.text('CGST (9%):', 150, y, { align: 'right' })
         doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
           195, y, { align: 'right' })
