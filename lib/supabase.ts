@@ -147,14 +147,19 @@ export type Quotation = {
   client_name: string
   client_address: string | null
   client_city: string | null
+  client_district: string | null
+  client_state: string | null
+  client_pin_code: string | null
   client_gstin: string | null
   subject: string | null
+  body_text: string | null
   items: QuotationItem[]
   subtotal: number
   sgst: number
   cgst: number
   grand_total: number
   include_gst: boolean
+  gst_rate: number
   notes: string | null
   status: string
   valid_till: string | null

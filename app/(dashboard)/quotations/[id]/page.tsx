@@ -60,6 +60,18 @@ function hexToRgb(hex: string): [number, number, number] {
     : [24, 95, 165]
 }
 
+function toWords(n: number): string {
+  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+  if (n === 0) return "Zero"
+  if (n < 20) return a[n]
+  if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "")
+  if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + toWords(n % 100) : "")
+  if (n < 100000) return toWords(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + toWords(n % 1000) : "")
+  if (n < 10000000) return toWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + toWords(n % 100000) : "")
+  return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
+}
+
 export default function ViewQuotationPage() {
   const params = useParams()
   const router = useRouter()
@@ -168,184 +180,228 @@ export default function ViewQuotationPage() {
 
       let y = margin
 
-      // Logo
+      // ===== HEADER SECTION =====
+      let logoAdded = false
       try {
         if (profile?.logo_url) {
-          doc.addImage(profile.logo_url, "PNG", margin, y, 25, 25)
+          const response = await fetch(profile.logo_url)
+          const blob = await response.blob()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          doc.addImage(base64, "PNG", margin, y, 16, 16)
+          logoAdded = true
         }
-      } catch (e) { /* skip */ }
+      } catch (e) { /* skip logo silently */ }
 
-      // Company header
-      const companyX = profile?.logo_url ? margin + 30 : margin
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(profile?.company_name), companyX, y + 8)
-
-      doc.setFontSize(8)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(80, 80, 80)
-      if (profile?.company_address) {
-        doc.text(safeStr(profile.company_address), companyX, y + 14)
-      }
-      if (profile?.company_email) {
-        doc.text(safeStr(profile.company_email), companyX, y + 19)
-      }
-      if (profile?.company_phone) {
-        doc.text(safeStr(profile.company_phone), companyX, y + 24)
-      }
-
-      y += 32
-
-      // Theme separator line
-      doc.setDrawColor(...themeRgb)
-      doc.setLineWidth(1)
-      doc.line(margin, y, pageW - margin, y)
-      y += 6
-
-      // Quote No + Date
+      const headerStartX = logoAdded ? margin + 18 : margin
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(...themeRgb)
-      doc.text(`Quotation ${safeStr(quotation.quote_no ?? ("QT-" + quotation.id))}`, margin, y)
+      doc.text(safeStr(profile?.company_name), headerStartX, y + 4)
 
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(80, 80, 80)
-      doc.text(`Date: ${safeDate(quotation.created_at)}`, pageW - margin, y, { align: "right" })
-      if (quotation.valid_till) {
-        doc.text(`Valid Till: ${safeDate(quotation.valid_till)}`, pageW - margin, y + 5, { align: "right" })
+      let headerY = y + 10
+      if (profile?.company_phone) {
+        doc.text(safeStr(profile.company_phone), headerStartX, headerY)
+        headerY += 4
       }
-      y += 12
 
-      // Client info
       doc.setFontSize(9)
+      if (profile?.company_address) {
+        doc.text(safeStr(profile.company_address), headerStartX, headerY)
+        headerY += 4
+      }
+      if (profile?.company_city && profile?.company_state && profile?.company_zip) {
+        doc.text(`${safeStr(profile.company_city)}, ${safeStr(profile.company_state)} - ${safeStr(profile.company_zip)}`, headerStartX, headerY)
+        headerY += 4
+      }
+      if (profile?.company_email) {
+        doc.text(safeStr(profile.company_email), headerStartX, headerY)
+      }
+
+      // Header bottom line
+      y += 24
+      doc.setDrawColor(...themeRgb)
+      doc.setLineWidth(1.5)
+      doc.line(margin, y, pageW - margin, y)
+      y += 8
+
+      // ===== QUOTE NUMBER + DATE ROW =====
+      doc.setFontSize(11)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
-      doc.text("Bill To:", margin, y)
+      doc.text(`${safeStr(quotation.quote_no ?? ("QT-" + quotation.id))}`, margin, y)
+
+      const formattedDate = quotation.created_at 
+        ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      doc.text(`DATE: ${formattedDate}`, pageW - margin, y, { align: "right" })
+      y += 8
+
+      // ===== CLIENT BLOCK =====
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(0, 0, 0)
+      doc.text("TO,", margin, y)
       y += 5
+      doc.text("THE OWNER,", margin, y)
+      y += 5
+
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
+      y += 5
+
       doc.setFont("helvetica", "normal")
       doc.setTextColor(40, 40, 40)
-      doc.text(safeStr(quotation.client_name), margin, y)
-      y += 5
       if (quotation.client_address) {
-        const addrLines = doc.splitTextToSize(safeStr(quotation.client_address), 90)
-        doc.text(addrLines, margin, y)
-        y += addrLines.length * 4
-      }
-      if (quotation.client_city) {
-        doc.text(safeStr(quotation.client_city), margin, y)
-        y += 4
-      }
-      if (quotation.client_gstin) {
-        doc.text(`GSTIN: ${safeStr(quotation.client_gstin)}`, margin, y)
-        y += 4
-      }
-      if (quotation.subject) {
-        y += 2
-        doc.setFont("helvetica", "bold")
-        doc.text(`Subject: ${safeStr(quotation.subject)}`, margin, y)
+        doc.text(safeStr(quotation.client_address), margin, y)
         y += 5
       }
-      y += 4
 
-      // Items table
+      const cityStateZip = [
+        quotation.client_district,
+        quotation.client_state,
+        quotation.client_pin_code
+      ].filter(Boolean).join(', ')
+      if (cityStateZip) {
+        doc.text(cityStateZip, margin, y)
+        y += 5
+      }
+      y += 3
+
+      // ===== SUBJECT LINE =====
+      if (quotation.subject) {
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(...themeRgb)
+        doc.setFontSize(10)
+        doc.text(`Sub: ${safeStr(quotation.subject)}`, margin, y)
+        y += 7
+      }
+
+      // ===== BODY TEXT =====
+      if (quotation.body_text) {
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(40, 40, 40)
+        const bodyLines = doc.splitTextToSize(safeStr(quotation.body_text), pageW - 2 * margin)
+        doc.text(bodyLines, margin, y)
+        y += (bodyLines.length * 4) + 3
+      }
+      y += 2
+
+      // ===== ITEMS TABLE =====
       const mappedItems = getMappedItems()
+      const subtotal = (quotation.items ?? []).reduce((sum, item) => {
+        return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
+      }, 0)
+      const sgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
+      const cgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
+      const grandTotal = subtotal + sgst + cgst
+
       const tableBody = mappedItems.map((item) => [
         String(item.sr),
         safeStr(item.description),
         String(item.qty),
-        `Rs. ${Number(item.rate).toLocaleString("en-IN")}`,
-        `Rs. ${Number(item.amount).toLocaleString("en-IN")}`,
+        `₹${Number(item.rate).toLocaleString("en-IN")}`,
+        `₹${Number(item.amount).toLocaleString("en-IN")}`,
+      ])
+
+      // Add totals row
+      const amountInWords = toWords(Math.round(grandTotal))
+      tableBody.push([
+        "",
+        `RUPEES ${amountInWords} ONLY`,
+        "",
+        `SGST@9%\n₹${sgst.toLocaleString("en-IN")}`,
+        `CGST@9%\n₹${cgst.toLocaleString("en-IN")}`,
       ])
 
       autoTable(doc, {
         startY: y,
-        head: [["SR.", "Description", "Qty", "Unit Price", "Amount"]],
+        head: [["SR.NO.", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
         body: tableBody,
         headStyles: {
-          fillColor: themeRgb,
-          textColor: [255, 255, 255],
+          fillColor: [200, 200, 200],
+          textColor: [0, 0, 0],
           fontSize: 9,
           fontStyle: "bold",
+          halign: "center",
         },
-        bodyStyles: { fontSize: 8 },
-        alternateRowStyles: { fillColor: [245, 247, 250] },
+        bodyStyles: {
+          fontSize: 8,
+          lineColor: [153, 153, 153],
+          lineWidth: 0.5,
+        },
         columnStyles: {
-          0: { halign: "center", cellWidth: 12 },
+          0: { halign: "center", cellWidth: 16 },
+          1: { halign: "left", cellWidth: 80 },
           2: { halign: "center", cellWidth: 18 },
-          3: { halign: "right", cellWidth: 32 },
-          4: { halign: "right", cellWidth: 32 },
+          3: { halign: "right", cellWidth: 30 },
+          4: { halign: "right", cellWidth: 30 },
         },
         margin: { left: margin, right: margin },
+        didDrawPage: () => { /* prevent default */ },
       })
 
-      y = (doc as any).lastAutoTable.finalY + 8
+      y = (doc as any).lastAutoTable.finalY + 6
 
-      // Totals
-      const subtotal = Number(quotation.subtotal ?? 0)
-      const sgst = Number(quotation.sgst ?? 0)
-      const cgst = Number(quotation.cgst ?? 0)
-      const grandTotal = getGrandTotal()
-      const rightCol = pageW - margin - 55
-
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(80, 80, 80)
-      doc.text("Subtotal:", rightCol, y)
-      doc.setTextColor(0, 0, 0)
-      doc.text(`Rs. ${subtotal.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
-      y += 5
-
-      if (sgst > 0 || cgst > 0) {
-        doc.setTextColor(80, 80, 80)
-        doc.text("SGST (9%):", rightCol, y)
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Rs. ${sgst.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
-        y += 5
-        doc.setTextColor(80, 80, 80)
-        doc.text("CGST (9%):", rightCol, y)
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Rs. ${cgst.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
-        y += 5
-      }
-
-      doc.setDrawColor(...themeRgb)
-      doc.setLineWidth(0.5)
-      doc.line(rightCol - 2, y, pageW - margin, y)
-      y += 5
-
-      doc.setFontSize(11)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(...themeRgb)
-      doc.text("Grand Total:", rightCol, y)
-      doc.text(`Rs. ${grandTotal.toLocaleString("en-IN")}`, pageW - margin, y, { align: "right" })
-      y += 10
-
-      // Notes
+      // ===== TERMS & CONDITIONS =====
       if (quotation.notes) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        doc.text("Notes:", margin, y)
+        doc.text("Terms & Conditions:", margin, y)
         y += 5
         doc.setFont("helvetica", "normal")
         doc.setTextColor(80, 80, 80)
         const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin)
         doc.text(noteLines, margin, y)
+        y += (noteLines.length * 4) + 3
       }
+      y += 4
 
-      // Footer
+      // ===== FOOTER =====
+      // Left side: Signature block
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      doc.text("Thanking you,", margin, y)
+      y += 5
+      doc.text("Yours faithfully,", margin, y)
+      y += 5
+      doc.setFont("helvetica", "bold")
+      doc.text(`For ${safeStr(profile?.company_name)}`, margin, y)
+
+      // Right side: Stamp circle
+      const circleX = pageW - margin - 20
+      const circleY = y - 8
+      doc.setDrawColor(...themeRgb)
+      doc.setLineWidth(1)
+      doc.circle(circleX, circleY, 14)
+      doc.setFontSize(7)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(...themeRgb)
+      doc.text("STAMP &", circleX, circleY - 3, { align: "center" })
+      doc.text("SIGN", circleX, circleY + 2, { align: "center" })
+
+      // Bottom: Generated by Remindi
       doc.setFontSize(7)
       doc.setTextColor(150, 150, 150)
+      doc.setFont("helvetica", "normal")
       doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
 
       const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
       doc.save(filename)
       toast.success("PDF downloaded")
     } catch (err) {
-      console.error(err)
-      toast.error("Failed to generate PDF")
+      console.error("PDF error:", err)
+      toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setGeneratingPdf(false)
     }
