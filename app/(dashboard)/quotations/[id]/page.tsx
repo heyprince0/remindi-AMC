@@ -176,11 +176,13 @@ export default function ViewQuotationPage() {
       const pageH = 297
       const margin = 15
       const themeColor = profile?.theme_color ?? "#185FA5"
-      const themeRgb = hexToRgb(themeColor)
+      const [tr, tg, tb] = hexToRgb(themeColor)
 
       let y = margin
 
       // ===== HEADER SECTION =====
+      // Left side: Logo + Company info
+      let logoX = margin
       let logoAdded = false
       try {
         if (profile?.logo_url) {
@@ -191,51 +193,63 @@ export default function ViewQuotationPage() {
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
-          doc.addImage(base64, "PNG", margin, y, 16, 16)
+          doc.addImage(base64, "PNG", logoX, y, 22, 22)
           logoAdded = true
         }
       } catch (e) { /* skip logo silently */ }
 
-      const headerStartX = logoAdded ? margin + 18 : margin
-      doc.setFontSize(16)
+      const infoX = logoAdded ? logoX + 24 : logoX
+      doc.setFontSize(14)
       doc.setFont("helvetica", "bold")
-      doc.setTextColor(...themeRgb)
-      doc.text(safeStr(profile?.company_name), headerStartX, y + 4)
-
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(80, 80, 80)
-      let headerY = y + 10
-      if (profile?.company_phone) {
-        doc.text(safeStr(profile.company_phone), headerStartX, headerY)
-        headerY += 4
-      }
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(profile?.company_name), infoX, y + 2)
 
       doc.setFontSize(9)
-      if (profile?.company_address) {
-        doc.text(safeStr(profile.company_address), headerStartX, headerY)
-        headerY += 4
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(120, 120, 120)
+      let infoY = y + 8
+
+      if (profile?.tagline) {
+        doc.text(safeStr(profile.tagline), infoX, infoY)
+        infoY += 4
       }
-      if (profile?.company_city && profile?.company_state && profile?.company_zip) {
-        doc.text(`${safeStr(profile.company_city)}, ${safeStr(profile.company_state)} - ${safeStr(profile.company_zip)}`, headerStartX, headerY)
-        headerY += 4
+      if (profile?.address) {
+        doc.text(safeStr(profile.address), infoX, infoY)
+        infoY += 4
       }
-      if (profile?.company_email) {
-        doc.text(safeStr(profile.company_email), headerStartX, headerY)
+      if (profile?.city || profile?.state || profile?.zip_code) {
+        const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+        doc.text(locationStr, infoX, infoY)
+        infoY += 4
+      }
+      if (profile?.phone) {
+        doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY)
+        infoY += 4
+      }
+      if (profile?.email) {
+        doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
+      }
+
+      // Right side: Phone number
+      if (profile?.phone) {
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(profile.phone), pageW - margin, y + 4, { align: "right" })
       }
 
       // Header bottom line
-      y += 24
-      doc.setDrawColor(...themeRgb)
-      doc.setLineWidth(1.5)
+      y += 28
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(3)
       doc.line(margin, y, pageW - margin, y)
-      y += 8
+      y += 6
 
       // ===== QUOTE NUMBER + DATE ROW =====
-      doc.setFontSize(11)
+      doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
-      doc.text(`${safeStr(quotation.quote_no ?? ("QT-" + quotation.id))}`, margin, y)
+      doc.text(safeStr(quotation.quote_no ?? ("QT-" + quotation.id)), margin, y)
 
       const formattedDate = quotation.created_at 
         ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -244,7 +258,7 @@ export default function ViewQuotationPage() {
       y += 8
 
       // ===== CLIENT BLOCK =====
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(0, 0, 0)
       doc.text("TO,", margin, y)
@@ -253,7 +267,6 @@ export default function ViewQuotationPage() {
       y += 5
 
       doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
       doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
       y += 5
 
@@ -278,7 +291,7 @@ export default function ViewQuotationPage() {
       // ===== SUBJECT LINE =====
       if (quotation.subject) {
         doc.setFont("helvetica", "bold")
-        doc.setTextColor(...themeRgb)
+        doc.setTextColor(tr, tg, tb)
         doc.setFontSize(10)
         doc.text(`Sub: ${safeStr(quotation.subject)}`, margin, y)
         y += 7
@@ -286,7 +299,7 @@ export default function ViewQuotationPage() {
 
       // ===== BODY TEXT =====
       if (quotation.body_text) {
-        doc.setFontSize(9)
+        doc.setFontSize(10)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(40, 40, 40)
         const bodyLines = doc.splitTextToSize(safeStr(quotation.body_text), pageW - 2 * margin)
@@ -296,30 +309,30 @@ export default function ViewQuotationPage() {
       y += 2
 
       // ===== ITEMS TABLE =====
-      const mappedItems = getMappedItems()
-      const subtotal = (quotation.items ?? []).reduce((sum, item) => {
-        return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
+      const items = quotation.items ?? []
+      const subtotal = items.reduce((sum, item) => {
+        return sum + (Number(item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0))
       }, 0)
       const sgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
       const cgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
       const grandTotal = subtotal + sgst + cgst
 
-      const tableBody = mappedItems.map((item) => [
-        String(item.sr),
-        safeStr(item.description),
-        String(item.qty),
-        `₹${Number(item.rate).toLocaleString("en-IN")}`,
-        `₹${Number(item.amount).toLocaleString("en-IN")}`,
+      const tableBody = items.map((item, idx) => [
+        String(idx + 1),
+        safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
+        String(item.qty ?? item.quantity ?? 1),
+        `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
+        `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
       ])
 
-      // Add totals row
-      const amountInWords = toWords(Math.round(grandTotal))
+      // Add total row
+      const amountInWords = toWords(Math.round(grandTotal)).toUpperCase() + " ONLY"
       tableBody.push([
         "",
-        `RUPEES ${amountInWords} ONLY`,
+        `RUPEES ${amountInWords}`,
         "",
-        `SGST@9%\n₹${sgst.toLocaleString("en-IN")}`,
-        `CGST@9%\n₹${cgst.toLocaleString("en-IN")}`,
+        `Total:\nRs. ${subtotal.toLocaleString("en-IN")}/-`,
+        `Gr. Total:\nRs. ${grandTotal.toLocaleString("en-IN")}/-`,
       ])
 
       autoTable(doc, {
@@ -327,7 +340,7 @@ export default function ViewQuotationPage() {
         head: [["SR.NO.", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
         body: tableBody,
         headStyles: {
-          fillColor: [200, 200, 200],
+          fillColor: [240, 240, 240],
           textColor: [0, 0, 0],
           fontSize: 9,
           fontStyle: "bold",
@@ -339,11 +352,11 @@ export default function ViewQuotationPage() {
           lineWidth: 0.5,
         },
         columnStyles: {
-          0: { halign: "center", cellWidth: 16 },
+          0: { halign: "center", cellWidth: 14 },
           1: { halign: "left", cellWidth: 80 },
-          2: { halign: "center", cellWidth: 18 },
-          3: { halign: "right", cellWidth: 30 },
-          4: { halign: "right", cellWidth: 30 },
+          2: { halign: "center", cellWidth: 16 },
+          3: { halign: "right", cellWidth: 25 },
+          4: { halign: "right", cellWidth: 35 },
         },
         margin: { left: margin, right: margin },
         didDrawPage: () => { /* prevent default */ },
@@ -379,19 +392,19 @@ export default function ViewQuotationPage() {
       doc.text(`For ${safeStr(profile?.company_name)}`, margin, y)
 
       // Right side: Stamp circle
-      const circleX = pageW - margin - 20
-      const circleY = y - 8
-      doc.setDrawColor(...themeRgb)
+      const circleX = pageW - margin - 18
+      const circleY = y - 6
+      doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(1)
-      doc.circle(circleX, circleY, 14)
-      doc.setFontSize(7)
+      doc.circle(circleX, circleY, 18)
+      doc.setFontSize(8)
       doc.setFont("helvetica", "bold")
-      doc.setTextColor(...themeRgb)
-      doc.text("STAMP &", circleX, circleY - 3, { align: "center" })
-      doc.text("SIGN", circleX, circleY + 2, { align: "center" })
+      doc.setTextColor(tr, tg, tb)
+      doc.text("STAMP", circleX, circleY - 4, { align: "center" })
+      doc.text("SIGN", circleX, circleY + 3, { align: "center" })
 
       // Bottom: Generated by Remindi
-      doc.setFontSize(7)
+      doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
       doc.setFont("helvetica", "normal")
       doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
@@ -550,15 +563,25 @@ export default function ViewQuotationPage() {
                     className="h-16 w-16 object-contain rounded border"
                   />
                 )}
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.company_address && (
-                    <p className="text-sm text-muted-foreground">{profile.company_address}</p>
+                  {profile.tagline && (
+                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
                   )}
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted-foreground">
-                    {profile.company_email && <span>{profile.company_email}</span>}
-                    {profile.company_phone && <span>{profile.company_phone}</span>}
-                  </div>
+                  {profile.address && (
+                    <p className="text-xs text-muted-foreground">{profile.address}</p>
+                  )}
+                  {(profile.city || profile.state || profile.zip_code) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                  {profile.phone && (
+                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
+                  )}
+                  {profile.email && (
+                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -576,25 +599,35 @@ export default function ViewQuotationPage() {
               <p className="font-medium">{quotation.client_name ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client City</p>
-              <p className="font-medium">{quotation.client_city ?? "-"}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid Till</p>
+              <p className="font-medium">{quotation.valid_till ? formatDate(quotation.valid_till) : "-"}</p>
             </div>
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
               <p className="font-medium">{quotation.client_address ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client GSTIN</p>
-              <p className="font-medium">{quotation.client_gstin ?? "-"}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client District</p>
+              <p className="font-medium">{quotation.client_district ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid Till</p>
-              <p className="font-medium">{quotation.valid_till ? formatDate(quotation.valid_till) : "-"}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client State</p>
+              <p className="font-medium">{quotation.client_state ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Pin Code</p>
+              <p className="font-medium">{quotation.client_pin_code ?? "-"}</p>
             </div>
             {quotation.subject && (
               <div className="sm:col-span-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
                 <p className="font-medium">{quotation.subject}</p>
+              </div>
+            )}
+            {quotation.body_text && (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Body Text</p>
+                <p className="font-medium text-sm whitespace-pre-wrap">{quotation.body_text}</p>
               </div>
             )}
           </CardContent>
