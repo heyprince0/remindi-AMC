@@ -22,9 +22,12 @@ export default function NewQuotationPage() {
   const [saving, setSaving] = useState(false)
 
   const [customerName, setCustomerName] = useState("")
-  const [customerEmail, setCustomerEmail] = useState("")
-  const [customerPhone, setCustomerPhone] = useState("")
   const [customerAddress, setCustomerAddress] = useState("")
+  const [customerDistrict, setCustomerDistrict] = useState("")
+  const [customerState, setCustomerState] = useState("")
+  const [customerPinCode, setCustomerPinCode] = useState("")
+  const [subject, setSubject] = useState("")
+  const [bodyText, setBodyText] = useState("")
   const [items, setItems] = useState<QuotationItem[]>([
     { id: "1", description: "", quantity: 1, unit_price: 0, amount: 0 },
   ])
@@ -33,7 +36,8 @@ export default function NewQuotationPage() {
   const [notes, setNotes] = useState("")
 
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
-  const gstAmount = includeGst ? (subtotal * gstRate) / 100 : 0
+  const gstRate_ = Number(gstRate ?? 18) / 100
+  const gstAmount = includeGst ? Math.round(subtotal * gstRate_) : 0
   const total = subtotal + gstAmount
 
   const handleAddItem = () => {
@@ -105,15 +109,20 @@ export default function NewQuotationPage() {
           quote_no: quoteNo,
           client_name: customerName,
           client_address: customerAddress,
+          client_district: customerDistrict,
+          client_state: customerState,
+          client_pin_code: customerPinCode,
           client_city: "",
           client_gstin: "",
-          subject: "",
+          subject: subject,
+          body_text: bodyText,
           items: items,
           subtotal: calculatedSubtotal,
           sgst: sgst,
           cgst: cgst,
           grand_total: grandTotal,
           include_gst: includeGst,
+          gst_rate: 18,
           notes: notes,
           status: "Draft",
           valid_till: null,
@@ -168,28 +177,6 @@ export default function NewQuotationPage() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="customer-phone">Phone</Label>
-                <Input
-                  id="customer-phone"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+91 XXXXX XXXXX"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customer-email">Email</Label>
-                <Input
-                  id="customer-email"
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  placeholder="customer@example.com"
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="customer-address">Address</Label>
               <Textarea
@@ -197,8 +184,86 @@ export default function NewQuotationPage() {
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 placeholder="Enter customer address"
-                rows={3}
+                rows={2}
               />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="customer-district">District</Label>
+                <Input
+                  id="customer-district"
+                  value={customerDistrict}
+                  onChange={(e) => setCustomerDistrict(e.target.value)}
+                  placeholder="District"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customer-state">State</Label>
+                <Input
+                  id="customer-state"
+                  value={customerState}
+                  onChange={(e) => setCustomerState(e.target.value)}
+                  placeholder="State"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customer-pin-code">Pin Code</Label>
+                <Input
+                  id="customer-pin-code"
+                  value={customerPinCode}
+                  onChange={(e) => setCustomerPinCode(e.target.value)}
+                  placeholder="Pin Code"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Subject and Letter Body */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Letter Details</CardTitle>
+            <CardDescription>Add subject and letter body for this quotation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g. Regarding AC AMC works at above mention place"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="body-text">Letter Body</Label>
+              <Textarea
+                id="body-text"
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                placeholder="e.g. Respected Sir/Madam, As per discussion held with you, regarding following works..."
+                rows={4}
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "Respected Sir/Madam,")}
+                >
+                  "Respected Sir/Madam,"
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "As per discussion held with you, regarding following works at above mention place. Details are given as below;")}
+                >
+                  "As per discussion..."
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
