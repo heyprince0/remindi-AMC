@@ -144,7 +144,7 @@ export default function EditQuotationPage() {
           cgst: cgst,
           grand_total: grandTotal,
           include_gst: includeGst,
-          gst_rate: gstRate,
+          gst_rate: includeGst ? 18 : 0,
           notes: notes,
         })
         .eq("id", id)
