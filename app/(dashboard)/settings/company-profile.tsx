@@ -25,10 +25,6 @@ export interface CompanyProfile {
   gstin: string | null
   logo_url: string | null
   theme_color: string
-  bank_name: string | null
-  account_no: string | null
-  ifsc: string | null
-  upi: string | null
   created_at: string
   updated_at: string
 }
@@ -52,10 +48,7 @@ export function CompanyProfileSettings() {
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [bankName, setBankName] = useState("")
-  const [accountNo, setAccountNo] = useState("")
-  const [ifsc, setIfsc] = useState("")
-  const [upi, setUpi] = useState("")
+
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -84,10 +77,6 @@ export function CompanyProfileSettings() {
           setThemeColor(data.theme_color || "#185FA5")
           // Set existing logo URL for preview
           setExistingLogoUrl(data.logo_url ?? null)
-          setBankName(data.bank_name || "")
-          setAccountNo(data.account_no || "")
-          setIfsc(data.ifsc || "")
-          setUpi(data.upi || "")
           // Reset any pending upload
           setNewImageFile(null)
           setPreviewUrl(null)
@@ -146,10 +135,6 @@ export function CompanyProfileSettings() {
           gstin: gstin,
           theme_color: themeColor,
           logo_url: logoUrl, // always included
-          bank_name: bankName,
-          account_no: accountNo,
-          ifsc: ifsc,
-          upi: upi,
         }, {
           onConflict: 'user_id'
         })
@@ -389,54 +374,6 @@ export function CompanyProfileSettings() {
               onChange={(e) => setGstin(e.target.value)}
               placeholder="GSTIN"
             />
-          </div>
-        </div>
-
-        {/* Bank Details */}
-        <div className="border-t border-border pt-6">
-          <h3 className="font-semibold text-sm mb-4">Bank Details</h3>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="bank-name">Bank Name</Label>
-              <Input
-                id="bank-name"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="Bank name"
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="account-no">Account Number</Label>
-                <Input
-                  id="account-no"
-                  value={accountNo}
-                  onChange={(e) => setAccountNo(e.target.value)}
-                  placeholder="Account number"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ifsc">IFSC Code</Label>
-                <Input
-                  id="ifsc"
-                  value={ifsc}
-                  onChange={(e) => setIfsc(e.target.value)}
-                  placeholder="IFSC code"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="upi">UPI ID</Label>
-              <Input
-                id="upi"
-                value={upi}
-                onChange={(e) => setUpi(e.target.value)}
-                placeholder="UPI ID"
-              />
-            </div>
           </div>
         </div>
 
