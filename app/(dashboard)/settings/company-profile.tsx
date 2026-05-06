@@ -49,8 +49,9 @@ export function CompanyProfileSettings() {
   const [zipCode, setZipCode] = useState("")
   const [gstin, setGstin] = useState("")
   const [themeColor, setThemeColor] = useState("#185FA5")
-  const [logoUrl, setLogoUrl] = useState("")
-  const [logoPreview, setLogoPreview] = useState("")
+  const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
+  const [newImageFile, setNewImageFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [bankName, setBankName] = useState("")
   const [accountNo, setAccountNo] = useState("")
   const [ifsc, setIfsc] = useState("")
@@ -81,12 +82,15 @@ export function CompanyProfileSettings() {
           setZipCode(data.zip_code || "")
           setGstin(data.gstin || "")
           setThemeColor(data.theme_color || "#185FA5")
-          setLogoUrl(data.logo_url || "")
-          setLogoPreview(data.logo_url || "")
+          // Set existing logo URL for preview
+          setExistingLogoUrl(data.logo_url ?? null)
           setBankName(data.bank_name || "")
           setAccountNo(data.account_no || "")
           setIfsc(data.ifsc || "")
           setUpi(data.upi || "")
+          // Reset any pending upload
+          setNewImageFile(null)
+          setPreviewUrl(null)
         }
       } catch (error) {
         console.error('Error loading company profile:', error)
@@ -104,37 +108,29 @@ export function CompanyProfileSettings() {
 
     setSaving(true)
     try {
-      let finalLogoUrl = logoUrl
+      let logoUrl = existingLogoUrl
 
-      // If there's a preview but no logoUrl (new upload), upload the file
-      if (logoPreview && logoPreview.startsWith('data:') && !logoUrl.startsWith('http')) {
-        // Get the actual file from the input
-        const fileInput = document.getElementById('logo-upload') as HTMLInputElement
-        const file = fileInput?.files?.[0]
+      // Step 1: if new image selected, upload it first
+      if (newImageFile) {
+        const fileName = `logo-${user.id}-${Date.now()}.png`
+        const { error: uploadError } = await supabase.storage
+          .from('logos')
+          .upload(fileName, newImageFile, { upsert: true })
 
-        if (file) {
-          try {
-            const fileName = `logo-${user.id}-${Date.now()}.png`
-            const { error: uploadError } = await supabase.storage
-              .from('logos')
-              .upload(fileName, file, { upsert: true })
-
-            if (uploadError) throw uploadError
-
-            const { data: urlData } = supabase.storage
-              .from('logos')
-              .getPublicUrl(fileName)
-
-            finalLogoUrl = urlData.publicUrl
-          } catch (error) {
-            console.error('Error uploading logo:', error)
-            toast.error('Failed to upload logo')
-            setSaving(false)
-            return
-          }
+        if (uploadError) {
+          toast.error('Logo upload failed: ' + uploadError.message)
+          setSaving(false)
+          return
         }
+
+        const { data: urlData } = supabase.storage
+          .from('logos')
+          .getPublicUrl(fileName)
+
+        logoUrl = urlData.publicUrl // update logoUrl with new URL
       }
 
+      // Step 2: now save profile with correct logoUrl
       const { error } = await supabase
         .from('company_profile')
         .upsert({
@@ -149,7 +145,7 @@ export function CompanyProfileSettings() {
           zip_code: zipCode,
           gstin: gstin,
           theme_color: themeColor,
-          logo_url: finalLogoUrl,
+          logo_url: logoUrl, // always included
           bank_name: bankName,
           account_no: accountNo,
           ifsc: ifsc,
@@ -158,8 +154,17 @@ export function CompanyProfileSettings() {
           onConflict: 'user_id'
         })
 
-      if (error) throw error
-      toast.success('Company profile saved successfully!')
+      if (error) {
+        toast.error('Failed to save: ' + error.message)
+        setSaving(false)
+        return
+      }
+
+      toast.success('Profile saved successfully')
+      // Update existing logo URL after successful save
+      setExistingLogoUrl(logoUrl)
+      setNewImageFile(null)
+      setPreviewUrl(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
@@ -167,9 +172,9 @@ export function CompanyProfileSettings() {
     }
   }
 
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !user?.id) return
+    if (!file) return
 
     // Validate file type - only PNG, JPG, JPEG, WEBP
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
@@ -184,17 +189,22 @@ export function CompanyProfileSettings() {
       return
     }
 
+    // Store the file
+    setNewImageFile(file)
+    
     // Create preview
     const reader = new FileReader()
     reader.onload = (event) => {
-      setLogoPreview(event.target?.result as string)
+      setPreviewUrl(event.target?.result as string)
     }
     reader.readAsDataURL(file)
   }
 
   const handleRemoveLogo = () => {
-    setLogoUrl("")
-    setLogoPreview("")
+    setNewImageFile(null)
+    setPreviewUrl(null)
+    setExistingLogoUrl(null)
+    // this will clear logo on next save
   }
 
   if (loading) {
@@ -218,10 +228,10 @@ export function CompanyProfileSettings() {
         <div className="space-y-3">
           <Label>Company Logo</Label>
           <div className="space-y-4">
-            {logoPreview && (
+            {(previewUrl ?? existingLogoUrl) && (
               <div className="flex items-center gap-4">
                 <div className="w-24 h-24 rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center flex-shrink-0">
-                  <img src={logoPreview} alt="Logo preview" className="w-full h-full object-contain p-2" />
+                  <img src={previewUrl ?? existingLogoUrl ?? ''} alt="Logo preview" className="w-full h-full object-contain p-2" />
                 </div>
                 <Button
                   type="button"
@@ -233,7 +243,7 @@ export function CompanyProfileSettings() {
                 </Button>
               </div>
             )}
-            {!logoPreview && (
+            {!(previewUrl ?? existingLogoUrl) && (
               <label htmlFor="logo-upload" className="cursor-pointer block">
                 <input
                   id="logo-upload"
