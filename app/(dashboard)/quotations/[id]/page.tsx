@@ -329,69 +329,10 @@ export default function ViewQuotationPage() {
         `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
       ])
 
-      // Build totals row with GST breakdown
-      const amountInWords = toWords(Math.round(grandTotal)).toUpperCase() + " ONLY"
-      const footRows: any[][] = includeGst
-        ? [[
-            { 
-              content: 'RUPEES ' + amountInWords, 
-              colSpan: 3,
-              styles: { 
-                fontStyle: 'bold', 
-                textColor: [tr, tg, tb],
-                fillColor: [249, 249, 240]
-              } 
-            },
-            { 
-              content: 'Total:\nSGST (9%):\nCGST (9%):\nGr. Total:', 
-              styles: { 
-                fontStyle: 'bold',
-                halign: 'right',
-                fillColor: [249, 249, 240]
-              } 
-            },
-            { 
-              content: `Rs. ${subtotal.toLocaleString("en-IN")}\nRs. ${sgst.toLocaleString("en-IN")}\nRs. ${cgst.toLocaleString("en-IN")}\nRs. ${grandTotal.toLocaleString("en-IN")}`,
-              styles: { 
-                fontStyle: 'bold',
-                halign: 'right',
-                fillColor: [249, 249, 240]
-              } 
-            }
-          ]]
-        : [[
-            { 
-              content: 'RUPEES ' + amountInWords, 
-              colSpan: 3,
-              styles: { 
-                fontStyle: 'bold', 
-                textColor: [tr, tg, tb],
-                fillColor: [249, 249, 240]
-              } 
-            },
-            { 
-              content: 'Total:', 
-              styles: { 
-                fontStyle: 'bold',
-                halign: 'right',
-                fillColor: [249, 249, 240]
-              } 
-            },
-            { 
-              content: `Rs. ${subtotal.toLocaleString("en-IN")}`,
-              styles: { 
-                fontStyle: 'bold',
-                halign: 'right',
-                fillColor: [249, 249, 240]
-              } 
-            }
-          ]]
-
       autoTable(doc, {
         startY: y,
         head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
         body: tableBody,
-        foot: footRows,
         theme: "grid",
         headStyles: {
           fillColor: [tr, tg, tb],
@@ -404,11 +345,6 @@ export default function ViewQuotationPage() {
           fontSize: 9,
           textColor: [0, 0, 0],
         },
-        footStyles: {
-          fillColor: [249, 249, 240],
-          textColor: [0, 0, 0],
-          fontSize: 9,
-        },
         columnStyles: {
           0: { cellWidth: 15, halign: "center" },
           1: { cellWidth: "auto" },
@@ -417,10 +353,48 @@ export default function ViewQuotationPage() {
           4: { cellWidth: 35, halign: "right" },
         },
         margin: { left: margin, right: margin },
-        showFoot: "lastPage",
       })
 
-      y = (doc as any).lastAutoTable.finalY + 6
+      y = (doc as any).lastAutoTable.finalY + 8
+
+      if (includeGst) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+
+        doc.text('Subtotal:', 150, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        y += 6
+        doc.text('SGST (9%):', 150, y, { align: 'right' })
+        doc.text('Rs. ' + sgst.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        y += 6
+        doc.text('CGST (9%):', 150, y, { align: 'right' })
+        doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        // Divider line above Grand Total
+        y += 4
+        doc.setDrawColor(0, 0, 0)
+        doc.setLineWidth(0.3)
+        doc.line(130, y, 195, y)
+
+        y += 5
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('Grand Total:', 150, y, { align: 'right' })
+        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text('Total:', 150, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+      }
 
       // ===== TERMS & CONDITIONS =====
       if (quotation.notes) {
@@ -439,15 +413,15 @@ export default function ViewQuotationPage() {
 
       // ===== FOOTER =====
       // Right-aligned signature block
+      y += 14
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
       doc.setTextColor(0, 0, 0)
-      doc.text("Thanking you,", 195, y, { align: "right" })
-      y += 6
-      doc.text("Yours faithfully,", 195, y, { align: "right" })
-      y += 6
-      doc.setFont("helvetica", "normal")
-      doc.text(`For ${safeStr(profile?.company_name)}`, 195, y, { align: "right" })
+      doc.text('Thanking you,', 195, y, { align: 'right' })
+      doc.text('Yours faithfully,', 195, y+6, { align: 'right' })
+      doc.setFont('helvetica', 'bold')
+      doc.text('For ' + safeStr(profile?.company_name),
+        195, y+12, { align: 'right' })
 
       // Bottom: Generated by Remindi (centered, small gray)
       doc.setFontSize(8)
