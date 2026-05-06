@@ -134,18 +134,28 @@ export default function ViewQuotationPage() {
     }))
   }
 
+  const calculateTotals = () => {
+    if (!quotation) return { subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0 }
+    const items = quotation.items ?? []
+    const subtotal = items.reduce((sum, item) => 
+      sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0)), 0)
+    const includeGst = quotation.include_gst ?? true
+    const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
+    const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
+    const grandTotal = subtotal + sgst + cgst
+    return { subtotal, sgst, cgst, grandTotal }
+  }
+
   const getGrandTotal = () => {
-    if (!quotation) return 0
-    const subtotal = Number(quotation.subtotal ?? 0)
-    const sgst = Number(quotation.sgst ?? 0)
-    const cgst = Number(quotation.cgst ?? 0)
-    return (subtotal + sgst + cgst) > 0 ? (subtotal + sgst + cgst) : subtotal
+    return calculateTotals().grandTotal
   }
 
   const handleWhatsApp = () => {
     if (!quotation) return
-    const grandTotal = getGrandTotal()
+    const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
     const items = quotation.items ?? []
+    const includeGst = quotation.include_gst ?? true
+    const gstTotal = sgst + cgst
     const msg =
       `*Quotation - ${safeStr(profile?.company_name)}*\n` +
       `Quote No: ${safeStr(quotation.quote_no)}\n` +
@@ -158,9 +168,9 @@ export default function ViewQuotationPage() {
         `• ${i.particulars ?? i.description ?? i.name ?? "-"} - Rs.${Number(i.amount ?? 0).toLocaleString("en-IN")}`
       ).join("\n") + "\n" +
       `─────────────────────\n` +
-      `*Subtotal:* Rs.${safeNum(quotation.subtotal)}\n` +
-      `*GST (18%):* Rs.${safeNum(Number(quotation.sgst ?? 0) + Number(quotation.cgst ?? 0))}\n` +
-      `*Total:* Rs.${safeNum(grandTotal)}\n` +
+      `*Subtotal:* Rs.${subtotal.toLocaleString("en-IN")}\n` +
+      (includeGst ? `*SGST (9%):* Rs.${sgst.toLocaleString("en-IN")}\n*CGST (9%):* Rs.${cgst.toLocaleString("en-IN")}\n` : ``) +
+      `*Total:* Rs.${grandTotal.toLocaleString("en-IN")}\n` +
       `─────────────────────\n\n` +
       `To confirm reply YES or call ${safeStr(profile?.company_phone)}\n\n` +
       `_Powered by Remindi_`
@@ -304,10 +314,11 @@ export default function ViewQuotationPage() {
       // ===== ITEMS TABLE =====
       const items = quotation.items ?? []
       const subtotal = items.reduce((sum, item) => {
-        return sum + (Number(item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0))
+        return sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0))
       }, 0)
-      const sgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
-      const cgst = quotation.include_gst ? Math.round(subtotal * 0.09) : 0
+      const includeGst = quotation.include_gst ?? true
+      const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
+      const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
       const grandTotal = subtotal + sgst + cgst
 
       const tableBody = items.map((item, idx) => [
@@ -318,15 +329,25 @@ export default function ViewQuotationPage() {
         `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
       ])
 
-      // Add total row
+      // Add total row with GST breakdown
       const amountInWords = toWords(Math.round(grandTotal)).toUpperCase() + " ONLY"
-      tableBody.push([
-        "",
-        `RUPEES ${amountInWords}`,
-        "",
-        `Total:\nRs. ${subtotal.toLocaleString("en-IN")}/-`,
-        `Gr. Total:\nRs. ${grandTotal.toLocaleString("en-IN")}/-`,
-      ])
+      if (includeGst) {
+        tableBody.push([
+          "",
+          `RUPEES ${amountInWords}`,
+          "",
+          `Total:\nSGST (9%):\nCGST (9%):\nGr. Total:`,
+          `Rs. ${subtotal.toLocaleString("en-IN")}\nRs. ${sgst.toLocaleString("en-IN")}\nRs. ${cgst.toLocaleString("en-IN")}\nRs. ${grandTotal.toLocaleString("en-IN")}`,
+        ])
+      } else {
+        tableBody.push([
+          "",
+          `RUPEES ${amountInWords}`,
+          "",
+          `Total:`,
+          `Rs. ${subtotal.toLocaleString("en-IN")}`,
+        ])
+      }
 
       autoTable(doc, {
         startY: y,
@@ -425,9 +446,8 @@ export default function ViewQuotationPage() {
   }
 
   const mappedItems = getMappedItems()
-  const grandTotal = getGrandTotal()
-  const subtotal = Number(quotation.subtotal ?? 0)
-  const gstTotal = Number(quotation.sgst ?? 0) + Number(quotation.cgst ?? 0)
+  const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
+  const includeGst = quotation.include_gst ?? true
   const statusLower = (quotation.status ?? "draft").toLowerCase()
 
   return (
@@ -658,23 +678,36 @@ export default function ViewQuotationPage() {
         {/* TOTALS */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col items-end gap-2 max-w-xs ml-auto">
-              <div className="flex justify-between w-full text-sm">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span className="font-medium">₹{subtotal.toLocaleString("en-IN")}</span>
-              </div>
-              {gstTotal > 0 && (
-                <div className="flex justify-between w-full text-sm">
-                  <span className="text-muted-foreground">GST (18%):</span>
-                  <span className="font-medium">₹{gstTotal.toLocaleString("en-IN")}</span>
+            <div className="flex flex-col items-end gap-3 max-w-xs ml-auto">
+              {includeGst ? (
+                <>
+                  <div className="flex justify-between w-full text-sm">
+                    <span className="text-muted-foreground">Subtotal:</span>
+                    <span className="font-medium">₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between w-full text-sm">
+                    <span className="text-muted-foreground">SGST (9%):</span>
+                    <span className="font-medium">₹{sgst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between w-full text-sm">
+                    <span className="text-muted-foreground">CGST (9%):</span>
+                    <span className="font-medium">₹{cgst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="border-t border-border pt-2 mt-1 flex justify-between w-full">
+                    <span className="text-lg font-bold">Grand Total:</span>
+                    <span className="text-lg font-bold text-blue-600">
+                      ₹{grandTotal.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between w-full">
+                  <span className="text-lg font-bold">Total:</span>
+                  <span className="text-lg font-bold text-blue-600">
+                    ₹{subtotal.toLocaleString("en-IN")}
+                  </span>
                 </div>
               )}
-              <div className="border-t border-border pt-2 mt-1 flex justify-between w-full">
-                <span className="text-base font-bold">Grand Total:</span>
-                <span className="text-base font-bold text-blue-600">
-                  ₹{grandTotal.toLocaleString("en-IN")}
-                </span>
-              </div>
             </div>
           </CardContent>
         </Card>
