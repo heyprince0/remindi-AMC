@@ -302,7 +302,7 @@ export default function EditQuotationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {items.map((item, index) => (
-              <div key={item.id} className="flex gap-2">
+              <div key={item.id} className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 space-y-2">
                   <Label htmlFor={`desc-${item.id}`} className="text-xs">
                     Description
@@ -347,7 +347,7 @@ export default function EditQuotationPage() {
                     {item.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                   </div>
                 </div>
-                <div className="flex items-end">
+                <div className="flex items-end sm:items-end justify-end sm:justify-start">
                   <Button
                     variant="ghost"
                     size="icon"
