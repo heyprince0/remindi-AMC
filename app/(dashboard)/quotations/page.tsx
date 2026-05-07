@@ -130,8 +130,8 @@ export default function QuotationsPage() {
         {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Quotations</h1>
-            <p className="text-muted-foreground">Create and manage customer quotations</p>
+            <h1 className="text-2xl font-bold text-foreground">Quotation & Invoice Management</h1>
+            <p className="text-muted-foreground">Create and manage customers quotations & Invoice</p>
           </div>
           <Link href="/quotations/new">
             <Button>
