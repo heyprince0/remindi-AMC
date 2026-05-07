@@ -382,7 +382,7 @@ export default function ViewQuotationPage() {
         doc.setLineWidth(0.3)
         doc.line(140, y, 195, y)
 
-        y += 3
+        y += 4
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
         doc.text('Total:', 160, y, { align: 'right' })
