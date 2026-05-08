@@ -93,6 +93,7 @@ export default function ViewInvoicePage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editInvoiceNo, setEditInvoiceNo] = useState("")
+  const [editOrderNo, setEditOrderNo] = useState("")
   const [editInvoiceDate, setEditInvoiceDate] = useState("")
   const [editDueDate, setEditDueDate] = useState("")
   const [editPaymentTerms, setEditPaymentTerms] = useState("")
@@ -155,6 +156,7 @@ export default function ViewInvoicePage() {
   const handleOpenEditModal = () => {
     if (!invoice) return
     setEditInvoiceNo(invoice.invoice_no || "")
+    setEditOrderNo(invoice.order_no || "")
     setEditInvoiceDate(invoice.invoice_date || "")
     setEditDueDate(invoice.due_date || "")
     setEditPaymentTerms(invoice.payment_terms || "")
@@ -170,6 +172,7 @@ export default function ViewInvoicePage() {
         .from("invoices")
         .update({
           invoice_no: editInvoiceNo,
+          order_no: editOrderNo || null,
           invoice_date: editInvoiceDate,
           due_date: editDueDate,
           payment_terms: editPaymentTerms,
@@ -313,6 +316,10 @@ export default function ViewInvoicePage() {
       }
       if (profile?.email) {
         doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
+        infoY += 4
+      }
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
       }
 
       // Header bottom line
@@ -679,6 +686,9 @@ export default function ViewInvoicePage() {
                   {profile.email && (
                     <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
                   )}
+                  {profile.gstin && (
+                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
+                  )}
                 </div>
               </div>
               
@@ -716,6 +726,12 @@ export default function ViewInvoicePage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Due Date</p>
               <p className="font-medium">{invoice.due_date ? formatDate(invoice.due_date) : "-"}</p>
             </div>
+            {invoice.order_no && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Order No</p>
+                <p className="font-medium">{invoice.order_no}</p>
+              </div>
+            )}
             {invoice.payment_terms && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Payment Terms</p>
@@ -857,6 +873,17 @@ export default function ViewInvoicePage() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Order Number */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-order-no">Order Number (Optional)</Label>
+              <Input
+                id="edit-order-no"
+                value={editOrderNo}
+                onChange={(e) => setEditOrderNo(e.target.value)}
+                placeholder="e.g. PO-2026-001"
+              />
+            </div>
+
             {/* Invoice Number */}
             <div className="space-y-2">
               <Label htmlFor="edit-invoice-no">Invoice Number</Label>

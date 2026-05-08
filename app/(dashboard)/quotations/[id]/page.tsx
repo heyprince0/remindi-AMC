@@ -103,6 +103,7 @@ export default function ViewQuotationPage() {
   })
   const [selectedPaymentTerms, setSelectedPaymentTerms] = useState("")
   const [invoiceNotes, setInvoiceNotes] = useState("")
+  const [orderNo, setOrderNo] = useState("")
   const id = params.id as string
 
   useEffect(() => {
@@ -164,6 +165,7 @@ export default function ViewQuotationPage() {
           user_id: user.id,
           quotation_id: quotation.id,
           invoice_no: invoiceNo,
+          order_no: orderNo || null,
           invoice_date: invoiceDate,
           due_date: dueDate,
           payment_terms: selectedPaymentTerms,
@@ -331,6 +333,10 @@ export default function ViewQuotationPage() {
       }
       if (profile?.email) {
         doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
+        infoY += 4
+      }
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
       }
 
       // Header bottom line (CHANGE 1: Thin colored line)
@@ -694,6 +700,9 @@ export default function ViewQuotationPage() {
                   {profile.email && (
                     <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
                   )}
+                  {profile.gstin && (
+                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -847,6 +856,17 @@ export default function ViewQuotationPage() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Order Number */}
+            <div className="space-y-2">
+              <Label htmlFor="order-no">Order Number (Optional)</Label>
+              <Input
+                id="order-no"
+                value={orderNo}
+                onChange={(e) => setOrderNo(e.target.value)}
+                placeholder="e.g. PO-2026-001"
+              />
+            </div>
+
             {/* Invoice Number */}
             <div className="space-y-2">
               <Label htmlFor="invoice-no">Invoice Number</Label>
