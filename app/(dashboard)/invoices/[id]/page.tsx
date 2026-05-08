@@ -348,18 +348,21 @@ export default function ViewInvoicePage() {
         : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
       doc.text('DATE: ' + formattedDate, pageW - margin, y,
         { align: 'right' })
-      
-      // Order number on next line
+
       y += 5
+      // Order number below date on right side
       if (invoice.order_no) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
-        doc.setTextColor(60, 60, 60)
-        doc.text('Order No: ' + safeStr(invoice.order_no), margin, y)
+        doc.setTextColor(0, 0, 0)
+        doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
+      } else {
+        // If no order number, still need to move y for spacing
+        y -= 5
       }
 
       y += 5
-      // Due date in red below date
+      // Due date in red below order number
       doc.setFontSize(9)
       doc.setTextColor(220, 38, 38)
       doc.text('Due: ' + safeDate(invoice.due_date),
