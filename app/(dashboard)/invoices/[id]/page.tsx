@@ -350,19 +350,15 @@ export default function ViewInvoicePage() {
         { align: 'right' })
 
       y += 5
-      // Order number below date on right side
+      // Order number on second line on right side
       if (invoice.order_no) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(0, 0, 0)
         doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
-      } else {
-        // If no order number, still need to move y for spacing
-        y -= 5
+        y += 5
       }
-
-      y += 5
-      // Due date in red below order number
+      // Due date in red below order number or date
       doc.setFontSize(9)
       doc.setTextColor(220, 38, 38)
       doc.text('Due: ' + safeDate(invoice.due_date),
