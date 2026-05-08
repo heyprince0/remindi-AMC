@@ -183,6 +183,7 @@ export type CompanyProfile = {
   theme_color: string
   created_at: string
   updated_at: string
+  payment_terms?: string | null
 }
 
 export type Invoice = {
