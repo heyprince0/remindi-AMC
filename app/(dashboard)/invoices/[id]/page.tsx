@@ -484,10 +484,6 @@ export default function ViewInvoicePage() {
         doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
         y += 4
       }
-      if (invoice.payment_terms) {
-        doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
-        y += 4
-      }
 
       // ===== NOTES =====
       if (invoice.notes) {
@@ -910,7 +906,7 @@ export default function ViewInvoicePage() {
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="edit-invoice-notes">Notes (Optional)</Label>
+              <Label htmlFor="edit-invoice-notes">Terms & Conditions</Label>
               <Textarea
                 id="edit-invoice-notes"
                 value={editNotes}
