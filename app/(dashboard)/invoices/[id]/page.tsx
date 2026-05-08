@@ -180,6 +180,22 @@ export default function ViewInvoicePage() {
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
 
+      // ===== PAID WATERMARK =====
+      if (invoice.payment_status?.toLowerCase() === 'paid') {
+        doc.saveGraphicsState()
+        doc.setFontSize(72)
+        doc.setFont('helvetica', 'bold')
+        // Light green color, very transparent
+        doc.setTextColor(180, 230, 180)
+        doc.text('PAID', 105, 180, {
+          align: 'center',
+          angle: 35
+        })
+        doc.restoreGraphicsState()
+        // Reset text color back to black after watermark
+        doc.setTextColor(0, 0, 0)
+      }
+
       let y = margin
 
       // ===== HEADER SECTION =====
@@ -240,13 +256,14 @@ export default function ViewInvoicePage() {
       y += 6
 
       // ===== INVOICE HEADER =====
-      // TAX INVOICE title
+      // TAX INVOICE — top right, above the date
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
-      doc.text("TAX INVOICE", pageW - margin, y, { align: "right" })
+      doc.text('TAX INVOICE', pageW - margin, y, { align: 'right' })
 
-      // Invoice number and date
+      // Then on next line below it:
+      y += 6
       doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
@@ -254,29 +271,26 @@ export default function ViewInvoicePage() {
       const formattedDate = invoice.invoice_date
         ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      doc.text(`DATE: ${formattedDate}`, pageW - margin, y, { align: "right" })
-      y += 8
+      doc.text('DATE: ' + formattedDate, pageW - margin, y,
+        { align: 'right' })
 
-      // Due date
-      if (invoice.due_date) {
-        doc.setFontSize(9)
-        doc.setTextColor(200, 50, 50)
-        const dueDateFormatted = new Date(invoice.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        doc.text(`Due: ${dueDateFormatted}`, pageW - margin, y, { align: "right" })
-        y += 5
-      }
-      y += 2
+      y += 5
+      // Due date in red below date
+      doc.setFontSize(9)
+      doc.setTextColor(220, 38, 38)
+      doc.text('Due: ' + safeDate(invoice.due_date),
+        pageW - margin, y, { align: 'right' })
+      doc.setTextColor(0, 0, 0)
 
       // ===== CLIENT BLOCK =====
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(0, 0, 0)
-      doc.text("TO,", margin, y)
-      y += 5
-      doc.text("THE OWNER,", margin, y)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(150, 150, 150)
+      doc.text("BILL TO:", margin, y)
       y += 5
 
       doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
       doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
       y += 5
 
@@ -297,26 +311,6 @@ export default function ViewInvoicePage() {
         y += 5
       }
       y += 3
-
-      // ===== SUBJECT LINE =====
-      if (invoice.subject) {
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(10)
-        doc.text(`Sub: ${safeStr(invoice.subject)}`, margin, y)
-        y += 7
-      }
-
-      // ===== BODY TEXT =====
-      if (invoice.body_text) {
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(40, 40, 40)
-        const bodyLines = doc.splitTextToSize(safeStr(invoice.body_text), pageW - 2 * margin)
-        doc.text(bodyLines, margin, y)
-        y += (bodyLines.length * 4) + 3
-      }
-      y += 2
 
       // ===== ITEMS TABLE =====
       const items = invoice.items ?? []
@@ -440,17 +434,6 @@ export default function ViewInvoicePage() {
         const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
         doc.text(noteLines, margin, y)
         y += (noteLines.length * 4)
-      }
-
-      // ===== PAYMENT STATUS WATERMARK =====
-      if (invoice.payment_status === "Paid") {
-        doc.setFontSize(60)
-        doc.setTextColor(200, 240, 200)
-        doc.setFont('helvetica', 'bold')
-        doc.text('PAID', 105, 160, { 
-          align: 'center', 
-          angle: 30 
-        })
       }
 
       // ===== FOOTER =====
