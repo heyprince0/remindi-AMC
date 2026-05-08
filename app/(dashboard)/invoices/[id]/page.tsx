@@ -26,6 +26,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
@@ -79,6 +90,14 @@ export default function ViewInvoicePage() {
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editInvoiceNo, setEditInvoiceNo] = useState("")
+  const [editInvoiceDate, setEditInvoiceDate] = useState("")
+  const [editDueDate, setEditDueDate] = useState("")
+  const [editPaymentTerms, setEditPaymentTerms] = useState("")
+  const [editNotes, setEditNotes] = useState("")
+  const [quotationData, setQuotationData] = useState<{ quote_no: string } | null>(null)
   const id = params.id as string
 
   useEffect(() => {
@@ -93,8 +112,19 @@ export default function ViewInvoicePage() {
         supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
       ])
       if (iErr) throw iErr
-      setInvoice(iData as Invoice)
+      const invoiceData = iData as Invoice
+      setInvoice(invoiceData)
       if (pData) setProfile(pData as CompanyProfile)
+      
+      // Fetch quotation data if quotation_id exists
+      if (invoiceData.quotation_id) {
+        const { data: quotData } = await supabase
+          .from("quotations")
+          .select("quote_no")
+          .eq("id", invoiceData.quotation_id)
+          .single()
+        if (quotData) setQuotationData(quotData)
+      }
     } catch (err) {
       console.error(err)
       toast.error("Failed to load invoice")
@@ -119,6 +149,44 @@ export default function ViewInvoicePage() {
       toast.error("Failed to update payment status")
     } finally {
       setUpdating(false)
+    }
+  }
+
+  const handleOpenEditModal = () => {
+    if (!invoice) return
+    setEditInvoiceNo(invoice.invoice_no || "")
+    setEditInvoiceDate(invoice.invoice_date || "")
+    setEditDueDate(invoice.due_date || "")
+    setEditPaymentTerms(invoice.payment_terms || "")
+    setEditNotes(invoice.notes || "")
+    setShowEditModal(true)
+  }
+
+  const handleSaveChanges = async () => {
+    if (!invoice || !user?.id) return
+    setEditLoading(true)
+    try {
+      const { error } = await supabase
+        .from("invoices")
+        .update({
+          invoice_no: editInvoiceNo,
+          invoice_date: editInvoiceDate,
+          due_date: editDueDate,
+          payment_terms: editPaymentTerms,
+          notes: editNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invoice.id)
+      
+      if (error) throw error
+      toast.success("Invoice updated successfully")
+      setShowEditModal(false)
+      loadData()
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to update invoice")
+    } finally {
+      setEditLoading(false)
     }
   }
 
@@ -539,6 +607,15 @@ export default function ViewInvoicePage() {
               WhatsApp
             </Button>
 
+            <Button
+              onClick={handleOpenEditModal}
+              variant="outline"
+              size="sm"
+            >
+              <Edit className="mr-1.5 size-4" />
+              Edit
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={updating}>
@@ -768,6 +845,128 @@ export default function ViewInvoicePage() {
           </Card>
         )}
       </div>
+
+      {/* Edit Invoice Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice</DialogTitle>
+            {quotationData && (
+              <p className="text-xs text-muted-foreground mt-1">From {quotationData.quote_no}</p>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Invoice Number */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-invoice-no">Invoice Number</Label>
+              <Input
+                id="edit-invoice-no"
+                value={editInvoiceNo}
+                onChange={(e) => setEditInvoiceNo(e.target.value)}
+                placeholder="INV-001"
+              />
+            </div>
+
+            {/* Invoice Date */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-invoice-date">Invoice Date</Label>
+              <Input
+                id="edit-invoice-date"
+                type="date"
+                value={editInvoiceDate}
+                onChange={(e) => setEditInvoiceDate(e.target.value)}
+              />
+            </div>
+
+            {/* Due Date */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-due-date">Due Date</Label>
+              <Input
+                id="edit-due-date"
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+              />
+            </div>
+
+            {/* Payment Terms */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-payment-terms">Payment Terms</Label>
+              <Select value={editPaymentTerms} onValueChange={setEditPaymentTerms}>
+                <SelectTrigger id="edit-payment-terms">
+                  <SelectValue placeholder="Select payment terms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100% advance along with work order">100% advance along with work order</SelectItem>
+                  <SelectItem value="50% advance, balance on completion">50% advance, balance on completion</SelectItem>
+                  <SelectItem value="Net 7 days">Net 7 days</SelectItem>
+                  <SelectItem value="Net 14 days">Net 14 days</SelectItem>
+                  <SelectItem value="Net 30 days">Net 30 days</SelectItem>
+                  <SelectItem value="On completion">On completion</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-invoice-notes">Notes (Optional)</Label>
+              <Textarea
+                id="edit-invoice-notes"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="e.g. Please transfer to bank account..."
+                className="min-h-[80px] resize-none"
+              />
+            </div>
+
+            {/* Summary */}
+            {invoice && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
+                <p className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Client:</span> {invoice.client_name}
+                </p>
+                <p className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Subtotal:</span> ₹{invoice.subtotal.toLocaleString("en-IN")}
+                </p>
+                {invoice.include_gst && (
+                  <>
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">SGST 9%:</span> ₹{invoice.sgst.toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">CGST 9%:</span> ₹{invoice.cgst.toLocaleString("en-IN")}
+                    </p>
+                  </>
+                )}
+                <p className="text-foreground font-semibold border-t border-border pt-2">
+                  Grand Total: ₹{invoice.grand_total.toLocaleString("en-IN")}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveChanges}
+              disabled={editLoading || !editInvoiceNo}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {editLoading ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
