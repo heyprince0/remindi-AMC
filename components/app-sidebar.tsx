@@ -32,7 +32,7 @@ import { useAuth } from "@/lib/auth-context"
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
   { title: "Contracts", icon: FileText, href: "/contracts" },
-  { title: "Quotations & Invoice", icon: FileCheck, href: "/quotations" },
+  { title: "Quotations", icon: FileCheck, href: "/quotations" },
   { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Customers", icon: Users, href: "/customers" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
