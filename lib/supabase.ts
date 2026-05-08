@@ -57,11 +57,15 @@ export const calculateNextServiceDate = (
   startDate: string,
   frequencyDays: number
 ): string => {
-  const date = new Date(startDate)
+  const [year, month, day] = startDate.split('-').map(Number)
+  const date = new Date(year, month - 1, day) // local time, no UTC shift
   date.setDate(date.getDate() + frequencyDays)
-  return date.toISOString().split('T')[0]
-}
 
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}` // manual format, no toISOString()
+}
 export type Customer = {
   id: string
   user_id: string
@@ -119,7 +123,8 @@ export type Profile = {
 export const getDaysUntilService = (nextServiceDate: string): number => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const serviceDate = new Date(nextServiceDate)
+  const [year, month, day] = nextServiceDate.split('-').map(Number)
+  const serviceDate = new Date(year, month - 1, day)
   serviceDate.setHours(0, 0, 0, 0)
   if (isNaN(serviceDate.getTime())) return 0
   const diffTime = serviceDate.getTime() - today.getTime()
