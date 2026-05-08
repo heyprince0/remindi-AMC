@@ -113,7 +113,7 @@ export default function ViewQuotationPage() {
     if (profile?.payment_terms) {
       setSelectedPaymentTerms(profile.payment_terms)
     }
-  }, [profile?.payment_terms])
+  }, [profile])
 
   const loadData = async () => {
     setLoading(true)
