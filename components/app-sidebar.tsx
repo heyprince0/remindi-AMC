@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   FileCheck,
+  Receipt,
 } from "lucide-react"
 import {
   Sidebar,
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
   { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Quotations & Invoice", icon: FileCheck, href: "/quotations" },
+  { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Customers", icon: Users, href: "/customers" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },

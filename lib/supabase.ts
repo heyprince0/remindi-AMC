@@ -189,16 +189,25 @@ export type Invoice = {
   id: string
   user_id: string
   quotation_id: string | null
-  invoice_number: string
-  customer_name: string
-  customer_email: string | null
-  customer_phone: string | null
-  customer_address: string | null
+  invoice_no: string
+  invoice_date: string
+  due_date: string | null
+  payment_terms: string | null
+  payment_status: "Unpaid" | "Partial" | "Paid"
+  notes: string | null
+  client_name: string
+  client_address: string | null
+  client_district: string | null
+  client_state: string | null
+  client_pin_code: string | null
+  subject: string | null
+  body_text: string | null
   items: QuotationItem[]
   subtotal: number
-  gst_amount: number
-  total_amount: number
-  status: 'draft' | 'sent' | 'paid' | 'overdue'
+  sgst: number
+  cgst: number
+  grand_total: number
+  include_gst: boolean
   created_at: string
   updated_at: string
 }

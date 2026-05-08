@@ -6,7 +6,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { supabase, type Quotation, type CompanyProfile } from "@/lib/supabase"
+import { supabase, type Invoice, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import {
   ArrowLeft,
@@ -15,7 +15,6 @@ import {
   Edit,
   ChevronDown,
   Loader2,
-  FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -27,17 +26,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
@@ -55,12 +43,11 @@ function formatDate(dateStr: string | null | undefined): string {
   })
 }
 
-function getStatusBadge(status: string) {
-  const s = (status ?? "draft").toLowerCase()
-  if (s === "draft") return <Badge className="bg-slate-100 text-slate-700 border-0">Draft</Badge>
-  if (s === "sent") return <Badge className="bg-blue-100 text-blue-700 border-0">Sent</Badge>
-  if (s === "accepted") return <Badge className="bg-green-100 text-green-700 border-0">Accepted</Badge>
-  if (s === "rejected") return <Badge className="bg-red-100 text-red-700 border-0">Rejected</Badge>
+function getPaymentStatusBadge(status: string) {
+  const s = (status ?? "unpaid").toLowerCase()
+  if (s === "unpaid") return <Badge className="bg-red-100 text-red-700 border-0">Unpaid</Badge>
+  if (s === "partial") return <Badge className="bg-yellow-100 text-yellow-700 border-0">Partial</Badge>
+  if (s === "paid") return <Badge className="bg-green-100 text-green-700 border-0">Paid</Badge>
   return <Badge className="bg-slate-100 text-slate-700 border-0">{status}</Badge>
 }
 
@@ -83,142 +70,60 @@ function toWords(n: number): string {
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
 }
 
-export default function ViewQuotationPage() {
+export default function ViewInvoicePage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const [quotation, setQuotation] = useState<Quotation | null>(null)
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [updating, setUpdating] = useState(false)
-  const [showConvertModal, setShowConvertModal] = useState(false)
-  const [convertLoading, setConvertLoading] = useState(false)
-  const [invoiceNo, setInvoiceNo] = useState("")
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState(() => {
-    const date = new Date()
-    date.setDate(date.getDate() + 14)
-    return date.toISOString().split('T')[0]
-  })
-  const [selectedPaymentTerms, setSelectedPaymentTerms] = useState("")
-  const [invoiceNotes, setInvoiceNotes] = useState("")
   const id = params.id as string
 
   useEffect(() => {
     if (user?.id && id) loadData()
   }, [id, user?.id])
 
-  useEffect(() => {
-    if (profile?.payment_terms) {
-      setSelectedPaymentTerms(profile.payment_terms)
-    }
-  }, [profile?.payment_terms])
-
   const loadData = async () => {
     setLoading(true)
     try {
-      const [{ data: qData, error: qErr }, { data: pData }] = await Promise.all([
-        supabase.from("quotations").select("*").eq("id", id).eq("user_id", user!.id).single(),
+      const [{ data: iData, error: iErr }, { data: pData }] = await Promise.all([
+        supabase.from("invoices").select("*").eq("id", id).eq("user_id", user!.id).single(),
         supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
       ])
-      if (qErr) throw qErr
-      setQuotation(qData as Quotation)
+      if (iErr) throw iErr
+      setInvoice(iData as Invoice)
       if (pData) setProfile(pData as CompanyProfile)
     } catch (err) {
       console.error(err)
-      toast.error("Failed to load quotation")
+      toast.error("Failed to load invoice")
     } finally {
       setLoading(false)
     }
   }
 
-  const generateNextInvoiceNo = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("invoice_no", { count: "exact" })
-        .eq("user_id", user!.id)
-      if (error) throw error
-      const count = (data?.length ?? 0) + 1
-      return `INV-${String(count).padStart(3, '0')}`
-    } catch (err) {
-      console.error(err)
-      return `INV-001`
-    }
-  }
-
-  const handleOpenConvertModal = async () => {
-    const nextNo = await generateNextInvoiceNo()
-    setInvoiceNo(nextNo)
-    setShowConvertModal(true)
-  }
-
-  const handleConvertToInvoice = async () => {
-    if (!quotation || !user?.id) return
-    setConvertLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .insert({
-          user_id: user.id,
-          quotation_id: quotation.id,
-          invoice_no: invoiceNo,
-          invoice_date: invoiceDate,
-          due_date: dueDate,
-          payment_terms: selectedPaymentTerms,
-          payment_status: "Unpaid",
-          notes: invoiceNotes,
-          client_name: quotation.client_name,
-          client_address: quotation.client_address,
-          client_district: quotation.client_district,
-          client_state: quotation.client_state,
-          client_pin_code: quotation.client_pin_code,
-          subject: quotation.subject,
-          body_text: quotation.body_text,
-          items: quotation.items,
-          subtotal: quotation.subtotal,
-          sgst: quotation.sgst,
-          cgst: quotation.cgst,
-          grand_total: quotation.grand_total,
-          include_gst: quotation.include_gst,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      toast.success("Invoice generated successfully")
-      setShowConvertModal(false)
-      router.push(`/invoices/${data.id}`)
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to generate invoice: " + (err instanceof Error ? err.message : "Unknown error"))
-    } finally {
-      setConvertLoading(false)
-    }
-  }
-
-  const handleUpdateStatus = async (newStatus: string) => {
-    if (!quotation) return
+  const handleUpdatePaymentStatus = async (newStatus: string) => {
+    if (!invoice) return
     setUpdating(true)
     try {
       const { error } = await supabase
-        .from("quotations")
-        .update({ status: newStatus })
-        .eq("id", quotation.id)
+        .from("invoices")
+        .update({ payment_status: newStatus })
+        .eq("id", invoice.id)
       if (error) throw error
-      setQuotation({ ...quotation, status: newStatus as Quotation["status"] })
-      toast.success(`Status updated to ${newStatus}`)
+      setInvoice({ ...invoice, payment_status: newStatus as Invoice["payment_status"] })
+      toast.success(`Payment status updated to ${newStatus}`)
     } catch (err) {
       console.error(err)
-      toast.error("Failed to update status")
+      toast.error("Failed to update payment status")
     } finally {
       setUpdating(false)
     }
   }
 
   const getMappedItems = () => {
-    return (quotation?.items ?? []).map((item: any, index: number) => ({
+    return (invoice?.items ?? []).map((item: any, index: number) => ({
       sr: index + 1,
       description: item.particulars ?? item.description ?? item.name ?? "-",
       qty: item.qty ?? item.quantity ?? 1,
@@ -228,33 +133,27 @@ export default function ViewQuotationPage() {
   }
 
   const calculateTotals = () => {
-    if (!quotation) return { subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0 }
-    const items = quotation.items ?? []
-    const subtotal = items.reduce((sum, item) => 
-      sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0)), 0)
-    const includeGst = quotation.include_gst ?? true
-    const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
-    const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
-    const grandTotal = subtotal + sgst + cgst
-    return { subtotal, sgst, cgst, grandTotal }
-  }
-
-  const getGrandTotal = () => {
-    return calculateTotals().grandTotal
+    if (!invoice) return { subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0 }
+    return {
+      subtotal: invoice.subtotal,
+      sgst: invoice.sgst,
+      cgst: invoice.cgst,
+      grandTotal: invoice.grand_total,
+    }
   }
 
   const handleWhatsApp = () => {
-    if (!quotation) return
+    if (!invoice) return
     const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-    const items = quotation.items ?? []
-    const includeGst = quotation.include_gst ?? true
+    const items = invoice.items ?? []
+    const includeGst = invoice.include_gst ?? true
     const gstTotal = sgst + cgst
     const msg =
-      `*Quotation - ${safeStr(profile?.company_name)}*\n` +
-      `Quote No: ${safeStr(quotation.quote_no)}\n` +
-      `Date: ${safeDate(quotation.created_at)}\n` +
-      `Valid till: ${safeDate(quotation.valid_till)}\n\n` +
-      `*Customer:* ${safeStr(quotation.client_name)}\n\n` +
+      `*Invoice - ${safeStr(profile?.company_name)}*\n` +
+      `Invoice No: ${safeStr(invoice.invoice_no)}\n` +
+      `Date: ${safeDate(invoice.invoice_date)}\n` +
+      `Due Date: ${safeDate(invoice.due_date)}\n\n` +
+      `*Customer:* ${safeStr(invoice.client_name)}\n\n` +
       `─────────────────────\n` +
       `*Services:*\n` +
       items.map((i: any) =>
@@ -265,13 +164,13 @@ export default function ViewQuotationPage() {
       (includeGst ? `*SGST (9%):* Rs.${sgst.toLocaleString("en-IN")}\n*CGST (9%):* Rs.${cgst.toLocaleString("en-IN")}\n` : ``) +
       `*Total:* Rs.${grandTotal.toLocaleString("en-IN")}\n` +
       `─────────────────────\n\n` +
-      `To confirm reply YES or call ${safeStr(profile?.company_phone)}\n\n` +
+      `To confirm please reply or call ${safeStr(profile?.company_phone)}\n\n` +
       `_Powered by Remindi_`
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
 
   const handleDownloadPdf = async () => {
-    if (!quotation) return
+    if (!invoice) return
     setGeneratingPdf(true)
     try {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
@@ -284,7 +183,6 @@ export default function ViewQuotationPage() {
       let y = margin
 
       // ===== HEADER SECTION =====
-      // Left side: Logo + Company info
       let logoX = margin
       let logoAdded = false
       try {
@@ -333,7 +231,7 @@ export default function ViewQuotationPage() {
         doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
       }
 
-      // Header bottom line (CHANGE 1: Thin colored line)
+      // Header bottom line
       y += 28
       const headerBottomY = y
       doc.setDrawColor(tr, tg, tb)
@@ -341,17 +239,33 @@ export default function ViewQuotationPage() {
       doc.line(margin, headerBottomY, pageW - margin, headerBottomY)
       y += 6
 
-      // ===== QUOTE NUMBER + DATE ROW =====
+      // ===== INVOICE HEADER =====
+      // TAX INVOICE title
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("TAX INVOICE", pageW - margin, y, { align: "right" })
+
+      // Invoice number and date
       doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(quotation.quote_no ?? ("QT-" + quotation.id)), margin, y)
-
-      const formattedDate = quotation.created_at 
-        ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
+      const formattedDate = invoice.invoice_date
+        ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
       doc.text(`DATE: ${formattedDate}`, pageW - margin, y, { align: "right" })
       y += 8
+
+      // Due date
+      if (invoice.due_date) {
+        doc.setFontSize(9)
+        doc.setTextColor(200, 50, 50)
+        const dueDateFormatted = new Date(invoice.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        doc.text(`Due: ${dueDateFormatted}`, pageW - margin, y, { align: "right" })
+        y += 5
+      }
+      y += 2
 
       // ===== CLIENT BLOCK =====
       doc.setFontSize(10)
@@ -363,20 +277,20 @@ export default function ViewQuotationPage() {
       y += 5
 
       doc.setFont("helvetica", "bold")
-      doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
+      doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
       y += 5
 
       doc.setFont("helvetica", "normal")
       doc.setTextColor(40, 40, 40)
-      if (quotation.client_address) {
-        doc.text(safeStr(quotation.client_address), margin, y)
+      if (invoice.client_address) {
+        doc.text(safeStr(invoice.client_address), margin, y)
         y += 5
       }
 
       const cityStateZip = [
-        quotation.client_district,
-        quotation.client_state,
-        quotation.client_pin_code
+        invoice.client_district,
+        invoice.client_state,
+        invoice.client_pin_code
       ].filter(Boolean).join(', ')
       if (cityStateZip) {
         doc.text(cityStateZip, margin, y)
@@ -385,34 +299,28 @@ export default function ViewQuotationPage() {
       y += 3
 
       // ===== SUBJECT LINE =====
-      if (quotation.subject) {
+      if (invoice.subject) {
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.setFontSize(10)
-        doc.text(`Sub: ${safeStr(quotation.subject)}`, margin, y)
+        doc.text(`Sub: ${safeStr(invoice.subject)}`, margin, y)
         y += 7
       }
 
       // ===== BODY TEXT =====
-      if (quotation.body_text) {
+      if (invoice.body_text) {
         doc.setFontSize(10)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(40, 40, 40)
-        const bodyLines = doc.splitTextToSize(safeStr(quotation.body_text), pageW - 2 * margin)
+        const bodyLines = doc.splitTextToSize(safeStr(invoice.body_text), pageW - 2 * margin)
         doc.text(bodyLines, margin, y)
         y += (bodyLines.length * 4) + 3
       }
       y += 2
 
       // ===== ITEMS TABLE =====
-      const items = quotation.items ?? []
-      const subtotal = items.reduce((sum, item) => {
-        return sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0))
-      }, 0)
-      const includeGst = quotation.include_gst ?? true
-      const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
-      const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
-      const grandTotal = subtotal + sgst + cgst
+      const items = invoice.items ?? []
+      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
 
       const tableBody = items.map((item, idx) => [
         String(idx + 1),
@@ -450,7 +358,7 @@ export default function ViewQuotationPage() {
 
       y = (doc as any).lastAutoTable.finalY + 8
 
-      if (includeGst) {
+      if (invoice.include_gst) {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
@@ -469,7 +377,6 @@ export default function ViewQuotationPage() {
         doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
           195, y, { align: 'right' })
 
-        // Divider line above Grand Total
         y += 3
         doc.setDrawColor(0, 0, 0)
         doc.setLineWidth(0.3)
@@ -489,24 +396,65 @@ export default function ViewQuotationPage() {
           195, y, { align: 'right' })
       }
 
-      // ===== TERMS & CONDITIONS =====
-      if (quotation.notes) {
+      // ===== PAYMENT DETAILS =====
+      y += 10
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Payment Details:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+
+      if (profile?.bank_name) {
+        doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
+        y += 4
+      }
+      if (profile?.account_no) {
+        doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
+        y += 4
+      }
+      if (profile?.ifsc_code) {
+        doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
+        y += 4
+      }
+      if (profile?.upi_id) {
+        doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
+        y += 4
+      }
+      if (invoice.payment_terms) {
+        doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
+        y += 4
+      }
+
+      // ===== NOTES =====
+      if (invoice.notes) {
+        y += 3
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        doc.text("Terms & Conditions:", margin, y)
-        y += 5
+        doc.text("Notes:", margin, y)
+        y += 4
         doc.setFont("helvetica", "normal")
         doc.setTextColor(80, 80, 80)
-        const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin)
+        const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
         doc.text(noteLines, margin, y)
-        y += (noteLines.length * 4) + 3
+        y += (noteLines.length * 4)
       }
-      y += 4
+
+      // ===== PAYMENT STATUS WATERMARK =====
+      if (invoice.payment_status === "Paid") {
+        doc.setFontSize(60)
+        doc.setTextColor(200, 240, 200)
+        doc.setFont('helvetica', 'bold')
+        doc.text('PAID', 105, 160, { 
+          align: 'center', 
+          angle: 30 
+        })
+      }
 
       // ===== FOOTER =====
-      // Right-aligned signature block
-      y += 14
+      y += 10
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       doc.setTextColor(0, 0, 0)
@@ -522,7 +470,7 @@ export default function ViewQuotationPage() {
       doc.setFont("helvetica", "normal")
       doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
 
-      const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
+      const filename = `Invoice-${safeStr(invoice.invoice_no ?? invoice.id)}-${safeStr(invoice.client_name ?? "Client")}.pdf`
       doc.save(filename)
       toast.success("PDF downloaded")
     } catch (err) {
@@ -543,13 +491,13 @@ export default function ViewQuotationPage() {
     )
   }
 
-  if (!quotation) {
+  if (!invoice) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <p className="text-muted-foreground">Quotation not found</p>
-          <Link href="/quotations">
-            <Button>Back to Quotations</Button>
+          <p className="text-muted-foreground">Invoice not found</p>
+          <Link href="/invoices">
+            <Button>Back to Invoices</Button>
           </Link>
         </div>
       </DashboardLayout>
@@ -558,8 +506,7 @@ export default function ViewQuotationPage() {
 
   const mappedItems = getMappedItems()
   const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-  const includeGst = quotation.include_gst ?? true
-  const statusLower = (quotation.status ?? "draft").toLowerCase()
+  const includeGst = invoice.include_gst ?? true
 
   return (
     <DashboardLayout>
@@ -568,23 +515,23 @@ export default function ViewQuotationPage() {
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
-            <Link href="/quotations">
+            <Link href="/invoices">
               <Button variant="outline" size="icon" className="shrink-0 mt-1">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                {quotation.quote_no ?? ("QT-" + quotation.id)}
+                {invoice.invoice_no ?? ("INV-" + invoice.id)}
               </h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {formatDate(quotation.created_at)}
+                {formatDate(invoice.invoice_date)}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {getStatusBadge(quotation.status)}
+            {getPaymentStatusBadge(invoice.payment_status)}
 
             <Button
               onClick={handleDownloadPdf}
@@ -609,13 +556,6 @@ export default function ViewQuotationPage() {
               WhatsApp
             </Button>
 
-            <Link href={`/quotations/${id}/edit`}>
-              <Button variant="outline" size="sm">
-                <Edit className="mr-1.5 size-4" />
-                Edit
-              </Button>
-            </Link>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={updating}>
@@ -624,39 +564,24 @@ export default function ViewQuotationPage() {
                   ) : (
                     <ChevronDown className="mr-1.5 size-4" />
                   )}
-                  Change Status
+                  Payment Status
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleUpdateStatus("Draft")}>
-                  <span className="size-2 rounded-full bg-slate-400 mr-2 inline-block" />
-                  Draft
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUpdateStatus("Sent")}>
-                  <span className="size-2 rounded-full bg-blue-500 mr-2 inline-block" />
-                  Sent
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUpdateStatus("Accepted")}>
-                  <span className="size-2 rounded-full bg-green-500 mr-2 inline-block" />
-                  Accepted
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUpdateStatus("Rejected")}>
+                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Unpaid")}>
                   <span className="size-2 rounded-full bg-red-500 mr-2 inline-block" />
-                  Rejected
+                  Unpaid
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Partial")}>
+                  <span className="size-2 rounded-full bg-yellow-500 mr-2 inline-block" />
+                  Partial
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Paid")}>
+                  <span className="size-2 rounded-full bg-green-500 mr-2 inline-block" />
+                  Paid
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {statusLower === "accepted" && (
-              <Button
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                size="sm"
-                onClick={handleOpenConvertModal}
-              >
-                <FileText className="mr-1.5 size-4" />
-                Convert to Invoice
-              </Button>
-            )}
           </div>
         </div>
 
@@ -675,7 +600,7 @@ export default function ViewQuotationPage() {
                     className="h-16 w-16 object-contain rounded border"
                   />
                 )}
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 flex-1">
                   <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
                   {profile.tagline && (
                     <p className="text-xs text-muted-foreground">{profile.tagline}</p>
@@ -696,6 +621,19 @@ export default function ViewQuotationPage() {
                   )}
                 </div>
               </div>
+              
+              {/* Bank Details */}
+              {(profile.bank_name || profile.account_no || profile.ifsc_code || profile.upi_id) && (
+                <div className="border-t border-border mt-4 pt-4">
+                  <p className="font-semibold text-sm mb-2">Bank Details</p>
+                  <div className="text-xs space-y-1 text-muted-foreground">
+                    {profile.bank_name && <p>Bank: {profile.bank_name}</p>}
+                    {profile.account_no && <p>Account No: {profile.account_no}</p>}
+                    {profile.ifsc_code && <p>IFSC: {profile.ifsc_code}</p>}
+                    {profile.upi_id && <p>UPI: {profile.upi_id}</p>}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -703,43 +641,55 @@ export default function ViewQuotationPage() {
         {/* CUSTOMER INFORMATION */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Customer Information</CardTitle>
+            <CardTitle className="text-base">Billed To</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
-              <p className="font-medium">{quotation.client_name ?? "-"}</p>
+              <p className="font-medium">{invoice.client_name ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid Till</p>
-              <p className="font-medium">{quotation.valid_till ? formatDate(quotation.valid_till) : "-"}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Invoice Date</p>
+              <p className="font-medium">{formatDate(invoice.invoice_date)}</p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Due Date</p>
+              <p className="font-medium">{invoice.due_date ? formatDate(invoice.due_date) : "-"}</p>
+            </div>
+            {invoice.payment_terms && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Payment Terms</p>
+                <p className="font-medium text-sm">{invoice.payment_terms}</p>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
-              <p className="font-medium">{quotation.client_address ?? "-"}</p>
+              <p className="font-medium">{invoice.client_address ?? "-"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client District</p>
-              <p className="font-medium">{quotation.client_district ?? "-"}</p>
+              <p className="font-medium">{invoice.client_district ?? "-"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client State</p>
-              <p className="font-medium">{quotation.client_state ?? "-"}</p>
+              <p className="font-medium">{invoice.client_state ?? "-"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Pin Code</p>
-              <p className="font-medium">{quotation.client_pin_code ?? "-"}</p>
+              <p className="font-medium">{invoice.client_pin_code ?? "-"}</p>
             </div>
-            {quotation.subject && (
+            {invoice.subject && (
               <div className="sm:col-span-2">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
-                <p className="font-medium">{quotation.subject}</p>
+                <p className="font-medium">{invoice.subject}</p>
               </div>
             )}
-            {quotation.body_text && (
+            {invoice.quotation_id && (
               <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Body Text</p>
-                <p className="font-medium text-sm whitespace-pre-wrap">{quotation.body_text}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Linked Quotation</p>
+                <Link href={`/quotations/${invoice.quotation_id}`} className="text-blue-600 hover:underline text-sm font-medium">
+                  View Quotation
+                </Link>
               </div>
             )}
           </CardContent>
@@ -824,139 +774,17 @@ export default function ViewQuotationPage() {
         </Card>
 
         {/* NOTES */}
-        {quotation.notes && (
+        {invoice.notes && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Notes</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quotation.notes}</p>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{invoice.notes}</p>
             </CardContent>
           </Card>
         )}
       </div>
-
-      {/* Convert to Invoice Modal */}
-      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Convert to Invoice</DialogTitle>
-            {quotation && (
-              <p className="text-xs text-muted-foreground mt-1">From {quotation.quote_no}</p>
-            )}
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Invoice Number */}
-            <div className="space-y-2">
-              <Label htmlFor="invoice-no">Invoice Number</Label>
-              <Input
-                id="invoice-no"
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
-                placeholder="INV-001"
-              />
-            </div>
-
-            {/* Invoice Date */}
-            <div className="space-y-2">
-              <Label htmlFor="invoice-date">Invoice Date</Label>
-              <Input
-                id="invoice-date"
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-              />
-            </div>
-
-            {/* Due Date */}
-            <div className="space-y-2">
-              <Label htmlFor="due-date">Due Date</Label>
-              <Input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
-
-            {/* Payment Terms */}
-            <div className="space-y-2">
-              <Label htmlFor="payment-terms">Payment Terms</Label>
-              <Select value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
-                <SelectTrigger id="payment-terms">
-                  <SelectValue placeholder="Select payment terms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="100% advance along with work order">100% advance along with work order</SelectItem>
-                  <SelectItem value="50% advance, balance on completion">50% advance, balance on completion</SelectItem>
-                  <SelectItem value="Net 7 days">Net 7 days</SelectItem>
-                  <SelectItem value="Net 14 days">Net 14 days</SelectItem>
-                  <SelectItem value="Net 30 days">Net 30 days</SelectItem>
-                  <SelectItem value="On completion">On completion</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="invoice-notes">Notes (Optional)</Label>
-              <Textarea
-                id="invoice-notes"
-                value={invoiceNotes}
-                onChange={(e) => setInvoiceNotes(e.target.value)}
-                placeholder="e.g. Please transfer to bank account..."
-                className="min-h-[80px] resize-none"
-              />
-            </div>
-
-            {/* Summary */}
-            {quotation && (
-              <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Client:</span> {quotation.client_name}
-                </p>
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Subtotal:</span> ₹{quotation.subtotal.toLocaleString("en-IN")}
-                </p>
-                {quotation.include_gst && (
-                  <>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">SGST 9%:</span> ₹{quotation.sgst.toLocaleString("en-IN")}
-                    </p>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">CGST 9%:</span> ₹{quotation.cgst.toLocaleString("en-IN")}
-                    </p>
-                  </>
-                )}
-                <p className="text-foreground font-semibold border-t border-border pt-2">
-                  Grand Total: ₹{quotation.grand_total.toLocaleString("en-IN")}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConvertModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConvertToInvoice}
-              disabled={convertLoading || !invoiceNo}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {convertLoading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                "Generate Invoice"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   )
-    }
+}

@@ -23,6 +23,11 @@ export interface CompanyProfile {
   state: string | null
   zip_code: string | null
   gstin: string | null
+  bank_name: string | null
+  account_no: string | null
+  ifsc_code: string | null
+  upi_id: string | null
+  payment_terms: string | null
   logo_url: string | null
   theme_color: string
   created_at: string
@@ -45,6 +50,11 @@ export function CompanyProfileSettings() {
   const [zipCode, setZipCode] = useState("")
   const [gstin, setGstin] = useState("")
   const [themeColor, setThemeColor] = useState("#185FA5")
+  const [bankName, setBankName] = useState("")
+  const [accountNo, setAccountNo] = useState("")
+  const [ifscCode, setIfscCode] = useState("")
+  const [upiId, setUpiId] = useState("")
+  const [paymentTerms, setPaymentTerms] = useState("100% advance along with work order")
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -75,6 +85,11 @@ export function CompanyProfileSettings() {
           setZipCode(data.zip_code || "")
           setGstin(data.gstin || "")
           setThemeColor(data.theme_color || "#185FA5")
+          setBankName(data.bank_name || "")
+          setAccountNo(data.account_no || "")
+          setIfscCode(data.ifsc_code || "")
+          setUpiId(data.upi_id || "")
+          setPaymentTerms(data.payment_terms || "100% advance along with work order")
           // Set existing logo URL for preview
           setExistingLogoUrl(data.logo_url ?? null)
           // Reset any pending upload
@@ -133,6 +148,11 @@ export function CompanyProfileSettings() {
           state: state,
           zip_code: zipCode,
           gstin: gstin,
+          bank_name: bankName,
+          account_no: accountNo,
+          ifsc_code: ifscCode,
+          upi_id: upiId,
+          payment_terms: paymentTerms,
           theme_color: themeColor,
           logo_url: logoUrl, // always included
         }, {
@@ -374,6 +394,67 @@ export function CompanyProfileSettings() {
               onChange={(e) => setGstin(e.target.value)}
               placeholder="GSTIN"
             />
+          </div>
+        </div>
+
+        {/* Payment Details */}
+        <div className="border-t border-border pt-6">
+          <h3 className="font-semibold text-sm mb-4">Payment Details</h3>
+          <p className="text-xs text-muted-foreground mb-4">These details will appear on your invoices</p>
+          
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="bank-name">Bank Name</Label>
+                <Input
+                  id="bank-name"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="e.g. HDFC Bank, SBI, ICICI Bank"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="account-no">Account Number</Label>
+                <Input
+                  id="account-no"
+                  value={accountNo}
+                  onChange={(e) => setAccountNo(e.target.value)}
+                  placeholder="e.g. 1234 5678 9012"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="ifsc-code">IFSC Code</Label>
+                <Input
+                  id="ifsc-code"
+                  value={ifscCode}
+                  onChange={(e) => setIfscCode(e.target.value)}
+                  placeholder="e.g. HDFC0001234"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="upi-id">UPI ID</Label>
+                <Input
+                  id="upi-id"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  placeholder="e.g. yourname@hdfc"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="payment-terms">Payment Terms</Label>
+              <Textarea
+                id="payment-terms"
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                placeholder="e.g. 100% advance along with work order"
+                className="min-h-[60px] resize-none"
+              />
+            </div>
           </div>
         </div>
 
