@@ -15,12 +15,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,7 +23,7 @@ import {
 } from "@/components/ui/select"
 import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, MoreHorizontal, Eye, Trash2, FileText } from "lucide-react"
+import { Plus, Search, Eye, Trash2, Edit } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -215,35 +209,38 @@ export default function QuotationsPage() {
                         <TableCell>{formatCurrency(quotation.grand_total)}</TableCell>
                         <TableCell>{getStatusBadge(quotation.status)}</TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="size-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/quotations/${quotation.id}`} className="cursor-pointer">
-                                  <Eye className="mr-2 size-4" />
-                                  View
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link href={`/quotations/${quotation.id}/edit`} className="cursor-pointer">
-                                  <FileText className="mr-2 size-4" />
-                                  Edit
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(quotation.id)}
-                                className="text-red-600 cursor-pointer"
+                          <div className="flex gap-2">
+                            <Link href={`/quotations/${quotation.id}`}>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                title="View Quotation"
                               >
-                                <Trash2 className="mr-2 size-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                <Eye className="size-4" />
+                                <span className="sr-only">View</span>
+                              </Button>
+                            </Link>
+                            <Link href={`/quotations/${quotation.id}/edit`}>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                title="Edit Quotation"
+                              >
+                                <Edit className="size-4" />
+                                <span className="sr-only">Edit</span>
+                              </Button>
+                            </Link>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDelete(quotation.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete Quotation"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

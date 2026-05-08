@@ -15,12 +15,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,10 +23,11 @@ import {
 } from "@/components/ui/select"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, Download } from "lucide-react"
+import { Plus, Search, Eye, Edit, Trash2, Download } from "lucide-react"
 import { toast } from "sonner"
 import { AddContractModal } from "@/components/add-contract-modal"
 import jsPDF from "jspdf"
+import Link from "next/link"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -476,24 +471,27 @@ export default function ContractsPage() {
                         <TableCell>{contract.next_service_date}</TableCell>
                         <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="size-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEditClick(contract)}>
-                                <Edit className="mr-2 size-4" />
-                                Edit Contract
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDelete(contract.id)} className="text-red-600">
-                                <Trash2 className="mr-2 size-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleEditClick(contract)}
+                              title="Edit Contract"
+                            >
+                              <Edit className="size-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDelete(contract.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete Contract"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
