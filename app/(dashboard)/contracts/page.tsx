@@ -65,6 +65,9 @@ export default function ContractsPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     loadContracts()
@@ -101,23 +104,25 @@ export default function ContractsPage() {
     handleFilter()
   }, [searchTerm, filterType, filterStatus, contracts])
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this contract?')) {
-      try {
-        const { error } = await supabase
-          .from('contracts')
-          .delete()
-          .eq('id', id)
-
-        if (error) throw error
-        setContracts(contracts.filter(c => c.id !== id))
-        toast.success('Contract deleted successfully')
-      } catch (error) {
-        console.error('Error deleting contract:', error)
-        toast.error('Failed to delete contract')
-      }
-    }
+const handleDelete = async () => {
+  if (!customerToDelete) return
+  setDeleting(true)
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', customerToDelete.id)
+    if (error) throw error
+    setCustomers(customers.filter(c => c.id !== customerToDelete.id))
+    toast.success('Customer deleted successfully')
+    setDeleteDialogOpen(false)
+    setCustomerToDelete(null)
+  } catch (error) {
+    toast.error('Failed to delete customer')
+  } finally {
+    setDeleting(false)
   }
+}
 
   const handleEditClick = (contract: ContractDisplay) => {
     setEditingContract(contract as Contract)
@@ -484,7 +489,7 @@ export default function ContractsPage() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => handleDelete(contract.id)}
+                              onClick={() => { setCustomerToDelete(customer); setDeleteDialogOpen(true) }}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                               title="Delete Contract"
                             >
@@ -513,6 +518,26 @@ export default function ContractsPage() {
           />
         )}
       </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+      <AlertDialogDescription>
+        Are you sure you want to delete {customerToDelete?.name}? This action cannot be undone.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction
+        onClick={handleDelete}
+        disabled={deleting}
+        className="bg-red-600 hover:bg-red-700"
+      >
+        {deleting ? "Deleting..." : "Delete"}
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
     </DashboardLayout>
   )
 }
