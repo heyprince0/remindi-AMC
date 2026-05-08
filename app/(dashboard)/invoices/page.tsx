@@ -21,9 +21,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Eye } from "lucide-react"
+import { Plus, Search, Eye, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -45,6 +55,9 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     loadInvoices()
@@ -90,6 +103,32 @@ export default function InvoicesPage() {
       toast.error("Failed to load invoices")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete || !user?.id) return
+
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from("invoices")
+        .delete()
+        .eq("id", invoiceToDelete.id)
+        .eq("user_id", user.id)
+
+      if (error) throw error
+
+      setInvoices(invoices.filter(inv => inv.id !== invoiceToDelete.id))
+      setFilteredInvoices(filteredInvoices.filter(inv => inv.id !== invoiceToDelete.id))
+      toast.success("Invoice deleted successfully")
+      setDeleteDialogOpen(false)
+      setInvoiceToDelete(null)
+    } catch (error) {
+      console.error("Error deleting invoice:", error)
+      toast.error("Failed to delete invoice")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -202,12 +241,25 @@ export default function InvoicesPage() {
                         <TableCell>{formatCurrency(invoice.grand_total)}</TableCell>
                         <TableCell>{getPaymentStatusBadge(invoice.payment_status)}</TableCell>
                         <TableCell>
-                          <Link href={`/invoices/${invoice.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="size-4" />
-                              <span className="sr-only">View</span>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/invoices/${invoice.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="size-4" />
+                                <span className="sr-only">View</span>
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setInvoiceToDelete(invoice)
+                                setDeleteDialogOpen(true)
+                              }}
+                            >
+                              <Trash2 className="size-4 text-red-600" />
+                              <span className="sr-only">Delete</span>
                             </Button>
-                          </Link>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -217,6 +269,28 @@ export default function InvoicesPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {invoiceToDelete?.invoice_no}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteInvoice}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   )
