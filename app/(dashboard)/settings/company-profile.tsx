@@ -54,6 +54,7 @@ export function CompanyProfileSettings() {
   const [accountNo, setAccountNo] = useState("")
   const [ifscCode, setIfscCode] = useState("")
   const [upiId, setUpiId] = useState("")
+  const [paymentTerms, setPaymentTerms] = useState("100% advance along with work order")
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -88,6 +89,7 @@ export function CompanyProfileSettings() {
           setAccountNo(data.account_no || "")
           setIfscCode(data.ifsc_code || "")
           setUpiId(data.upi_id || "")
+          setPaymentTerms(data.payment_terms || "100% advance along with work order")
           // Set existing logo URL for preview
           setExistingLogoUrl(data.logo_url ?? null)
           // Reset any pending upload
@@ -150,6 +152,7 @@ export function CompanyProfileSettings() {
           account_no: accountNo,
           ifsc_code: ifscCode,
           upi_id: upiId,
+          payment_terms: paymentTerms,
           theme_color: themeColor,
           logo_url: logoUrl, // always included
         }, {
@@ -423,15 +426,14 @@ export function CompanyProfileSettings() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="upi-id">UPI ID</Label>
+                <Label htmlFor="ifsc-code">IFSC Code</Label>
                 <Input
-                  id="upi-id"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                  placeholder="e.g. yourname@hdfc"
+                  id="ifsc-code"
+                  value={ifscCode}
+                  onChange={(e) => setIfscCode(e.target.value)}
+                  placeholder="e.g. HDFC0001234"
                 />
               </div>
-            </div>
               <div className="space-y-2">
                 <Label htmlFor="upi-id">UPI ID</Label>
                 <Input

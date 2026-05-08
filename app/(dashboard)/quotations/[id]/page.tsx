@@ -900,7 +900,7 @@ export default function ViewQuotationPage() {
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="invoice-notes">Terms & Conditions</Label>
+              <Label htmlFor="invoice-notes">Notes (Optional)</Label>
               <Textarea
                 id="invoice-notes"
                 value={invoiceNotes}
