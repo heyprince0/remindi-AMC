@@ -351,14 +351,14 @@ export default function ViewInvoicePage() {
 
       y += 5
       // Order number on second line on right side
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(0, 0, 0)
       if (invoice.order_no) {
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(0, 0, 0)
         doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
-        y += 5
       }
-      // Due date in red below
+      y += 5
+      // Due date in red below (third line)
       doc.setFontSize(9)
       doc.setTextColor(220, 38, 38)
       doc.text('Due: ' + safeDate(invoice.due_date),
