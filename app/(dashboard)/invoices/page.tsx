@@ -36,6 +36,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, Eye, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { NewInvoiceModal } from "@/components/new-invoice-modal"
 
 function getPaymentStatusBadge(status: string) {
   const statusLower = (status || "").toLowerCase()
@@ -58,6 +59,7 @@ export default function InvoicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showNewInvoiceModal, setShowNewInvoiceModal] = useState(false)
 
   useEffect(() => {
     loadInvoices()
@@ -155,9 +157,8 @@ export default function InvoicesPage() {
             <p className="text-muted-foreground">Manage and track your invoices</p>
           </div>
           <Button
-            disabled
-            title="Create invoices by converting quotations"
-            className="opacity-50 cursor-not-allowed"
+            onClick={() => setShowNewInvoiceModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="mr-2 size-4" />
             New Invoice
@@ -291,6 +292,15 @@ export default function InvoicesPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* New Invoice Modal */}
+        {user?.id && (
+          <NewInvoiceModal
+            open={showNewInvoiceModal}
+            onOpenChange={setShowNewInvoiceModal}
+            userId={user.id}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
