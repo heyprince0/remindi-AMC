@@ -168,6 +168,7 @@ export type Quotation = {
   notes: string | null
   status: string
   valid_till: string | null
+  invoice_id: string | null
   created_at: string
   updated_at: string
 }

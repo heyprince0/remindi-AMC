@@ -189,9 +189,25 @@ export default function ViewQuotationPage() {
         .single()
 
       if (error) throw error
+      
+      // Update the quotation record with the invoice_id
+      const { error: updateErr } = await supabase
+        .from("quotations")
+        .update({ invoice_id: data.id })
+        .eq("id", quotation.id)
+      
+      if (updateErr) throw updateErr
+      
+      // Update the quotation state with the invoice_id so button switches immediately
+      setQuotation({ ...quotation, invoice_id: data.id })
+      
       toast.success("Invoice generated successfully")
       setShowConvertModal(false)
-      router.push(`/invoices/${data.id}`)
+      
+      // Navigate after a brief delay to allow UI to update
+      setTimeout(() => {
+        router.push(`/invoices/${data.id}`)
+      }, 500)
     } catch (err) {
       console.error(err)
       toast.error("Failed to generate invoice: " + (err instanceof Error ? err.message : "Unknown error"))
@@ -654,14 +670,25 @@ export default function ViewQuotationPage() {
             </DropdownMenu>
 
             {statusLower === "accepted" && (
-              <Button
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                size="sm"
-                onClick={handleOpenConvertModal}
-              >
-                <FileText className="mr-1.5 size-4" />
-                Convert to Invoice
-              </Button>
+              quotation.invoice_id ? (
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  size="sm"
+                  onClick={() => router.push(`/invoices/${quotation.invoice_id}`)}
+                >
+                  <FileText className="mr-1.5 size-4" />
+                  View Invoice
+                </Button>
+              ) : (
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  size="sm"
+                  onClick={handleOpenConvertModal}
+                >
+                  <FileText className="mr-1.5 size-4" />
+                  Convert to Invoice
+                </Button>
+              )
             )}
           </div>
         </div>
