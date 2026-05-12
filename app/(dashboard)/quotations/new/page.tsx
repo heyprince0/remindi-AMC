@@ -297,7 +297,12 @@ export default function NewQuotationPage() {
                     type="number"
                     min="1"
                     value={item.quantity}
-                    onChange={(e) => handleItemChange(item.id, "quantity", parseInt(e.target.value) || 1)}
+                    onFocus={(e) => e.target.value = ''}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      handleItemChange(item.id, "quantity", isNaN(val) || val <= 0 ? 1 : val);
+                    }}
+                    onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
                   />
                 </div>
                 <div className="w-32 space-y-2">
@@ -310,6 +315,11 @@ export default function NewQuotationPage() {
                     min="0"
                     step="0.01"
                     value={item.unit_price}
+                    onFocus={(e) => e.target.value = ''}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      handleItemChange(item.id, "unit_price", isNaN(val) ? 0 : val);
+                    }}
                     onChange={(e) => handleItemChange(item.id, "unit_price", parseFloat(e.target.value) || 0)}
                   />
                 </div>
