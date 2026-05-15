@@ -478,13 +478,13 @@ y += 6
   }
 
   // ===== IN WORDS =====
-  y += 8
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(0, 0, 0)
-  const finalAmount = invoice.include_gst ? grandTotal : subtotal
-  doc.text('Rupees ' + toWords(finalAmount) + ' Only', margin, y)
-  y += 6
+     y -= 11
+     doc.setFont('helvetica', 'bold')
+     doc.setFontSize(9)
+     doc.setTextColor(0, 0, 0)
+     const inWordsAmount = includeGst ? grandTotal : subtotal
+     doc.text(('RUPEES ' + toWords(inWordsAmount) + ' ONLY').toUpperCase(), margin, y)
+     y += 20
 
   // ===== PAYMENT DETAILS =====
       y += 10
