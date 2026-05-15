@@ -270,66 +270,69 @@ export default function ViewInvoicePage() {
       let y = margin
 
       // ===== HEADER SECTION =====
-      let logoX = margin
-      let logoAdded = false
-      try {
-        if (profile?.logo_url) {
-          const response = await fetch(profile.logo_url)
-          const blob = await response.blob()
-          const base64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          doc.addImage(base64, "PNG", logoX, y, 22, 22)
-          logoAdded = true
-        }
-      } catch (e) { /* skip logo silently */ }
+const headerStyle = profile?.header_style ?? "single_logo"
 
-      const infoX = logoAdded ? logoX + 24 : logoX
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(profile?.company_name), infoX, y + 2)
+if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
+  try {
+    const response = await fetch(profile.header_thumbnail_url)
+    const blob = await response.blob()
+    const base64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.readAsDataURL(blob)
+    })
+    const bannerW = pageW - (margin * 2)
+    const bannerH = Math.round(bannerW / (1462 / 396))
+    doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
+    y += bannerH
+  } catch (e) { /* skip banner silently */ }
+} else {
+  // Single logo mode
+  let logoX = margin
+  let logoAdded = false
+  try {
+    if (profile?.logo_url) {
+      const response = await fetch(profile.logo_url)
+      const blob = await response.blob()
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+      doc.addImage(base64, "PNG", logoX, y, 22, 22)
+      logoAdded = true
+    }
+  } catch (e) { /* skip logo silently */ }
 
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(120, 120, 120)
-      let infoY = y + 8
+  const infoX = logoAdded ? logoX + 24 : logoX
+  doc.setFontSize(14)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(0, 0, 0)
+  doc.text(safeStr(profile?.company_name), infoX, y + 2)
 
-      if (profile?.tagline) {
-        doc.text(safeStr(profile.tagline), infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.address) {
-        doc.text(safeStr(profile.address), infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.city || profile?.state || profile?.zip_code) {
-        const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
-        doc.text(locationStr, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.phone) {
-        doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.email) {
-        doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.gstin) {
-        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
-      }
+  doc.setFontSize(9)
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(120, 120, 120)
+  let infoY = y + 8
 
-      // Header bottom line
-      y += 31
-      const headerBottomY = y
-      doc.setDrawColor(tr, tg, tb)
-      doc.setLineWidth(0.5)
-      doc.line(margin, headerBottomY, pageW - margin, headerBottomY)
-      y += 6
+  if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
+  if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
+  if (profile?.city || profile?.state || profile?.zip_code) {
+    const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+    doc.text(locationStr, infoX, infoY); infoY += 4
+  }
+  if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
+  if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
+  if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
 
+  y += 31
+}
+
+// Header bottom line always drawn
+doc.setDrawColor(tr, tg, tb)
+doc.setLineWidth(0.5)
+doc.line(margin, y, pageW - margin, y)
+y += 6
       // ===== INVOICE HEADER =====
       // TAX INVOICE — top right, above the date
       doc.setFontSize(16)
