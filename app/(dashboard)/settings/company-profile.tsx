@@ -269,8 +269,8 @@ export function CompanyProfileSettings() {
       const img = new Image()
       img.onload = () => {
         const aspectRatio = img.width / img.height
-        if (aspectRatio < 5 || aspectRatio > 10) {
-          toast.error("Please upload a wide banner image (recommended: 1500×200px)")
+        if (aspectRatio < 2.5 || aspectRatio > 6) {
+          toast.error("Please upload a wide banner image (recommended: 1462×396px)")
           return
         }
         // Valid - store the file
@@ -608,7 +608,7 @@ export function CompanyProfileSettings() {
                 <div className="space-y-3 pt-4 border-t border-border">
                   {(thumbnailPreviewUrl || thumbnailUrl) ? (
                     <div className="space-y-3">
-                      <div className="rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center max-h-20">
+                      <div className="rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center" style={{ height: '96px' }}>
                         <img 
                           src={thumbnailPreviewUrl ?? thumbnailUrl ?? ''} 
                           alt="Thumbnail preview" 
@@ -637,7 +637,7 @@ export function CompanyProfileSettings() {
                         <Upload className="mx-auto size-8 mb-2 text-muted-foreground" />
                         <p className="text-sm font-medium text-foreground">Click to upload banner</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Wide banner image, PNG or JPG, max 2MB. Recommended: 1500×200px
+                          Wide banner image, PNG or JPG, max 2MB. Recommended: 1462×396px
                         </p>
                       </div>
                     </label>
