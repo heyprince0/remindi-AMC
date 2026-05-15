@@ -1,5 +1,5 @@
 "use client"
-
+ 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -38,12 +38,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-
+ 
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
 const safeDate = (val: any) =>
   val ? new Date(val).toLocaleDateString("en-IN") : "-"
-
+ 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
@@ -54,7 +54,7 @@ function formatDate(dateStr: string | null | undefined): string {
     year: "numeric",
   })
 }
-
+ 
 function getStatusBadge(status: string) {
   const s = (status ?? "draft").toLowerCase()
   if (s === "draft") return <Badge className="bg-slate-100 text-slate-700 border-0">Draft</Badge>
@@ -63,14 +63,14 @@ function getStatusBadge(status: string) {
   if (s === "rejected") return <Badge className="bg-red-100 text-red-700 border-0">Rejected</Badge>
   return <Badge className="bg-slate-100 text-slate-700 border-0">{status}</Badge>
 }
-
+ 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : [24, 95, 165]
 }
-
+ 
 function toWords(n: number): string {
   const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
   const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
@@ -82,7 +82,7 @@ function toWords(n: number): string {
   if (n < 10000000) return toWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + toWords(n % 100000) : "")
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
 }
-
+ 
 export default function ViewQuotationPage() {
   const params = useParams()
   const router = useRouter()
@@ -105,17 +105,17 @@ export default function ViewQuotationPage() {
   const [invoiceNotes, setInvoiceNotes] = useState("")
   const [orderNo, setOrderNo] = useState("")
   const id = params.id as string
-
+ 
   useEffect(() => {
     if (user?.id && id) loadData()
   }, [id, user?.id])
-
+ 
   useEffect(() => {
     if (profile?.payment_terms) {
       setSelectedPaymentTerms(profile.payment_terms)
     }
   }, [profile?.payment_terms])
-
+ 
   const loadData = async () => {
     setLoading(true)
     try {
@@ -133,7 +133,7 @@ export default function ViewQuotationPage() {
       setLoading(false)
     }
   }
-
+ 
   const generateNextInvoiceNo = async () => {
     try {
       const { data, error } = await supabase
@@ -148,13 +148,13 @@ export default function ViewQuotationPage() {
       return `INV-001`
     }
   }
-
+ 
   const handleOpenConvertModal = async () => {
     const nextNo = await generateNextInvoiceNo()
     setInvoiceNo(nextNo)
     setShowConvertModal(true)
   }
-
+ 
   const handleConvertToInvoice = async () => {
     if (!quotation || !user?.id) return
     setConvertLoading(true)
@@ -187,7 +187,7 @@ export default function ViewQuotationPage() {
         })
         .select()
         .single()
-
+ 
       if (error) throw error
       
       // Update the quotation record with the invoice_id
@@ -215,7 +215,7 @@ export default function ViewQuotationPage() {
       setConvertLoading(false)
     }
   }
-
+ 
   const handleUpdateStatus = async (newStatus: string) => {
     if (!quotation) return
     setUpdating(true)
@@ -234,7 +234,7 @@ export default function ViewQuotationPage() {
       setUpdating(false)
     }
   }
-
+ 
   const getMappedItems = () => {
     return (quotation?.items ?? []).map((item: any, index: number) => ({
       sr: index + 1,
@@ -244,7 +244,7 @@ export default function ViewQuotationPage() {
       amount: Number(item.amount ?? ((item.qty ?? item.quantity ?? 0) * (item.rate ?? item.unit_price ?? 0)) ?? 0),
     }))
   }
-
+ 
   const calculateTotals = () => {
     if (!quotation) return { subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0 }
     const items = quotation.items ?? []
@@ -256,11 +256,11 @@ export default function ViewQuotationPage() {
     const grandTotal = subtotal + sgst + cgst
     return { subtotal, sgst, cgst, grandTotal }
   }
-
+ 
   const getGrandTotal = () => {
     return calculateTotals().grandTotal
   }
-
+ 
   const handleWhatsApp = () => {
     if (!quotation) return
     const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
@@ -287,7 +287,7 @@ export default function ViewQuotationPage() {
       `_Powered by Remindi_`
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
-
+ 
   const handleDownloadPdf = async () => {
     if (!quotation) return
     setGeneratingPdf(true)
@@ -298,12 +298,12 @@ export default function ViewQuotationPage() {
       const margin = 15
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
-
+ 
       let y = margin
-
+ 
       // ===== HEADER SECTION =====
       const headerStyle = profile?.header_style ?? "single_logo"
-
+ 
       if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         // Thumbnail mode: draw full-width banner image
         try {
@@ -337,18 +337,18 @@ export default function ViewQuotationPage() {
             logoAdded = true
           }
         } catch (e) { /* skip logo silently */ }
-
+ 
         const infoX = logoAdded ? logoX + 24 : logoX
         doc.setFontSize(14)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
+ 
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(120, 120, 120)
         let infoY = y + 8
-
+ 
         if (profile?.tagline) {
           doc.text(safeStr(profile.tagline), infoX, infoY)
           infoY += 4
@@ -373,24 +373,29 @@ export default function ViewQuotationPage() {
         if (profile?.gstin) {
           doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
         }
-
+ 
         y += 31
       }
-
+ 
       // Header bottom line always drawn after header
       doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(0.5)
       doc.line(margin, y, pageW - margin, y)
       y += 6
-
+ 
       // ===== QUOTE NUMBER + DATE ROW =====
+      // FIX: formattedDate declared BEFORE it is used
+      const formattedDate = quotation.created_at
+        ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+ 
       doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
       doc.text(safeStr(quotation.quote_no ?? ("QT-" + quotation.id)), margin, y)
       doc.text(`DATE: ${formattedDate}`, pageW - margin, y, { align: "right" })
       y += 5
-
+ 
       if (quotation.order_no) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
@@ -401,11 +406,7 @@ export default function ViewQuotationPage() {
       } else {
         y += 3
       }
-
-      const formattedDate = quotation.created_at 
-        ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-
+ 
       // ===== CLIENT BLOCK =====
       doc.setFontSize(10)
       doc.setFont("helvetica", "normal")
@@ -414,18 +415,18 @@ export default function ViewQuotationPage() {
       y += 5
       doc.text("THE OWNER,", margin, y)
       y += 5
-
+ 
       doc.setFont("helvetica", "bold")
       doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
       y += 5
-
+ 
       doc.setFont("helvetica", "normal")
       doc.setTextColor(40, 40, 40)
       if (quotation.client_address) {
         doc.text(safeStr(quotation.client_address), margin, y)
         y += 5
       }
-
+ 
       const cityStateZip = [
         quotation.client_district,
         quotation.client_state,
@@ -436,7 +437,7 @@ export default function ViewQuotationPage() {
         y += 5
       }
       y += 3
-
+ 
       // ===== SUBJECT LINE =====
       if (quotation.subject) {
         doc.setFont("helvetica", "bold")
@@ -445,7 +446,7 @@ export default function ViewQuotationPage() {
         doc.text(`Sub: ${safeStr(quotation.subject)}`, margin, y)
         y += 7
       }
-
+ 
       // ===== BODY TEXT =====
       if (quotation.body_text) {
         doc.setFontSize(10)
@@ -456,7 +457,7 @@ export default function ViewQuotationPage() {
         y += (bodyLines.length * 4) + 3
       }
       y += 2
-
+ 
       // ===== ITEMS TABLE =====
       const items = quotation.items ?? []
       const subtotal = items.reduce((sum, item) => {
@@ -466,7 +467,7 @@ export default function ViewQuotationPage() {
       const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
       const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
       const grandTotal = subtotal + sgst + cgst
-
+ 
       const tableBody = items.map((item, idx) => [
         String(idx + 1),
         safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
@@ -474,7 +475,7 @@ export default function ViewQuotationPage() {
         `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
         `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
       ])
-
+ 
       autoTable(doc, {
         startY: y,
         head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
@@ -500,58 +501,54 @@ export default function ViewQuotationPage() {
         },
         margin: { left: margin, right: margin },
       })
-
+ 
       y = (doc as any).lastAutoTable.finalY + 8
-
+ 
       if (includeGst) {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
-
+ 
         doc.text('Subtotal:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
-          195, y, { align: 'right' })
-
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+ 
         y += 4
         doc.text('SGST (9%):', 160, y, { align: 'right' })
-        doc.text('Rs. ' + sgst.toLocaleString('en-IN'),
-          195, y, { align: 'right' })
-
+        doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+ 
         y += 4
         doc.text('CGST (9%):', 160, y, { align: 'right' })
-        doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
-          195, y, { align: 'right' })
-
+        doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+ 
         // Divider line above Grand Total
         y += 3
         doc.setDrawColor(0, 0, 0)
         doc.setLineWidth(0.3)
         doc.line(140, y, 195, y)
-
+ 
         y += 4
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
         doc.text('Total:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'),
-          195, y, { align: 'right' })
-  } else {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.text('Total:', 160, y, { align: 'right' })
-    doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
-      195, y, { align: 'right' })
-  }
-
-  // ===== IN WORDS =====
-  y += 4
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(0, 0, 0)
-  const finalAmount = includeGst ? grandTotal : subtotal
-  doc.text(('RUPEES ' + toWords(finalAmount) + ' ONLY').toUpperCase(), margin, y)
-  y += 5
-
-  // ===== TERMS & CONDITIONS =====
+        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text('Total:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+      }
+ 
+      // ===== IN WORDS =====
+      // FIX: renamed to inWordsAmount to avoid any variable conflict
+      y += 4
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      const inWordsAmount = includeGst ? grandTotal : subtotal
+      doc.text(('RUPEES ' + toWords(inWordsAmount) + ' ONLY').toUpperCase(), margin, y)
+      y += 5
+ 
+      // ===== TERMS & CONDITIONS =====
       if (quotation.notes) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
@@ -565,7 +562,7 @@ export default function ViewQuotationPage() {
         y += (noteLines.length * 4) + 3
       }
       y += 4
-
+ 
       // ===== FOOTER =====
       // Right-aligned signature block
       y += 14
@@ -575,15 +572,14 @@ export default function ViewQuotationPage() {
       doc.text('Thanking you,', 195, y, { align: 'right' })
       doc.text('Yours faithfully,', 195, y+6, { align: 'right' })
       doc.setFont('helvetica', 'bold')
-      doc.text('For ' + safeStr(profile?.company_name),
-        195, y+12, { align: 'right' })
-
+      doc.text('For ' + safeStr(profile?.company_name), 195, y+12, { align: 'right' })
+ 
       // Bottom: Generated by Remindi (centered, small gray)
       doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
       doc.setFont("helvetica", "normal")
       doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
-
+ 
       const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
       doc.save(filename)
       toast.success("PDF downloaded")
@@ -594,7 +590,7 @@ export default function ViewQuotationPage() {
       setGeneratingPdf(false)
     }
   }
-
+ 
   if (loading) {
     return (
       <DashboardLayout>
@@ -604,7 +600,7 @@ export default function ViewQuotationPage() {
       </DashboardLayout>
     )
   }
-
+ 
   if (!quotation) {
     return (
       <DashboardLayout>
@@ -617,16 +613,16 @@ export default function ViewQuotationPage() {
       </DashboardLayout>
     )
   }
-
+ 
   const mappedItems = getMappedItems()
   const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
   const includeGst = quotation.include_gst ?? true
   const statusLower = (quotation.status ?? "draft").toLowerCase()
-
+ 
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-
+ 
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -635,24 +631,24 @@ export default function ViewQuotationPage() {
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
-  <div>
-  <h1 className="text-2xl font-bold text-foreground">
-  {quotation.quote_no ?? ("QT-" + quotation.id)}
-  </h1>
-  {quotation.order_no && (
-    <p className="text-sm text-muted-foreground">
-      Order No: <span className="font-medium text-foreground">{quotation.order_no}</span>
-    </p>
-  )}
-  <p className="text-sm text-muted-foreground mt-0.5">
-  {formatDate(quotation.created_at)}
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {quotation.quote_no ?? ("QT-" + quotation.id)}
+              </h1>
+              {quotation.order_no && (
+                <p className="text-sm text-muted-foreground">
+                  Order No: <span className="font-medium text-foreground">{quotation.order_no}</span>
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {formatDate(quotation.created_at)}
               </p>
             </div>
           </div>
-
+ 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {getStatusBadge(quotation.status)}
-
+ 
             <Button
               onClick={handleDownloadPdf}
               disabled={generatingPdf}
@@ -666,7 +662,7 @@ export default function ViewQuotationPage() {
               )}
               Download PDF
             </Button>
-
+ 
             <Button
               onClick={handleWhatsApp}
               className="bg-green-600 hover:bg-green-700 text-white"
@@ -675,14 +671,14 @@ export default function ViewQuotationPage() {
               <MessageCircle className="mr-1.5 size-4" />
               WhatsApp
             </Button>
-
+ 
             <Link href={`/quotations/${id}/edit`}>
               <Button variant="outline" size="sm">
                 <Edit className="mr-1.5 size-4" />
                 Edit
               </Button>
             </Link>
-
+ 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={updating}>
@@ -713,7 +709,7 @@ export default function ViewQuotationPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
+ 
             {statusLower === "accepted" && (
               quotation.invoice_id ? (
                 <Button
@@ -737,7 +733,7 @@ export default function ViewQuotationPage() {
             )}
           </div>
         </div>
-
+ 
         {/* COMPANY INFO */}
         {profile && (
           <Card>
@@ -780,7 +776,7 @@ export default function ViewQuotationPage() {
             </CardContent>
           </Card>
         )}
-
+ 
         {/* CUSTOMER INFORMATION */}
         <Card>
           <CardHeader>
@@ -800,32 +796,20 @@ export default function ViewQuotationPage() {
               <p className="font-medium">{quotation.client_address ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client District</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">District</p>
               <p className="font-medium">{quotation.client_district ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client State</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">State</p>
               <p className="font-medium">{quotation.client_state ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Pin Code</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pin Code</p>
               <p className="font-medium">{quotation.client_pin_code ?? "-"}</p>
             </div>
-            {quotation.subject && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
-                <p className="font-medium">{quotation.subject}</p>
-              </div>
-            )}
-            {quotation.body_text && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Body Text</p>
-                <p className="font-medium text-sm whitespace-pre-wrap">{quotation.body_text}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
-
+ 
         {/* ITEMS TABLE */}
         <Card>
           <CardHeader>
@@ -835,19 +819,19 @@ export default function ViewQuotationPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="text-center py-3 px-4 font-semibold w-12">SR.</th>
-                    <th className="text-left py-3 px-4 font-semibold">Description</th>
-                    <th className="text-center py-3 px-4 font-semibold w-16">Qty</th>
-                    <th className="text-right py-3 px-4 font-semibold w-32">Unit Price</th>
-                    <th className="text-right py-3 px-4 font-semibold w-32">Amount</th>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-12">SR</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-16">Qty</th>
+                    <th className="text-right py-3 px-4 font-medium text-muted-foreground w-28">Rate</th>
+                    <th className="text-right py-3 px-4 font-medium text-muted-foreground w-28">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {mappedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                        No items found
+                      <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No items
                       </td>
                     </tr>
                   ) : (
@@ -866,7 +850,7 @@ export default function ViewQuotationPage() {
             </div>
           </CardContent>
         </Card>
-
+ 
         {/* TOTALS */}
         <Card>
           <CardContent className="pt-6">
@@ -903,7 +887,7 @@ export default function ViewQuotationPage() {
             </div>
           </CardContent>
         </Card>
-
+ 
         {/* NOTES */}
         {quotation.notes && (
           <Card>
@@ -916,7 +900,7 @@ export default function ViewQuotationPage() {
           </Card>
         )}
       </div>
-
+ 
       {/* Convert to Invoice Modal */}
       <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -926,7 +910,7 @@ export default function ViewQuotationPage() {
               <p className="text-xs text-muted-foreground mt-1">From {quotation.quote_no}</p>
             )}
           </DialogHeader>
-
+ 
           <div className="space-y-4">
             {/* Order Number */}
             <div className="space-y-2">
@@ -938,7 +922,7 @@ export default function ViewQuotationPage() {
                 placeholder="e.g. PO-2026-001"
               />
             </div>
-
+ 
             {/* Invoice Number */}
             <div className="space-y-2">
               <Label htmlFor="invoice-no">Invoice Number</Label>
@@ -949,7 +933,7 @@ export default function ViewQuotationPage() {
                 placeholder="INV-001"
               />
             </div>
-
+ 
             {/* Invoice Date */}
             <div className="space-y-2">
               <Label htmlFor="invoice-date">Invoice Date</Label>
@@ -960,7 +944,7 @@ export default function ViewQuotationPage() {
                 onChange={(e) => setInvoiceDate(e.target.value)}
               />
             </div>
-
+ 
             {/* Due Date */}
             <div className="space-y-2">
               <Label htmlFor="due-date">Due Date</Label>
@@ -971,7 +955,7 @@ export default function ViewQuotationPage() {
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
-
+ 
             {/* Payment Terms */}
             <div className="space-y-2">
               <Label htmlFor="payment-terms">Payment Terms</Label>
@@ -989,7 +973,7 @@ export default function ViewQuotationPage() {
                 </SelectContent>
               </Select>
             </div>
-
+ 
             {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="invoice-notes">Notes (Optional)</Label>
@@ -1001,7 +985,7 @@ export default function ViewQuotationPage() {
                 className="min-h-[80px] resize-none"
               />
             </div>
-
+ 
             {/* Summary */}
             {quotation && (
               <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
@@ -1027,7 +1011,7 @@ export default function ViewQuotationPage() {
               </div>
             )}
           </div>
-
+ 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConvertModal(false)}>
               Cancel
@@ -1051,4 +1035,4 @@ export default function ViewQuotationPage() {
       </Dialog>
     </DashboardLayout>
   )
-    }
+}
