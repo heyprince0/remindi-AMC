@@ -187,6 +187,8 @@ export type CompanyProfile = {
   gstin: string | null
   logo_url: string | null
   theme_color: string
+  header_style?: "single_logo" | "thumbnail"
+  header_thumbnail_url?: string | null
   created_at: string
   updated_at: string
 }

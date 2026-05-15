@@ -302,65 +302,85 @@ export default function ViewQuotationPage() {
       let y = margin
 
       // ===== HEADER SECTION =====
-      // Left side: Logo + Company info
-      let logoX = margin
-      let logoAdded = false
-      try {
-        if (profile?.logo_url) {
-          const response = await fetch(profile.logo_url)
+      const headerStyle = profile?.header_style ?? "single_logo"
+
+      if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
+        // Thumbnail mode: draw full-width banner image
+        try {
+          const response = await fetch(profile.header_thumbnail_url)
           const blob = await response.blob()
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader()
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
-          doc.addImage(base64, "PNG", logoX, y, 22, 22)
-          logoAdded = true
+          const bannerW = pageW - (margin * 2)
+          const bannerH = 22  // fixed height matching original header height
+          doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
+          y += bannerH
+        } catch (e) { /* skip banner silently, fall through */ }
+      } else {
+        // Single logo mode: existing header code (logo + company info text)
+        // Left side: Logo + Company info
+        let logoX = margin
+        let logoAdded = false
+        try {
+          if (profile?.logo_url) {
+            const response = await fetch(profile.logo_url)
+            const blob = await response.blob()
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.readAsDataURL(blob)
+            })
+            doc.addImage(base64, "PNG", logoX, y, 22, 22)
+            logoAdded = true
+          }
+        } catch (e) { /* skip logo silently */ }
+
+        const infoX = logoAdded ? logoX + 24 : logoX
+        doc.setFontSize(14)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(profile?.company_name), infoX, y + 2)
+
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(120, 120, 120)
+        let infoY = y + 8
+
+        if (profile?.tagline) {
+          doc.text(safeStr(profile.tagline), infoX, infoY)
+          infoY += 4
         }
-      } catch (e) { /* skip logo silently */ }
+        if (profile?.address) {
+          doc.text(safeStr(profile.address), infoX, infoY)
+          infoY += 4
+        }
+        if (profile?.city || profile?.state || profile?.zip_code) {
+          const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+          doc.text(locationStr, infoX, infoY)
+          infoY += 4
+        }
+        if (profile?.phone) {
+          doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY)
+          infoY += 4
+        }
+        if (profile?.email) {
+          doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
+          infoY += 4
+        }
+        if (profile?.gstin) {
+          doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
+        }
 
-      const infoX = logoAdded ? logoX + 24 : logoX
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(120, 120, 120)
-      let infoY = y + 8
-
-      if (profile?.tagline) {
-        doc.text(safeStr(profile.tagline), infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.address) {
-        doc.text(safeStr(profile.address), infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.city || profile?.state || profile?.zip_code) {
-        const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
-        doc.text(locationStr, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.phone) {
-        doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.email) {
-        doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY)
-        infoY += 4
-      }
-      if (profile?.gstin) {
-        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY)
+        y += 31
       }
 
-      // Header bottom line (CHANGE 1: Thin colored line)
-      y += 31
-      const headerBottomY = y
+      // Header bottom line always drawn after header
       doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(0.5)
-      doc.line(margin, headerBottomY, pageW - margin, headerBottomY)
+      doc.line(margin, y, pageW - margin, y)
       y += 6
 
       // ===== QUOTE NUMBER + DATE ROW =====

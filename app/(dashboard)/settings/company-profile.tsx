@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/auth-context"
 import { supabase } from "@/lib/supabase"
-import { Save, Upload, Loader2 } from "lucide-react"
+import { Save, Upload, Loader2, ImageIcon, LayoutTemplate } from "lucide-react"
 import { toast } from "sonner"
 
 export interface CompanyProfile {
@@ -58,6 +58,10 @@ export function CompanyProfileSettings() {
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [headerStyle, setHeaderStyle] = useState<"single_logo" | "thumbnail">("single_logo")
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+  const [newThumbnailFile, setNewThumbnailFile] = useState<File | null>(null)
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null)
 
 
   useEffect(() => {
@@ -95,6 +99,9 @@ export function CompanyProfileSettings() {
           // Reset any pending upload
           setNewImageFile(null)
           setPreviewUrl(null)
+          // Load header style settings
+          setHeaderStyle(data.header_style ?? "single_logo")
+          setThumbnailUrl(data.header_thumbnail_url ?? null)
         }
       } catch (error) {
         console.error('Error loading company profile:', error)
@@ -113,8 +120,9 @@ export function CompanyProfileSettings() {
     setSaving(true)
     try {
       let logoUrl = existingLogoUrl
+      let finalThumbnailUrl = thumbnailUrl
 
-      // Step 1: if new image selected, upload it first
+      // Step 1: if new logo selected, upload it first
       if (newImageFile) {
         const fileName = `logo-${user.id}-${Date.now()}.png`
         const { error: uploadError } = await supabase.storage
@@ -134,7 +142,27 @@ export function CompanyProfileSettings() {
         logoUrl = urlData.publicUrl // update logoUrl with new URL
       }
 
-      // Step 2: now save profile with correct logoUrl
+      // Step 1b: if new thumbnail selected, upload it
+      if (newThumbnailFile) {
+        const fileName = `thumbnail-${user.id}-${Date.now()}.png`
+        const { error: uploadError } = await supabase.storage
+          .from('header-thumbnails')
+          .upload(fileName, newThumbnailFile, { upsert: true })
+
+        if (uploadError) {
+          toast.error('Thumbnail upload failed: ' + uploadError.message)
+          setSaving(false)
+          return
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('header-thumbnails')
+          .getPublicUrl(fileName)
+
+        finalThumbnailUrl = urlData.publicUrl
+      }
+
+      // Step 2: now save profile with correct logoUrl and thumbnail
       const { error } = await supabase
         .from('company_profile')
         .upsert({
@@ -154,7 +182,9 @@ export function CompanyProfileSettings() {
           upi_id: upiId,
           payment_terms: paymentTerms,
           theme_color: themeColor,
-          logo_url: logoUrl, // always included
+          logo_url: logoUrl,
+          header_style: headerStyle,
+          header_thumbnail_url: finalThumbnailUrl,
         }, {
           onConflict: 'user_id'
         })
@@ -170,6 +200,10 @@ export function CompanyProfileSettings() {
       setExistingLogoUrl(logoUrl)
       setNewImageFile(null)
       setPreviewUrl(null)
+      // Reset thumbnail after save
+      setNewThumbnailFile(null)
+      setThumbnailPreviewUrl(null)
+      setThumbnailUrl(finalThumbnailUrl)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
@@ -210,6 +244,48 @@ export function CompanyProfileSettings() {
     setPreviewUrl(null)
     setExistingLogoUrl(null)
     // this will clear logo on next save
+  }
+
+  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type - only PNG, JPG, JPEG
+    const allowedTypes = ['image/png', 'image/jpeg']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload PNG or JPG only')
+      return
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File size must be less than 2MB')
+      return
+    }
+
+    // Validate aspect ratio (5:1 to 10:1)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        const aspectRatio = img.width / img.height
+        if (aspectRatio < 5 || aspectRatio > 10) {
+          toast.error("Please upload a wide banner image (recommended: 1500×200px)")
+          return
+        }
+        // Valid - store the file
+        setNewThumbnailFile(file)
+        setThumbnailPreviewUrl(event.target?.result as string)
+      }
+      img.src = event.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveThumbnail = () => {
+    setNewThumbnailFile(null)
+    setThumbnailPreviewUrl(null)
+    setThumbnailUrl(null)
   }
 
   if (loading) {
@@ -475,6 +551,122 @@ export function CompanyProfileSettings() {
             </>
           )}
         </Button>
+
+        {/* Header Style Section */}
+        <div className="border-t border-border pt-6 mt-6">
+          <h3 className="font-semibold text-sm mb-4">Header Style</h3>
+          
+          {companyName.trim() === "" || email.trim() === "" ? (
+            <div className="text-sm text-muted-foreground">
+              Please save your Company Information above before choosing a header style.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Option Cards */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Single Logo Card */}
+                <div
+                  onClick={() => setHeaderStyle("single_logo")}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    headerStyle === "single_logo"
+                      ? `border-[${themeColor}] bg-blue-50`
+                      : "border-border bg-secondary/30 hover:bg-secondary/50"
+                  }`}
+                  style={headerStyle === "single_logo" ? { borderColor: themeColor } : {}}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <ImageIcon className="size-5 text-muted-foreground" />
+                    <span className="font-medium">Single Logo</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Your logo + company info shown in PDF header
+                  </p>
+                </div>
+
+                {/* Thumbnail Header Card */}
+                <div
+                  onClick={() => setHeaderStyle("thumbnail")}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    headerStyle === "thumbnail"
+                      ? `border-[${themeColor}] bg-blue-50`
+                      : "border-border bg-secondary/30 hover:bg-secondary/50"
+                  }`}
+                  style={headerStyle === "thumbnail" ? { borderColor: themeColor } : {}}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <LayoutTemplate className="size-5 text-muted-foreground" />
+                    <span className="font-medium">Thumbnail Header</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a pre-designed full-width banner image
+                  </p>
+                </div>
+              </div>
+
+              {/* Thumbnail Upload Section */}
+              {headerStyle === "thumbnail" && (
+                <div className="space-y-3 pt-4 border-t border-border">
+                  {(thumbnailPreviewUrl || thumbnailUrl) ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center max-h-20">
+                        <img 
+                          src={thumbnailPreviewUrl ?? thumbnailUrl ?? ''} 
+                          alt="Thumbnail preview" 
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRemoveThumbnail}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <label htmlFor="thumbnail-upload" className="cursor-pointer block">
+                      <input
+                        id="thumbnail-upload"
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={handleThumbnailChange}
+                        className="hidden"
+                      />
+                      <div className="border-2 border-dashed border-border rounded-lg p-6 text-center bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                        <Upload className="mx-auto size-8 mb-2 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground">Click to upload banner</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wide banner image, PNG or JPG, max 2MB. Recommended: 1500×200px
+                        </p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {/* Save Header Style Button */}
+              <Button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="w-full sm:w-auto"
+                variant="outline"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 size-4" />
+                    Save Header Style
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
