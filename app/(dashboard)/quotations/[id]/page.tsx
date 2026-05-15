@@ -540,7 +540,7 @@ export default function ViewQuotationPage() {
  
       // ===== IN WORDS =====
       // FIX: renamed to inWordsAmount to avoid any variable conflict
-      y += 8
+      y -= 11
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(0, 0, 0)
