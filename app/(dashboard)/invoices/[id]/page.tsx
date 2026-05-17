@@ -554,6 +554,10 @@ y += 6
       }
 
       // ===== FOOTER =====
+      if (y + 40 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
       y += 10
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
