@@ -487,6 +487,10 @@ y += 6
      y += 20
 
   // ===== PAYMENT DETAILS =====
+      if (y + 30 > pageH - 10) {
+  doc.addPage()
+  y = margin
+}
       y += 10
       doc.setFontSize(9)
       doc.setFont("helvetica", "bold")
@@ -518,6 +522,10 @@ y += 6
       }
 
       // ===== TAX INFORMATION =====
+      if (y + 25 > pageH - 10) {
+  doc.addPage()
+  y = margin
+}
       y += 6
       doc.setFontSize(9)
       doc.setFont("helvetica", "bold")
@@ -539,6 +547,10 @@ y += 6
       y += 6
 
       // ===== NOTES =====
+      if (y + 20 > pageH - 10) {
+  doc.addPage()
+  y = margin
+}
       if (invoice.notes) {
         y += 3
         doc.setFontSize(9)
