@@ -23,6 +23,7 @@ export interface CompanyProfile {
   state: string | null
   zip_code: string | null
   gstin: string | null
+  pan_number: string | null
   bank_name: string | null
   account_no: string | null
   ifsc_code: string | null
@@ -49,6 +50,7 @@ export function CompanyProfileSettings() {
   const [state, setState] = useState("")
   const [zipCode, setZipCode] = useState("")
   const [gstin, setGstin] = useState("")
+  const [panNumber, setPanNumber] = useState("")
   const [themeColor, setThemeColor] = useState("#185FA5")
   const [bankName, setBankName] = useState("")
   const [accountNo, setAccountNo] = useState("")
@@ -88,6 +90,7 @@ export function CompanyProfileSettings() {
           setState(data.state || "")
           setZipCode(data.zip_code || "")
           setGstin(data.gstin || "")
+          setPanNumber(data.pan_number || "")
           setThemeColor(data.theme_color || "#185FA5")
           setBankName(data.bank_name || "")
           setAccountNo(data.account_no || "")
@@ -176,6 +179,7 @@ export function CompanyProfileSettings() {
           state: state,
           zip_code: zipCode,
           gstin: gstin,
+          pan_number: panNumber,
           bank_name: bankName,
           account_no: accountNo,
           ifsc_code: ifscCode,
@@ -462,14 +466,25 @@ export function CompanyProfileSettings() {
         <div className="border-t border-border pt-6">
           <h3 className="font-semibold text-sm mb-4">Tax Information</h3>
           
-          <div className="space-y-2">
-            <Label htmlFor="gstin">GSTIN</Label>
-            <Input
-              id="gstin"
-              value={gstin}
-              onChange={(e) => setGstin(e.target.value)}
-              placeholder="GSTIN"
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="gstin">GSTIN</Label>
+              <Input
+                id="gstin"
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value)}
+                placeholder="GSTIN"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pan">PAN Number <span className="text-xs text-muted-foreground">(Optional)</span></Label>
+              <Input
+                id="pan"
+                value={panNumber}
+                onChange={(e) => setPanNumber(e.target.value)}
+                placeholder="e.g. ABCDE1234F"
+              />
+            </div>
           </div>
         </div>
 
