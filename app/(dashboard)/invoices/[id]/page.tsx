@@ -483,7 +483,7 @@ y += 6
      doc.setFontSize(9)
      doc.setTextColor(0, 0, 0)
      const inWordsAmount = includeGst ? grandTotal : subtotal
-     doc.text(('RUPEES ' + toWords(inWordsAmount) + ' ONLY').toUpperCase(), margin, y)
+     doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
      y += 20
 
   // ===== PAYMENT DETAILS =====
