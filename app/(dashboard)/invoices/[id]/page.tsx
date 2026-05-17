@@ -517,6 +517,27 @@ y += 6
         y += 4
       }
 
+      // ===== TAX INFORMATION =====
+      y += 6
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Tax Information:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
+        y += 4
+      }
+      if (profile?.pan_number) {
+        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
+        y += 4
+      }
+      doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+      y += 6
+
       // ===== NOTES =====
       if (invoice.notes) {
         y += 3

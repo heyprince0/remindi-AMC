@@ -185,6 +185,7 @@ export type CompanyProfile = {
   state: string | null
   zip_code: string | null
   gstin: string | null
+  pan_number: string | null
   logo_url: string | null
   theme_color: string
   header_style?: "single_logo" | "thumbnail"

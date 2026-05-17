@@ -562,6 +562,26 @@ export default function ViewQuotationPage() {
         y += (noteLines.length * 4) + 3
       }
       y += 4
+
+      // ===== TAX INFORMATION =====
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Tax Information:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
+        y += 4
+      }
+      if (profile?.pan_number) {
+        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
+        y += 4
+      }
+      doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+      y += 6
  
       // ===== FOOTER =====
       // Right-aligned signature block
