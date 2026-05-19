@@ -200,6 +200,7 @@ export type Invoice = {
   quotation_id: string | null
   invoice_no: string
   order_no: string | null
+  order_date: string | null
   invoice_date: string
   due_date: string | null
   payment_terms: string | null

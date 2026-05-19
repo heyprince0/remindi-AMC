@@ -94,6 +94,7 @@ export default function ViewInvoicePage() {
   const [editLoading, setEditLoading] = useState(false)
   const [editInvoiceNo, setEditInvoiceNo] = useState("")
   const [editOrderNo, setEditOrderNo] = useState("")
+  const [editOrderDate, setEditOrderDate] = useState("")
   const [editInvoiceDate, setEditInvoiceDate] = useState("")
   const [editDueDate, setEditDueDate] = useState("")
   const [editPaymentTerms, setEditPaymentTerms] = useState("")
@@ -157,6 +158,7 @@ export default function ViewInvoicePage() {
     if (!invoice) return
     setEditInvoiceNo(invoice.invoice_no || "")
     setEditOrderNo(invoice.order_no || "")
+    setEditOrderDate(invoice.order_date || "")
     setEditInvoiceDate(invoice.invoice_date || "")
     setEditDueDate(invoice.due_date || "")
     setEditPaymentTerms(invoice.payment_terms || "")
@@ -173,6 +175,7 @@ export default function ViewInvoicePage() {
         .update({
           invoice_no: editInvoiceNo,
           order_no: editOrderNo || null,
+          order_date: editOrderDate || null,
           invoice_date: editInvoiceDate,
           due_date: editDueDate,
           payment_terms: editPaymentTerms,
@@ -366,6 +369,12 @@ y += 6
       doc.setTextColor(0, 0, 0)
       if (invoice.order_no) {
         doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
+        y += 5
+      }
+      // Order date on next line on right side (only if exists)
+      if (invoice.order_date) {
+        const orderDateFormatted = new Date(invoice.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
       }
       doc.setTextColor(0, 0, 0)
 
@@ -939,6 +948,17 @@ y += 6
                 value={editOrderNo}
                 onChange={(e) => setEditOrderNo(e.target.value)}
                 placeholder="e.g. PO-2026-001"
+              />
+            </div>
+
+            {/* Order Date */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-order-date">Order Date (Optional)</Label>
+              <Input
+                id="edit-order-date"
+                type="date"
+                value={editOrderDate}
+                onChange={(e) => setEditOrderDate(e.target.value)}
               />
             </div>
 

@@ -104,6 +104,7 @@ export default function ViewQuotationPage() {
   const [selectedPaymentTerms, setSelectedPaymentTerms] = useState("")
   const [invoiceNotes, setInvoiceNotes] = useState("")
   const [orderNo, setOrderNo] = useState("")
+  const [orderDate, setOrderDate] = useState("")
   const id = params.id as string
  
   useEffect(() => {
@@ -166,6 +167,7 @@ export default function ViewQuotationPage() {
           quotation_id: quotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,
+          order_date: orderDate || null,
           invoice_date: invoiceDate,
           due_date: dueDate,
           payment_terms: selectedPaymentTerms,
@@ -952,6 +954,17 @@ export default function ViewQuotationPage() {
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
                 placeholder="e.g. PO-2026-001"
+              />
+            </div>
+ 
+            {/* Order Date */}
+            <div className="space-y-2">
+              <Label htmlFor="order-date">Order Date (Optional)</Label>
+              <Input
+                id="order-date"
+                type="date"
+                value={orderDate}
+                onChange={(e) => setOrderDate(e.target.value)}
               />
             </div>
  
