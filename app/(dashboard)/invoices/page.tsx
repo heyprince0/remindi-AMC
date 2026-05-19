@@ -226,7 +226,7 @@ export default function InvoicesPage() {
                       <TableHead>Invoice No</TableHead>
                       <TableHead>Client Name</TableHead>
                       <TableHead>Date</TableHead>
-                      <TableHead>Due Date</TableHead>
+                      <TableHead>Valid Till</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Payment Status</TableHead>
                       <TableHead className="w-[80px]">Actions</TableHead>
