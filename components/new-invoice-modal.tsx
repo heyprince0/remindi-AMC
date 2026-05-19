@@ -230,7 +230,7 @@ export function NewInvoiceModal({ open, onOpenChange, userId }: NewInvoiceModalP
 
               {/* Due Date */}
               <div className="space-y-2">
-                <Label htmlFor="due-date">Due Date</Label>
+                <Label htmlFor="due-date">Valid Till</Label>
                 <Input
                   id="due-date"
                   type="date"
