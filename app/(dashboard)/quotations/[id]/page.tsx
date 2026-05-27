@@ -124,14 +124,22 @@ export default function ViewQuotationPage() {
     try {
       const { data, error } = await supabase
         .from("invoices")
-        .select("invoice_no", { count: "exact" })
+        .select("invoice_no")
         .eq("user_id", user!.id)
       if (error) throw error
-      const count = (data?.length ?? 0) + 1
-      return `INV-${String(count).padStart(3, '0')}`
+      if (!data || data.length === 0) return "INV-001"
+      const numbers = data
+        .map(inv => {
+          const match = (inv.invoice_no || "").match(/(\d+)$/)
+          return match ? parseInt(match[1]) : 0
+        })
+        .filter(n => n > 0)
+      if (numbers.length === 0) return "INV-001"
+      const maxNumber = Math.max(...numbers)
+      return `INV-${String(maxNumber + 1).padStart(3, '0')}`
     } catch (err) {
       console.error(err)
-      return `INV-001`
+      return "INV-001"
     }
   }
  
