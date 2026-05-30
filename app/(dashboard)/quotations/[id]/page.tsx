@@ -672,22 +672,7 @@ export default function ViewQuotationPage() {
               )}
               Download PDF
             </Button>
- 
-            <Button
-              onClick={handleWhatsApp}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              size="sm"
-            >
-              <MessageCircle className="mr-1.5 size-4" />
-              WhatsApp
-            </Button>
- 
-            <Link href={`/quotations/${id}/edit`}>
-              <Button variant="outline" size="sm">
-                <Edit className="mr-1.5 size-4" />
-                Edit
-              </Button>
-            </Link>
+           
  
             {quotation.invoice_id ? (
               <Button
@@ -707,6 +692,12 @@ export default function ViewQuotationPage() {
                 Convert to Invoice
               </Button>
             )}
+            <Link href={`/quotations/${id}/edit`}>
+              <Button variant="outline" size="sm">
+                <Edit className="mr-1.5 size-4" />
+                Edit
+              </Button>
+            </Link>
           </div>
         </div>
  
@@ -763,10 +754,7 @@ export default function ViewQuotationPage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
               <p className="font-medium">{quotation.client_name ?? "-"}</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid Till</p>
-              <p className="font-medium">{quotation.valid_till ? formatDate(quotation.valid_till) : "-"}</p>
-            </div>
+           
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
               <p className="font-medium">{quotation.client_address ?? "-"}</p>
@@ -963,7 +951,7 @@ export default function ViewQuotationPage() {
  
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="invoice-notes">Notes (Optional)</Label>
+              <Label htmlFor="invoice-notes">Terms and Conditions</Label>
               <Textarea
                 id="invoice-notes"
                 value={invoiceNotes}
