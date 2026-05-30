@@ -353,6 +353,21 @@ export default function ReportsPage() {
           ) : (
             <>
               {/* Total Services */}
+               <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-muted-foreground">Total Services</span>
+                      <span className="text-3xl font-bold">{stats.totalServices}</span>
+                      <TrendBadge current={stats.totalServices} prev={stats.prevTotalServices} />
+                    </div>
+                    <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+                      <Activity className="size-6 text-primary" />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{RANGE_LABELS[range]}</p>
+                </CardContent>
+              </Card>
              
 
               {/* Completed Services */}
