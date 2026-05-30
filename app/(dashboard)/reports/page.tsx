@@ -24,6 +24,7 @@ interface Stats {
   totalServices: number
   completedServices: number
   activeContracts: number
+  totalContracts: number
   totalEarnings: number
   prevTotalServices: number
   prevCompletedServices: number
@@ -285,6 +286,7 @@ export default function ReportsPage() {
         totalServices: getTotalServices(cHistory),
         completedServices: getCompletedServices(cHistory),
         activeContracts: contracts.filter(c => c.status === "active").length,
+        totalContracts: contracts.length,
         totalEarnings: getTotalEarnings(cHistory, contractMap),
         prevTotalServices: getTotalServices(pHistory),
         prevCompletedServices: getCompletedServices(pHistory),
@@ -354,20 +356,20 @@ export default function ReportsPage() {
             <>
               {/* Total Services */}
                <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-muted-foreground">Total Services</span>
-                      <span className="text-3xl font-bold">{stats.totalServices}</span>
-                      <TrendBadge current={stats.totalServices} prev={stats.prevTotalServices} />
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                      <Activity className="size-6 text-primary" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{RANGE_LABELS[range]}</p>
-                </CardContent>
-              </Card>
+  <CardContent className="p-6">
+    <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-muted-foreground">Total Contracts</span>
+        <span className="text-3xl font-bold">{stats.totalContracts}</span>
+        <span className="text-xs text-muted-foreground">All time</span>
+      </div>
+      <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+        <Activity className="size-6 text-primary" />
+      </div>
+    </div>
+    <p className="mt-2 text-xs text-muted-foreground">All time</p>
+  </CardContent>
+</Card>
              
 
               {/* Completed Services */}
