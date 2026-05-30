@@ -672,24 +672,6 @@ y += 6
               Download PDF
             </Button>
 
-            <Button
-              onClick={handleWhatsApp}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              size="sm"
-            >
-              <MessageCircle className="mr-1.5 size-4" />
-              WhatsApp
-            </Button>
-
-            <Button
-              onClick={handleOpenEditModal}
-              variant="outline"
-              size="sm"
-            >
-              <Edit className="mr-1.5 size-4" />
-              Edit
-            </Button>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={updating}>
@@ -716,6 +698,14 @@ y += 6
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button
+              onClick={handleOpenEditModal}
+              variant="outline"
+              size="sm"
+            >
+              <Edit className="mr-1.5 size-4" />
+              Edit
+            </Button>
           </div>
         </div>
 
@@ -790,7 +780,7 @@ y += 6
               <p className="font-medium">{formatDate(invoice.invoice_date)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Due Date</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Vaild till</p>
               <p className="font-medium">{invoice.due_date ? formatDate(invoice.due_date) : "-"}</p>
             </div>
             {invoice.order_no && (
@@ -986,7 +976,7 @@ y += 6
 
             {/* Due Date */}
             <div className="space-y-2">
-              <Label htmlFor="edit-due-date">Due Date</Label>
+              <Label htmlFor="edit-due-date">Valid till</Label>
               <Input
                 id="edit-due-date"
                 type="date"
@@ -1015,7 +1005,7 @@ y += 6
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="edit-invoice-notes">Notes (Optional)</Label>
+              <Label htmlFor="edit-invoice-notes">Terms & Conditions</Label>
               <Textarea
                 id="edit-invoice-notes"
                 value={editNotes}
