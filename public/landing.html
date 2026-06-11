@@ -824,6 +824,35 @@
       font-weight: 700;
     }
 
+    /* ─── PRICING TABS ────────────────────────────────── */
+    .pricing-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+    .pricing-tab {
+      padding: 10px 24px;
+      border: 2px solid var(--gray-200);
+      background: white;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .pricing-tab:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .pricing-tab.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: white;
+    }
+
     /* ─── FAQ ─────────────────────────────────────────── */
     .faq { background: white; }
     .faq-list {
@@ -1408,6 +1437,13 @@
     <h2 class="section-title reveal">Simple, Transparent Pricing</h2>
     <p class="section-subtitle reveal">Start free for 30 days. No credit card required.</p>
 
+    <div class="pricing-tabs">
+      <button class="pricing-tab active" data-duration="monthly" onclick="switchPricingDuration('monthly')">Monthly</button>
+      <button class="pricing-tab" data-duration="3months" onclick="switchPricingDuration('3months')">3 Months</button>
+      <button class="pricing-tab" data-duration="6months" onclick="switchPricingDuration('6months')">6 Months</button>
+      <button class="pricing-tab" data-duration="yearly" onclick="switchPricingDuration('yearly')">Yearly</button>
+    </div>
+
     <div class="pricing-grid">
 
       <!-- Free Trial -->
@@ -1432,12 +1468,12 @@
       </div>
 
       <!-- Basic -->
-      <div class="pricing-card reveal reveal-delay-2">
+      <div class="pricing-card reveal reveal-delay-2" data-plan="basic">
         <div class="pricing-plan-name">Basic</div>
-        <div class="pricing-price">
+        <div class="pricing-price" data-monthly="499" data-3months="1399" data-6months="2499" data-yearly="4799">
           <span class="currency">₹</span>
-          <span class="amount">499</span>
-          <span class="period">/month</span>
+          <span class="amount" data-monthly="499" data-3months="1399" data-6months="2499" data-yearly="4799">499</span>
+          <span class="period" data-monthly="/month" data-3months="/ 3 months" data-6months="/ 6 months" data-yearly="/ year">/month</span>
         </div>
         <div class="pricing-desc">Perfect for small contractors just getting started</div>
         <div class="pricing-divider"></div>
@@ -1457,13 +1493,13 @@
       </div>
 
       <!-- Pro -->
-      <div class="pricing-card pro reveal reveal-delay-3">
+      <div class="pricing-card pro reveal reveal-delay-3" data-plan="pro">
         <div class="pricing-popular-badge">⭐ Most Popular</div>
         <div class="pricing-plan-name">Pro</div>
-        <div class="pricing-price">
+        <div class="pricing-price" data-monthly="799" data-3months="2199" data-6months="3999" data-yearly="7499">
           <span class="currency">₹</span>
-          <span class="amount">799</span>
-          <span class="period">/month</span>
+          <span class="amount" data-monthly="799" data-3months="2199" data-6months="3999" data-yearly="7499">799</span>
+          <span class="period" data-monthly="/month" data-3months="/ 3 months" data-6months="/ 6 months" data-yearly="/ year">/month</span>
         </div>
         <div class="pricing-desc">For growing businesses managing large client bases</div>
         <div class="pricing-divider"></div>
@@ -1726,6 +1762,36 @@
       }
     });
   });
+
+  // Pricing duration selector
+  function switchPricingDuration(duration) {
+    // Update active tab
+    document.querySelectorAll('.pricing-tab').forEach(tab => {
+      tab.classList.remove('active');
+      if (tab.getAttribute('data-duration') === duration) {
+        tab.classList.add('active');
+      }
+    });
+
+    // Update prices for Basic and Pro plans
+    document.querySelectorAll('.pricing-card[data-plan]').forEach(card => {
+      const priceContainer = card.querySelector('.pricing-price');
+      const amountEl = card.querySelector('.amount');
+      const periodEl = card.querySelector('.period');
+
+      if (priceContainer && amountEl && periodEl) {
+        const newAmount = priceContainer.getAttribute(`data-${duration}`);
+        const newPeriod = periodEl.getAttribute(`data-${duration}`);
+        
+        if (newAmount) {
+          amountEl.textContent = newAmount;
+        }
+        if (newPeriod) {
+          periodEl.textContent = newPeriod;
+        }
+      }
+    });
+  }
 
 </script>
 
