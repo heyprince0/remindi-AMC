@@ -12,6 +12,7 @@ import { supabase, type Profile, signOut } from "@/lib/supabase"
 import { Save, LogOut } from "lucide-react"
 import { toast } from "sonner"
 import { CompanyProfileSettings } from "./company-profile"
+import { StampSignatureSettings } from "@/components/stamp-signature-settings"
 
 const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control', 'Generator', 'Fire Safety', 'UPS', 'Other']
 
@@ -112,6 +113,8 @@ export default function SettingsPage() {
         </div>
 
         <CompanyProfileSettings />
+
+        <StampSignatureSettings />
 
         <Card>
           <CardHeader>

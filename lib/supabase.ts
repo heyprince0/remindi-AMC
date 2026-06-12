@@ -190,6 +190,12 @@ export type CompanyProfile = {
   theme_color: string
   header_style?: "single_logo" | "thumbnail"
   header_thumbnail_url?: string | null
+  stamp_url?: string | null
+  signature_url?: string | null
+  show_stamp_on_quotation?: boolean
+  show_stamp_on_invoice?: boolean
+  show_signature_on_quotation?: boolean
+  show_signature_on_invoice?: boolean
   created_at: string
   updated_at: string
 }
