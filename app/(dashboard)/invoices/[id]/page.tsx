@@ -99,10 +99,24 @@ export default function ViewInvoicePage() {
   const [editInvoiceDate, setEditInvoiceDate] = useState("")
   const [editDueDate, setEditDueDate] = useState("")
   const [editPaymentTerms, setEditPaymentTerms] = useState("")
-  const [includeStamp, setIncludeStamp] = useState(false)
+  // Persist stamp toggle in localStorage — survives page refresh
+  const [includeStamp, setIncludeStamp] = useState<boolean>(false)
   const [editNotes, setEditNotes] = useState("")
   const [quotationData, setQuotationData] = useState<{ quote_no: string } | null>(null)
   const id = params.id as string
+
+  // Load stamp toggle from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(`stamp_toggle_inv_${id}`)
+    if (saved === 'true') setIncludeStamp(true)
+  }, [id])
+
+  // Save stamp toggle to localStorage whenever it changes
+  const handleStampToggle = () => {
+    const newVal = !includeStamp
+    setIncludeStamp(newVal)
+    localStorage.setItem(`stamp_toggle_inv_${id}`, String(newVal))
+  }
 
   useEffect(() => {
     if (user?.id && id) loadData()
@@ -599,72 +613,54 @@ y += 6
   doc.text('For ' + safeStr(profile?.company_name),
   195, y+12, { align: 'right' })
   
-  // Add stamp and signature if toggle is ON
-  if (stampToggle && (profile?.stamp_url || profile?.signature_url)) {
+  // Add stamp if toggle is ON
+  // profile.stamp_url stores the clean storage PATH (e.g. "user-id/stamp")
+  // Bucket is public so we use getPublicUrl directly — no signed URL needed
+  if (stampToggle && profile?.stamp_url) {
     let stampY = y + 18
-    
+
     try {
-      // Fetch and add stamp image
-      if (profile?.stamp_url) {
-        const stampSignedUrl = await supabase.storage
-          .from('company-assets')
-          .createSignedUrl(`${user?.id}/stamp.png`, 60)
-        
-        if (stampSignedUrl.data?.signedUrl) {
-          const stampResponse = await fetch(stampSignedUrl.data.signedUrl)
-          const stampBlob = await stampResponse.blob()
-          const stampBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(stampBlob)
-          })
-          
-          // Add stamp (120x120px max, right-aligned)
-          const stampW = 30
-          const stampH = 30
-          const stampX = pageW - margin - stampW
-          doc.addImage(stampBase64, "PNG", stampX, stampY, stampW, stampH)
-          stampY += stampH + 2
-        }
-      }
-      
-      // Fetch and add signature image
-      if (profile?.signature_url) {
-        const sigSignedUrl = await supabase.storage
-          .from('company-assets')
-          .createSignedUrl(`${user?.id}/signature.png`, 60)
-        
-        if (sigSignedUrl.data?.signedUrl) {
-          const sigResponse = await fetch(sigSignedUrl.data.signedUrl)
-          const sigBlob = await sigResponse.blob()
-          const sigBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(sigBlob)
-          })
-          
-          // Add signature (150x50px max, right-aligned)
-          const sigW = 35
-          const sigH = 12
-          const sigX = pageW - margin - sigW
-          doc.addImage(sigBase64, "PNG", sigX, stampY, sigW, sigH)
-          stampY += sigH + 2
-        }
-      }
-      
-      // Add divider line
+      // Get public URL from the stored path
+      const { data: publicUrlData } = supabase.storage
+        .from('company-assets')
+        .getPublicUrl(profile.stamp_url)
+
+      // Fetch image and convert to base64 for jsPDF
+      const stampResponse = await fetch(publicUrlData.publicUrl)
+      if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
+
+      const stampBlob = await stampResponse.blob()
+      const stampBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(stampBlob)
+      })
+
+      // Detect image format from blob type for jsPDF
+      const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+
+      // Draw stamp — 30x30mm, right-aligned, below "For Company Name"
+      const stampW = 30
+      const stampH = 30
+      const stampX = pageW - margin - stampW
+      doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
+      stampY += stampH + 2
+
+      // Divider line
       doc.setDrawColor(200, 200, 200)
       doc.setLineWidth(0.5)
-      doc.line(pageW - margin - 35, stampY, pageW - margin, stampY)
-      stampY += 3
-      
-      // Add "Authorized Signatory" text
+      doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
+      stampY += 4
+
+      // "Authorized Signatory" label
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
       doc.setTextColor(120, 120, 120)
       doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
     } catch (e) {
-      console.error('Error adding stamp/signature:', e)
+      console.error('Error adding stamp to PDF:', e)
+      // Don't fail the whole PDF — just skip the stamp silently
     }
   }
   
@@ -739,7 +735,7 @@ y += 6
 
             {profile?.stamp_url || profile?.signature_url ? (
               <Button
-                onClick={() => setIncludeStamp(!includeStamp)}
+                onClick={handleStampToggle}
                 disabled={generatingPdf}
                 variant="outline"
                 size="sm"
