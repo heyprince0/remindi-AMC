@@ -55,21 +55,12 @@ function getStatusBadge(days: number, status: string) {
   return <Badge variant="outline">{status}</Badge>
 }
 
-function getServiceTypeBadge(type: string) {
-  return (
-    <Badge variant="outline" className="font-normal">
-      {type}
-    </Badge>
-  )
-}
-
 export default function ContractsPage() {
   const { user } = useAuth()
   const [contracts, setContracts] = useState<ContractDisplay[]>([])
   const [filteredContracts, setFilteredContracts] = useState<ContractDisplay[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
@@ -91,10 +82,6 @@ export default function ContractsPage() {
       )
     }
 
-    if (filterType !== 'all') {
-      filtered = filtered.filter(c => c.service_type.toLowerCase() === filterType.toLowerCase())
-    }
-
     if (filterStatus !== 'all') {
   filtered = filtered.filter(c => {
     const days = getDaysUntilService(c.next_service_date)
@@ -111,7 +98,7 @@ export default function ContractsPage() {
 
   useEffect(() => {
     handleFilter()
-  }, [searchTerm, filterType, filterStatus, contracts])
+  }, [searchTerm, filterStatus, contracts])
 
   const handleDelete = async () => {
     if (!contractToDelete) return
@@ -219,14 +206,13 @@ export default function ContractsPage() {
       const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
       const columns = [
-        { header: 'Contract Name', dataKey: 'contract_name',     width: 55 },
-        { header: 'Customer',      dataKey: 'customerName',      width: 42 },
-        { header: 'Service Type',  dataKey: 'service_type',      width: 26 },
-        { header: 'Frequency',     dataKey: 'frequency_days',    width: 24 },
-        { header: 'Price (Rs.)',     dataKey: 'contracts_price',   width: 24 },
-        { header: 'Start Date',    dataKey: 'start_date',        width: 28 },
-        { header: 'Next Service',  dataKey: 'next_service_date', width: 28 },
-        { header: 'Status',        dataKey: '__status',          width: 22 },
+        { header: 'Contract Name', dataKey: 'contract_name',     width: 60 },
+        { header: 'Customer',      dataKey: 'customerName',      width: 48 },
+        { header: 'Frequency',     dataKey: 'frequency_days',    width: 26 },
+        { header: 'Price (Rs.)',     dataKey: 'contracts_price',   width: 26 },
+        { header: 'Start Date',    dataKey: 'start_date',        width: 30 },
+        { header: 'Next Service',  dataKey: 'next_service_date', width: 30 },
+        { header: 'Status',        dataKey: '__status',          width: 24 },
       ]
       const tableWidth = columns.reduce((s, c) => s + c.width, 0)
       const rowH = 9
@@ -406,20 +392,6 @@ export default function ContractsPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Service Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="ac">AC</SelectItem>
-                    <SelectItem value="cctv">CCTV</SelectItem>
-                    <SelectItem value="lift">Lift</SelectItem>
-                    <SelectItem value="fire-safety">Fire Safety</SelectItem>
-                    <SelectItem value="generator">Generator</SelectItem>
-                    <SelectItem value="ups">UPS</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Status" />
@@ -457,7 +429,6 @@ export default function ContractsPage() {
                   <TableRow>
                     <TableHead>Contract Name</TableHead>
                     <TableHead>Customer</TableHead>
-                    <TableHead>Service Type</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead>Start Date</TableHead>
@@ -473,7 +444,6 @@ export default function ContractsPage() {
                       <TableRow key={contract.id}>
                         <TableCell className="font-medium">{contract.contract_name}</TableCell>
                         <TableCell>{contract.customerName}</TableCell>
-                        <TableCell>{getServiceTypeBadge(contract.service_type)}</TableCell>
                         <TableCell>{contract.frequency_days} days</TableCell>
                         <TableCell>
                           {contract.contracts_price != null
