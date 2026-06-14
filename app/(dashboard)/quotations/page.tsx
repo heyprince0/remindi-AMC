@@ -68,6 +68,20 @@ export default function QuotationsPage() {
   if (!quotationToDelete) return
   setDeleting(true)
   try {
+    const { data: linkedInvoices, error: checkError } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("quotation_id", quotationToDelete.id)
+
+    if (checkError) throw checkError
+
+    if (linkedInvoices && linkedInvoices.length > 0) {
+      toast.error("Cannot delete: an invoice has been generated from this quotation.")
+      setDeleteDialogOpen(false)
+      setDeleting(false)
+      return
+    }
+
     const { error } = await supabase
       .from("quotations")
       .delete()
