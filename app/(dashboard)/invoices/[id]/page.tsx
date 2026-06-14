@@ -511,7 +511,7 @@ y += 6
   }
 
   // ===== IN WORDS =====
-     y -= 11
+     y += 2
      doc.setFont('helvetica', 'bold')
      doc.setFontSize(9)
      doc.setTextColor(0, 0, 0)
