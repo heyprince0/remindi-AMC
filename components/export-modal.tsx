@@ -19,7 +19,6 @@ interface ServiceRecord {
   id: string
   customerName: string
   contractName: string
-  serviceType: string
   technicianName: string
   service_date: string
   status: string
@@ -62,16 +61,15 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
   const generateCSV = () => {
     setLoading(true)
     try {
-      const headers = ['Customer Name', 'Contract Name', 'Service Type', 'Technician', 'Service Date', 'Price (₹)', 'Status', 'Notes']
+      const headers = ['Customer Name', 'Contract Name', 'Technician', 'Service Date', 'Price (Rs.)', 'Status', 'Notes']
       const csvContent = [
         headers.join(','),
         ...records.map(record =>
           [
             `"${record.customerName}"`,
             `"${record.contractName}"`,
-            `"${record.serviceType}"`,
             `"${record.technicianName}"`,
-            `"${record.service_date}"`,
+            `"=""${record.service_date}"""`,
             `"${record.contractPrice != null ? record.contractPrice : ''}"`,
             `"${record.status}"`,
             `"${(record.notes || '').replace(/"/g, '""')}"`,
@@ -164,14 +162,23 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
         doc.text(`Page ${pageNum}`, pageW - margin, pageH - 3, { align: 'right' })
       }
 
+      // Truncate text with an ellipsis if it exceeds the available column width
+      const truncateToWidth = (text: string, maxWidth: number): string => {
+        if (doc.getTextWidth(text) <= maxWidth) return text
+        let truncated = text
+        while (truncated.length > 0 && doc.getTextWidth(truncated + '...') > maxWidth) {
+          truncated = truncated.slice(0, -1)
+        }
+        return truncated + '...'
+      }
+
       const columns = [
-        { header: 'Customer Name',  dataKey: 'customerName',   width: 36 },
-        { header: 'Contract',       dataKey: 'contractName',   width: 34 },
-        { header: 'Service Type',   dataKey: 'serviceType',    width: 24 },
-        { header: 'Technician',     dataKey: 'technicianName', width: 28 },
+        { header: 'Customer Name',  dataKey: 'customerName',   width: 42 },
+        { header: 'Contract',       dataKey: 'contractName',   width: 42 },
+        { header: 'Technician',     dataKey: 'technicianName', width: 30 },
         { header: 'Date',           dataKey: 'service_date',   width: 24 },
-        { header: 'Price (₹)',      dataKey: 'contractPrice',  width: 22 },
-        { header: 'Status',         dataKey: 'status',         width: 20 },
+        { header: 'Price (Rs.)',    dataKey: 'contractPrice',  width: 24 },
+        { header: 'Status',         dataKey: 'status',         width: 22 },
         { header: 'Notes',          dataKey: 'notes',          width: 81 },
       ]
       const tableWidth = columns.reduce((s, c) => s + c.width, 0)
@@ -257,7 +264,7 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
             doc.setTextColor(...textDark)
             doc.setFont('helvetica', 'normal')
           }
-          doc.text(cellValue || '—', x + 2, currentY + 6, { maxWidth: col.width - 4 })
+          doc.text(truncateToWidth(cellValue || '—', col.width - 4), x + 2, currentY + 6)
           x += col.width
         }
 
