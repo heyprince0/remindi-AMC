@@ -80,7 +80,6 @@ export type Contract = {
   user_id: string
   customer_id: string
   contract_name: string
-  service_type: string
   frequency_days: number
   start_date: string
   next_service_date: string
