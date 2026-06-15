@@ -442,7 +442,7 @@ export default function ContractsPage() {
                     <TableHead>Frequency</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead>Start Date</TableHead>
-                    <TableHead>Next Service</TableHead>
+                    <TableHead>End Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[70px]">Actions</TableHead>
                   </TableRow>
