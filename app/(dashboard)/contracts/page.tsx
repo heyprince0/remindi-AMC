@@ -260,9 +260,9 @@ export default function ContractsPage() {
         doc.text(`Exported: ${dateStr}`, margin, 27)
         // Summary counts
         const active   = data.filter(c => getDaysUntilService(c.next_service_date) >= 4 && c.status === 'active').length
-        const overdue  = data.filter(c => getDaysUntilService(c.next_service_date) < 0).length
-        const dueToday = data.filter(c => getDaysUntilService(c.next_service_date) === 0).length
-        const dueSoon  = data.filter(c => { const d = getDaysUntilService(c.next_service_date); return d > 0 && d <= 3 }).length
+        const Expire  = data.filter(c => getDaysUntilService(c.next_service_date) < 0).length
+        const ExpireToday = data.filter(c => getDaysUntilService(c.next_service_date) === 0).length
+        const ExpireSoon  = data.filter(c => { const d = getDaysUntilService(c.next_service_date); return d > 0 && d <= 3 }).length
         doc.text(
           `Total: ${data.length}  •  Active: ${active}  •  Expire: ${overdue}  •  Today's Servicing: ${dueToday}  •  Expire Soon: ${dueSoon}`,
           margin + 48, 27
