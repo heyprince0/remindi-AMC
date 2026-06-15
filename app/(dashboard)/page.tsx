@@ -242,7 +242,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard title="Active Contracts" value={stats.contracts} icon={FileText} description="Total" />
           <StatCard title="Today's Servicing" value={stats.dueToday} icon={CalendarClock} description="Needs attention" iconClassName="bg-alert-due-today/10" />
-          <StatCard title="Expire in this Week" value={stats.dueThisWeek} icon={CalendarCheck} description="Scheduled" />
+          <StatCard title="Expire in Week" value={stats.dueThisWeek} icon={CalendarCheck} description="Scheduled" />
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
           <StatCard title="Technicians" value={stats.technicians} icon={Wrench} description="Available" />
         </div>
