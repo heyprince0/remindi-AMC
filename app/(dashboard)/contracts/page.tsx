@@ -85,9 +85,9 @@ export default function ContractsPage() {
     if (filterStatus !== 'all') {
   filtered = filtered.filter(c => {
     const days = getDaysUntilService(c.next_service_date)
-    if (filterStatus === 'overdue') return days < 0
-    if (filterStatus === 'due-today') return days === 0
-    if (filterStatus === 'due-soon') return days > 0 && days <= 7
+    if (filterStatus === 'Expire') return days < 0
+    if (filterStatus === 'Expire-Today') return days === 0
+    if (filterStatus === 'Expire-soon') return days > 0 && days <= 7
     if (filterStatus === 'active') return c.status === 'active' && days > 7  // ← fix
     return c.status === filterStatus
   })
