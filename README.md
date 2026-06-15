@@ -46,13 +46,6 @@ Remindi uses Supabase with the following key tables:
 
 ---
 
-## Roadmap
-
-- [ ] Renewal reminders via WhatsApp / email
-- [ ] Client portal (view-only contract access)
-- [ ] Subscription billing via Razorpay
-- [ ] Multi-user team access
-- [ ] Mobile app
 
 ---
 
