@@ -179,9 +179,9 @@ export default function ContractsPage() {
   const getStatusPdfColor = (label: string): [number, number, number] => {
     switch (label) {
       case 'Active':    return [22, 163, 74]
-      case 'Overdue':   return [220, 38, 38]
-      case 'Due Today': return [202, 138, 4]
-      case 'Due Soon':  return [234, 88, 12]
+      case 'Expire':   return [220, 38, 38]
+      case 'Today Servicing': return [202, 138, 4]
+      case 'Expire Soon':  return [234, 88, 12]
       default:          return [71, 85, 105]
     }
   }
@@ -264,7 +264,7 @@ export default function ContractsPage() {
         const dueToday = data.filter(c => getDaysUntilService(c.next_service_date) === 0).length
         const dueSoon  = data.filter(c => { const d = getDaysUntilService(c.next_service_date); return d > 0 && d <= 3 }).length
         doc.text(
-          `Total: ${data.length}  •  Active: ${active}  •  Overdue: ${overdue}  •  Due Today: ${dueToday}  •  Due Soon: ${dueSoon}`,
+          `Total: ${data.length}  •  Active: ${active}  •  Expire: ${overdue}  •  Today's Servicing: ${dueToday}  •  Expire Soon: ${dueSoon}`,
           margin + 48, 27
         )
         doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: 'right' })
