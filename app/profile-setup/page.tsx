@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
+import { triggerWelcomeEmail } from '@/lib/email-actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -78,7 +79,7 @@ export default function ProfileSetupPage() {
     e.preventDefault()
     setSubmitError('')
     
-    if (!validateForm() || !user?.id) return
+    if (!validateForm() || !user?.id || !user?.email) return
 
     setSaving(true)
     try {
@@ -97,6 +98,14 @@ export default function ProfileSetupPage() {
   })
 
       if (error) throw error
+      
+      // Send welcome email after profile is created (non-blocking)
+      try {
+        await triggerWelcomeEmail(user.email, fullName)
+      } catch (emailError) {
+        console.error('Welcome email failed:', emailError)
+        // Don't fail profile setup if email fails
+      }
       
       toast.success('Profile setup completed!')
       router.push('/')
