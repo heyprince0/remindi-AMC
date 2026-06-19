@@ -44,15 +44,44 @@ interface ContractDisplay extends Contract {
 
 function getStatusBadge(days: number, status: string) {
   if (days < 0) {
-    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Overdue</Badge>
+    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
   } else if (days === 0) {
-    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Due Today</Badge>
+    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
   } else if (days <= 3) {
-    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Due Soon</Badge>
+    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Expiring Soon</Badge>
   } else if (status === "active") {
     return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Active</Badge>
   }
   return <Badge variant="outline">{status}</Badge>
+}
+
+// Helper to get status label for PDF and filtering
+function getStatusLabel(days: number, status: string): string {
+  if (days < 0) return 'Expired'
+  if (days === 0) return 'Today Servicing'
+  if (days <= 3) return 'Expiring Soon'
+  if (status === 'active') return 'Active'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+// Helper to get status color for PDF
+function getStatusPdfColor(label: string): [number, number, number] {
+  switch (label) {
+    case 'Active':          return [22, 163, 74]  // green
+    case 'Expired':         return [220, 38, 38] // red
+    case 'Today Servicing': return [202, 138, 4] // yellow
+    case 'Expiring Soon':   return [234, 88, 12] // orange
+    default:                return [71, 85, 105] // slate
+  }
+}
+
+// Helper to get filter status values
+function getFilterStatusValue(days: number, status: string): string {
+  if (days < 0) return 'expired'
+  if (days === 0) return 'today-servicing'
+  if (days <= 3) return 'expiring-soon'
+  if (status === 'active') return 'active'
+  return status
 }
 
 export default function ContractsPage() {
@@ -75,6 +104,7 @@ export default function ContractsPage() {
   const handleFilter = () => {
     let filtered = contracts
 
+    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(c =>
         c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,16 +112,14 @@ export default function ContractsPage() {
       )
     }
 
+    // Apply status filter
     if (filterStatus !== 'all') {
-  filtered = filtered.filter(c => {
-    const days = getDaysUntilService(c.next_service_date)
-    if (filterStatus === 'Expire') return days < 0
-    if (filterStatus === 'Expire-Today') return days === 0
-    if (filterStatus === 'Expire-soon') return days > 0 && days <= 7
-    if (filterStatus === 'active') return c.status === 'active' && days > 7  // ← fix
-    return c.status === filterStatus
-  })
-}
+      filtered = filtered.filter(c => {
+        const days = getDaysUntilService(c.next_service_date)
+        const statusLabel = getFilterStatusValue(days, c.status)
+        return statusLabel === filterStatus
+      })
+    }
 
     setFilteredContracts(filtered)
   }
@@ -168,22 +196,18 @@ export default function ContractsPage() {
     }
   }
 
-  const getStatusLabel = (days: number, status: string): string => {
-    if (days < 0) return 'Overdue'
-    if (days === 0) return 'Due Today'
-    if (days <= 3) return 'Due Soon'
-    if (status === 'active') return 'Active'
-    return status.charAt(0).toUpperCase() + status.slice(1)
-  }
-
-  const getStatusPdfColor = (label: string): [number, number, number] => {
-    switch (label) {
-      case 'Active':    return [22, 163, 74]
-      case 'Expire':   return [220, 38, 38]
-      case 'Today Servicing': return [202, 138, 4]
-      case 'Expire Soon':  return [234, 88, 12]
-      default:          return [71, 85, 105]
-    }
+  const getStatusCounts = (data: ContractDisplay[]) => {
+    let active = 0, expired = 0, todayServicing = 0, expiringSoon = 0
+    
+    data.forEach(c => {
+      const days = getDaysUntilService(c.next_service_date)
+      if (days < 0) expired++
+      else if (days === 0) todayServicing++
+      else if (days <= 3) expiringSoon++
+      else if (c.status === 'active') active++
+    })
+    
+    return { active, expired, todayServicing, expiringSoon }
   }
 
   const exportContractsPDF = () => {
@@ -214,14 +238,15 @@ export default function ContractsPage() {
 
       const data = filteredContracts
       const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      const counts = getStatusCounts(data)
 
       const columns = [
         { header: 'Contract Name', dataKey: 'contract_name',     width: 60 },
         { header: 'Customer',      dataKey: 'customerName',      width: 48 },
         { header: 'Frequency',     dataKey: 'frequency_days',    width: 26 },
-        { header: 'Price (Rs.)',     dataKey: 'contracts_price',   width: 26 },
+        { header: 'Price (Rs.)',   dataKey: 'contracts_price',   width: 26 },
         { header: 'Start Date',    dataKey: 'start_date',        width: 30 },
-        { header: 'End Date',  dataKey: 'next_service_date', width: 30 },
+        { header: 'End Date',      dataKey: 'next_service_date', width: 30 },
         { header: 'Status',        dataKey: '__status',          width: 24 },
       ]
       const tableWidth = columns.reduce((s, c) => s + c.width, 0)
@@ -258,13 +283,9 @@ export default function ContractsPage() {
         doc.setFontSize(8.5)
         doc.setTextColor(...textMid)
         doc.text(`Exported: ${dateStr}`, margin, 27)
-        // Summary counts
-        const active   = data.filter(c => getDaysUntilService(c.next_service_date) >= 4 && c.status === 'active').length
-        const Expire  = data.filter(c => getDaysUntilService(c.next_service_date) < 0).length
-        const ExpireToday = data.filter(c => getDaysUntilService(c.next_service_date) === 0).length
-        const ExpireSoon  = data.filter(c => { const d = getDaysUntilService(c.next_service_date); return d > 0 && d <= 3 }).length
+        // Summary counts - using calculated counts
         doc.text(
-          `Total: ${data.length}  •  Active: ${active}  •  Expire: ${overdue}  •  Today's Servicing: ${dueToday}  •  Expire Soon: ${dueSoon}`,
+          `Total: ${data.length}  •  Active: ${counts.active}  •  Expired: ${counts.expired}  •  Today Servicing: ${counts.todayServicing}  •  Expiring Soon: ${counts.expiringSoon}`,
           margin + 48, 27
         )
         doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: 'right' })
@@ -409,9 +430,9 @@ export default function ContractsPage() {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="overdue">Expired</SelectItem>
-                    <SelectItem value="due-today">Today's Servicing</SelectItem>
-                    <SelectItem value="due-soon">Expire Soon</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="today-servicing">Today Servicing</SelectItem>
+                    <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
