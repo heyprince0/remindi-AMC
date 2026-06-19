@@ -45,7 +45,7 @@ export async function sendWelcomeEmail(
       from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
       to: userEmail,
       template: {
-        id: 'welcome-Email',
+        id: 'welcome-email',
         variables: {
           name: userName,
         },
