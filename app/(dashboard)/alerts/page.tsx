@@ -30,18 +30,28 @@ interface ServiceAlert {
   contractData?: Contract
 }
 
-function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "overdue" | "due-today" | "upcoming"; onMarkComplete: (contract: Contract) => void }) {
+function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "expired" | "today-servicing" | "expiring-soon"; onMarkComplete: (contract: Contract) => void }) {
   const borderColor = {
-    overdue: "border-l-alert-overdue",
-    "due-today": "border-l-alert-due-today",
-    upcoming: "border-l-alert-upcoming",
+    expired: "border-l-alert-overdue",
+    "today-servicing": "border-l-alert-due-today",
+    "expiring-soon": "border-l-alert-upcoming",
   }[variant]
 
   const bgColor = {
-    overdue: "bg-alert-overdue/5",
-    "due-today": "bg-alert-due-today/5",
-    upcoming: "bg-alert-upcoming/5",
+    expired: "bg-alert-overdue/5",
+    "today-servicing": "bg-alert-due-today/5",
+    "expiring-soon": "bg-alert-upcoming/5",
   }[variant]
+
+  // Get status label for display
+  const getStatusDisplay = () => {
+    switch(variant) {
+      case "expired": return "Expired"
+      case "today-servicing": return "Today Servicing"
+      case "expiring-soon": return "Expiring Soon"
+      default: return ""
+    }
+  }
 
   return (
     <Card className={`border-l-4 ${borderColor} ${bgColor}`}>
@@ -53,15 +63,22 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
               <Badge variant="outline" className="text-xs font-normal">
                 {service.serviceType}
               </Badge>
+              <Badge className={`text-xs ${
+                variant === "expired" ? "bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20" :
+                variant === "today-servicing" ? "bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20" :
+                "bg-alert-upcoming/10 text-alert-upcoming border-alert-upcoming/20"
+              }`}>
+                {getStatusDisplay()}
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">{service.contract}</p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Clock className="size-4" />
                 <span>
-                  {variant === "overdue"
-                    ? `${service.daysOverdue} days overdue`
-                    : variant === "due-today"
+                  {variant === "expired"
+                    ? `${service.daysOverdue} days expired`
+                    : variant === "today-servicing"
                     ? `Today`
                     : service.dueDate}
                 </span>
@@ -92,9 +109,9 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
 
 export default function ServiceAlertsPage() {
   const { user } = useAuth()
-  const [overdueServices, setOverdueServices] = useState<ServiceAlert[]>([])
-  const [dueTodayServices, setDueTodayServices] = useState<ServiceAlert[]>([])
-  const [upcomingServices, setUpcomingServices] = useState<ServiceAlert[]>([])
+  const [expiredServices, setExpiredServices] = useState<ServiceAlert[]>([])
+  const [todayServicingServices, setTodayServicingServices] = useState<ServiceAlert[]>([])
+  const [expiringSoonServices, setExpiringSoonServices] = useState<ServiceAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
@@ -106,9 +123,9 @@ export default function ServiceAlertsPage() {
       const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
       const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
 
-      const overdue: ServiceAlert[] = []
-      const dueToday: ServiceAlert[] = []
-      const upcoming: ServiceAlert[] = []
+      const expired: ServiceAlert[] = []
+      const todayServicing: ServiceAlert[] = []
+      const expiringSoon: ServiceAlert[] = []
 
       for (const contract of (contractsData as Contract[]) || []) {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
@@ -125,17 +142,17 @@ export default function ServiceAlertsPage() {
         }
 
         if (days < 0) {
-          overdue.push({ ...alert, daysOverdue: Math.abs(days) })
+          expired.push({ ...alert, daysOverdue: Math.abs(days) })
         } else if (days === 0) {
-          dueToday.push(alert)
-        } else if (days <= 7) {
-          upcoming.push(alert)
+          todayServicing.push(alert)
+        } else if (days <= 3) {
+          expiringSoon.push(alert)
         }
       }
 
-      setOverdueServices(overdue)
-      setDueTodayServices(dueToday)
-      setUpcomingServices(upcoming)
+      setExpiredServices(expired)
+      setTodayServicingServices(todayServicing)
+      setExpiringSoonServices(expiringSoon)
     } catch (error) {
       console.error('Error loading service alerts:', error)
     } finally {
@@ -163,7 +180,7 @@ export default function ServiceAlertsPage() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Service Alerts</h1>
-            <p className="text-muted-foreground">Monitor and manage upcoming and overdue services</p>
+            <p className="text-muted-foreground">Monitor and manage expired, today servicing, and expiring soon services</p>
           </div>
         </div>
 
@@ -173,9 +190,9 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <AlertTriangle className="size-4 text-alert-overdue" />
-                Overdue Services
+                Expired Services
               </CardDescription>
-              <CardTitle className="text-3xl">{overdueServices.length}</CardTitle>
+              <CardTitle className="text-3xl">{expiredServices.length}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">Requires immediate attention</p>
@@ -185,9 +202,9 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <CalendarClock className="size-4 text-alert-due-today" />
-                Due Today
+                Today Servicing
               </CardDescription>
-              <CardTitle className="text-3xl">{dueTodayServices.length}</CardTitle>
+              <CardTitle className="text-3xl">{todayServicingServices.length}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">Scheduled for today</p>
@@ -197,42 +214,42 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <Clock className="size-4 text-alert-upcoming" />
-                Upcoming This Week
+                Expiring Soon
               </CardDescription>
-              <CardTitle className="text-3xl">{upcomingServices.length}</CardTitle>
+              <CardTitle className="text-3xl">{expiringSoonServices.length}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Coming up soon</p>
+              <p className="text-sm text-muted-foreground">Coming up in next 3 days</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Tabs for Service Categories */}
-        <Tabs defaultValue="overdue" className="w-full">
+        <Tabs defaultValue="expired" className="w-full">
           <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-            <TabsTrigger value="overdue" className="flex items-center gap-2">
+            <TabsTrigger value="expired" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-overdue" />
-              Overdue ({overdueServices.length})
+              Expired ({expiredServices.length})
             </TabsTrigger>
             <TabsTrigger value="today" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-due-today" />
-              Today ({dueTodayServices.length})
+              Today Servicing ({todayServicingServices.length})
             </TabsTrigger>
-            <TabsTrigger value="upcoming" className="flex items-center gap-2">
+            <TabsTrigger value="expiring" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-upcoming" />
-              Upcoming ({upcomingServices.length})
+              Expiring Soon ({expiringSoonServices.length})
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overdue" className="mt-6">
+          <TabsContent value="expired" className="mt-6">
             <div className="flex flex-col gap-4">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : overdueServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No overdue services</div>
+              ) : expiredServices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No expired services</div>
               ) : (
-                overdueServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="overdue" onMarkComplete={handleMarkComplete} />
+                expiredServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="expired" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
@@ -242,25 +259,25 @@ export default function ServiceAlertsPage() {
             <div className="flex flex-col gap-4">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : dueTodayServices.length === 0 ? (
+              ) : todayServicingServices.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">No services due today</div>
               ) : (
-                dueTodayServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="due-today" onMarkComplete={handleMarkComplete} />
+                todayServicingServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="today-servicing" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="upcoming" className="mt-6">
+          <TabsContent value="expiring" className="mt-6">
             <div className="flex flex-col gap-4">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : upcomingServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No upcoming services this week</div>
+              ) : expiringSoonServices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No services expiring soon</div>
               ) : (
-                upcomingServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="upcoming" onMarkComplete={handleMarkComplete} />
+                expiringSoonServices.map((service) => (
+                  <ServiceAlertCard key={service.id} service={service} variant="expiring-soon" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
