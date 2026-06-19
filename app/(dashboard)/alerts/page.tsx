@@ -30,25 +30,25 @@ interface ServiceAlert {
   contractData?: Contract
 }
 
-function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "expired" | "today-servicing" | "expiring-soon"; onMarkComplete: (contract: Contract) => void }) {
+function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "Expired" | "Today" | "Upcoming"; onMarkComplete: (contract: Contract) => void }) {
   const borderColor = {
-    expired: "border-l-alert-overdue",
-    "today-servicing": "border-l-alert-due-today",
-    "expiring-soon": "border-l-alert-upcoming",
+    Expired: "border-l-alert-overdue",
+    "Today": "border-l-alert-due-today",
+    Upcoming: "border-l-alert-upcoming",
   }[variant]
 
   const bgColor = {
-    expired: "bg-alert-overdue/5",
-    "today-servicing": "bg-alert-due-today/5",
-    "expiring-soon": "bg-alert-upcoming/5",
+    Expired: "bg-alert-overdue/5",
+    "Today": "bg-alert-due-today/5",
+    Upcoming: "bg-alert-upcoming/5",
   }[variant]
 
   // Get status label for display
   const getStatusDisplay = () => {
     switch(variant) {
-      case "expired": return "Expired"
-      case "today-servicing": return "Today Servicing"
-      case "expiring-soon": return "Expiring Soon"
+      case "Expired": return "Expired"
+      case "Today": return "Today Servicing"
+      case "Upcoming": return "Expiring Soon"
       default: return ""
     }
   }
@@ -64,8 +64,8 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
                 {service.serviceType}
               </Badge>
               <Badge className={`text-xs ${
-                variant === "expired" ? "bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20" :
-                variant === "today-servicing" ? "bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20" :
+                variant === "Expired" ? "bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20" :
+                variant === "Today" ? "bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20" :
                 "bg-alert-upcoming/10 text-alert-upcoming border-alert-upcoming/20"
               }`}>
                 {getStatusDisplay()}
@@ -76,9 +76,9 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
               <div className="flex items-center gap-1.5">
                 <Clock className="size-4" />
                 <span>
-                  {variant === "expired"
+                  {variant === "Expired"
                     ? `${service.daysOverdue} days expired`
-                    : variant === "today-servicing"
+                    : variant === "Today"
                     ? `Today`
                     : service.dueDate}
                 </span>
@@ -224,7 +224,7 @@ export default function ServiceAlertsPage() {
           </Card>
         </div>
 
-        {/* Tabs for Service Categories - Keeping original tab design with dots */}
+        {/* Tabs for Service Categories */}
         <Tabs defaultValue="expired" className="w-full">
           <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
             <TabsTrigger value="expired" className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No expired services</div>
               ) : (
                 expiredServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="expired" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard key={service.id} service={service} variant="Expired" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
@@ -263,7 +263,7 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No services due today</div>
               ) : (
                 todayServicingServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="today-servicing" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard key={service.id} service={service} variant="Today" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
@@ -277,7 +277,7 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No services expiring soon</div>
               ) : (
                 expiringSoonServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="expiring-soon" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard key={service.id} service={service} variant="Upcoming" onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
