@@ -13,12 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-import { supabase, type Quotation } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Eye, Trash2, Edit } from "lucide-react"
-import Link from "next/link"
-import { toast } from "sonner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,8 +23,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-
-
+import { supabase, type Quotation, type Profile } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
+import { Plus, Search, Eye, Trash2, Edit, Settings } from "lucide-react"
+import Link from "next/link"
+import { toast } from "sonner"
 
 export default function QuotationsPage() {
   const { user } = useAuth()
@@ -41,6 +38,8 @@ export default function QuotationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [companySetupDialogOpen, setCompanySetupDialogOpen] = useState(false)
+  const [checkingCompany, setCheckingCompany] = useState(false)
 
   useEffect(() => {
     loadQuotations()
@@ -65,25 +64,25 @@ export default function QuotationsPage() {
   }, [searchTerm, quotations])
 
   const handleDelete = async () => {
-  if (!quotationToDelete) return
-  setDeleting(true)
-  try {
-    const { error } = await supabase
-      .from("quotations")
-      .delete()
-      .eq("id", quotationToDelete.id)
-    if (error) throw error
-    setQuotations(quotations.filter(q => q.id !== quotationToDelete.id))
-    toast.success("Quotation deleted successfully")
-    setDeleteDialogOpen(false)
-    setQuotationToDelete(null)
-  } catch (error) {
-    console.error("Error deleting quotation:", error)
-    toast.error("Failed to delete quotation")
-  } finally {
-    setDeleting(false)
+    if (!quotationToDelete) return
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from("quotations")
+        .delete()
+        .eq("id", quotationToDelete.id)
+      if (error) throw error
+      setQuotations(quotations.filter(q => q.id !== quotationToDelete.id))
+      toast.success("Quotation deleted successfully")
+      setDeleteDialogOpen(false)
+      setQuotationToDelete(null)
+    } catch (error) {
+      console.error("Error deleting quotation:", error)
+      toast.error("Failed to delete quotation")
+    } finally {
+      setDeleting(false)
+    }
   }
-}
 
   const loadQuotations = async () => {
     try {
@@ -107,6 +106,53 @@ export default function QuotationsPage() {
     }
   }
 
+  const checkCompanySetup = async () => {
+    if (!user?.id) return false
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('company_name, full_name, phone, city')
+        .eq('id', user.id)
+        .single()
+
+      if (error) {
+        console.error('Error checking profile:', error)
+        return false
+      }
+
+      // Check if company profile is complete
+      const profile = data as Profile
+      const isComplete = !!(profile.company_name && profile.full_name && profile.phone)
+      
+      return isComplete
+    } catch (error) {
+      console.error('Error checking company setup:', error)
+      return false
+    }
+  }
+
+  const handleNewQuotationClick = async () => {
+    if (!user?.id) return
+
+    setCheckingCompany(true)
+    try {
+      const isSetupComplete = await checkCompanySetup()
+      
+      if (!isSetupComplete) {
+        setCompanySetupDialogOpen(true)
+      } else {
+        // User has setup complete, navigate to new quotation
+        window.location.href = '/quotations/new'
+      }
+    } catch (error) {
+      console.error('Error checking company setup:', error)
+      toast.error('Failed to check company setup')
+    } finally {
+      setCheckingCompany(false)
+    }
+  }
+
   const formatCurrency = (value: number) => {
     return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
   }
@@ -120,12 +166,10 @@ export default function QuotationsPage() {
             <h1 className="text-2xl font-bold text-foreground">Quotation</h1>
             <p className="text-muted-foreground">Create and manage customers quotations</p>
           </div>
-          <Link href="/quotations/new">
-            <Button>
-              <Plus className="mr-2 size-4" />
-              New Quotation
-            </Button>
-          </Link>
+          <Button onClick={handleNewQuotationClick} disabled={checkingCompany}>
+            <Plus className="mr-2 size-4" />
+            {checkingCompany ? 'Checking...' : 'New Quotation'}
+          </Button>
         </div>
 
         {/* Filters */}
@@ -229,26 +273,59 @@ export default function QuotationsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
-      <AlertDialogDescription>
-        Are you sure you want to delete {quotationToDelete?.quote_no}? This action cannot be undone.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction
-        onClick={handleDelete}
-        disabled={deleting}
-        className="bg-red-600 hover:bg-red-700"
-      >
-        {deleting ? "Deleting..." : "Delete"}
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {quotationToDelete?.quote_no}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Company Setup Required Dialog */}
+      <AlertDialog open={companySetupDialogOpen} onOpenChange={setCompanySetupDialogOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-full bg-yellow-100">
+                <Settings className="size-6 text-yellow-600" />
+              </div>
+              <AlertDialogTitle className="text-xl">Company Setup Required</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base">
+              You need to complete your company profile setup before creating quotations. 
+              Please add your company name, your name, and phone number in the settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2 sm:gap-0">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setCompanySetupDialogOpen(false)
+                window.location.href = '/settings'
+              }}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Settings className="mr-2 size-4" />
+              Go to Settings
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   )
 }
