@@ -31,17 +31,17 @@ interface UpcomingService {
   date: string
   time: string
   technician: string | null
-  status: "due-today" | "upcoming" | "overdue"
+  status: "expired" | "today-servicing" | "expiring-soon"
 }
 
 function getStatusBadge(status: string) {
   switch (status) {
-    case "due-today":
-      return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Due Today</Badge>
-    case "upcoming":
-      return <Badge className="bg-alert-upcoming/10 text-alert-upcoming border-alert-upcoming/20">Upcoming</Badge>
-    case "overdue":
-      return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Overdue</Badge>
+    case "today-servicing":
+      return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
+    case "expiring-soon":
+      return <Badge className="bg-alert-upcoming/10 text-alert-upcoming border-alert-upcoming/20">Expiring Soon</Badge>
+    case "expired":
+      return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
     default:
       return null
   }
@@ -50,7 +50,14 @@ function getStatusBadge(status: string) {
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
-  const [stats, setStats] = useState({ contracts: 0, dueToday: 0, dueThisWeek: 0, customers: 0, technicians: 0 })
+  const [stats, setStats] = useState({ 
+    contracts: 0, 
+    todayServicing: 0, 
+    expiringSoon: 0, 
+    expired: 0,
+    customers: 0, 
+    technicians: 0 
+  })
   const [upcomingServices, setUpcomingServices] = useState<UpcomingService[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -109,8 +116,9 @@ export default function DashboardPage() {
       const nextWeek = new Date(today)
       nextWeek.setDate(nextWeek.getDate() + 7)
 
-      let dueToday = 0
-      let dueThisWeek = 0
+      let todayServicing = 0
+      let expiringSoon = 0
+      let expired = 0
       const services: UpcomingService[] = []
 
       for (const contract of (contractsData as Contract[]) || []) {
@@ -118,17 +126,18 @@ export default function DashboardPage() {
         const days = getDaysUntilService(contract.next_service_date)
 
         if (days < 0) {
+          expired++
           services.push({
             id: contract.id,
             customer: customer?.name || 'Unknown',
             service: contract.contract_name,
-            date: 'Overdue',
+            date: 'Expired',
             time: '',
             technician: null,
-            status: 'overdue'
+            status: 'expired'
           })
         } else if (days === 0) {
-          dueToday++
+          todayServicing++
           services.push({
             id: contract.id,
             customer: customer?.name || 'Unknown',
@@ -136,10 +145,10 @@ export default function DashboardPage() {
             date: 'Today',
             time: '',
             technician: null,
-            status: 'due-today'
+            status: 'today-servicing'
           })
-        } else if (days <= 7) {
-          dueThisWeek++
+        } else if (days <= 3) {
+          expiringSoon++
           services.push({
             id: contract.id,
             customer: customer?.name || 'Unknown',
@@ -147,15 +156,16 @@ export default function DashboardPage() {
             date: new Date(contract.next_service_date).toLocaleDateString(),
             time: '',
             technician: null,
-            status: 'upcoming'
+            status: 'expiring-soon'
           })
         }
       }
 
       setStats({
         contracts: activeContracts,
-        dueToday,
-        dueThisWeek,
+        todayServicing,
+        expiringSoon,
+        expired,
         customers: (customersData as Customer[])?.length || 0,
         technicians: (techniciansData as Technician[])?.length || 0,
       })
@@ -239,10 +249,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard title="Active Contracts" value={stats.contracts} icon={FileText} description="Total" />
-          <StatCard title="Today's Servicing" value={stats.dueToday} icon={CalendarClock} description="Needs attention" iconClassName="bg-alert-due-today/10" />
-          <StatCard title="Expire in Week" value={stats.dueThisWeek} icon={CalendarCheck} description="Scheduled" />
+          <StatCard title="Today Servicing" value={stats.todayServicing} icon={CalendarClock} description="Needs attention" iconClassName="bg-alert-due-today/10" />
+          <StatCard title="Expiring Soon" value={stats.expiringSoon} icon={CalendarCheck} description="In next 3 days" />
+          <StatCard title="Expired" value={stats.expired} icon={Clock} description="Overdue contracts" iconClassName="bg-alert-overdue/10" />
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
           <StatCard title="Technicians" value={stats.technicians} icon={Wrench} description="Available" />
         </div>
