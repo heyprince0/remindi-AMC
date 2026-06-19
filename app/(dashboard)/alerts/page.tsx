@@ -224,7 +224,7 @@ export default function ServiceAlertsPage() {
           </Card>
         </div>
 
-        {/* Tabs for Service Categories */}
+        {/* Tabs for Service Categories - Keeping original tab design with dots */}
         <Tabs defaultValue="expired" className="w-full">
           <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
             <TabsTrigger value="expired" className="flex items-center gap-2">
