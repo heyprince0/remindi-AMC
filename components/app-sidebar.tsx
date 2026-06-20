@@ -35,7 +35,6 @@ const navItems = [
   { title: "Quotations", icon: FileCheck, href: "/quotations" },
   { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Customers", icon: Users, href: "/customers" },
-  { title: "Team", icon: Users, href: "/team" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
