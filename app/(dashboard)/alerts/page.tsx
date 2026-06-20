@@ -209,7 +209,7 @@ export default function ServiceAlertsPage() {
 
         {/* Tabs for Service Categories */}
         <Tabs defaultValue="overdue" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+          <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
             <TabsTrigger value="overdue" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-overdue" />
               Expired ({overdueServices.length})
