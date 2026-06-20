@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,7 +17,7 @@ import {
 
 import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Eye, Trash2, Edit } from "lucide-react"
+import { Plus, Search, Eye, Trash2, Edit, Settings } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -29,11 +30,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 
 
 export default function QuotationsPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +51,8 @@ export default function QuotationsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
+  const [checkingProfile, setCheckingProfile] = useState(false)
 
   useEffect(() => {
     loadQuotations()
@@ -107,6 +119,38 @@ export default function QuotationsPage() {
     }
   }
 
+  const handleNewQuotationClick = async () => {
+    if (!user?.id) return
+    setCheckingProfile(true)
+    try {
+      const { data, error } = await supabase
+        .from("company_profile")
+        .select("company_name, address, phone")
+        .eq("user_id", user.id)
+        .single()
+
+      if (error && error.code !== "PGRST116") throw error
+
+      const isComplete = !!(
+        data?.company_name?.trim() &&
+        data?.address?.trim() &&
+        data?.phone?.trim()
+      )
+
+      if (isComplete) {
+        router.push("/quotations/new")
+      } else {
+        setProfileSetupDialogOpen(true)
+      }
+    } catch (error) {
+      console.error("Error checking company profile:", error)
+      // Fail open — don't block quotation creation if the check itself fails
+      router.push("/quotations/new")
+    } finally {
+      setCheckingProfile(false)
+    }
+  }
+
   const formatCurrency = (value: number) => {
     return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
   }
@@ -120,12 +164,10 @@ export default function QuotationsPage() {
             <h1 className="text-2xl font-bold text-foreground">Quotation</h1>
             <p className="text-muted-foreground">Create and manage customers quotations</p>
           </div>
-          <Link href="/quotations/new">
-            <Button>
-              <Plus className="mr-2 size-4" />
-              New Quotation
-            </Button>
-          </Link>
+          <Button onClick={handleNewQuotationClick} disabled={checkingProfile}>
+            <Plus className="mr-2 size-4" />
+            New Quotation
+          </Button>
         </div>
 
         {/* Filters */}
@@ -249,6 +291,26 @@ export default function QuotationsPage() {
     </AlertDialogFooter>
   </AlertDialogContent>
 </AlertDialog>
+      <Dialog open={profileSetupDialogOpen} onOpenChange={setProfileSetupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Your Company Profile</DialogTitle>
+            <DialogDescription>
+              Before creating a quotation, please add your company name, address, and contact
+              details in Settings. This information appears on your quotation PDF header.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileSetupDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => router.push("/settings")}>
+              <Settings className="mr-2 size-4" />
+              Go to Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
