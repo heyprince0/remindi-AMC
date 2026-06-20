@@ -20,14 +20,14 @@ interface NotificationItem {
   id: string
   title: string
   description: string
-  type: "overdue" | "due-today" | "upcoming"
+  type: "expired" | "today-servicing" // we keep only these two as per original logic
 }
 
 export function AppHeader() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [overdueCount, setOverdueCount] = useState(0)
-  const [dueTodayCount, setDueTodayCount] = useState(0)
+  const [expiredCount, setExpiredCount] = useState(0)
+  const [todayServicingCount, setTodayServicingCount] = useState(0)
 
   useEffect(() => {
     const loadAlerts = async () => {
@@ -45,8 +45,8 @@ export function AppHeader() {
           .select("id, name")
           .eq("user_id", user.id)
 
-        let overdue = 0
-        let dueToday = 0
+        let expired = 0
+        let todayServicing = 0
         const items: NotificationItem[] = []
 
         for (const contract of contractsData as Contract[]) {
@@ -55,26 +55,26 @@ export function AppHeader() {
           const customerName = customer?.name || "Unknown"
 
           if (days < 0) {
-            overdue++
+            expired++
             items.push({
               id: contract.id,
-              title: `Overdue: ${contract.contract_name}`,
-              description: `${customerName} — ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} overdue`,
-              type: "overdue",
+              title: `Expired: ${contract.contract_name}`,
+              description: `${customerName} — ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} expired`,
+              type: "expired",
             })
           } else if (days === 0) {
-            dueToday++
+            todayServicing++
             items.push({
               id: contract.id,
-              title: `Due Today: ${contract.contract_name}`,
+              title: `Today Servicing: ${contract.contract_name}`,
               description: `${customerName} — service due today`,
-              type: "due-today",
+              type: "today-servicing",
             })
           }
         }
 
-        setOverdueCount(overdue)
-        setDueTodayCount(dueToday)
+        setExpiredCount(expired)
+        setTodayServicingCount(todayServicing)
         setNotifications(items.slice(0, 10))
       } catch (error) {
         console.error("Error loading notifications:", error)
@@ -93,7 +93,7 @@ export function AppHeader() {
     return () => { subscription.unsubscribe() }
   }, [user?.id])
 
-  const totalCount = overdueCount + dueTodayCount
+  const totalCount = expiredCount + todayServicingCount
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
@@ -124,9 +124,9 @@ export function AppHeader() {
                 <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 py-3">
                   <span
                     className={`font-medium text-sm ${
-                      n.type === "overdue"
+                      n.type === "expired"
                         ? "text-red-600"
-                        : n.type === "due-today"
+                        : n.type === "today-servicing"
                         ? "text-amber-600"
                         : ""
                     }`}
