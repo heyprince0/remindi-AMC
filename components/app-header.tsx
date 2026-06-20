@@ -20,7 +20,7 @@ interface NotificationItem {
   id: string
   title: string
   description: string
-  type: "expired" | "today-servicing" // we keep only these two as per original logic
+  type: "expired" | "today-servicing" | "expiring-soon"
 }
 
 export function AppHeader() {
@@ -28,6 +28,7 @@ export function AppHeader() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [expiredCount, setExpiredCount] = useState(0)
   const [todayServicingCount, setTodayServicingCount] = useState(0)
+  const [expiringSoonCount, setExpiringSoonCount] = useState(0)
 
   useEffect(() => {
     const loadAlerts = async () => {
@@ -47,6 +48,7 @@ export function AppHeader() {
 
         let expired = 0
         let todayServicing = 0
+        let expiringSoon = 0
         const items: NotificationItem[] = []
 
         for (const contract of contractsData as Contract[]) {
@@ -70,11 +72,20 @@ export function AppHeader() {
               description: `${customerName} — service due today`,
               type: "today-servicing",
             })
+          } else if (days <= 3) {
+            expiringSoon++
+            items.push({
+              id: contract.id,
+              title: `Expiring Soon: ${contract.contract_name}`,
+              description: `${customerName} — in ${days} day${days !== 1 ? "s" : ""}`,
+              type: "expiring-soon",
+            })
           }
         }
 
         setExpiredCount(expired)
         setTodayServicingCount(todayServicing)
+        setExpiringSoonCount(expiringSoon)
         setNotifications(items.slice(0, 10))
       } catch (error) {
         console.error("Error loading notifications:", error)
@@ -93,7 +104,7 @@ export function AppHeader() {
     return () => { subscription.unsubscribe() }
   }, [user?.id])
 
-  const totalCount = expiredCount + todayServicingCount
+  const totalCount = expiredCount + todayServicingCount + expiringSoonCount
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
@@ -128,7 +139,7 @@ export function AppHeader() {
                         ? "text-red-600"
                         : n.type === "today-servicing"
                         ? "text-amber-600"
-                        : ""
+                        : "text-orange-600"  // expiring-soon
                     }`}
                   >
                     {n.title}
