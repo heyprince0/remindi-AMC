@@ -10,7 +10,7 @@ import { supabase, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart, Line
+  ResponsiveContainer, Legend, ComposedChart, Line
 } from "recharts"
 import {
   TrendingUp, TrendingDown, FileText, CheckCircle2, IndianRupee,
@@ -38,11 +38,6 @@ interface MonthlyData {
   earnings: number
 }
 
-interface ServiceTypeData {
-  name: string
-  value: number
-}
-
 interface HistoryRow {
   id: string
   contract_id: string
@@ -53,18 +48,9 @@ interface HistoryRow {
 interface ContractRow {
   id: string
   status: string
-  service_type: string
   contracts_price: number | null
   customer_id: string
   next_service_date: string 
-}
-
-const CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"]
-
-const SERVICE_TYPE_LABELS: Record<string, string> = {
-  ac: "AC", cctv: "CCTV", lift: "Lift",
-  "fire-safety": "Fire Safety", generator: "Generator",
-  ups: "UPS", other: "Other"
 }
 
 const RANGE_LABELS: Record<DateRange, string> = {
@@ -236,7 +222,6 @@ export default function ReportsPage() {
   const [range, setRange] = useState<DateRange>("month")
   const [stats, setStats] = useState<Stats | null>(null)
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
-  const [serviceTypeData, setServiceTypeData] = useState<ServiceTypeData[]>([])
   const [loading, setLoading] = useState(true)
 
   const [currentHistory, setCurrentHistory] = useState<HistoryRow[]>([])
@@ -256,7 +241,7 @@ export default function ReportsPage() {
       const [contractsRes, currentHistoryRes, prevHistoryRes, allHistoryRes] = await Promise.all([
         supabase
           .from("contracts")
-          .select("id, status, service_type, contracts_price, customer_id, next_service_date")
+          .select("id, status, contracts_price, customer_id, next_service_date")
           .eq("user_id", user.id),
         supabase
           .from("service_history")
@@ -298,18 +283,6 @@ export default function ReportsPage() {
       })
 
       setMonthlyData(getMonthlyData(aHistory, contractMap))
-
-      const typeCounts: Record<string, number> = {}
-      for (const c of contracts) {
-        const key = c.service_type || "other"
-        typeCounts[key] = (typeCounts[key] || 0) + 1
-      }
-      setServiceTypeData(
-        Object.entries(typeCounts).map(([key, value]) => ({
-          name: SERVICE_TYPE_LABELS[key] || key,
-          value
-        }))
-      )
     } catch (err) {
       console.error("Error loading reports:", err)
       toast.error("Failed to load report data")
@@ -430,9 +403,9 @@ export default function ReportsPage() {
         </div>
 
         {/* Charts Row */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6">
           {/* Monthly Services Overview */}
-          <Card className="lg:col-span-2">
+          <Card>
             <CardHeader>
               <CardTitle>Monthly Services Overview</CardTitle>
               <CardDescription>Completed services and earnings over the last 6 months</CardDescription>
@@ -475,43 +448,6 @@ export default function ReportsPage() {
                       dot={{ r: 4 }}
                     />
                   </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Contracts by Service Type */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Contracts by Type</CardTitle>
-              <CardDescription>Distribution of all contracts by service type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : serviceTypeData.length === 0 ? (
-                <div className="flex h-64 items-center justify-center text-muted-foreground">
-                  No contract data yet
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={serviceTypeData}
-                      cx="50%"
-                      cy="45%"
-                      outerRadius={90}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                      labelLine={false}
-                    >
-                      {serviceTypeData.map((_, index) => (
-                        <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value, name) => [value, name]} />
-                    <Legend />
-                  </PieChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
