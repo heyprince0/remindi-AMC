@@ -60,7 +60,7 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
                 <Clock className="size-4" />
                 <span>
                   {variant === "overdue"
-                    ? `${service.daysOverdue} days overdue`
+                    ? `${service.daysOverdue} days expired`
                     : variant === "due-today"
                     ? `Today`
                     : service.dueDate}
@@ -173,7 +173,7 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <AlertTriangle className="size-4 text-alert-overdue" />
-                Overdue Services
+                Expired Services
               </CardDescription>
               <CardTitle className="text-3xl">{overdueServices.length}</CardTitle>
             </CardHeader>
@@ -197,7 +197,7 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <Clock className="size-4 text-alert-upcoming" />
-                Upcoming This Week
+                Expiring Soon
               </CardDescription>
               <CardTitle className="text-3xl">{upcomingServices.length}</CardTitle>
             </CardHeader>
@@ -212,7 +212,7 @@ export default function ServiceAlertsPage() {
           <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
             <TabsTrigger value="overdue" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-overdue" />
-              Overdue ({overdueServices.length})
+              Expired ({overdueServices.length})
             </TabsTrigger>
             <TabsTrigger value="today" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-due-today" />
@@ -220,7 +220,7 @@ export default function ServiceAlertsPage() {
             </TabsTrigger>
             <TabsTrigger value="upcoming" className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-alert-upcoming" />
-              Upcoming ({upcomingServices.length})
+              Expiring Soon ({upcomingServices.length})
             </TabsTrigger>
           </TabsList>
 
@@ -229,7 +229,7 @@ export default function ServiceAlertsPage() {
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : overdueServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No overdue services</div>
+                <div className="text-center py-8 text-muted-foreground">No expired services</div>
               ) : (
                 overdueServices.map((service) => (
                   <ServiceAlertCard key={service.id} service={service} variant="overdue" onMarkComplete={handleMarkComplete} />
@@ -257,7 +257,7 @@ export default function ServiceAlertsPage() {
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : upcomingServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No upcoming services this week</div>
+                <div className="text-center py-8 text-muted-foreground">No services expiring soon</div>
               ) : (
                 upcomingServices.map((service) => (
                   <ServiceAlertCard key={service.id} service={service} variant="upcoming" onMarkComplete={handleMarkComplete} />
