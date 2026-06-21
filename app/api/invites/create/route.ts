@@ -18,7 +18,14 @@ export async function POST(request: NextRequest) {
     // 'remindi-auth-token'), which the server can never read directly.
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      }
     )
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
