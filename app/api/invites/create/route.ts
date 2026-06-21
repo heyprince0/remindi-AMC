@@ -6,9 +6,9 @@ import crypto from "crypto"
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    const token = authHeader?.replace("Bearer ", "")
+    const accessToken = authHeader?.replace("Bearer ", "")
 
-    if (!token) {
+    if (!accessToken) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
 
     if (authError || !user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
