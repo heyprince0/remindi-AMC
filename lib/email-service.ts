@@ -301,6 +301,7 @@ export async function sendInviteMemberEmail(
   inviteeEmail: string,
   inviterName: string,
   businessName: string,
+  role: string,
   acceptLink: string
 ): Promise<EmailResponse> {
   try {
