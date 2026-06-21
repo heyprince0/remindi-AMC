@@ -5,7 +5,7 @@ import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       .from("profiles")
       .select("full_name")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
     const inviterName = inviterProfile?.full_name || user.email || "Team"
 
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       .from("organizations")
       .select("name")
       .eq("id", orgId)
-      .single()
+      .maybeSingle()
 
     const businessName = org?.name || "Remindi"
 
