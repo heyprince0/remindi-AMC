@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
       email,
       inviterName,
       businessName,
+      role,
       acceptLink
     )
 
