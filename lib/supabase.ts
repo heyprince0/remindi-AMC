@@ -227,3 +227,36 @@ export type Invoice = {
   created_at: string
   updated_at: string
 }
+
+// Team Management Types
+export type Organization = {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export type Membership = {
+  id: string
+  org_id: string
+  user_id: string
+  role: 'admin' | 'member'
+  joined_at: string
+}
+
+export type Invite = {
+  id: string
+  org_id: string
+  email: string
+  role: 'admin' | 'member'
+  token: string
+  status: 'pending' | 'accepted' | 'revoked' | 'expired'
+  inviter_id: string
+  created_at: string
+  expires_at: string
+  accepted_at: string | null
+}
+
+// TODO: Add org-scoped queries for memberships and invites
+// Example: const getMembersForOrg = async (orgId: string) => { ... filter by org_id ... }
+// Example: const getInvitesForOrg = async (orgId: string) => { ... filter by org_id ... }

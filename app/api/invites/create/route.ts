@@ -1,0 +1,187 @@
+import { NextRequest, NextResponse } from "next/server"
+import { supabase, type Membership } from "@/lib/supabase"
+import { sendInviteMemberEmail } from "@/lib/email-service"
+import crypto from "crypto"
+
+export async function POST(request: NextRequest) {
+  try {
+    // Get auth session
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session || !session.user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+
+    const { email, role } = await request.json()
+
+    // Validate input
+    if (!email || !role) {
+      return NextResponse.json(
+        { message: "Email and role are required" },
+        { status: 400 }
+      )
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { message: "Invalid email format" },
+        { status: 400 }
+      )
+    }
+
+    if (!["admin", "member"].includes(role)) {
+      return NextResponse.json(
+        { message: "Invalid role" },
+        { status: 400 }
+      )
+    }
+
+    // TODO: Get user's organization ID (for now, use first org)
+    // When org scoping is implemented, fetch the user's current org
+    const { data: orgs, error: orgsError } = await supabase
+      .from("organizations")
+      .select("id")
+      .limit(1)
+
+    if (orgsError || !orgs || orgs.length === 0) {
+      return NextResponse.json(
+        { message: "Organization not found" },
+        { status: 400 }
+      )
+    }
+
+    const orgId = orgs[0].id
+
+    // Check if user is admin in this organization
+    const { data: membership, error: membershipError } = await supabase
+      .from("memberships")
+      .select("role")
+      .eq("org_id", orgId)
+      .eq("user_id", session.user.id)
+      .single()
+
+    if (membershipError || !membership) {
+      return NextResponse.json(
+        { message: "You are not a member of this organization" },
+        { status: 403 }
+      )
+    }
+
+    if (membership.role !== "admin") {
+      return NextResponse.json(
+        { message: "Only admins can invite members" },
+        { status: 403 }
+      )
+    }
+
+    // Check if email is already invited or is a member
+    const { data: existingInvite, error: inviteCheckError } = await supabase
+      .from("invites")
+      .select("id, status")
+      .eq("org_id", orgId)
+      .eq("email", email)
+      .in("status", ["pending", "accepted"])
+      .maybeSingle()
+
+    if (existingInvite) {
+      return NextResponse.json(
+        { message: "This person has already been invited or is already a member" },
+        { status: 409 }
+      )
+    }
+
+    const { data: existingMember, error: memberCheckError } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("org_id", orgId)
+      .neq("role", null) // any member
+      .maybeSingle()
+
+    // Generate invite token
+    const token = crypto.randomBytes(32).toString("hex")
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 7) // 7 days
+
+    // Create invite record
+    const { data: invite, error: insertError } = await supabase
+      .from("invites")
+      .insert([
+        {
+          org_id: orgId,
+          email,
+          role,
+          token,
+          status: "pending",
+          inviter_id: session.user.id,
+          expires_at: expiresAt.toISOString(),
+        },
+      ])
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error("[v0] Error creating invite:", insertError)
+      return NextResponse.json(
+        { message: "Failed to create invite" },
+        { status: 500 }
+      )
+    }
+
+    // Get inviter name for email
+    const { data: inviterProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", session.user.id)
+      .single()
+
+    const inviterName = inviterProfile?.full_name || session.user.email || "Team"
+
+    // Get organization name for email
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", orgId)
+      .single()
+
+    const businessName = org?.name || "Remindi"
+
+    // Send invitation email
+    const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite/accept/${token}`
+
+    const emailResult = await sendInviteMemberEmail(
+      email,
+      inviterName,
+      businessName,
+      acceptLink
+    )
+
+    if (!emailResult.success) {
+      console.warn("[v0] Email sending had issue:", emailResult.error)
+      // Still return success but with warning
+      return NextResponse.json(
+        {
+          success: true,
+          emailWarning: "Invitation created but email may not have been delivered. Please verify the email address.",
+        },
+        { status: 200 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Invitation sent successfully",
+      },
+      { status: 200 }
+    )
+  } catch (error) {
+    console.error("[v0] Error in invite create route:", error)
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}

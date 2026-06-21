@@ -40,6 +40,7 @@ const navItems = [
   { title: "Service History", icon: History, href: "/history" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
   { title: "Settings", icon: Settings, href: "/settings" },
+  { title: "Team", icon: Users, href: "/team" },
 ]
 
 export function AppSidebar() {

@@ -315,3 +315,64 @@ export async function sendAMCExpiryReminderEmail(
     }
   }
 }
+
+/**
+ * Sends a team invitation email
+ * @param inviteeEmail - Email address of the person being invited
+ * @param inviterName - Name of the person sending the invite
+ * @param businessName - Name of the business/organization
+ * @param acceptLink - Link to accept the invitation
+ * @returns Promise with email sending status
+ */
+export async function sendInviteMemberEmail(
+  inviteeEmail: string,
+  inviterName: string,
+  businessName: string,
+  acceptLink: string
+): Promise<EmailResponse> {
+  try {
+    if (!resend) {
+      console.warn('[Email Service] Resend API key not configured')
+      return {
+        success: false,
+        error: 'Email service is not configured. Please add RESEND_API_KEY to environment variables.',
+      }
+    }
+
+    console.log(`[Email Service] Sending team invitation email to ${inviteeEmail}`)
+
+    const response = await resend.emails.send({
+      from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
+      to: inviteeEmail,
+      template: {
+        id: 'invite-member',
+        variables: {
+          inviterName,
+          businessName,
+          acceptLink,
+        },
+      },
+    })
+
+    if (response.error) {
+      console.error(`[Email Service] Invitation email failed for ${inviteeEmail}:`, response.error)
+      return {
+        success: false,
+        error: response.error.message || 'Failed to send invitation email',
+      }
+    }
+
+    console.log(`[Email Service] Invitation email sent successfully to ${inviteeEmail}. Message ID: ${response.data?.id}`)
+    return {
+      success: true,
+      messageId: response.data?.id,
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    console.error(`[Email Service] Exception sending invitation email to ${inviteeEmail}:`, errorMessage)
+    return {
+      success: false,
+      error: errorMessage,
+    }
+  }
+}
