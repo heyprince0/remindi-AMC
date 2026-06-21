@@ -22,9 +22,6 @@ export interface EmailResponse {
 
 /**
  * Sends a welcome email to a new user
- * @param userEmail - User's email address
- * @param userName - User's full name
- * @returns Promise with email sending status
  */
 export async function sendWelcomeEmail(
   userEmail: string,
@@ -77,11 +74,6 @@ export async function sendWelcomeEmail(
 
 /**
  * Sends an invoice email to a customer
- * @param userEmail - User's email address
- * @param invoiceNumber - Invoice number
- * @param clientName - Client/customer name
- * @param grandTotal - Invoice total amount
- * @returns Promise with email sending status
  */
 export async function sendInvoiceEmail(
   userEmail: string,
@@ -138,10 +130,6 @@ export async function sendInvoiceEmail(
 
 /**
  * Sends a password reset email
- * @param userEmail - User's email address
- * @param resetLink - Password reset link
- * @param userName - User's full name
- * @returns Promise with email sending status
  */
 export async function sendPasswordResetEmail(
   userEmail: string,
@@ -196,11 +184,6 @@ export async function sendPasswordResetEmail(
 
 /**
  * Sends a service reminder email
- * @param userEmail - User's email address
- * @param contractName - Contract/service name
- * @param serviceDate - Upcoming service date
- * @param customerName - Customer name
- * @returns Promise with email sending status
  */
 export async function sendServiceReminderEmail(
   userEmail: string,
@@ -257,11 +240,6 @@ export async function sendServiceReminderEmail(
 
 /**
  * Sends an AMC expiry reminder email
- * @param userEmail - User's email address
- * @param contractName - Contract/AMC name
- * @param expiryDate - Contract expiry date
- * @param customerName - Customer name
- * @returns Promise with email sending status
  */
 export async function sendAMCExpiryReminderEmail(
   userEmail: string,
@@ -318,11 +296,6 @@ export async function sendAMCExpiryReminderEmail(
 
 /**
  * Sends a team invitation email
- * @param inviteeEmail - Email address of the person being invited
- * @param inviterName - Name of the person sending the invite
- * @param businessName - Name of the business/organization
- * @param acceptLink - Link to accept the invitation
- * @returns Promise with email sending status
  */
 export async function sendInviteMemberEmail(
   inviteeEmail: string,
@@ -341,11 +314,16 @@ export async function sendInviteMemberEmail(
 
     console.log(`[Email Service] Sending team invitation email to ${inviteeEmail}`)
 
+    // Fixed: template id now matches the real Resend template slug
+    // ("invitation-accepted"), not the made-up "invite-member" string that
+    // doesn't exist in the Resend dashboard — that mismatch is why no
+    // emails were actually being delivered despite the route reporting
+    // a soft "may not have been delivered" warning instead of a hard error.
     const response = await resend.emails.send({
       from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
       to: inviteeEmail,
       template: {
-        id: 'invite-member',
+        id: 'invitation-accepted',
         variables: {
           inviterName,
           businessName,
