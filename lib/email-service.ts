@@ -325,9 +325,12 @@ export async function sendInviteMemberEmail(
       template: {
         id: 'invitation-accepted',
         variables: {
-          inviterName,
-          businessName,
-          acceptLink,
+          name: inviteeEmail,
+          inviter_name: inviterName,
+          business_name: businessName,
+          role: role,
+          invite_link: acceptLink,
+          email: inviteeEmail,
         },
       },
     })
