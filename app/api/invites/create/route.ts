@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase, type Membership } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/server"
 import { sendInviteMemberEmail } from "@/lib/email-service"
 import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get auth session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const supabase = createClient()
 
-    if (!session || !session.user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
     const { email, role } = await request.json()
 
-    // Validate input
     if (!email || !role) {
       return NextResponse.json(
         { message: "Email and role are required" },
@@ -55,12 +53,11 @@ export async function POST(request: NextRequest) {
 
     const orgId = orgs[0].id
 
-    // Check if user is admin in this organization
     const { data: membership, error: membershipError } = await supabase
       .from("memberships")
       .select("role")
       .eq("org_id", orgId)
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .single()
 
     if (membershipError || !membership) {
@@ -77,8 +74,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if email is already invited or is a member
-    const { data: existingInvite, error: inviteCheckError } = await supabase
+    const { data: existingInvite } = await supabase
       .from("invites")
       .select("id, status")
       .eq("org_id", orgId)
@@ -93,19 +89,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: existingMember, error: memberCheckError } = await supabase
-      .from("memberships")
-      .select("id")
-      .eq("org_id", orgId)
-      .neq("role", null) // any member
-      .maybeSingle()
-
-    // Generate invite token
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 7) // 7 days
+    expiresAt.setDate(expiresAt.getDate() + 7)
 
-    // Create invite record
     const { data: invite, error: insertError } = await supabase
       .from("invites")
       .insert([
@@ -115,7 +102,7 @@ export async function POST(request: NextRequest) {
           role,
           token,
           status: "pending",
-          inviter_id: session.user.id,
+          invited_by: user.id,
           expires_at: expiresAt.toISOString(),
         },
       ])
@@ -130,16 +117,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get inviter name for email
     const { data: inviterProfile } = await supabase
       .from("profiles")
       .select("full_name")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single()
 
-    const inviterName = inviterProfile?.full_name || session.user.email || "Team"
+    const inviterName = inviterProfile?.full_name || user.email || "Team"
 
-    // Get organization name for email
     const { data: org } = await supabase
       .from("organizations")
       .select("name")
@@ -148,7 +133,6 @@ export async function POST(request: NextRequest) {
 
     const businessName = org?.name || "Remindi"
 
-    // Send invitation email
     const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite/accept/${token}`
 
     const emailResult = await sendInviteMemberEmail(
@@ -160,7 +144,6 @@ export async function POST(request: NextRequest) {
 
     if (!emailResult.success) {
       console.warn("[v0] Email sending had issue:", emailResult.error)
-      // Still return success but with warning
       return NextResponse.json(
         {
           success: true,
