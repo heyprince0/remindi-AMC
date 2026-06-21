@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase"
 
 interface InviteMemberModalProps {
   open: boolean
@@ -52,10 +53,23 @@ export function InviteMemberModal({
     setLoading(true)
 
     try {
+      // Grab the current session so we can send its access token explicitly —
+      // the API route validates this token directly rather than relying on
+      // cookies, since this app's sessions live in localStorage
+      // (storageKey: 'remindi-auth-token'), which server code can't read.
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        toast.error("Your session has expired. Please log in again.")
+        setLoading(false)
+        return
+      }
+
       const response = await fetch("/api/invites/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           email,
@@ -68,6 +82,8 @@ export function InviteMemberModal({
       if (!response.ok) {
         if (response.status === 409) {
           toast.error("This person has already been invited or is already a member")
+        } else if (response.status === 401) {
+          toast.error("Your session has expired. Please log in again.")
         } else {
           toast.error(data.message || "Failed to send invitation")
         }
