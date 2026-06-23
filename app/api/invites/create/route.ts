@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     const businessName = org?.name || "Remindi"
 
-    const acceptLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/invite/accept/${token}`
+    const acceptLink = `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/invite/accept/${token}`
 
     const emailResult = await sendInviteMemberEmail(
       email,
