@@ -68,7 +68,7 @@ export default function TeamPage() {
 
           membersWithProfiles.push({
             ...membership,
-            full_name: profile?.full_name || undefined,
+            full_name: profile?.company_name || undefined,
             email: profile?.email || undefined,             // <-- Change 2: include email
           })
         }
