@@ -58,8 +58,8 @@ export default function TeamPage() {
         for (const membership of membershipsData) {
           const { data: profile, error: profileError } = await supabase
             .from("company_profile")
-            .select("full_name,email")                      // <-- Change 1: also select email
-            .eq("user_id", membership.user_id)              // <-- Change 1: correct column matching
+            .select("company_name,email")                      
+            .eq("user_id", membership.user_id)              
             .maybeSingle()
 
           if (profileError) {
