@@ -54,21 +54,25 @@ export default function TeamPage() {
 
       if (!membershipsError && membershipsData) {
         const membersWithProfiles: MemberWithProfile[] = []
-        for (const membership of membershipsData) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email")
-            .eq("id", membership.user_id)
-            .maybeSingle()
 
-          membersWithProfiles.push({
-            ...membership,
-            email: profile?.email || undefined,
-            full_name: profile?.full_name || undefined,
-          })
-        }
-        setMembers(membersWithProfiles)
-      }
+for (const membership of membershipsData) {
+  const { data: profile, error: profileError } = await supabase
+    .from("company_profile")
+    .select("full_name")
+    .eq("id", membership.user_id)
+    .maybeSingle()
+
+  if (profileError) {
+    console.error("[team] Error loading profile:", profileError)
+  }
+
+  membersWithProfiles.push({
+    ...membership,
+    full_name: profile?.full_name || undefined,
+  })
+}
+
+setMembers(membersWithProfiles)
 
       // Fetch pending invites
       const { data: invitesData, error: invitesError } = await supabase
@@ -223,7 +227,7 @@ export default function TeamPage() {
                       <div className="flex items-center gap-3">
                         <div className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <span className="text-sm font-semibold">
-                            {(member.full_name || member.email || "?")
+                            {{member.full_name || "Team Member"}
                               .split(" ")
                               .map((n) => n[0])
                               .join("")
@@ -236,7 +240,7 @@ export default function TeamPage() {
                             {member.full_name || member.email || "Team Member"}
                           </CardTitle>
                           <CardDescription className="text-xs">
-                            {member.email || ""}
+                            User ID: {member.user_id.slice(0, 8)}...
                           </CardDescription>
                         </div>
                       </div>
