@@ -1,27 +1,40 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get auth session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    // Same auth pattern as the create route — read the Bearer token from the
+    // Authorization header since this app stores sessions in localStorage,
+    // not cookies, so server-side cookie-based clients can't read the session.
+    const authHeader = request.headers.get("authorization")
+    const accessToken = authHeader?.replace("Bearer ", "")
 
-    if (!session || !session.user) {
-      return NextResponse.json(
-        { message: "Unauthorized" },
-        { status: 401 }
-      )
+    if (!accessToken) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      }
+    )
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+
+    if (authError || !user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
     const { token } = await request.json()
 
     if (!token) {
-      return NextResponse.json(
-        { message: "Token is required" },
-        { status: 400 }
-      )
+      return NextResponse.json({ message: "Token is required" }, { status: 400 })
     }
 
     // Fetch and validate invite
@@ -32,25 +45,17 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (inviteError || !invite) {
-      return NextResponse.json(
-        { message: "Invite not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ message: "Invite not found" }, { status: 404 })
     }
 
-    // Check if invite is expired
-    const expiresAt = new Date(invite.expires_at)
-    const now = new Date()
-    const isExpired = now > expiresAt
-
-    if (isExpired) {
+    // Check expiry
+    if (new Date() > new Date(invite.expires_at)) {
       return NextResponse.json(
         { message: "This invitation has expired" },
         { status: 410 }
       )
     }
 
-    // Check if invite has been revoked or already used
     if (invite.status === "revoked") {
       return NextResponse.json(
         { message: "This invitation has been revoked" },
@@ -65,11 +70,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user email matches invite email
-    if (session.user.email !== invite.email) {
+    // Security check — the logged-in user must match the invited email
+    if (user.email !== invite.email) {
       return NextResponse.json(
         {
-          message: "The email in your account does not match the email this invitation was sent to",
+          message:
+            "The email in your account does not match the email this invitation was sent to",
         },
         { status: 403 }
       )
@@ -85,46 +91,43 @@ export async function POST(request: NextRequest) {
       .eq("id", invite.id)
 
     if (updateError) {
-      console.error("[v0] Error accepting invite:", updateError)
+      console.error("[invites/accept] Error updating invite status:", updateError)
       return NextResponse.json(
         { message: "Failed to accept invite" },
         { status: 500 }
       )
     }
 
-    // Check if user already has membership (in case of re-acceptance)
+    // Check if membership already exists (graceful re-acceptance)
     const { data: existingMembership } = await supabase
       .from("memberships")
       .select("id")
       .eq("org_id", invite.org_id)
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .maybeSingle()
 
     if (existingMembership) {
-      // User already has membership, just return success
       return NextResponse.json(
-        {
-          success: true,
-          message: "You are already a member of this organization",
-        },
+        { success: true, message: "You are already a member of this organization" },
         { status: 200 }
       )
     }
 
-    // Create membership record
+    // Create membership — using created_at, not joined_at,
+    // which is the actual column name on the memberships table
     const { error: membershipError } = await supabase
       .from("memberships")
       .insert([
         {
           org_id: invite.org_id,
-          user_id: session.user.id,
+          user_id: user.id,
           role: invite.role,
-          joined_at: new Date().toISOString(),
+          // created_at is auto-set by Supabase default, no need to pass it
         },
       ])
 
     if (membershipError) {
-      console.error("[v0] Error creating membership:", membershipError)
+      console.error("[invites/accept] Error creating membership:", membershipError)
       return NextResponse.json(
         { message: "Failed to create membership" },
         { status: 500 }
@@ -132,17 +135,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      {
-        success: true,
-        message: "Invitation accepted successfully",
-      },
+      { success: true, message: "Invitation accepted successfully" },
       { status: 200 }
     )
   } catch (error) {
-    console.error("[v0] Error in invite accept route:", error)
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("[invites/accept] Unhandled error:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
