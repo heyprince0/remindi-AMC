@@ -50,29 +50,32 @@ export default function TeamPage() {
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
-        .order("created_at", { ascending: false })  // fixed: was joined_at
+        .eq("org_id", YOUR_ORG_ID) // Replace YOUR_ORG_ID with the actual org identifier
+        .order("created_at", { ascending: false }) // fixed: was joined_at
 
       if (!membershipsError && membershipsData) {
         const membersWithProfiles: MemberWithProfile[] = []
 
-for (const membership of membershipsData) {
-  const { data: profile, error: profileError } = await supabase
-    .from("company_profile")
-    .select("full_name")
-    .eq("id", membership.user_id)
-    .maybeSingle()
+        for (const membership of membershipsData) {
+          const { data: profile, error: profileError } = await supabase
+            .from("company_profile")
+            .select("full_name,email")
+            .eq("user_id", membership.user_id) // fixed: correct column matching
+            .maybeSingle()
 
-  if (profileError) {
-    console.error("[team] Error loading profile:", profileError)
-  }
+          if (profileError) {
+            console.error("[team] Error loading profile:", profileError)
+          }
 
-  membersWithProfiles.push({
-    ...membership,
-    full_name: profile?.full_name || undefined,
-  })
-}
+          membersWithProfiles.push({
+            ...membership,
+            full_name: profile?.full_name || undefined,
+            email: profile?.email || undefined,
+          })
+        }
 
-setMembers(membersWithProfiles)
+        setMembers(membersWithProfiles)
+      }
 
       // Fetch pending invites
       const { data: invitesData, error: invitesError } = await supabase
