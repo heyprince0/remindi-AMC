@@ -30,13 +30,12 @@ export default function AcceptInvitePage() {
   const [inviteDetails, setInviteDetails] = useState<InviteDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [signupEmail, setSignupEmail] = useState("")
   const [signupPassword, setSignupPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [emailWarning, setEmailWarning] = useState<string | null>(null)
 
-  // Fetch invite details
+  // Fetch invite details — no auth needed for this, it's a public endpoint
   useEffect(() => {
     const fetchInvite = async () => {
       try {
@@ -49,13 +48,14 @@ export default function AcceptInvitePage() {
         }
 
         setInviteDetails(data)
-        
-        // If user is logged in, check if email matches
+
         if (user?.email && user.email !== data.email) {
-          setEmailWarning(`This invitation was sent to ${data.email}, but you're logged in as ${user.email}`)
+          setEmailWarning(
+            `This invitation was sent to ${data.email}, but you're logged in as ${user.email}. Please log out and sign in with the invited email, or create a new account below.`
+          )
         }
       } catch (err) {
-        console.error("[v0] Error fetching invite:", err)
+        console.error("[invite/accept] Error fetching invite:", err)
         setError("Failed to load invitation. Please try again.")
       } finally {
         setLoading(false)
@@ -67,10 +67,23 @@ export default function AcceptInvitePage() {
     }
   }, [token, user?.email])
 
+  // Helper: call accept route with the current session's access token
+  const callAcceptRoute = async (accessToken: string) => {
+    const response = await fetch("/api/invites/accept", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ token }),
+    })
+    return response
+  }
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!signupEmail || !signupPassword || !confirmPassword) {
+    if (!signupPassword || !confirmPassword) {
       toast.error("Please fill in all fields")
       return
     }
@@ -85,12 +98,17 @@ export default function AcceptInvitePage() {
       return
     }
 
+    if (!inviteDetails?.email) {
+      toast.error("Invite details not loaded")
+      return
+    }
+
     setSubmitting(true)
 
     try {
-      // Sign up new user
+      // Sign up with the invited email (pre-filled, locked)
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: signupEmail,
+        email: inviteDetails.email,
         password: signupPassword,
       })
 
@@ -99,23 +117,30 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // Accept the invite
-      const acceptResponse = await fetch("/api/invites/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      })
+      // After signup, the session is immediately available in the response
+      const accessToken = authData.session?.access_token
 
-      if (!acceptResponse.ok) {
-        const acceptData = await acceptResponse.json()
-        toast.error(acceptData.message || "Failed to accept invitation")
+      if (!accessToken) {
+        // Supabase requires email confirmation — user needs to verify first
+        toast.success(
+          "Account created! Please check your email to confirm your account, then click the invite link again to accept."
+        )
         return
       }
 
-      toast.success("Account created and invitation accepted!")
+      // Session available immediately (email confirmation disabled) — accept now
+      const acceptResponse = await callAcceptRoute(accessToken)
+
+      if (!acceptResponse.ok) {
+        const acceptData = await acceptResponse.json()
+        toast.error(acceptData.message || "Account created but failed to accept invitation")
+        return
+      }
+
+      toast.success("Account created and invitation accepted! Welcome to the team.")
       router.push("/dashboard")
     } catch (err) {
-      console.error("[v0] Error in signup flow:", err)
+      console.error("[invite/accept] Error in signup flow:", err)
       toast.error("An error occurred. Please try again.")
     } finally {
       setSubmitting(false)
@@ -128,14 +153,22 @@ export default function AcceptInvitePage() {
       return
     }
 
+    if (emailWarning) {
+      toast.error("Email mismatch — please use the correct account to accept this invite")
+      return
+    }
+
     setSubmitting(true)
 
     try {
-      const acceptResponse = await fetch("/api/invites/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        toast.error("Your session has expired. Please log in again.")
+        return
+      }
+
+      const acceptResponse = await callAcceptRoute(session.access_token)
 
       if (!acceptResponse.ok) {
         const acceptData = await acceptResponse.json()
@@ -146,7 +179,7 @@ export default function AcceptInvitePage() {
       toast.success("Invitation accepted! Welcome to the team.")
       router.push("/dashboard")
     } catch (err) {
-      console.error("[v0] Error accepting invite:", err)
+      console.error("[invite/accept] Error accepting invite:", err)
       toast.error("An error occurred. Please try again.")
     } finally {
       setSubmitting(false)
@@ -173,7 +206,9 @@ export default function AcceptInvitePage() {
             <CardTitle>Invitation Error</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{error || "This invitation could not be found or has expired."}</p>
+            <p className="text-sm text-muted-foreground">
+              {error || "This invitation could not be found or has expired."}
+            </p>
             <Link href="https://remindi.online" target="_blank" className="block">
               <Button variant="outline" className="w-full">
                 Visit Remindi
@@ -233,7 +268,7 @@ export default function AcceptInvitePage() {
             </div>
           )}
 
-          {/* Signup Form (if not logged in) */}
+          {/* Signup Form (not logged in) */}
           {!user ? (
             <form onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-2">
@@ -286,7 +321,7 @@ export default function AcceptInvitePage() {
               </Button>
             </form>
           ) : (
-            // Accept button for logged-in users
+            // Logged-in accept flow
             <div className="space-y-4">
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm text-blue-800">
@@ -295,7 +330,7 @@ export default function AcceptInvitePage() {
               </div>
               <Button
                 onClick={handleAcceptAsUser}
-                disabled={submitting}
+                disabled={submitting || !!emailWarning}
                 className="w-full"
                 style={{ backgroundColor: "#2ea4e6" }}
               >
@@ -304,10 +339,9 @@ export default function AcceptInvitePage() {
             </div>
           )}
 
-          {/* Footer Link */}
           <p className="text-center text-xs text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/auth/login" className="text-primary hover:underline">
+            <Link href="/login" className="text-primary hover:underline">
               Sign in
             </Link>
           </p>
