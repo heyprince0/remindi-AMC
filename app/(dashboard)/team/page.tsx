@@ -35,10 +35,11 @@ export default function TeamPage() {
       if (!user?.id) return
 
       // Get current user's role in their org
-      const { data: membershipsData, error: membershipsError } = await supabase
+      const { data: userMembership } = await supabase
         .from("memberships")
-        .select("*")
-        .order("created_at", { ascending: false })
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle()
 
       if (userMembership) {
         setUserRole(userMembership.role)
@@ -48,8 +49,7 @@ export default function TeamPage() {
       // the auth schema. We get email from profiles instead.
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
-        .select("*")
-        .eq("org_id", YOUR_ORG_ID) // Replace YOUR_ORG_ID with the actual org identifier
+        .select("*") 
         .order("created_at", { ascending: false }) // fixed: was joined_at
 
       if (!membershipsError && membershipsData) {
@@ -58,8 +58,8 @@ export default function TeamPage() {
         for (const membership of membershipsData) {
           const { data: profile, error: profileError } = await supabase
             .from("company_profile")
-            .select("full_name,email")
-            .eq("user_id", membership.user_id) // fixed: correct column matching
+            .select("full_name,email")                      // <-- Change 1: also select email
+            .eq("user_id", membership.user_id)              // <-- Change 1: correct column matching
             .maybeSingle()
 
           if (profileError) {
@@ -69,7 +69,7 @@ export default function TeamPage() {
           membersWithProfiles.push({
             ...membership,
             full_name: profile?.full_name || undefined,
-            email: profile?.email || undefined,
+            email: profile?.email || undefined,             // <-- Change 2: include email
           })
         }
 
