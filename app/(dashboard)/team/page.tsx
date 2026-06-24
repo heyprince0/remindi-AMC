@@ -227,7 +227,7 @@ setMembers(membersWithProfiles)
                       <div className="flex items-center gap-3">
                         <div className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <span className="text-sm font-semibold">
-                            {{member.full_name || "Team Member"}
+                            {(member.full_name || "Team Member")
                               .split(" ")
                               .map((n) => n[0])
                               .join("")
