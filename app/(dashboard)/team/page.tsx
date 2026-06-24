@@ -35,11 +35,10 @@ export default function TeamPage() {
       if (!user?.id) return
 
       // Get current user's role in their org
-      const { data: userMembership } = await supabase
+      const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle()
+        .select("*")
+        .order("created_at", { ascending: false })
 
       if (userMembership) {
         setUserRole(userMembership.role)
