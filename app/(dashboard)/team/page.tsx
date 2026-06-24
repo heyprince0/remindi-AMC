@@ -30,14 +30,12 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
 
-  // TODO: Fetch memberships filtered by user's org_id
-  // When org scoping is implemented, this will filter by organization
   const loadTeamData = async () => {
     try {
       if (!user?.id) return
 
-      // Get user's organization membership
-      const { data: userMembership, error: memberError } = await supabase
+      // Get current user's role in their org
+      const { data: userMembership } = await supabase
         .from("memberships")
         .select("role")
         .eq("user_id", user.id)
@@ -47,32 +45,32 @@ export default function TeamPage() {
         setUserRole(userMembership.role)
       }
 
-      // TODO: Filter by org_id when org scoping is implemented
-      // For now, fetch all memberships with profile data
+      // Fetch memberships — no auth.users join since PostgREST can't traverse
+      // the auth schema. We get email from profiles instead.
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
-        .select("*, auth.users(email)")
-        .order("joined_at", { ascending: false })
+        .select("*")
+        .order("created_at", { ascending: false })  // fixed: was joined_at
 
       if (!membershipsError && membershipsData) {
         const membersWithProfiles: MemberWithProfile[] = []
         for (const membership of membershipsData) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("full_name")
+            .select("full_name, email")
             .eq("id", membership.user_id)
             .maybeSingle()
 
           membersWithProfiles.push({
             ...membership,
-            email: (membership.auth as any)?.users?.[0]?.email,
-            full_name: profile?.full_name,
+            email: profile?.email || undefined,
+            full_name: profile?.full_name || undefined,
           })
         }
         setMembers(membersWithProfiles)
       }
 
-      // TODO: Filter by org_id when org scoping is implemented
+      // Fetch pending invites
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -83,7 +81,7 @@ export default function TeamPage() {
         setPendingInvites(invitesData)
       }
     } catch (error) {
-      console.error("[v0] Error loading team data:", error)
+      console.error("[team] Error loading team data:", error)
       toast.error("Failed to load team data")
     } finally {
       setLoading(false)
@@ -107,7 +105,7 @@ export default function TeamPage() {
       setMembers(members.filter((m) => m.id !== memberId))
       toast.success("Member removed successfully")
     } catch (error) {
-      console.error("[v0] Error removing member:", error)
+      console.error("[team] Error removing member:", error)
       toast.error("Failed to remove member")
     }
   }
@@ -123,17 +121,61 @@ export default function TeamPage() {
       setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
       toast.success("Invitation revoked")
     } catch (error) {
-      console.error("[v0] Error revoking invite:", error)
+      console.error("[team] Error revoking invite:", error)
       toast.error("Failed to revoke invitation")
+    }
+  }
+
+  const handleDeleteInvite = async (inviteId: string) => {
+    if (!confirm("Permanently delete this invitation? The person will need to be re-invited.")) return
+
+    try {
+      const { error } = await supabase
+        .from("invites")
+        .delete()
+        .eq("id", inviteId)
+
+      if (error) throw error
+      setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
+      toast.success("Invitation deleted")
+    } catch (error) {
+      console.error("[team] Error deleting invite:", error)
+      toast.error("Failed to delete invitation")
     }
   }
 
   const handleResendInvite = async (invite: Invite) => {
     try {
-      // TODO: Implement resend invite logic using sendInviteMemberEmail
-      toast.info("Resend invite not yet implemented")
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        toast.error("Your session has expired. Please log in again.")
+        return
+      }
+
+      const response = await fetch("/api/invites/resend", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ inviteId: invite.id }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.message || "Failed to resend invitation")
+        return
+      }
+
+      if (data.emailWarning) {
+        toast.warning(data.emailWarning)
+      } else {
+        toast.success("Invitation resent successfully!")
+      }
     } catch (error) {
-      console.error("[v0] Error resending invite:", error)
+      console.error("[team] Error resending invite:", error)
       toast.error("Failed to resend invitation")
     }
   }
@@ -191,9 +233,11 @@ export default function TeamPage() {
                         </div>
                         <div>
                           <CardTitle className="text-base">
-                            {member.full_name || member.email}
+                            {member.full_name || member.email || "Team Member"}
                           </CardTitle>
-                          <CardDescription className="text-xs">{member.email}</CardDescription>
+                          <CardDescription className="text-xs">
+                            {member.email || ""}
+                          </CardDescription>
                         </div>
                       </div>
                       {userRole === "admin" && member.user_id !== user?.id && (
@@ -226,7 +270,7 @@ export default function TeamPage() {
                     </div>
                     <div className="text-xs text-muted-foreground">
                       Joined{" "}
-                      {new Date(member.joined_at).toLocaleDateString("en-US", {
+                      {new Date(member.created_at).toLocaleDateString("en-US", {
                         year: "numeric",
                         month: "short",
                         day: "numeric",
