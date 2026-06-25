@@ -1,87 +1,84 @@
 import { NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const { token } = params
+    // params is async in Next.js 15+ — must be awaited
+    const { token } = await params
 
     if (!token) {
-      return NextResponse.json(
-        { message: "Token is required" },
-        { status: 400 }
-      )
+      return NextResponse.json({ message: "Token is required" }, { status: 400 })
     }
 
-    // Fetch invite details
+    // This is a public endpoint — no auth needed, anyone with the link can
+    // view invite details. Use anon key with no auth header.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    // Fetch invite — RLS SELECT policy on invites allows anon reads by token
     const { data: invite, error: inviteError } = await supabase
       .from("invites")
-      .select("*, organizations(name), profiles(full_name)")
+      .select("*")
       .eq("token", token)
       .maybeSingle()
 
     if (inviteError || !invite) {
-      return NextResponse.json(
-        { message: "Invite not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ message: "Invite not found" }, { status: 404 })
     }
 
-    // Check if invite is expired
-    const expiresAt = new Date(invite.expires_at)
-    const now = new Date()
-    const isExpired = now > expiresAt
-
-    if (isExpired) {
+    if (new Date() > new Date(invite.expires_at)) {
       return NextResponse.json(
-        {
-          message: "This invitation has expired",
-          status: "expired",
-        },
+        { message: "This invitation has expired", status: "expired" },
         { status: 410 }
       )
     }
 
-    // Check if invite has been revoked or already used
     if (invite.status === "revoked") {
       return NextResponse.json(
-        {
-          message: "This invitation has been revoked",
-          status: "revoked",
-        },
+        { message: "This invitation has been revoked", status: "revoked" },
         { status: 410 }
       )
     }
 
     if (invite.status === "accepted") {
       return NextResponse.json(
-        {
-          message: "This invitation has already been used",
-          status: "accepted",
-        },
+        { message: "This invitation has already been used", status: "accepted" },
         { status: 410 }
       )
     }
 
-    // Return invite details
+    // Get org name
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", invite.org_id)
+      .maybeSingle()
+
+    // Get inviter name from company_profile (which has company_name, not full_name)
+    const { data: inviterProfile } = await supabase
+      .from("company_profile")
+      .select("company_name")
+      .eq("user_id", invite.invited_by)
+      .maybeSingle()
+
     return NextResponse.json(
       {
         email: invite.email,
         role: invite.role,
-        businessName: invite.organizations?.name || "Remindi",
-        inviterName: invite.profiles?.full_name || "Team",
+        businessName: org?.name || "Remindi",
+        inviterName: inviterProfile?.company_name || "A team admin",
         expiresAt: invite.expires_at,
         status: invite.status,
       },
       { status: 200 }
     )
   } catch (error) {
-    console.error("[v0] Error in invite details route:", error)
-    return NextResponse.json(
-      { message: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("[invites/token] Unhandled error:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
