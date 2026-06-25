@@ -34,7 +34,6 @@ export default function TeamPage() {
     try {
       if (!user?.id) return
 
-      // Get current user's role in their org
       const { data: userMembership } = await supabase
         .from("memberships")
         .select("role")
@@ -45,38 +44,56 @@ export default function TeamPage() {
         setUserRole(userMembership.role)
       }
 
-      // Fetch memberships — no auth.users join since PostgREST can't traverse
-      // the auth schema. We get email from profiles instead.
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
-        .select("*") 
-        .order("created_at", { ascending: false }) // fixed: was joined_at
+        .select("*")
+        .order("created_at", { ascending: false })
 
       if (!membershipsError && membershipsData) {
         const membersWithProfiles: MemberWithProfile[] = []
 
         for (const membership of membershipsData) {
-          const { data: profile, error: profileError } = await supabase
-            .from("company_profile")
-            .select("company_name,email")                      
-            .eq("user_id", membership.user_id)              
+          // Try profiles table first for display name (set during profile-setup)
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", membership.user_id)
             .maybeSingle()
 
-          if (profileError) {
-            console.error("[team] Error loading profile:", profileError)
+          // Get email from the accepted invite for this user in this org
+          // This is the most reliable source since we store it at invite time
+          const { data: acceptedInvite } = await supabase
+            .from("invites")
+            .select("email")
+            .eq("org_id", membership.org_id)
+            .eq("status", "accepted")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          // Fallback to company_profile for name and email if profiles has nothing
+          let companyName: string | undefined
+          let companyEmail: string | undefined
+          if (!profile?.full_name) {
+            const { data: cp } = await supabase
+              .from("company_profile")
+              .select("company_name, email")
+              .eq("user_id", membership.user_id)
+              .maybeSingle()
+            companyName = cp?.company_name || undefined
+            companyEmail = cp?.email || undefined
           }
 
           membersWithProfiles.push({
             ...membership,
-            full_name: profile?.company_name || undefined,
-            email: profile?.email || undefined,             // <-- Change 2: include email
+            full_name: profile?.full_name || companyName || undefined,
+            email: acceptedInvite?.email || companyEmail || undefined,
           })
         }
 
         setMembers(membersWithProfiles)
       }
 
-      // Fetch pending invites
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -100,13 +117,8 @@ export default function TeamPage() {
 
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
-
     try {
-      const { error } = await supabase
-        .from("memberships")
-        .delete()
-        .eq("id", memberId)
-
+      const { error } = await supabase.from("memberships").delete().eq("id", memberId)
       if (error) throw error
       setMembers(members.filter((m) => m.id !== memberId))
       toast.success("Member removed successfully")
@@ -122,7 +134,6 @@ export default function TeamPage() {
         .from("invites")
         .update({ status: "revoked" })
         .eq("id", inviteId)
-
       if (error) throw error
       setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
       toast.success("Invitation revoked")
@@ -134,13 +145,8 @@ export default function TeamPage() {
 
   const handleDeleteInvite = async (inviteId: string) => {
     if (!confirm("Permanently delete this invitation? The person will need to be re-invited.")) return
-
     try {
-      const { error } = await supabase
-        .from("invites")
-        .delete()
-        .eq("id", inviteId)
-
+      const { error } = await supabase.from("invites").delete().eq("id", inviteId)
       if (error) throw error
       setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
       toast.success("Invitation deleted")
@@ -153,12 +159,10 @@ export default function TeamPage() {
   const handleResendInvite = async (invite: Invite) => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
-
       if (!session?.access_token) {
         toast.error("Your session has expired. Please log in again.")
         return
       }
-
       const response = await fetch("/api/invites/resend", {
         method: "POST",
         headers: {
@@ -167,14 +171,11 @@ export default function TeamPage() {
         },
         body: JSON.stringify({ inviteId: invite.id }),
       })
-
       const data = await response.json()
-
       if (!response.ok) {
         toast.error(data.message || "Failed to resend invitation")
         return
       }
-
       if (data.emailWarning) {
         toast.warning(data.emailWarning)
       } else {
@@ -192,10 +193,17 @@ export default function TeamPage() {
       : "bg-gray-100 text-gray-800 border-gray-200"
   }
 
+  const getInitials = (name?: string, email?: string) => {
+    if (name && name !== "Team Member") {
+      return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    }
+    if (email) return email[0].toUpperCase()
+    return "TM"
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Team</h1>
@@ -229,12 +237,7 @@ export default function TeamPage() {
                       <div className="flex items-center gap-3">
                         <div className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <span className="text-sm font-semibold">
-                            {(member.full_name || "Team Member")
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()
-                              .slice(0, 2)}
+                            {getInitials(member.full_name, member.email)}
                           </span>
                         </div>
                         <div>
@@ -242,7 +245,7 @@ export default function TeamPage() {
                             {member.full_name || member.email || "Team Member"}
                           </CardTitle>
                           <CardDescription className="text-xs">
-                            User ID: {member.user_id.slice(0, 8)}...
+                            {member.email || `ID: ${member.user_id.slice(0, 8)}...`}
                           </CardDescription>
                         </div>
                       </div>
@@ -323,10 +326,17 @@ export default function TeamPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleRevokeInvite(invite.id)}
-                              className="text-red-600"
+                              className="text-yellow-600"
                             >
                               <Trash2 className="mr-2 size-4" />
                               Revoke
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteInvite(invite.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -363,7 +373,6 @@ export default function TeamPage() {
           )}
         </div>
 
-        {/* Invite Modal */}
         <InviteMemberModal
           open={inviteModalOpen}
           onOpenChange={setInviteModalOpen}
