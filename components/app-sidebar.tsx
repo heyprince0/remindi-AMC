@@ -14,6 +14,7 @@ import {
   Settings,
   FileCheck,
   Receipt,
+  UsersRound,
 } from "lucide-react"
 import {
   Sidebar,
@@ -29,7 +30,7 @@ import {
 import { supabase, type Profile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 
-const navItems = [
+const memberNavItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
   { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Quotations", icon: FileCheck, href: "/quotations" },
@@ -39,8 +40,11 @@ const navItems = [
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
+]
+
+const adminOnlyNavItems = [
   { title: "Settings", icon: Settings, href: "/settings" },
-  { title: "Team", icon: Users, href: "/team" },
+  { title: "Team", icon: UsersRound, href: "/team" },
 ]
 
 export function AppSidebar() {
@@ -49,12 +53,14 @@ export function AppSidebar() {
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
   const [fullName, setFullName] = useState("")
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
         if (!user?.id) return
 
+        // Load profile for display name
         const { data } = await supabase
           .from('profiles')
           .select('company_name, full_name')
@@ -69,8 +75,19 @@ export function AppSidebar() {
         if (data?.full_name) {
           setFullName(data.full_name)
         }
+
+        // Load user's role in their org
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (membership) {
+          setUserRole(membership.role)
+        }
       } catch (error) {
-        console.error('Error loading company name:', error)
+        console.error('Error loading profile:', error)
       }
     }
 
@@ -101,6 +118,11 @@ export function AppSidebar() {
     }
   }, [user?.id])
 
+  // Combine nav items based on role
+  const navItems = userRole === 'admin'
+    ? [...memberNavItems, ...adminOnlyNavItems]
+    : memberNavItems
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
@@ -110,7 +132,9 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-semibold text-sidebar-foreground">{companyName}</span>
-            {companySubtitle && <span className="text-xs text-sidebar-foreground/70">{companySubtitle}</span>}
+            {companySubtitle && (
+              <span className="text-xs text-sidebar-foreground/70">{companySubtitle}</span>
+            )}
           </div>
         </Link>
       </SidebarHeader>
@@ -137,7 +161,6 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-4 space-y-3">
-        
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
             <span className="text-xs font-medium">
@@ -150,7 +173,9 @@ export function AppSidebar() {
             <span className="text-sm font-medium text-sidebar-foreground">
               {fullName || user?.email || 'User'}
             </span>
-            <span className="text-xs text-sidebar-foreground/70">Administrator</span>
+            <span className="text-xs text-sidebar-foreground/70">
+              {userRole === 'admin' ? 'Administrator' : 'Member'}
+            </span>
           </div>
         </div>
       </SidebarFooter>
