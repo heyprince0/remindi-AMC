@@ -138,7 +138,7 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("Account created and invitation accepted! Welcome to the team.")
-      router.push("/dashboard")
+      router.push("/")
     } catch (err) {
       console.error("[invite/accept] Error in signup flow:", err)
       toast.error("An error occurred. Please try again.")
@@ -177,7 +177,7 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("Invitation accepted! Welcome to the team.")
-      router.push("/dashboard")
+      router.push("/")
     } catch (err) {
       console.error("[invite/accept] Error accepting invite:", err)
       toast.error("An error occurred. Please try again.")
