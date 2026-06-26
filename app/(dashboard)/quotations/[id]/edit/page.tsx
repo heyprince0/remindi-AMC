@@ -36,24 +36,44 @@ export default function EditQuotationPage() {
   const [gstRate, setGstRate] = useState(18)
   const [notes, setNotes] = useState("")
 
-  const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
-  const gstRate_ = Number(gstRate ?? 18) / 100
-  const gstAmount = includeGst ? Math.round(subtotal * gstRate_) : 0
-  const total = subtotal + gstAmount
+  // --- ADDED: organization ID ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // --- fetch org_id on mount ---
   useEffect(() => {
-    loadQuotation()
-  }, [id, user?.id])
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
+  // Load quotation only when org_id is available
+  useEffect(() => {
+    if (id && currentOrgId) {
+      loadQuotation()
+    }
+  }, [id, currentOrgId])
 
   const loadQuotation = async () => {
     try {
-      if (!user?.id || !id) return
+      if (!user?.id || !id || !currentOrgId) return
 
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
         .single()
 
       if (error) throw error
@@ -108,7 +128,7 @@ export default function EditQuotationPage() {
   }
 
   const handleSave = async () => {
-    if (!user?.id || !id) return
+    if (!user?.id || !id || !currentOrgId) return
 
     // Validation
     if (!customerName.trim()) {
@@ -130,6 +150,7 @@ export default function EditQuotationPage() {
       const cgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
       const grandTotal = calculatedSubtotal + sgst + cgst
 
+      // Update with org_id filter for safety
       const { error } = await supabase
         .from("quotations")
         .update({
@@ -151,6 +172,7 @@ export default function EditQuotationPage() {
           notes: notes,
         })
         .eq("id", id)
+        .eq("org_id", currentOrgId)   // <-- added
 
       if (error) throw error
       toast.success("Quotation updated successfully")
