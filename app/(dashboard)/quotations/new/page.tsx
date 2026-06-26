@@ -36,6 +36,28 @@ export default function NewQuotationPage() {
   const [gstRate, setGstRate] = useState(18)
   const [notes, setNotes] = useState("")
 
+  // --- ADDED: organization ID ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- fetch org_id ---
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
   const gstRate_ = Number(gstRate ?? 18) / 100
   const gstAmount = includeGst ? Math.round(subtotal * gstRate_) : 0
@@ -69,7 +91,7 @@ export default function NewQuotationPage() {
   }
 
   const handleSave = async () => {
-    if (!user?.id) return
+    if (!user?.id || !currentOrgId) return
 
     // Validation
     if (!customerName.trim()) {
@@ -84,18 +106,17 @@ export default function NewQuotationPage() {
 
     setSaving(true)
     try {
-      // Generate quote_no: QT-001, QT-002, etc.
+      // Generate quote_no based on org scope
       const { data: existingQuotes, error: countError } = await supabase
         .from("quotations")
         .select("quote_no", { count: "exact" })
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
 
       if (countError) throw countError
 
       const nextNumber = ((existingQuotes?.length || 0) + 1).toString().padStart(3, "0")
       const quoteNo = `QT-${nextNumber}`
 
-      // Calculate grand_total: subtotal + SGST + CGST
       const calculatedSubtotal = (items ?? []).reduce((sum, item) => {
         return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
       }, 0)
@@ -107,6 +128,7 @@ export default function NewQuotationPage() {
         .from("quotations")
         .insert({
           user_id: user.id,
+          org_id: currentOrgId,           // <-- added
           quote_no: quoteNo,
           order_no: orderNo || null,
           client_name: customerName,
