@@ -63,6 +63,28 @@ export default function DashboardPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
 
+  // --- NEW: organization ID state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- fetch org_id ---
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
   const handleEnableNotifications = async () => {
     if (!user?.id) {
       toast.error('User not found')
@@ -90,24 +112,27 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      if (!user?.id) return
+      if (!user?.id || !currentOrgId) return
 
+      // Fetch contracts scoped by org_id
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)   // <-- changed from user_id
       if (contractsError) throw contractsError
 
+      // Fetch customers scoped by org_id
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)   // <-- changed from user_id
       if (customersError) throw customersError
 
+      // Fetch technicians scoped by org_id
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)   // <-- changed from user_id
       if (techniciansError) throw techniciansError
 
       const activeContracts = (contractsData as Contract[]).filter(c => c.status === 'active').length
@@ -178,23 +203,30 @@ export default function DashboardPage() {
     }
   }
 
+  // Load data when org_id is available
   useEffect(() => {
-    if (!user?.id) return
-    loadData()
+    if (user?.id && currentOrgId) {
+      loadData()
+    }
+  }, [user?.id, currentOrgId])
+
+  // Real-time subscriptions using org_id filter
+  useEffect(() => {
+    if (!user?.id || !currentOrgId) return
 
     const contractsSubscription = supabase
       .channel('contracts_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts', filter: `user_id=eq.${user?.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
       .subscribe()
 
     const customersSubscription = supabase
       .channel('customers_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `user_id=eq.${user?.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
       .subscribe()
 
     const techniciansSubscription = supabase
       .channel('technicians_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'technicians', filter: `user_id=eq.${user?.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'technicians', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
       .subscribe()
 
     return () => {
@@ -202,7 +234,7 @@ export default function DashboardPage() {
       customersSubscription.unsubscribe()
       techniciansSubscription.unsubscribe()
     }
-  }, [user?.id])
+  }, [user?.id, currentOrgId])
 
   // Show spinner while checking auth
   if (authLoading) {
@@ -318,13 +350,14 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {user && (
+        {user && currentOrgId && (
           <AddContractModal
             open={modalOpen}
             onOpenChange={setModalOpen}
             onSuccess={loadData}
             editingContract={null}
             userId={user.id}
+            orgId={currentOrgId}   // <-- added
           />
         )}
       </div>
