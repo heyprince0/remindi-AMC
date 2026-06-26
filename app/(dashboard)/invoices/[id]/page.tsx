@@ -19,6 +19,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -257,80 +259,416 @@ export default function ViewInvoicePage() {
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
 
+  // =============================================
+  // REPLACED PDF FUNCTION – matches old version exactly
+  // =============================================
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!invoice) return
+
+    // Validate stamp/signature images exist if toggle is ON
+    if (stampToggle && (!profile?.stamp_url && !profile?.signature_url)) {
+      toast.error('Please upload your stamp/signature in Settings first')
+      router.push('/settings')
+      return
+    }
+
     setGeneratingPdf(true)
     try {
-      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-      const includeGst = invoice.include_gst ?? true
-      const themeColor = profile?.theme_color ?? '#185FA5'
-      const items = invoice.items ?? []
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+      const pageW = 210
+      const pageH = 297
+      const margin = 15
+      const themeColor = profile?.theme_color ?? "#185FA5"
+      const [tr, tg, tb] = hexToRgb(themeColor)
 
-      let stampHtml = ''
-      if (stampToggle && profile?.stamp_url) {
-        try {
-          const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(profile.stamp_url)
-          stampHtml = `<img src="${urlData.publicUrl}" style="width:80px;height:80px;object-fit:contain" /><br/><small style="color:#888">Authorized Signatory</small>`
-        } catch(e) { /* skip */ }
+      // ===== PAID WATERMARK =====
+      if (invoice.payment_status?.toLowerCase() === 'paid') {
+        doc.saveGraphicsState()
+        doc.setFontSize(72)
+        doc.setFont('helvetica', 'bold')
+        // Light green color, very transparent
+        doc.setTextColor(180, 230, 180)
+        doc.text('PAID', 105, 180, {
+          align: 'center',
+          angle: 35
+        })
+        doc.restoreGraphicsState()
+        // Reset text color back to black after watermark
+        doc.setTextColor(0, 0, 0)
       }
 
-      const itemRows = items.map((item: any, idx: number) => `
-        <tr><td>${idx+1}</td><td>${item.particulars ?? item.description ?? item.name ?? '-'}</td>
-        <td>${item.qty ?? item.quantity ?? 1}</td>
-        <td>Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString('en-IN')}</td>
-        <td>Rs. ${Number(item.amount ?? 0).toLocaleString('en-IN')}</td></tr>`).join('')
+      let y = margin
 
-      const isPaid = invoice.payment_status?.toLowerCase() === 'paid'
+      // ===== HEADER SECTION =====
+      const headerStyle = profile?.header_style ?? "single_logo"
 
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) { toast.error('Please allow popups to download PDF'); return }
-      printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${safeStr(invoice.invoice_no)}</title>
-        <style>body{font-family:helvetica,sans-serif;margin:20px;color:#000;font-size:10px;position:relative}
-        h2{font-size:14px;margin:0}
-        .header{border-bottom:2px solid ${themeColor};padding-bottom:8px;margin-bottom:12px}
-        .right{text-align:right}.bold{font-weight:bold}
-        table{width:100%;border-collapse:collapse;margin:8px 0}
-        th{background:${themeColor};color:#fff;padding:5px 4px;text-align:left;font-size:9px}
-        td{padding:4px;border:1px solid #ddd;font-size:9px}
-        .totals td{border:none;padding:2px 4px}
-        .footer-sig{text-align:right;margin-top:20px}
-        .watermark{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:72px;font-weight:bold;color:rgba(180,230,180,0.4);pointer-events:none;z-index:-1}
-        footer{font-size:8px;color:#999;text-align:center;margin-top:20px}
-        @media print{@page{margin:15mm}.watermark{position:fixed}}</style></head>
-        <body>
-        ${isPaid ? '<div class="watermark">PAID</div>' : ''}
-        <div class="header">
-          ${profile?.logo_url ? `<img src="${profile.logo_url}" style="height:40px;float:left;margin-right:10px"/>` : ''}
-          <h2>${safeStr(profile?.company_name)}</h2>
-          <div style="color:#888;font-size:9px">${profile?.address ?? ''} ${profile?.city ?? ''} ${profile?.state ?? ''}<br/>
-          ${profile?.phone ? 'Ph: ' + profile.phone : ''} ${profile?.email ? '| ' + profile.email : ''} ${profile?.gstin ? '| GSTIN: ' + profile.gstin : ''}</div>
-          <div style="clear:both"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-          <div><div class="bold" style="color:${themeColor};font-size:14px">TAX INVOICE</div>
-          <div class="bold">${safeStr(invoice.invoice_no)}</div></div>
-          <div class="right">DATE: ${invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString('en-IN') : '-'}<br/>
-          <span style="color:#dc2626">Valid Till: ${safeStr(invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-IN') : '-')}</span>
-          ${invoice.order_no ? '<br/>Order No: ' + safeStr(invoice.order_no) : ''}</div>
-        </div>
-        <div style="margin-bottom:10px"><span style="color:#999">BILL TO:</span><br/>
-        <strong>${safeStr(invoice.client_name).toUpperCase()}</strong><br/>
-        ${invoice.client_address ?? ''}<br/>${[invoice.client_district, invoice.client_state, invoice.client_pin_code].filter(Boolean).join(', ')}</div>
-        <table><thead><tr><th>SR.NO</th><th>PARTICULARS</th><th>QTY</th><th>RATE</th><th>AMOUNT</th></tr></thead>
-        <tbody>${itemRows}</tbody></table>
-        <table class="totals" style="width:auto;margin-left:auto">
-          ${includeGst ? `<tr><td>Subtotal:</td><td class="right">Rs. ${subtotal.toLocaleString('en-IN')}</td></tr>
-          <tr><td>SGST (9%):</td><td class="right">Rs. ${sgst.toLocaleString('en-IN')}</td></tr>
-          <tr><td>CGST (9%):</td><td class="right">Rs. ${cgst.toLocaleString('en-IN')}</td></tr>` : ''}
-          <tr><td class="bold">Total:</td><td class="bold right">Rs. ${grandTotal.toLocaleString('en-IN')}</td></tr>
-        </table>
-        ${invoice.notes ? `<div style="margin-top:10px"><strong>Terms &amp; Conditions:</strong><br/><span style="color:#555">${safeStr(invoice.notes)}</span></div>` : ''}
-        <div class="footer-sig"><div>Thanking you,</div><div>Yours faithfully,</div><div class="bold">For ${safeStr(profile?.company_name)}</div>${stampHtml}</div>
-        <footer>Generated by Remindi · remindi.online</footer>
-        <script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}</script>
-        </body></html>`)
-      printWindow.document.close()
-      toast.success('PDF opened — use Print > Save as PDF')
+      if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
+        try {
+          const response = await fetch(profile.header_thumbnail_url)
+          const blob = await response.blob()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          const bannerW = pageW - (margin * 2)
+          const bannerH = Math.round(bannerW / (1462 / 396))
+          doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
+          y += bannerH
+        } catch (e) { /* skip banner silently */ }
+      } else {
+        // Single logo mode
+        let logoX = margin
+        let logoAdded = false
+        try {
+          if (profile?.logo_url) {
+            const response = await fetch(profile.logo_url)
+            const blob = await response.blob()
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.readAsDataURL(blob)
+            })
+            doc.addImage(base64, "PNG", logoX, y, 22, 22)
+            logoAdded = true
+          }
+        } catch (e) { /* skip logo silently */ }
+
+        const infoX = logoAdded ? logoX + 24 : logoX
+        doc.setFontSize(14)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(profile?.company_name), infoX, y + 2)
+
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(120, 120, 120)
+        let infoY = y + 8
+
+        if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
+        if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
+        if (profile?.city || profile?.state || profile?.zip_code) {
+          const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+          doc.text(locationStr, infoX, infoY); infoY += 4
+        }
+        if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
+        if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
+        if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
+
+        y += 31
+      }
+
+      // Header bottom line always drawn
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.5)
+      doc.line(margin, y, pageW - margin, y)
+      y += 6
+
+      // ===== INVOICE HEADER =====
+      // TAX INVOICE — top right, above the date
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text('TAX INVOICE', pageW - margin, y, { align: 'right' })
+
+      // Then on next line below it:
+      y += 6
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
+      const formattedDate = invoice.invoice_date
+        ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      doc.text('DATE: ' + formattedDate, pageW - margin, y,
+        { align: 'right' })
+
+      y += 5
+      // Due date on second line on right side
+      doc.setFontSize(9)
+      doc.setTextColor(220, 38, 38)
+      doc.text('Valid Till:' + safeDate(invoice.due_date),
+        pageW - margin, y, { align: 'right' })
+
+      y += 5
+      // Order number on third line on right side (only if exists)
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(0, 0, 0)
+      if (invoice.order_no) {
+        doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
+        y += 5
+      }
+      // Order date on next line on right side (only if exists)
+      if (invoice.order_date) {
+        const orderDateFormatted = new Date(invoice.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
+      }
+      doc.setTextColor(0, 0, 0)
+
+      // ===== CLIENT BLOCK =====
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(150, 150, 150)
+      doc.text("BILL TO:", margin, y)
+      y += 5
+
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
+      y += 5
+
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      if (invoice.client_address) {
+        doc.text(safeStr(invoice.client_address), margin, y)
+        y += 5
+      }
+
+      const cityStateZip = [
+        invoice.client_district,
+        invoice.client_state,
+        invoice.client_pin_code
+      ].filter(Boolean).join(', ')
+      if (cityStateZip) {
+        doc.text(cityStateZip, margin, y)
+        y += 5
+      }
+      y += 3
+
+      // ===== ITEMS TABLE =====
+      const items = invoice.items ?? []
+      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
+
+      const tableBody = items.map((item, idx) => [
+        String(idx + 1),
+        safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
+        String(item.qty ?? item.quantity ?? 1),
+        `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
+        `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
+      ])
+
+      autoTable(doc, {
+        startY: y,
+        head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: {
+          fillColor: [tr, tg, tb],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 9,
+          halign: "center",
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: [0, 0, 0],
+        },
+        columnStyles: {
+          0: { cellWidth: 15, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 20, halign: "center" },
+          3: { cellWidth: 35, halign: "right" },
+          4: { cellWidth: 35, halign: "right" },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 8
+
+      if (invoice.include_gst) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+
+        doc.text('Subtotal:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        y += 4
+        doc.text('SGST (9%):', 160, y, { align: 'right' })
+        doc.text('Rs. ' + sgst.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        y += 4
+        doc.text('CGST (9%):', 160, y, { align: 'right' })
+        doc.text('Rs. ' + cgst.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+
+        y += 3
+        doc.setDrawColor(0, 0, 0)
+        doc.setLineWidth(0.3)
+        doc.line(140, y, 195, y)
+
+        y += 4
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('Total:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text('Total:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'),
+          195, y, { align: 'right' })
+      }
+
+      // ===== IN WORDS =====
+      y += 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      const inWordsAmount = invoice.include_gst ? grandTotal : subtotal
+      doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
+      y += 20
+
+      // ===== PAYMENT DETAILS =====
+      if (y + 30 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      y += 10
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Payment Details:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+
+      if (profile?.bank_name) {
+        doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
+        y += 4
+      }
+      if (profile?.account_no) {
+        doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
+        y += 4
+      }
+      if (profile?.ifsc_code) {
+        doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
+        y += 4
+      }
+      if (profile?.upi_id) {
+        doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
+        y += 4
+      }
+      if (invoice.payment_terms) {
+        doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
+        y += 4
+      }
+
+      // ===== TAX INFORMATION =====
+      if (y + 25 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      y += 6
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Tax Information:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
+        y += 4
+      }
+      if (profile?.pan_number) {
+        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
+        y += 4
+      }
+      doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+      y += 6
+
+      // ===== NOTES =====
+      if (y + 20 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      if (invoice.notes) {
+        y += 3
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Terms & Conditions:", margin, y)
+        y += 4
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
+        doc.text(noteLines, margin, y)
+        y += (noteLines.length * 4)
+      }
+
+      // ===== FOOTER =====
+      if (y + 40 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      y += 10
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      doc.text('Thanking you,', 195, y, { align: 'right' })
+      doc.text('Yours faithfully,', 195, y+6, { align: 'right' })
+      doc.setFont('helvetica', 'bold')
+      doc.text('For ' + safeStr(profile?.company_name),
+        195, y+12, { align: 'right' })
+
+      // Add stamp if toggle is ON
+      if (stampToggle && profile?.stamp_url) {
+        let stampY = y + 18
+
+        try {
+          const { data: publicUrlData } = supabase.storage
+            .from('company-assets')
+            .getPublicUrl(profile.stamp_url)
+
+          const stampResponse = await fetch(publicUrlData.publicUrl)
+          if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
+
+          const stampBlob = await stampResponse.blob()
+          const stampBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(stampBlob)
+          })
+
+          const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+
+          const stampW = 30
+          const stampH = 30
+          const stampX = pageW - margin - stampW
+          doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
+          stampY += stampH + 2
+
+          doc.setDrawColor(200, 200, 200)
+          doc.setLineWidth(0.5)
+          doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
+          stampY += 4
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(120, 120, 120)
+          doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
+        } catch (e) {
+          console.error('Error adding stamp to PDF:', e)
+          // Don't fail the whole PDF — just skip the stamp silently
+        }
+      }
+
+      // Bottom: Generated by Remindi
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.setFont("helvetica", "normal")
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
+
+      const filename = `Invoice-${safeStr(invoice.invoice_no ?? invoice.id)}-${safeStr(invoice.client_name ?? "Client")}.pdf`
+      doc.save(filename)
+      toast.success("PDF downloaded")
     } catch (err) {
       console.error("PDF error:", err)
       toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
