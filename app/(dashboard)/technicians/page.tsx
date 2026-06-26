@@ -62,18 +62,10 @@ export default function TechniciansPage() {
     try {
       if (!user?.id) return
 
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      const orgId = membership?.org_id
-      if (!orgId) return
-
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
-        .eq('org_id', orgId)
+        .eq('user_id', user.id)
 
       if (techniciansError) throw techniciansError
 

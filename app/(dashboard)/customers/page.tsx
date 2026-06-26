@@ -31,25 +31,17 @@ export default function CustomersPage() {
     try {
       if (!user?.id) return
 
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      const orgId = membership?.org_id
-      if (!orgId) return
-
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
-        .eq('org_id', orgId)
+        .eq('user_id', user.id)
 
       if (customersError) throw customersError
 
       const { data: contractsData } = await supabase
         .from('contracts')
         .select('*')
-        .eq('org_id', orgId)
+        .eq('user_id', user.id)
 
       const customersWithContracts = (customersData as Customer[]).map(customer => {
         const contractCount = (contractsData as Contract[])?.filter(c => c.customer_id === customer.id).length || 0

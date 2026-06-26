@@ -133,18 +133,10 @@ export function AddTechnicianModal({
         toast.success('Technician updated successfully!')
       } else {
         // Create new technician
-        const { data: membership } = await supabase
-          .from('memberships')
-          .select('org_id')
-          .eq('user_id', userId)
-          .maybeSingle()
-        const orgId = membership?.org_id
-
         const { error } = await supabase
           .from('technicians')
           .insert({
             user_id: userId,
-            org_id: orgId ?? null,
             ...technicianData
           })
 

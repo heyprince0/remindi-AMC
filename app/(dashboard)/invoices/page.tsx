@@ -90,18 +90,10 @@ export default function InvoicesPage() {
     try {
       if (!user?.id) return
 
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-      const orgId = membership?.org_id
-      if (!orgId) return
-
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .eq("org_id", orgId)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -125,6 +117,7 @@ export default function InvoicesPage() {
         .from("invoices")
         .delete()
         .eq("id", invoiceToDelete.id)
+        .eq("user_id", user.id)
 
       if (error) throw error
 

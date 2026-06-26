@@ -51,20 +51,13 @@ export function NewInvoiceModal({ open, onOpenChange, userId }: NewInvoiceModalP
   const loadData = async () => {
     setLoading(true)
     try {
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", userId)
-        .maybeSingle()
-      const orgId = membership?.org_id ?? ""
-
-      const nextNo = await generateNextInvoiceNo(orgId)
+      const nextNo = await generateNextInvoiceNo()
       setInvoiceNo(nextNo)
 
       const { data, error } = await supabase
         .from("quotations")
         .select("id, quote_no, client_name, subtotal, sgst, cgst, grand_total, include_gst, items, client_address, client_district, client_state, client_pin_code, subject, body_text")
-        .eq("org_id", orgId)
+        .eq("user_id", userId)
         .eq("status", "Accepted")
         .order("created_at", { ascending: false })
 
@@ -78,12 +71,12 @@ export function NewInvoiceModal({ open, onOpenChange, userId }: NewInvoiceModalP
     }
   }
 
-  const generateNextInvoiceNo = async (orgId: string) => {
+  const generateNextInvoiceNo = async () => {
     try {
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no", { count: "exact" })
-        .eq("org_id", orgId)
+        .eq("user_id", userId)
       if (error) throw error
       const count = (data?.length ?? 0) + 1
       return `INV-${String(count).padStart(3, '0')}`
@@ -103,18 +96,10 @@ export function NewInvoiceModal({ open, onOpenChange, userId }: NewInvoiceModalP
 
     setGeneratingInvoice(true)
     try {
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", userId)
-        .maybeSingle()
-      const orgId = membership?.org_id
-
       const { data, error } = await supabase
         .from("invoices")
         .insert({
           user_id: userId,
-          org_id: orgId ?? null,
           quotation_id: selectedQuotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,

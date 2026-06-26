@@ -91,18 +91,10 @@ export function AddCustomerModal({
         toast.success('Customer updated successfully')
       } else {
         // Insert new customer
-        const { data: membership } = await supabase
-          .from('memberships')
-          .select('org_id')
-          .eq('user_id', userId)
-          .maybeSingle()
-        const orgId = membership?.org_id
-
         const { error } = await supabase
           .from('customers')
           .insert({
             user_id: userId,
-            org_id: orgId ?? null,
             name: formData.name.trim(),
             phone: formData.phone.trim(),
             address: formData.address.trim()

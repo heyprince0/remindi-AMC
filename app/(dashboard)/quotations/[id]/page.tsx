@@ -120,7 +120,7 @@ export default function ViewQuotationPage() {
     setLoading(true)
     try {
       const [{ data: qData, error: qErr }, { data: pData }] = await Promise.all([
-        supabase.from("quotations").select("*").eq("id", id).single(),
+        supabase.from("quotations").select("*").eq("id", id).eq("user_id", user!.id).single(),
         supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
       ])
       if (qErr) throw qErr
@@ -136,16 +136,10 @@ export default function ViewQuotationPage() {
  
   const generateNextInvoiceNo = async () => {
     try {
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user!.id)
-        .maybeSingle()
-      const orgId = membership?.org_id
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no")
-        .eq("org_id", orgId ?? "")
+        .eq("user_id", user!.id)
       if (error) throw error
       if (!data || data.length === 0) return "INV-001"
       const numbers = data
@@ -173,19 +167,10 @@ export default function ViewQuotationPage() {
     if (!quotation || !user?.id) return
     setConvertLoading(true)
     try {
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-      const orgId = membership?.org_id
-      if (!orgId) throw new Error("No organization found")
-
       const { data, error } = await supabase
         .from("invoices")
         .insert({
           user_id: user.id,
-          org_id: orgId,
           quotation_id: quotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,

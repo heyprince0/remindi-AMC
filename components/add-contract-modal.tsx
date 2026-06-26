@@ -108,16 +108,10 @@ export function AddContractModal({
   const loadCustomers = async () => {
     try {
       setLoadingCustomers(true)
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', userId)
-        .maybeSingle()
-      const orgId = membership?.org_id
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .eq('org_id', orgId ?? '')
+        .eq('user_id', userId)
 
       if (error) throw error
       setCustomers(data || [])
@@ -159,16 +153,8 @@ export function AddContractModal({
     try {
       setLoading(true)
 
-      const { data: membership } = await supabase
-        .from('memberships')
-        .select('org_id')
-        .eq('user_id', userId)
-        .maybeSingle()
-      const orgId = membership?.org_id
-
       const contractData = {
         user_id: userId,
-        org_id: orgId ?? null,
         customer_id: formData.customerId,
         contract_name: formData.contractName,
         frequency_days: parseInt(formData.frequency),
