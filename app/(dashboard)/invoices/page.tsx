@@ -61,9 +61,34 @@ export default function InvoicesPage() {
   const [deleting, setDeleting] = useState(false)
   const [showNewInvoiceModal, setShowNewInvoiceModal] = useState(false)
 
+  // --- Organization state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- Fetch org_id ---
   useEffect(() => {
-    loadInvoices()
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
   }, [user?.id])
+
+  // Load invoices when org ID is available
+  useEffect(() => {
+    if (currentOrgId) {
+      loadInvoices()
+    }
+  }, [currentOrgId])
 
   const handleFilter = () => {
     let filtered = invoices
@@ -88,12 +113,12 @@ export default function InvoicesPage() {
 
   const loadInvoices = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -109,7 +134,7 @@ export default function InvoicesPage() {
   }
 
   const handleDeleteInvoice = async () => {
-    if (!invoiceToDelete || !user?.id) return
+    if (!invoiceToDelete || !currentOrgId) return
 
     setDeleting(true)
     try {
@@ -117,7 +142,7 @@ export default function InvoicesPage() {
         .from("invoices")
         .delete()
         .eq("id", invoiceToDelete.id)
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)   // <-- added
 
       if (error) throw error
 
@@ -293,12 +318,13 @@ export default function InvoicesPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* New Invoice Modal */}
-        {user?.id && (
+        {/* New Invoice Modal - pass org_id */}
+        {user?.id && currentOrgId && (
           <NewInvoiceModal
             open={showNewInvoiceModal}
             onOpenChange={setShowNewInvoiceModal}
             userId={user.id}
+            orgId={currentOrgId}   // <-- added
           />
         )}
       </div>
