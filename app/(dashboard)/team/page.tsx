@@ -29,79 +29,114 @@ export default function TeamPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  const loadTeamData = async () => {
-    try {
-      if (!user?.id) return
-
-      const { data: userMembership } = await supabase
+  // Fetch current user's org and role
+  useEffect(() => {
+    if (user?.id) {
+      supabase
         .from("memberships")
-        .select("role")
+        .select("org_id, role")
         .eq("user_id", user.id)
-        .maybeSingle()
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setCurrentOrgId(data.org_id)
+            setUserRole(data.role)
+            loadTeamData(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
 
-      if (userMembership) {
-        setUserRole(userMembership.role)
-      }
+  const loadTeamData = async (orgId: string) => {
+    try {
+      if (!orgId) return
 
+      // 1. Fetch memberships for this org only
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
+        .eq("org_id", orgId)
         .order("created_at", { ascending: false })
 
-      if (!membershipsError && membershipsData) {
-        const membersWithProfiles: MemberWithProfile[] = []
+      if (membershipsError) throw membershipsError
 
-        for (const membership of membershipsData) {
-          // Try profiles table first for display name (set during profile-setup)
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name")
-            .eq("id", membership.user_id)
-            .maybeSingle()
+      const membersWithProfiles: MemberWithProfile[] = []
 
-          // Get email from the accepted invite for this user in this org
-          // This is the most reliable source since we store it at invite time
-          const { data: acceptedInvite } = await supabase
-            .from("invites")
-            .select("email")
-            .eq("org_id", membership.org_id)
-            .eq("status", "accepted")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle()
+      for (const membership of membershipsData || []) {
+        let fullName: string | undefined
+        let email: string | undefined
 
-          // Fallback to company_profile for name and email if profiles has nothing
-          let companyName: string | undefined
-          let companyEmail: string | undefined
-          if (!profile?.full_name) {
-            const { data: cp } = await supabase
-              .from("company_profile")
-              .select("company_name, email")
-              .eq("user_id", membership.user_id)
-              .maybeSingle()
-            companyName = cp?.company_name || undefined
-            companyEmail = cp?.email || undefined
-          }
+        // Try to get full_name from profiles
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", membership.user_id)
+          .maybeSingle()
 
-          membersWithProfiles.push({
-            ...membership,
-            full_name: profile?.full_name || companyName || undefined,
-            email: acceptedInvite?.email || companyEmail || undefined,
-          })
+        if (profile?.full_name) {
+          fullName = profile.full_name
         }
 
-        setMembers(membersWithProfiles)
+        // If no full_name, try company_profile (company_name as fallback)
+        if (!fullName) {
+          const { data: cp } = await supabase
+            .from("company_profile")
+            .select("company_name")
+            .eq("user_id", membership.user_id)
+            .maybeSingle()
+          if (cp?.company_name) {
+            fullName = cp.company_name
+          }
+        }
+
+        // Get email from accepted invite
+        const { data: acceptedInvite } = await supabase
+          .from("invites")
+          .select("email")
+          .eq("org_id", orgId)
+          .eq("user_id", membership.user_id)   // link invite to the user
+          .eq("status", "accepted")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (acceptedInvite?.email) {
+          email = acceptedInvite.email
+        }
+
+        // If no email from invite, try company_profile email
+        if (!email) {
+          const { data: cp } = await supabase
+            .from("company_profile")
+            .select("email")
+            .eq("user_id", membership.user_id)
+            .maybeSingle()
+          if (cp?.email) {
+            email = cp.email
+          }
+        }
+
+        membersWithProfiles.push({
+          ...membership,
+          full_name: fullName,
+          email: email,
+        })
       }
 
+      setMembers(membersWithProfiles)
+
+      // 2. Fetch pending invites for this org
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
+        .eq("org_id", orgId)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
 
-      if (!invitesError && invitesData) {
-        setPendingInvites(invitesData)
+      if (!invitesError) {
+        setPendingInvites(invitesData || [])
       }
     } catch (error) {
       console.error("[team] Error loading team data:", error)
@@ -111,9 +146,13 @@ export default function TeamPage() {
     }
   }
 
+  // Redirect non-admin users
   useEffect(() => {
-    loadTeamData()
-  }, [user?.id])
+    if (userRole && userRole !== "admin") {
+      toast.error("You don't have permission to view this page")
+      // Optionally redirect: router.push("/dashboard")
+    }
+  }, [userRole])
 
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
@@ -376,7 +415,9 @@ export default function TeamPage() {
         <InviteMemberModal
           open={inviteModalOpen}
           onOpenChange={setInviteModalOpen}
-          onSuccess={loadTeamData}
+          onSuccess={() => {
+            if (currentOrgId) loadTeamData(currentOrgId)
+          }}
         />
       </div>
     </DashboardLayout>
