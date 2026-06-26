@@ -1,5 +1,5 @@
 "use client"
- 
+
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
@@ -18,6 +18,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import {
   Dialog,
   DialogContent,
@@ -29,12 +31,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
- 
+
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
 const safeDate = (val: any) =>
   val ? new Date(val).toLocaleDateString("en-IN") : "-"
- 
+
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
@@ -45,16 +47,14 @@ function formatDate(dateStr: string | null | undefined): string {
     year: "numeric",
   })
 }
- 
 
- 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : [24, 95, 165]
 }
- 
+
 function toWords(n: number): string {
   const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
   const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
@@ -66,7 +66,7 @@ function toWords(n: number): string {
   if (n < 10000000) return toWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + toWords(n % 100000) : "")
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
 }
- 
+
 export default function ViewQuotationPage() {
   const params = useParams()
   const router = useRouter()
@@ -77,7 +77,6 @@ export default function ViewQuotationPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [showConvertModal, setShowConvertModal] = useState(false)
-  // Persist stamp toggle in localStorage — survives page refresh
   const [includeStamp, setIncludeStamp] = useState<boolean>(false)
   const [convertLoading, setConvertLoading] = useState(false)
   const [invoiceNo, setInvoiceNo] = useState("")
@@ -105,17 +104,17 @@ export default function ViewQuotationPage() {
     setIncludeStamp(newVal)
     localStorage.setItem(`stamp_toggle_q_${id}`, String(newVal))
   }
- 
+
   useEffect(() => {
     if (user?.id && id) loadData()
   }, [id, user?.id])
- 
+
   useEffect(() => {
     if (profile?.payment_terms) {
       setSelectedPaymentTerms(profile.payment_terms)
     }
   }, [profile?.payment_terms])
- 
+
   const loadData = async () => {
     setLoading(true)
     try {
@@ -133,7 +132,7 @@ export default function ViewQuotationPage() {
       setLoading(false)
     }
   }
- 
+
   const generateNextInvoiceNo = async () => {
     try {
       const { data, error } = await supabase
@@ -156,13 +155,13 @@ export default function ViewQuotationPage() {
       return "INV-001"
     }
   }
- 
+
   const handleOpenConvertModal = async () => {
     const nextNo = await generateNextInvoiceNo()
     setInvoiceNo(nextNo)
     setShowConvertModal(true)
   }
- 
+
   const handleConvertToInvoice = async () => {
     if (!quotation || !user?.id) return
     setConvertLoading(true)
@@ -196,23 +195,23 @@ export default function ViewQuotationPage() {
         })
         .select()
         .single()
- 
+
       if (error) throw error
-      
+
       // Update the quotation record with the invoice_id
       const { error: updateErr } = await supabase
         .from("quotations")
         .update({ invoice_id: data.id })
         .eq("id", quotation.id)
-      
+
       if (updateErr) throw updateErr
-      
+
       // Update the quotation state with the invoice_id so button switches immediately
       setQuotation({ ...quotation, invoice_id: data.id })
-      
+
       toast.success("Invoice generated successfully")
       setShowConvertModal(false)
-      
+
       // Navigate after a brief delay to allow UI to update
       setTimeout(() => {
         router.push(`/invoices/${data.id}`)
@@ -224,9 +223,7 @@ export default function ViewQuotationPage() {
       setConvertLoading(false)
     }
   }
- 
 
- 
   const getMappedItems = () => {
     return (quotation?.items ?? []).map((item: any, index: number) => ({
       sr: index + 1,
@@ -236,11 +233,11 @@ export default function ViewQuotationPage() {
       amount: Number(item.amount ?? ((item.qty ?? item.quantity ?? 0) * (item.rate ?? item.unit_price ?? 0)) ?? 0),
     }))
   }
- 
+
   const calculateTotals = () => {
     if (!quotation) return { subtotal: 0, sgst: 0, cgst: 0, grandTotal: 0 }
     const items = quotation.items ?? []
-    const subtotal = items.reduce((sum, item) => 
+    const subtotal = items.reduce((sum, item) =>
       sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0)), 0)
     const includeGst = quotation.include_gst ?? true
     const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
@@ -248,11 +245,7 @@ export default function ViewQuotationPage() {
     const grandTotal = subtotal + sgst + cgst
     return { subtotal, sgst, cgst, grandTotal }
   }
- 
-  const getGrandTotal = () => {
-    return calculateTotals().grandTotal
-  }
- 
+
   const handleWhatsApp = () => {
     if (!quotation) return
     const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
@@ -279,78 +272,406 @@ export default function ViewQuotationPage() {
       `_Powered by Remindi_`
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
- 
+
+  // ============================================================
+  // NEW PDF GENERATION USING jsPDF + autoTable (old invoice style)
+  // ============================================================
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!quotation) return
+
+    // Validate stamp/signature images exist if toggle is ON
+    if (stampToggle && (!profile?.stamp_url && !profile?.signature_url)) {
+      toast.error('Please upload your stamp/signature in Settings first')
+      router.push('/settings')
+      return
+    }
+
     setGeneratingPdf(true)
     try {
-      const items = quotation.items ?? []
-      const subtotal = items.reduce((sum, item) => sum + (Number(item.qty ?? item.quantity ?? 1) * Number(item.rate ?? item.unit_price ?? 0)), 0)
-      const includeGst = quotation.include_gst ?? true
-      const sgst = includeGst ? Math.round(subtotal * 0.09) : 0
-      const cgst = includeGst ? Math.round(subtotal * 0.09) : 0
-      const grandTotal = subtotal + sgst + cgst
-      const themeColor = profile?.theme_color ?? '#185FA5'
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+      const pageW = 210
+      const pageH = 297
+      const margin = 15
+      const themeColor = profile?.theme_color ?? "#185FA5"
+      const [tr, tg, tb] = hexToRgb(themeColor)
 
-      let stampHtml = ''
-      if (stampToggle && profile?.stamp_url) {
+      let y = margin
+
+      // ===== HEADER SECTION =====
+      const headerStyle = profile?.header_style ?? "single_logo"
+
+      if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         try {
-          const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(profile.stamp_url)
-          stampHtml = `<img src="${urlData.publicUrl}" style="width:80px;height:80px;object-fit:contain" /><br/><small style="color:#888">Authorized Signatory</small>`
-        } catch(e) { /* skip */ }
+          const response = await fetch(profile.header_thumbnail_url)
+          const blob = await response.blob()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          const bannerW = pageW - (margin * 2)
+          const bannerH = Math.round(bannerW / (1462 / 396))
+          doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
+          y += bannerH
+        } catch (e) { /* skip banner silently */ }
+      } else {
+        // Single logo mode
+        let logoX = margin
+        let logoAdded = false
+        try {
+          if (profile?.logo_url) {
+            const response = await fetch(profile.logo_url)
+            const blob = await response.blob()
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.readAsDataURL(blob)
+            })
+            doc.addImage(base64, "PNG", logoX, y, 22, 22)
+            logoAdded = true
+          }
+        } catch (e) { /* skip logo silently */ }
+
+        const infoX = logoAdded ? logoX + 24 : logoX
+        doc.setFontSize(14)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(profile?.company_name), infoX, y + 2)
+
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(120, 120, 120)
+        let infoY = y + 8
+
+        if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
+        if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
+        if (profile?.city || profile?.state || profile?.zip_code) {
+          const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+          doc.text(locationStr, infoX, infoY); infoY += 4
+        }
+        if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
+        if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
+        if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
+
+        y += 31
       }
 
-      const itemRows = items.map((item: any, idx: number) => `
-        <tr><td>${idx+1}</td><td>${item.particulars ?? item.description ?? item.name ?? '-'}</td>
-        <td>${item.qty ?? item.quantity ?? 1}</td>
-        <td>Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString('en-IN')}</td>
-        <td>Rs. ${Number(item.amount ?? 0).toLocaleString('en-IN')}</td></tr>`).join('')
+      // Header bottom line
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.5)
+      doc.line(margin, y, pageW - margin, y)
+      y += 6
 
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) { toast.error('Please allow popups to download PDF'); return }
-      printWindow.document.write(`<!DOCTYPE html><html><head><title>Quotation ${safeStr(quotation.quote_no)}</title>
-        <style>body{font-family:helvetica,sans-serif;margin:20px;color:#000;font-size:10px}
-        h2{font-size:14px;margin:0}
-        .header{border-bottom:2px solid ${themeColor};padding-bottom:8px;margin-bottom:12px}
-        .right{text-align:right}.bold{font-weight:bold}
-        table{width:100%;border-collapse:collapse;margin:8px 0}
-        th{background:${themeColor};color:#fff;padding:5px 4px;text-align:left;font-size:9px}
-        td{padding:4px;border:1px solid #ddd;font-size:9px}
-        .totals td{border:none;padding:2px 4px}
-        .footer-sig{text-align:right;margin-top:20px}
-        footer{font-size:8px;color:#999;text-align:center;margin-top:20px}
-        @media print{@page{margin:15mm}}</style></head>
-        <body>
-        <div class="header">
-          ${profile?.logo_url ? `<img src="${profile.logo_url}" style="height:40px;float:left;margin-right:10px"/>` : ''}
-          <h2>${safeStr(profile?.company_name)}</h2>
-          <div style="color:#888;font-size:9px">${profile?.address ?? ''} ${profile?.city ?? ''} ${profile?.state ?? ''}<br/>
-          ${profile?.phone ? 'Ph: ' + profile.phone : ''} ${profile?.email ? '| ' + profile.email : ''} ${profile?.gstin ? '| GSTIN: ' + profile.gstin : ''}</div>
-          <div style="clear:both"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-          <div><div class="bold">${safeStr(quotation.quote_no)}</div></div>
-          <div class="right">DATE: ${quotation.created_at ? new Date(quotation.created_at).toLocaleDateString('en-IN') : '-'}</div>
-        </div>
-        <div style="margin-bottom:10px">TO,<br/>THE OWNER,<br/><strong>${safeStr(quotation.client_name).toUpperCase()}</strong><br/>
-        ${quotation.client_address ?? ''}<br/>${[quotation.client_district, quotation.client_state, quotation.client_pin_code].filter(Boolean).join(', ')}</div>
-        ${quotation.subject ? `<div class="bold">Sub: ${safeStr(quotation.subject)}</div>` : ''}
-        ${quotation.body_text ? `<div style="margin:6px 0;color:#444">${safeStr(quotation.body_text)}</div>` : ''}
-        <table><thead><tr><th>SR.NO</th><th>PARTICULARS</th><th>QTY</th><th>RATE</th><th>AMOUNT</th></tr></thead>
-        <tbody>${itemRows}</tbody></table>
-        <table class="totals" style="width:auto;margin-left:auto">
-          <tr><td>Subtotal:</td><td class="right">Rs. ${subtotal.toLocaleString('en-IN')}</td></tr>
-          ${includeGst ? `<tr><td>SGST (9%):</td><td class="right">Rs. ${sgst.toLocaleString('en-IN')}</td></tr>
-          <tr><td>CGST (9%):</td><td class="right">Rs. ${cgst.toLocaleString('en-IN')}</td></tr>` : ''}
-          <tr><td class="bold">Total:</td><td class="bold right">Rs. ${grandTotal.toLocaleString('en-IN')}</td></tr>
-        </table>
-        ${quotation.notes ? `<div style="margin-top:10px"><strong>Terms &amp; Conditions:</strong><br/><span style="color:#555">${safeStr(quotation.notes)}</span></div>` : ''}
-        <div class="footer-sig"><div>Thanking you,</div><div>Yours faithfully,</div><div class="bold">For ${safeStr(profile?.company_name)}</div>${stampHtml}</div>
-        <footer>Generated by Remindi · remindi.online</footer>
-        <script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}</script>
-        </body></html>`)
-      printWindow.document.close()
-      toast.success('PDF opened — use Print > Save as PDF')
+      // ===== QUOTATION HEADER =====
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text('QUOTATION', pageW - margin, y, { align: 'right' })
+
+      y += 6
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(quotation.quote_no ?? ("QT-" + quotation.id)), margin, y)
+      const formattedDate = quotation.created_at
+        ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
+
+      y += 5
+      if (quotation.valid_till) {
+        doc.setFontSize(9)
+        doc.setTextColor(220, 38, 38)
+        doc.text('Valid till: ' + safeDate(quotation.valid_till), pageW - margin, y, { align: 'right' })
+        y += 5
+      }
+      if (quotation.order_no) {
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(0, 0, 0)
+        doc.text('Order No: ' + safeStr(quotation.order_no), pageW - margin, y, { align: 'right' })
+        y += 5
+      }
+      if (quotation.order_date) {
+        const orderDateFormatted = new Date(quotation.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
+      }
+      doc.setTextColor(0, 0, 0)
+
+      // ===== CLIENT BLOCK =====
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(150, 150, 150)
+      doc.text("TO,", margin, y)
+      y += 5
+
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
+      y += 5
+
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+      if (quotation.client_address) {
+        doc.text(safeStr(quotation.client_address), margin, y)
+        y += 5
+      }
+
+      const cityStateZip = [
+        quotation.client_district,
+        quotation.client_state,
+        quotation.client_pin_code
+      ].filter(Boolean).join(', ')
+      if (cityStateZip) {
+        doc.text(cityStateZip, margin, y)
+        y += 5
+      }
+      y += 3
+
+      // ===== SUBJECT & BODY =====
+      if (quotation.subject) {
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text('Sub: ' + safeStr(quotation.subject), margin, y)
+        y += 5
+      }
+      if (quotation.body_text) {
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        const bodyLines = doc.splitTextToSize(safeStr(quotation.body_text), pageW - 2 * margin)
+        doc.text(bodyLines, margin, y)
+        y += (bodyLines.length * 4) + 3
+      }
+
+      // ===== ITEMS TABLE =====
+      const items = quotation.items ?? []
+      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
+
+      const tableBody = items.map((item: any, idx: number) => [
+        String(idx + 1),
+        safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
+        String(item.qty ?? item.quantity ?? 1),
+        `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
+        `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
+      ])
+
+      autoTable(doc, {
+        startY: y,
+        head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: {
+          fillColor: [tr, tg, tb],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 9,
+          halign: "center",
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: [0, 0, 0],
+        },
+        columnStyles: {
+          0: { cellWidth: 15, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 20, halign: "center" },
+          3: { cellWidth: 35, halign: "right" },
+          4: { cellWidth: 35, halign: "right" },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 8
+
+      // ===== TOTALS =====
+      if (quotation.include_gst) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+
+        doc.text('Subtotal:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+        y += 4
+        doc.text('SGST (9%):', 160, y, { align: 'right' })
+        doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+        y += 4
+        doc.text('CGST (9%):', 160, y, { align: 'right' })
+        doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+        y += 3
+        doc.setDrawColor(0, 0, 0)
+        doc.setLineWidth(0.3)
+        doc.line(140, y, 195, y)
+
+        y += 4
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('Total:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+      } else {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text('Total:', 160, y, { align: 'right' })
+        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+      }
+
+      // ===== IN WORDS =====
+      y += 2
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      const inWordsAmount = quotation.include_gst ? grandTotal : subtotal
+      doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
+      y += 20
+
+      // ===== PAYMENT DETAILS (optional) =====
+      if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
+        if (y + 30 > pageH - 10) {
+          doc.addPage()
+          y = margin
+        }
+        y += 10
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Payment Details:", margin, y)
+        y += 5
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(40, 40, 40)
+
+        if (profile?.bank_name) {
+          doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
+          y += 4
+        }
+        if (profile?.account_no) {
+          doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
+          y += 4
+        }
+        if (profile?.ifsc_code) {
+          doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
+          y += 4
+        }
+        if (profile?.upi_id) {
+          doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
+          y += 4
+        }
+        if (quotation.payment_terms) {
+          doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y)
+          y += 4
+        }
+      }
+
+      // ===== TAX INFORMATION =====
+      if (y + 25 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      y += 6
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text("Tax Information:", margin, y)
+      y += 5
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(40, 40, 40)
+
+      if (profile?.gstin) {
+        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
+        y += 4
+      }
+      if (profile?.pan_number) {
+        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
+        y += 4
+      }
+      doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+      y += 6
+
+      // ===== NOTES / TERMS =====
+      if (quotation.notes) {
+        if (y + 20 > pageH - 10) {
+          doc.addPage()
+          y = margin
+        }
+        y += 3
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Terms & Conditions:", margin, y)
+        y += 4
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin)
+        doc.text(noteLines, margin, y)
+        y += (noteLines.length * 4)
+      }
+
+      // ===== FOOTER =====
+      if (y + 40 > pageH - 10) {
+        doc.addPage()
+        y = margin
+      }
+      y += 10
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(0, 0, 0)
+      doc.text('Thanking you,', 195, y, { align: 'right' })
+      doc.text('Yours faithfully,', 195, y+6, { align: 'right' })
+      doc.setFont('helvetica', 'bold')
+      doc.text('For ' + safeStr(profile?.company_name), 195, y+12, { align: 'right' })
+
+      // Add stamp if toggle is ON
+      if (stampToggle && profile?.stamp_url) {
+        let stampY = y + 18
+
+        try {
+          const { data: publicUrlData } = supabase.storage
+            .from('company-assets')
+            .getPublicUrl(profile.stamp_url)
+
+          const stampResponse = await fetch(publicUrlData.publicUrl)
+          if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
+
+          const stampBlob = await stampResponse.blob()
+          const stampBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(stampBlob)
+          })
+
+          const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+
+          const stampW = 30
+          const stampH = 30
+          const stampX = pageW - margin - stampW
+          doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
+          stampY += stampH + 2
+
+          doc.setDrawColor(200, 200, 200)
+          doc.setLineWidth(0.5)
+          doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
+          stampY += 4
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(120, 120, 120)
+          doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
+        } catch (e) {
+          console.error('Error adding stamp to PDF:', e)
+        }
+      }
+
+      // Bottom: Generated by Remindi
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.setFont("helvetica", "normal")
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
+
+      const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
+      doc.save(filename)
+      toast.success("PDF downloaded")
     } catch (err) {
       console.error("PDF error:", err)
       toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
@@ -368,7 +689,7 @@ export default function ViewQuotationPage() {
       </DashboardLayout>
     )
   }
- 
+
   if (!quotation) {
     return (
       <DashboardLayout>
@@ -381,16 +702,16 @@ export default function ViewQuotationPage() {
       </DashboardLayout>
     )
   }
- 
+
   const mappedItems = getMappedItems()
   const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
   const includeGst = quotation.include_gst ?? true
   const statusLower = (quotation.status ?? "draft").toLowerCase()
- 
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 max-w-4xl mx-auto">
- 
+
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -413,7 +734,7 @@ export default function ViewQuotationPage() {
               </p>
             </div>
           </div>
- 
+
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {profile?.stamp_url || profile?.signature_url ? (
               <Button
@@ -444,8 +765,6 @@ export default function ViewQuotationPage() {
               )}
               Download PDF
             </Button>
-           
- 
             {quotation.invoice_id ? (
               <Button
                 className="bg-green-600 hover:bg-green-700 text-white"
@@ -472,7 +791,7 @@ export default function ViewQuotationPage() {
             </Link>
           </div>
         </div>
- 
+
         {/* COMPANY INFO */}
         {profile && (
           <Card>
@@ -515,7 +834,7 @@ export default function ViewQuotationPage() {
             </CardContent>
           </Card>
         )}
- 
+
         {/* CUSTOMER INFORMATION */}
         <Card>
           <CardHeader>
@@ -526,7 +845,6 @@ export default function ViewQuotationPage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
               <p className="font-medium">{quotation.client_name ?? "-"}</p>
             </div>
-           
             <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
               <p className="font-medium">{quotation.client_address ?? "-"}</p>
@@ -545,7 +863,7 @@ export default function ViewQuotationPage() {
             </div>
           </CardContent>
         </Card>
- 
+
         {/* ITEMS TABLE */}
         <Card>
           <CardHeader>
@@ -586,7 +904,7 @@ export default function ViewQuotationPage() {
             </div>
           </CardContent>
         </Card>
- 
+
         {/* TOTALS */}
         <Card>
           <CardContent className="pt-6">
@@ -623,7 +941,7 @@ export default function ViewQuotationPage() {
             </div>
           </CardContent>
         </Card>
- 
+
         {/* NOTES */}
         {quotation.notes && (
           <Card>
@@ -636,7 +954,7 @@ export default function ViewQuotationPage() {
           </Card>
         )}
       </div>
- 
+
       {/* Convert to Invoice Modal */}
       <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
@@ -646,7 +964,7 @@ export default function ViewQuotationPage() {
               <p className="text-xs text-muted-foreground mt-1">From {quotation.quote_no}</p>
             )}
           </DialogHeader>
- 
+
           <div className="space-y-4">
             {/* Order Number */}
             <div className="space-y-2">
@@ -658,7 +976,7 @@ export default function ViewQuotationPage() {
                 placeholder="e.g. PO-2026-001"
               />
             </div>
- 
+
             {/* Order Date */}
             <div className="space-y-2">
               <Label htmlFor="order-date">Order Date (Optional)</Label>
@@ -669,7 +987,7 @@ export default function ViewQuotationPage() {
                 onChange={(e) => setOrderDate(e.target.value)}
               />
             </div>
- 
+
             {/* Invoice Number */}
             <div className="space-y-2">
               <Label htmlFor="invoice-no">Invoice Number</Label>
@@ -680,7 +998,7 @@ export default function ViewQuotationPage() {
                 placeholder="INV-001"
               />
             </div>
- 
+
             {/* Invoice Date */}
             <div className="space-y-2">
               <Label htmlFor="invoice-date">Invoice Date</Label>
@@ -691,7 +1009,7 @@ export default function ViewQuotationPage() {
                 onChange={(e) => setInvoiceDate(e.target.value)}
               />
             </div>
- 
+
             {/* Due Date */}
             <div className="space-y-2">
               <Label htmlFor="due-date">Valid till</Label>
@@ -702,7 +1020,7 @@ export default function ViewQuotationPage() {
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
- 
+
             {/* Payment Terms */}
             <div className="space-y-2">
               <Label htmlFor="payment-terms">Payment Terms</Label>
@@ -720,7 +1038,7 @@ export default function ViewQuotationPage() {
                 </SelectContent>
               </Select>
             </div>
- 
+
             {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="invoice-notes">Terms and Conditions</Label>
@@ -732,7 +1050,7 @@ export default function ViewQuotationPage() {
                 className="min-h-[80px] resize-none"
               />
             </div>
- 
+
             {/* Summary */}
             {quotation && (
               <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
@@ -758,7 +1076,7 @@ export default function ViewQuotationPage() {
               </div>
             )}
           </div>
- 
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConvertModal(false)}>
               Cancel
