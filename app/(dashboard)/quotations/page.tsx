@@ -104,6 +104,7 @@ export default function QuotationsPage() {
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
+        .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false })
 
       if (error) throw error
