@@ -23,6 +23,7 @@ export default function EditQuotationPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Form state
   const [customerName, setCustomerName] = useState("")
   const [customerAddress, setCustomerAddress] = useState("")
   const [customerDistrict, setCustomerDistrict] = useState("")
@@ -36,10 +37,10 @@ export default function EditQuotationPage() {
   const [gstRate, setGstRate] = useState(18)
   const [notes, setNotes] = useState("")
 
-  // --- ADDED: organization ID ---
+  // --- Organization ID ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- fetch org_id on mount ---
+  // --- fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -58,7 +59,7 @@ export default function EditQuotationPage() {
     }
   }, [user?.id])
 
-  // Load quotation only when org_id is available
+  // Load quotation when org_id is available
   useEffect(() => {
     if (id && currentOrgId) {
       loadQuotation()
@@ -73,7 +74,7 @@ export default function EditQuotationPage() {
         .from("quotations")
         .select("*")
         .eq("id", id)
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
         .single()
 
       if (error) throw error
@@ -127,10 +128,18 @@ export default function EditQuotationPage() {
     setItems(updatedItems)
   }
 
+  // --- Compute totals safely ---
+  const subtotal = Array.isArray(items)
+    ? items.reduce((sum, item) => sum + (item.amount || 0), 0)
+    : 0
+
+  const gstRateNum = Number(gstRate) || 18
+  const gstAmount = includeGst ? Math.round(subtotal * (gstRateNum / 100)) : 0
+  const total = subtotal + gstAmount
+
   const handleSave = async () => {
     if (!user?.id || !id || !currentOrgId) return
 
-    // Validation
     if (!customerName.trim()) {
       toast.error("Please enter customer name")
       return
@@ -150,7 +159,6 @@ export default function EditQuotationPage() {
       const cgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
       const grandTotal = calculatedSubtotal + sgst + cgst
 
-      // Update with org_id filter for safety
       const { error } = await supabase
         .from("quotations")
         .update({
@@ -172,7 +180,7 @@ export default function EditQuotationPage() {
           notes: notes,
         })
         .eq("id", id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
 
       if (error) throw error
       toast.success("Quotation updated successfully")
@@ -437,7 +445,7 @@ export default function EditQuotationPage() {
                   onCheckedChange={(checked) => setIncludeGst(checked as boolean)}
                 />
                 <Label htmlFor="include-gst" className="text-sm cursor-pointer">
-                  Include GST ({gstRate}%)
+                  Include GST ({gstRateNum}%)
                 </Label>
               </div>
 
