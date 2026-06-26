@@ -92,6 +92,28 @@ export default function ViewQuotationPage() {
   const [orderDate, setOrderDate] = useState("")
   const id = params.id as string
 
+  // --- ADDED: organization ID state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- ADDED: fetch user's organization ID ---
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
   // Load stamp toggle from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem(`stamp_toggle_q_${id}`)
@@ -105,9 +127,12 @@ export default function ViewQuotationPage() {
     localStorage.setItem(`stamp_toggle_q_${id}`, String(newVal))
   }
 
+  // Load data only when org ID is available
   useEffect(() => {
-    if (user?.id && id) loadData()
-  }, [id, user?.id])
+    if (user?.id && id && currentOrgId) {
+      loadData()
+    }
+  }, [id, user?.id, currentOrgId])
 
   useEffect(() => {
     if (profile?.payment_terms) {
@@ -118,11 +143,23 @@ export default function ViewQuotationPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [{ data: qData, error: qErr }, { data: pData }] = await Promise.all([
-        supabase.from("quotations").select("*").eq("id", id).eq("user_id", user!.id).single(),
-        supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
-      ])
+      // Fetch quotation with org_id filter
+      const { data: qData, error: qErr } = await supabase
+        .from("quotations")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .single()
+
       if (qErr) throw qErr
+
+      // Fetch company profile with org_id filter
+      const { data: pData } = await supabase
+        .from("company_profile")
+        .select("*")
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .single()
+
       setQuotation(qData as Quotation)
       if (pData) setProfile(pData as CompanyProfile)
     } catch (err) {
@@ -135,10 +172,11 @@ export default function ViewQuotationPage() {
 
   const generateNextInvoiceNo = async () => {
     try {
+      // Filter invoices by org_id
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no")
-        .eq("user_id", user!.id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
       if (error) throw error
       if (!data || data.length === 0) return "INV-001"
       const numbers = data
@@ -163,13 +201,14 @@ export default function ViewQuotationPage() {
   }
 
   const handleConvertToInvoice = async () => {
-    if (!quotation || !user?.id) return
+    if (!quotation || !user?.id || !currentOrgId) return
     setConvertLoading(true)
     try {
       const { data, error } = await supabase
         .from("invoices")
         .insert({
           user_id: user.id,
+          org_id: currentOrgId,               // <-- added
           quotation_id: quotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,
@@ -206,13 +245,10 @@ export default function ViewQuotationPage() {
 
       if (updateErr) throw updateErr
 
-      // Update the quotation state with the invoice_id so button switches immediately
       setQuotation({ ...quotation, invoice_id: data.id })
-
       toast.success("Invoice generated successfully")
       setShowConvertModal(false)
 
-      // Navigate after a brief delay to allow UI to update
       setTimeout(() => {
         router.push(`/invoices/${data.id}`)
       }, 500)
@@ -251,7 +287,6 @@ export default function ViewQuotationPage() {
     const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
     const items = quotation.items ?? []
     const includeGst = quotation.include_gst ?? true
-    const gstTotal = sgst + cgst
     const msg =
       `*Quotation - ${safeStr(profile?.company_name)}*\n` +
       `Quote No: ${safeStr(quotation.quote_no)}\n` +
@@ -273,13 +308,10 @@ export default function ViewQuotationPage() {
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
 
-  // ============================================================
-  // NEW PDF GENERATION USING jsPDF + autoTable (old invoice style)
-  // ============================================================
+  // PDF generation (unchanged – uses jsPDF)
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!quotation) return
 
-    // Validate stamp/signature images exist if toggle is ON
     if (stampToggle && (!profile?.stamp_url && !profile?.signature_url)) {
       toast.error('Please upload your stamp/signature in Settings first')
       router.push('/settings')
@@ -297,9 +329,8 @@ export default function ViewQuotationPage() {
 
       let y = margin
 
-      // ===== HEADER SECTION =====
+      // Header section (unchanged)
       const headerStyle = profile?.header_style ?? "single_logo"
-
       if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         try {
           const response = await fetch(profile.header_thumbnail_url)
@@ -313,9 +344,8 @@ export default function ViewQuotationPage() {
           const bannerH = Math.round(bannerW / (1462 / 396))
           doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
           y += bannerH
-        } catch (e) { /* skip banner silently */ }
+        } catch (e) { /* skip */ }
       } else {
-        // Single logo mode
         let logoX = margin
         let logoAdded = false
         try {
@@ -330,7 +360,7 @@ export default function ViewQuotationPage() {
             doc.addImage(base64, "PNG", logoX, y, 22, 22)
             logoAdded = true
           }
-        } catch (e) { /* skip logo silently */ }
+        } catch (e) { /* skip */ }
 
         const infoX = logoAdded ? logoX + 24 : logoX
         doc.setFontSize(14)
@@ -342,7 +372,6 @@ export default function ViewQuotationPage() {
         doc.setFont("helvetica", "normal")
         doc.setTextColor(120, 120, 120)
         let infoY = y + 8
-
         if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
         if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
         if (profile?.city || profile?.state || profile?.zip_code) {
@@ -352,17 +381,15 @@ export default function ViewQuotationPage() {
         if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
         if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
         if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-
         y += 31
       }
 
-      // Header bottom line
       doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(0.5)
       doc.line(margin, y, pageW - margin, y)
       y += 6
 
-      // ===== QUOTATION HEADER =====
+      // Quotation header
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
@@ -398,25 +425,22 @@ export default function ViewQuotationPage() {
       }
       doc.setTextColor(0, 0, 0)
 
-      // ===== CLIENT BLOCK =====
+      // Client block
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(150, 150, 150)
       doc.text("TO,", margin, y)
       y += 5
-
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
       doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
       y += 5
-
       doc.setFont("helvetica", "normal")
       doc.setTextColor(40, 40, 40)
       if (quotation.client_address) {
         doc.text(safeStr(quotation.client_address), margin, y)
         y += 5
       }
-
       const cityStateZip = [
         quotation.client_district,
         quotation.client_state,
@@ -428,7 +452,7 @@ export default function ViewQuotationPage() {
       }
       y += 3
 
-      // ===== SUBJECT & BODY =====
+      // Subject & Body
       if (quotation.subject) {
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
@@ -443,10 +467,9 @@ export default function ViewQuotationPage() {
         y += (bodyLines.length * 4) + 3
       }
 
-      // ===== ITEMS TABLE =====
+      // Items table
       const items = quotation.items ?? []
       const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-
       const tableBody = items.map((item: any, idx: number) => [
         String(idx + 1),
         safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
@@ -483,28 +506,23 @@ export default function ViewQuotationPage() {
 
       y = (doc as any).lastAutoTable.finalY + 8
 
-      // ===== TOTALS =====
+      // Totals
       if (quotation.include_gst) {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
-
         doc.text('Subtotal:', 160, y, { align: 'right' })
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
         y += 4
         doc.text('SGST (9%):', 160, y, { align: 'right' })
         doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
         y += 4
         doc.text('CGST (9%):', 160, y, { align: 'right' })
         doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
         y += 3
         doc.setDrawColor(0, 0, 0)
         doc.setLineWidth(0.3)
         doc.line(140, y, 195, y)
-
         y += 4
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
@@ -517,7 +535,7 @@ export default function ViewQuotationPage() {
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
       }
 
-      // ===== IN WORDS =====
+      // In words
       y += 2
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
@@ -526,12 +544,9 @@ export default function ViewQuotationPage() {
       doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
       y += 20
 
-      // ===== PAYMENT DETAILS (optional) =====
+      // Payment Details
       if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
-        if (y + 30 > pageH - 10) {
-          doc.addPage()
-          y = margin
-        }
+        if (y + 30 > pageH - 10) { doc.addPage(); y = margin }
         y += 10
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
@@ -540,34 +555,15 @@ export default function ViewQuotationPage() {
         y += 5
         doc.setFont("helvetica", "normal")
         doc.setTextColor(40, 40, 40)
-
-        if (profile?.bank_name) {
-          doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
-          y += 4
-        }
-        if (profile?.account_no) {
-          doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
-          y += 4
-        }
-        if (profile?.ifsc_code) {
-          doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
-          y += 4
-        }
-        if (profile?.upi_id) {
-          doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
-          y += 4
-        }
-        if (quotation.payment_terms) {
-          doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y)
-          y += 4
-        }
+        if (profile?.bank_name) { doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y); y += 4 }
+        if (profile?.account_no) { doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y); y += 4 }
+        if (profile?.ifsc_code) { doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y); y += 4 }
+        if (profile?.upi_id) { doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y); y += 4 }
+        if (quotation.payment_terms) { doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y); y += 4 }
       }
 
-      // ===== TAX INFORMATION =====
-      if (y + 25 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
+      // Tax Information
+      if (y + 25 > pageH - 10) { doc.addPage(); y = margin }
       y += 6
       doc.setFontSize(9)
       doc.setFont("helvetica", "bold")
@@ -576,24 +572,14 @@ export default function ViewQuotationPage() {
       y += 5
       doc.setFont("helvetica", "normal")
       doc.setTextColor(40, 40, 40)
-
-      if (profile?.gstin) {
-        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
-        y += 4
-      }
-      if (profile?.pan_number) {
-        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
-        y += 4
-      }
+      if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
+      if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
       doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
       y += 6
 
-      // ===== NOTES / TERMS =====
+      // Notes
       if (quotation.notes) {
-        if (y + 20 > pageH - 10) {
-          doc.addPage()
-          y = margin
-        }
+        if (y + 20 > pageH - 10) { doc.addPage(); y = margin }
         y += 3
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
@@ -607,11 +593,8 @@ export default function ViewQuotationPage() {
         y += (noteLines.length * 4)
       }
 
-      // ===== FOOTER =====
-      if (y + 40 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
+      // Footer
+      if (y + 40 > pageH - 10) { doc.addPage(); y = margin }
       y += 10
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
@@ -621,18 +604,15 @@ export default function ViewQuotationPage() {
       doc.setFont('helvetica', 'bold')
       doc.text('For ' + safeStr(profile?.company_name), 195, y+12, { align: 'right' })
 
-      // Add stamp if toggle is ON
+      // Stamp
       if (stampToggle && profile?.stamp_url) {
         let stampY = y + 18
-
         try {
           const { data: publicUrlData } = supabase.storage
             .from('company-assets')
             .getPublicUrl(profile.stamp_url)
-
           const stampResponse = await fetch(publicUrlData.publicUrl)
           if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
-
           const stampBlob = await stampResponse.blob()
           const stampBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
@@ -640,20 +620,16 @@ export default function ViewQuotationPage() {
             reader.onerror = reject
             reader.readAsDataURL(stampBlob)
           })
-
           const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
-
           const stampW = 30
           const stampH = 30
           const stampX = pageW - margin - stampW
           doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
           stampY += stampH + 2
-
           doc.setDrawColor(200, 200, 200)
           doc.setLineWidth(0.5)
           doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
           stampY += 4
-
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(8)
           doc.setTextColor(120, 120, 120)
@@ -663,7 +639,6 @@ export default function ViewQuotationPage() {
         }
       }
 
-      // Bottom: Generated by Remindi
       doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
       doc.setFont("helvetica", "normal")
@@ -706,12 +681,10 @@ export default function ViewQuotationPage() {
   const mappedItems = getMappedItems()
   const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
   const includeGst = quotation.include_gst ?? true
-  const statusLower = (quotation.status ?? "draft").toLowerCase()
 
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -884,9 +857,7 @@ export default function ViewQuotationPage() {
                 <tbody>
                   {mappedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No items
-                      </td>
+                      <td colSpan={5} className="text-center py-8 text-muted-foreground">No items</td>
                     </tr>
                   ) : (
                     mappedItems.map((item, i) => (
@@ -966,7 +937,6 @@ export default function ViewQuotationPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Order Number */}
             <div className="space-y-2">
               <Label htmlFor="order-no">Order Number (Optional)</Label>
               <Input
@@ -977,7 +947,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Order Date */}
             <div className="space-y-2">
               <Label htmlFor="order-date">Order Date (Optional)</Label>
               <Input
@@ -988,7 +957,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Invoice Number */}
             <div className="space-y-2">
               <Label htmlFor="invoice-no">Invoice Number</Label>
               <Input
@@ -999,7 +967,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Invoice Date */}
             <div className="space-y-2">
               <Label htmlFor="invoice-date">Invoice Date</Label>
               <Input
@@ -1010,7 +977,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Due Date */}
             <div className="space-y-2">
               <Label htmlFor="due-date">Valid till</Label>
               <Input
@@ -1021,7 +987,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Payment Terms */}
             <div className="space-y-2">
               <Label htmlFor="payment-terms">Payment Terms</Label>
               <Select value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
@@ -1039,7 +1004,6 @@ export default function ViewQuotationPage() {
               </Select>
             </div>
 
-            {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="invoice-notes">Terms and Conditions</Label>
               <Textarea
@@ -1051,7 +1015,6 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            {/* Summary */}
             {quotation && (
               <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
                 <p className="text-muted-foreground">
