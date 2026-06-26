@@ -36,7 +36,6 @@ import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, Edit, Trash2, Download } from "lucide-react"
 import { toast } from "sonner"
 import { AddContractModal } from "@/components/add-contract-modal"
-import jsPDF from "jspdf"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -212,175 +211,49 @@ export default function ContractsPage() {
 
   const exportContractsPDF = () => {
     try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const pageW = 297
-      const pageH = 210
-      const margin = 14
-
-      // Truncate text with an ellipsis if it exceeds the available column width
-      const truncateToWidth = (text: string, maxWidth: number): string => {
-        if (doc.getTextWidth(text) <= maxWidth) return text
-        let truncated = text
-        while (truncated.length > 0 && doc.getTextWidth(truncated + '...') > maxWidth) {
-          truncated = truncated.slice(0, -1)
-        }
-        return truncated + '...'
-      }
-
-      const skyBlue: [number, number, number]    = [41, 171, 226]
-      const darkHeader: [number, number, number] = [22, 45, 60]
-      const white: [number, number, number]      = [255, 255, 255]
-      const rowAlt: [number, number, number]     = [240, 249, 255]
-      const rowWhite: [number, number, number]   = [255, 255, 255]
-      const textDark: [number, number, number]   = [15, 23, 42]
-      const textMid: [number, number, number]    = [71, 85, 105]
-      const borderCol: [number, number, number]  = [203, 213, 225]
-
       const data = filteredContracts
       const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
       const counts = getStatusCounts(data)
 
-      const columns = [
-        { header: 'Contract Name', dataKey: 'contract_name',     width: 60 },
-        { header: 'Customer',      dataKey: 'customerName',      width: 48 },
-        { header: 'Frequency',     dataKey: 'frequency_days',    width: 26 },
-        { header: 'Price (Rs.)',   dataKey: 'contracts_price',   width: 26 },
-        { header: 'Start Date',    dataKey: 'start_date',        width: 30 },
-        { header: 'End Date',      dataKey: 'next_service_date', width: 30 },
-        { header: 'Status',        dataKey: '__status',          width: 24 },
-      ]
-      const tableWidth = columns.reduce((s, c) => s + c.width, 0)
-      const rowH = 9
-      const colHeaderH = 9
-      const tableStartY = 33
-      const maxY = pageH - 12
-
-      // Pre-count pages
-      let tempY = tableStartY + colHeaderH
-      let totalPages = 1
-      for (let i = 0; i < data.length; i++) {
-        if (tempY + rowH > maxY) { totalPages++; tempY = tableStartY + colHeaderH }
-        tempY += rowH
-      }
-
-      const addPageChrome = (pageNum: number) => {
-        // Header bar
-        doc.setFillColor(...darkHeader)
-        doc.rect(0, 0, pageW, 18, 'F')
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, 18, pageW, 2, 'F')
-        // Title
-        doc.setFontSize(15)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        doc.text('Contracts Report', margin, 12)
-        // Right label
-        doc.setFontSize(9)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(180, 210, 230)
-        doc.text('AMC CONTRACTS', pageW - margin, 12, { align: 'right' })
-        // Meta row
-        doc.setFontSize(8.5)
-        doc.setTextColor(...textMid)
-        doc.text(`Exported: ${dateStr}`, margin, 27)
-        // Summary counts - using calculated counts
-        doc.text(
-          `Total: ${data.length}  •  Active: ${counts.active}  •  Expired: ${counts.expired}  •  Today Servicing: ${counts.todayServicing}  •  Expiring Soon: ${counts.expiringSoon}`,
-          margin + 48, 27
-        )
-        doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: 'right' })
-        // Footer
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, pageH - 8, pageW, 8, 'F')
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        doc.text('remindi', margin, pageH - 3)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(180, 230, 248)
-        doc.text('— Smart AMC Management for Indian Contractors  •  www.remindi.online', margin + 14, pageH - 3)
-        doc.setTextColor(...white)
-        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 3, { align: 'right' })
-      }
-
-      const drawColHeaders = (y: number) => {
-        doc.setFillColor(...darkHeader)
-        doc.rect(margin, y, tableWidth, colHeaderH, 'F')
-        doc.setFontSize(8.5)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        let x = margin
-        for (const col of columns) {
-          doc.text(col.header, x + 2, y + 6, { maxWidth: col.width - 4 })
-          x += col.width
-        }
-      }
-
-      let currentPage = 1
-      addPageChrome(currentPage)
-      let currentY = tableStartY
-      drawColHeaders(currentY)
-      currentY += colHeaderH
-
-      doc.setFontSize(8.5)
-      doc.setFont('helvetica', 'normal')
-
-      for (let i = 0; i < data.length; i++) {
-        if (currentY + rowH > maxY) {
-          doc.addPage()
-          currentPage++
-          addPageChrome(currentPage)
-          currentY = tableStartY
-          drawColHeaders(currentY)
-          currentY += colHeaderH
-        }
-
-        const c = data[i]
+      const rows = data.map((c, i) => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
         const statusColor = getStatusPdfColor(statusLabel)
+        const colorHex = `rgb(${statusColor[0]},${statusColor[1]},${statusColor[2]})`
+        const price = c.contracts_price != null ? `Rs.${Number(c.contracts_price).toLocaleString('en-IN')}` : '—'
+        return `<tr style="background:${i % 2 === 0 ? '#f0f9ff' : '#fff'}">
+          <td>${c.contract_name || '—'}</td>
+          <td>${c.customerName || '—'}</td>
+          <td>${c.frequency_days} days</td>
+          <td>${price}</td>
+          <td>${c.start_date || '—'}</td>
+          <td>${c.next_service_date || '—'}</td>
+          <td style="color:${colorHex};font-weight:bold">${statusLabel}</td>
+        </tr>`
+      }).join('')
 
-        doc.setFillColor(...(i % 2 === 0 ? rowAlt : rowWhite))
-        doc.rect(margin, currentY, tableWidth, rowH, 'F')
-        doc.setDrawColor(...borderCol)
-        doc.setLineWidth(0.2)
-        doc.line(margin, currentY + rowH, margin + tableWidth, currentY + rowH)
-
-        let x = margin
-        for (const col of columns) {
-          let cellValue = ''
-          if (col.dataKey === '__status') {
-            cellValue = statusLabel
-            doc.setTextColor(...statusColor)
-            doc.setFont('helvetica', 'bold')
-          } else if (col.dataKey === 'contracts_price') {
-            const price = c.contracts_price
-            cellValue = price != null ? `Rs.${Number(price).toLocaleString('en-IN')}` : '—'
-            doc.setTextColor(...textDark)
-            doc.setFont('helvetica', 'normal')
-          } else if (col.dataKey === 'frequency_days') {
-            cellValue = `${c.frequency_days} days`
-            doc.setTextColor(...textDark)
-            doc.setFont('helvetica', 'normal')
-          } else {
-            cellValue = String(c[col.dataKey as keyof typeof c] ?? '') || '—'
-            doc.setTextColor(...textDark)
-            doc.setFont('helvetica', 'normal')
-          }
-          doc.text(truncateToWidth(cellValue, col.width - 4), x + 2, currentY + 6)
-          x += col.width
-        }
-
-        currentY += rowH
-      }
-
-      // Outer border
-      doc.setDrawColor(...borderCol)
-      doc.setLineWidth(0.4)
-      doc.rect(margin, tableStartY, tableWidth, currentY - tableStartY)
-
-      doc.save(`contracts-${new Date().toISOString().split('T')[0]}.pdf`)
-      toast.success('Contracts PDF exported successfully')
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) { toast.error('Please allow popups to export PDF'); return }
+      printWindow.document.write(`<!DOCTYPE html><html><head><title>Contracts Report</title>
+        <style>body{font-family:helvetica,sans-serif;margin:20px;color:#0f172a}
+        .banner{background:#162d3c;color:#fff;padding:8px 14px;margin:-20px -20px 12px}
+        .banner h2{font-size:15px;margin:0;display:inline}
+        .meta{font-size:8px;color:#475569;margin-bottom:10px}
+        table{width:100%;border-collapse:collapse;font-size:9px}
+        th{background:#162d3c;color:#fff;padding:5px 4px;text-align:left}
+        td{padding:4px;border-bottom:1px solid #cbd5e1}
+        footer{font-size:8px;color:#94a3b8;text-align:center;margin-top:20px;border-top:2px solid #29abe2;padding-top:6px}
+        @media print{@page{size:landscape;margin:10mm}footer{position:fixed;bottom:0;width:100%}}</style></head>
+        <body>
+        <div class="banner"><h2>Contracts Report</h2><span style="float:right;font-size:9px;color:#b4d2e6">AMC CONTRACTS</span></div>
+        <div class="meta">Exported: ${dateStr} &nbsp;|&nbsp; Total: ${data.length} &nbsp;|&nbsp; Active: ${counts.active} &nbsp;|&nbsp; Expired: ${counts.expired} &nbsp;|&nbsp; Today Servicing: ${counts.todayServicing} &nbsp;|&nbsp; Expiring Soon: ${counts.expiringSoon}</div>
+        <table><thead><tr><th>Contract Name</th><th>Customer</th><th>Frequency</th><th>Price (Rs.)</th><th>Start Date</th><th>End Date</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+        <footer><strong>remindi</strong> — Smart AMC Management for Indian Contractors · www.remindi.online</footer>
+        <script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}</script>
+        </body></html>`)
+      printWindow.document.close()
+      toast.success('PDF export opened — use Print > Save as PDF')
     } catch (error) {
       console.error('Error generating contracts PDF:', error)
       toast.error('Failed to export PDF')

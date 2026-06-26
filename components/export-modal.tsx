@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { FileText, File, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import jsPDF from 'jspdf'
 import { useAuth } from '@/lib/auth-context'
 import { supabase, type Profile } from '@/lib/supabase'
 
@@ -102,183 +101,42 @@ export function ExportModal({ open, onOpenChange, records }: ExportModalProps) {
   const generatePDF = () => {
     setLoading(true)
     try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const pageW = 297
-      const pageH = 210
-      const margin = 14
-
-      // ── Palette ──────────────────────────────────────────
-      const skyBlue: [number, number, number]   = [41, 171, 226]
-      const darkHeader: [number, number, number] = [22, 45, 60]
-      const white: [number, number, number]      = [255, 255, 255]
-      const rowAlt: [number, number, number]     = [240, 249, 255]
-      const rowWhite: [number, number, number]   = [255, 255, 255]
-      const textDark: [number, number, number]   = [15, 23, 42]
-      const textMid: [number, number, number]    = [71, 85, 105]
-      const borderCol: [number, number, number]  = [203, 213, 225]
-
-      const addPageContent = (pageNum: number, totalPages: number) => {
-        // ── Top header bar ────────────────────────────────
-        doc.setFillColor(...darkHeader)
-        doc.rect(0, 0, pageW, 18, 'F')
-
-        // Sky-blue accent strip
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, 18, pageW, 2, 'F')
-
-        // Company name
-        doc.setFontSize(15)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        doc.text(companyName || 'Service History Report', margin, 12)
-
-        // Right-align: "Service History Report" label
-        doc.setFontSize(9)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(180, 210, 230)
-        doc.text('SERVICE HISTORY REPORT', pageW - margin, 12, { align: 'right' })
-
-        // ── Sub-header meta row ───────────────────────────
-        doc.setFontSize(8.5)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(...textMid)
-        const exportDate = `Exported: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
-        const totalRecords = `Total Records: ${records.length}`
-        doc.text(exportDate, margin, 27)
-        doc.text(totalRecords, margin + 60, 27)
-        doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, 27, { align: 'right' })
-
-        // ── Footer ────────────────────────────────────────
-        doc.setFillColor(...skyBlue)
-        doc.rect(0, pageH - 8, pageW, 8, 'F')
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        doc.text('remindi', margin, pageH - 3)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(180, 230, 248)
-        doc.text('— Smart AMC Management for Indian Contractors  •  www.remindi.online', margin + 14, pageH - 3)
-        doc.setTextColor(...white)
-        doc.text(`Page ${pageNum}`, pageW - margin, pageH - 3, { align: 'right' })
+      const exportDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        toast.error('Please allow popups to export PDF')
+        return
       }
-
-      // Truncate text with an ellipsis if it exceeds the available column width
-      const truncateToWidth = (text: string, maxWidth: number): string => {
-        if (doc.getTextWidth(text) <= maxWidth) return text
-        let truncated = text
-        while (truncated.length > 0 && doc.getTextWidth(truncated + '...') > maxWidth) {
-          truncated = truncated.slice(0, -1)
-        }
-        return truncated + '...'
-      }
-
-      const columns = [
-        { header: 'Customer Name',  dataKey: 'customerName',   width: 42 },
-        { header: 'Contract',       dataKey: 'contractName',   width: 42 },
-        { header: 'Technician',     dataKey: 'technicianName', width: 30 },
-        { header: 'Date',           dataKey: 'service_date',   width: 24 },
-        { header: 'Price (Rs.)',    dataKey: 'contractPrice',  width: 24 },
-        { header: 'Status',         dataKey: 'status',         width: 22 },
-        { header: 'Notes',          dataKey: 'notes',          width: 81 },
-      ]
-      const tableWidth = columns.reduce((s, c) => s + c.width, 0)
-      const rowH = 9
-      const colHeaderH = 9
-      const tableStartY = 33
-      const maxY = pageH - 12
-
-      // Count pages
-      let tempY = tableStartY + colHeaderH
-      let totalPages = 1
-      for (let i = 0; i < records.length; i++) {
-        if (tempY + rowH > maxY) { totalPages++; tempY = tableStartY + colHeaderH }
-        tempY += rowH
-      }
-
-      // ── Page 1 header ─────────────────────────────────
-      let currentPage = 1
-      addPageContent(currentPage, totalPages)
-
-      const drawColHeaders = (y: number) => {
-        doc.setFillColor(...darkHeader)
-        doc.rect(margin, y, tableWidth, colHeaderH, 'F')
-        doc.setFontSize(8.5)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(...white)
-        let x = margin
-        for (const col of columns) {
-          doc.text(col.header, x + 2, y + 6, { maxWidth: col.width - 4 })
-          x += col.width
-        }
-      }
-
-      let currentY = tableStartY
-      drawColHeaders(currentY)
-      currentY += colHeaderH
-
-      // ── Rows ──────────────────────────────────────────
-      doc.setFontSize(8.5)
-      doc.setFont('helvetica', 'normal')
-
-      for (let i = 0; i < records.length; i++) {
-        if (currentY + rowH > maxY) {
-          // New page
-          doc.addPage()
-          currentPage++
-          addPageContent(currentPage, totalPages)
-          currentY = tableStartY
-          drawColHeaders(currentY)
-          currentY += colHeaderH
-        }
-
-        const record = records[i]
-        const isAlt = i % 2 === 0
-
-        // Row background
-        doc.setFillColor(...(isAlt ? rowAlt : rowWhite))
-        doc.rect(margin, currentY, tableWidth, rowH, 'F')
-
-        // Row border bottom
-        doc.setDrawColor(...borderCol)
-        doc.setLineWidth(0.2)
-        doc.line(margin, currentY + rowH, margin + tableWidth, currentY + rowH)
-
-        // Status badge colour
-        const status = String(record.status || '').toLowerCase()
-        const statusColor: [number, number, number] =
-          status === 'completed' ? [22, 163, 74] :
-          status === 'pending'   ? [202, 138, 4]  :
-          status === 'cancelled' ? [220, 38, 38]  : [71, 85, 105]
-
-        doc.setTextColor(...textDark)
-        let x = margin
-        for (const col of columns) {
-          let cellValue = String(record[col.dataKey as keyof typeof record] ?? '')
-          if (col.dataKey === 'contractPrice') {
-            cellValue = cellValue ? `Rs.${Number(cellValue).toLocaleString('en-IN')}` : '—'
-          }
-          if (col.dataKey === 'status') {
-            doc.setTextColor(...statusColor)
-            doc.setFont('helvetica', 'bold')
-          } else {
-            doc.setTextColor(...textDark)
-            doc.setFont('helvetica', 'normal')
-          }
-          doc.text(truncateToWidth(cellValue || '—', col.width - 4), x + 2, currentY + 6)
-          x += col.width
-        }
-
-        currentY += rowH
-      }
-
-      // Outer table border
-      doc.setDrawColor(...borderCol)
-      doc.setLineWidth(0.4)
-      doc.rect(margin, tableStartY, tableWidth, currentY - tableStartY)
-
-      const fileName = `service-history-${new Date().toISOString().split('T')[0]}.pdf`
-      doc.save(fileName)
-      toast.success('PDF exported successfully')
+      const rows = records.map((record, i) => {
+        const status = (record.status || '').toLowerCase()
+        const statusColor = status === 'completed' ? '#16a34a' : status === 'pending' ? '#ca8a04' : status === 'cancelled' ? '#dc2626' : '#475569'
+        return `<tr style="background:${i % 2 === 0 ? '#f0f9ff' : '#fff'}">
+          <td>${record.customerName || '—'}</td>
+          <td>${record.contractName || '—'}</td>
+          <td>${record.technicianName || '—'}</td>
+          <td>${record.service_date || '—'}</td>
+          <td>${record.contractPrice != null ? 'Rs.' + Number(record.contractPrice).toLocaleString('en-IN') : '—'}</td>
+          <td style="color:${statusColor};font-weight:bold">${record.status || '—'}</td>
+          <td>${(record.notes || '—').replace(/</g, '&lt;')}</td>
+        </tr>`
+      }).join('')
+      printWindow.document.write(`<!DOCTYPE html><html><head><title>Service History</title>
+        <style>body{font-family:helvetica,sans-serif;margin:20px;color:#0f172a}
+        h2{font-size:15px;margin:0}p{font-size:9px;color:#475569;margin:4px 0 12px}
+        table{width:100%;border-collapse:collapse;font-size:9px}
+        th{background:#162d3c;color:#fff;padding:5px 4px;text-align:left}
+        td{padding:4px;border-bottom:1px solid #cbd5e1}
+        footer{font-size:8px;color:#94a3b8;text-align:center;margin-top:20px}
+        @media print{footer{position:fixed;bottom:0;width:100%}}</style></head>
+        <body><h2>${companyName || 'Service History Report'}</h2>
+        <p>Exported: ${exportDate} &nbsp;|&nbsp; Total Records: ${records.length}</p>
+        <table><thead><tr><th>Customer Name</th><th>Contract</th><th>Technician</th><th>Date</th><th>Price (Rs.)</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+        <footer>Generated by Remindi · remindi.online</footer>
+        <script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}</script>
+        </body></html>`)
+      printWindow.document.close()
+      toast.success('PDF export opened — use Print > Save as PDF')
       onOpenChange(false)
     } catch (error) {
       console.error('[v0] Error generating PDF:', error)
