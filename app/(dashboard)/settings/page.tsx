@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { supabase, type Profile, signOut } from "@/lib/supabase"
-import { Save, LogOut } from "lucide-react"
+import { Save, LogOut, Shield } from "lucide-react"
 import { toast } from "sonner"
 import { CompanyProfileSettings } from "./company-profile"
 import { StampSignatureSettings } from "@/components/stamp-signature-settings"
@@ -28,6 +28,43 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Organization & role state
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [checkingRole, setCheckingRole] = useState(true)
+
+  // Fetch org_id and role
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id, role")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch membership:", error)
+            toast.error("Could not determine your organization role")
+          } else if (data) {
+            setCurrentOrgId(data.org_id)
+            setUserRole(data.role)
+          }
+          setCheckingRole(false)
+        })
+    } else {
+      setCheckingRole(false)
+    }
+  }, [user?.id])
+
+  // Redirect non‑admin users away from Settings
+  useEffect(() => {
+    if (!checkingRole && userRole && userRole !== "admin") {
+      toast.error("You don't have permission to access Settings")
+      router.push("/dashboard")
+    }
+  }, [checkingRole, userRole, router])
+
+  // Load user profile (this is personal info, not org profile)
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -104,16 +141,35 @@ export default function SettingsPage() {
     }
   }
 
+  // Show loading state while checking role
+  if (checkingRole) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  // If not admin, return null (will redirect)
+  if (userRole !== "admin") {
+    return null
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">Manage your business settings and preferences</p>
+        <div className="flex items-center gap-2">
+          <Shield className="size-5 text-blue-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+            <p className="text-muted-foreground">Manage your business settings and preferences</p>
+          </div>
         </div>
 
+        {/* Only admins can see these sections */}
         <CompanyProfileSettings />
-
         <StampSignatureSettings />
 
         <Card>
