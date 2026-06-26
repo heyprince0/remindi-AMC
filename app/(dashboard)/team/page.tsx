@@ -91,30 +91,26 @@ export default function TeamPage() {
           }
         }
 
-        // Get email from accepted invite
-        const { data: acceptedInvite } = await supabase
-          .from("invites")
+        // Get email from company_profile (most reliable)
+        const { data: cpEmail } = await supabase
+          .from("company_profile")
           .select("email")
-          .eq("org_id", orgId)
-          .eq("user_id", membership.user_id)   // link invite to the user
-          .eq("status", "accepted")
-          .order("created_at", { ascending: false })
-          .limit(1)
+          .eq("user_id", membership.user_id)
           .maybeSingle()
 
-        if (acceptedInvite?.email) {
-          email = acceptedInvite.email
+        if (cpEmail?.email) {
+          email = cpEmail.email
         }
 
-        // If no email from invite, try company_profile email
+        // Fallback: if no email in company_profile, check profiles (if we store email there)
         if (!email) {
-          const { data: cp } = await supabase
-            .from("company_profile")
-            .select("email")
-            .eq("user_id", membership.user_id)
+          const { data: profileEmail } = await supabase
+            .from("profiles")
+            .select("email") // assumes profiles has email column
+            .eq("id", membership.user_id)
             .maybeSingle()
-          if (cp?.email) {
-            email = cp.email
+          if (profileEmail?.email) {
+            email = profileEmail.email
           }
         }
 
