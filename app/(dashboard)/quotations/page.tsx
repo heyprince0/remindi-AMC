@@ -14,7 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
 import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, Eye, Trash2, Edit, Settings } from "lucide-react"
@@ -39,8 +38,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-
-
 export default function QuotationsPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -54,13 +51,37 @@ export default function QuotationsPage() {
   const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
   const [checkingProfile, setCheckingProfile] = useState(false)
 
+  // --- ADDED: organization ID state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- ADDED: fetch the user's organization ID ---
   useEffect(() => {
-    loadQuotations()
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
   }, [user?.id])
+
+  // Load quotations when org ID is available
+  useEffect(() => {
+    if (currentOrgId) {
+      loadQuotations()
+    }
+  }, [currentOrgId])
 
   const handleFilter = () => {
     let filtered = quotations
-
     if (searchTerm) {
       filtered = filtered.filter(q =>
         (q.client_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +89,6 @@ export default function QuotationsPage() {
         (q.client_gstin || "").includes(searchTerm)
       )
     }
-
     setFilteredQuotations(filtered)
   }
 
@@ -77,34 +97,36 @@ export default function QuotationsPage() {
   }, [searchTerm, quotations])
 
   const handleDelete = async () => {
-  if (!quotationToDelete) return
-  setDeleting(true)
-  try {
-    const { error } = await supabase
-      .from("quotations")
-      .delete()
-      .eq("id", quotationToDelete.id)
-    if (error) throw error
-    setQuotations(quotations.filter(q => q.id !== quotationToDelete.id))
-    toast.success("Quotation deleted successfully")
-    setDeleteDialogOpen(false)
-    setQuotationToDelete(null)
-  } catch (error) {
-    console.error("Error deleting quotation:", error)
-    toast.error("Failed to delete quotation")
-  } finally {
-    setDeleting(false)
+    if (!quotationToDelete) return
+    setDeleting(true)
+    try {
+      // Add org_id filter for extra safety (RLS will also enforce)
+      const { error } = await supabase
+        .from("quotations")
+        .delete()
+        .eq("id", quotationToDelete.id)
+        .eq("org_id", currentOrgId)   // <-- added
+      if (error) throw error
+      setQuotations(quotations.filter(q => q.id !== quotationToDelete.id))
+      toast.success("Quotation deleted successfully")
+      setDeleteDialogOpen(false)
+      setQuotationToDelete(null)
+    } catch (error) {
+      console.error("Error deleting quotation:", error)
+      toast.error("Failed to delete quotation")
+    } finally {
+      setDeleting(false)
+    }
   }
-}
 
   const loadQuotations = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
-        .eq("org_id", currentOrgId)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -120,13 +142,14 @@ export default function QuotationsPage() {
   }
 
   const handleNewQuotationClick = async () => {
-    if (!user?.id) return
+    if (!user?.id || !currentOrgId) return
     setCheckingProfile(true)
     try {
+      // Fetch company profile scoped by org_id
       const { data, error } = await supabase
         .from("company_profile")
         .select("company_name, address, phone")
-        .eq("user_id", user.id)
+        .eq("org_id", currentOrgId)   // <-- changed from user_id
         .single()
 
       if (error && error.code !== "PGRST116") throw error
@@ -231,27 +254,19 @@ export default function QuotationsPage() {
                         <TableCell>
                           <div className="flex gap-2">
                             <Link href={`/quotations/${quotation.id}`}>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                title="View Quotation"
-                              >
+                              <Button variant="ghost" size="sm" title="View Quotation">
                                 <Eye className="size-4" />
                                 <span className="sr-only">View</span>
                               </Button>
                             </Link>
                             <Link href={`/quotations/${quotation.id}/edit`}>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                title="Edit Quotation"
-                              >
+                              <Button variant="ghost" size="sm" title="Edit Quotation">
                                 <Edit className="size-4" />
                                 <span className="sr-only">Edit</span>
                               </Button>
                             </Link>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={() => { setQuotationToDelete(quotation); setDeleteDialogOpen(true) }}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -271,26 +286,28 @@ export default function QuotationsPage() {
           </CardContent>
         </Card>
       </div>
+
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
-      <AlertDialogDescription>
-        Are you sure you want to delete {quotationToDelete?.quote_no}? This action cannot be undone.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction
-        onClick={handleDelete}
-        disabled={deleting}
-        className="bg-red-600 hover:bg-red-700"
-      >
-        {deleting ? "Deleting..." : "Delete"}
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {quotationToDelete?.quote_no}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={profileSetupDialogOpen} onOpenChange={setProfileSetupDialogOpen}>
         <DialogContent>
           <DialogHeader>
