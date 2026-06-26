@@ -22,10 +22,9 @@ interface NewInvoiceModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   userId: string
-  orgId: string   // <-- added
 }
 
-export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoiceModalProps) {
+export function NewInvoiceModal({ open, onOpenChange, userId }: NewInvoiceModalProps) {
   const router = useRouter()
   const [acceptedQuotations, setAcceptedQuotations] = useState<Quotation[]>([])
   const [selectedQuotationId, setSelectedQuotationId] = useState("")
@@ -44,23 +43,21 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
   const [orderDate, setOrderDate] = useState("")
 
   useEffect(() => {
-    if (open && userId && orgId) {
+    if (open && userId) {
       loadData()
     }
-  }, [open, userId, orgId])
+  }, [open, userId])
 
   const loadData = async () => {
-    if (!orgId) return
     setLoading(true)
     try {
       const nextNo = await generateNextInvoiceNo()
       setInvoiceNo(nextNo)
 
-      // Fetch accepted quotations scoped by org_id
       const { data, error } = await supabase
         .from("quotations")
         .select("id, quote_no, client_name, subtotal, sgst, cgst, grand_total, include_gst, items, client_address, client_district, client_state, client_pin_code, subject, body_text")
-        .eq("org_id", orgId)           // <-- changed from user_id
+        .eq("user_id", userId)
         .eq("status", "Accepted")
         .order("created_at", { ascending: false })
 
@@ -76,11 +73,10 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
 
   const generateNextInvoiceNo = async () => {
     try {
-      // Count invoices for this org
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no", { count: "exact" })
-        .eq("org_id", orgId)          // <-- changed from user_id
+        .eq("user_id", userId)
       if (error) throw error
       const count = (data?.length ?? 0) + 1
       return `INV-${String(count).padStart(3, '0')}`
@@ -104,7 +100,6 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
         .from("invoices")
         .insert({
           user_id: userId,
-          org_id: orgId,                          // <-- added
           quotation_id: selectedQuotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,
