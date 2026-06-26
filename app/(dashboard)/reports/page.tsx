@@ -230,6 +230,14 @@ export default function ReportsPage() {
     if (!user?.id) return
     setLoading(true)
     try {
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+      const orgId = membership?.org_id
+      if (!orgId) return
+
       const { start, end } = getDateRange(range)
       const { start: prevStart, end: prevEnd } = getPrevDateRange(range)
 
@@ -242,7 +250,7 @@ export default function ReportsPage() {
         supabase
           .from("contracts")
           .select("id, status, contracts_price, customer_id, next_service_date")
-          .eq("user_id", user.id),
+          .eq("org_id", orgId),
         supabase
           .from("service_history")
           .select("id, contract_id, status, service_date")

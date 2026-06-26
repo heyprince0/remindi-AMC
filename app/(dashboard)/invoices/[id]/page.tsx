@@ -124,7 +124,7 @@ export default function ViewInvoicePage() {
     setLoading(true)
     try {
       const [{ data: iData, error: iErr }, { data: pData }] = await Promise.all([
-        supabase.from("invoices").select("*").eq("id", id).eq("user_id", user!.id).single(),
+        supabase.from("invoices").select("*").eq("id", id).single(),
         supabase.from("company_profile").select("*").eq("user_id", user!.id).single(),
       ])
       if (iErr) throw iErr

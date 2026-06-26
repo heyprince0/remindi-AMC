@@ -103,8 +103,16 @@ export default function ServiceAlertsPage() {
     try {
       if (!user?.id) return
 
-      const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
-      const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
+      const { data: membership } = await supabase
+        .from('memberships')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      const orgId = membership?.org_id
+      if (!orgId) return
+
+      const { data: contractsData } = await supabase.from('contracts').select('*').eq('org_id', orgId)
+      const { data: customersData } = await supabase.from('customers').select('*').eq('org_id', orgId)
 
       const overdue: ServiceAlert[] = []
       const dueToday: ServiceAlert[] = []

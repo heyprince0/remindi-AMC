@@ -84,11 +84,19 @@ export default function NewQuotationPage() {
 
     setSaving(true)
     try {
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+      const orgId = membership?.org_id
+      if (!orgId) throw new Error("No organization found")
+
       // Generate quote_no: QT-001, QT-002, etc.
       const { data: existingQuotes, error: countError } = await supabase
         .from("quotations")
         .select("quote_no", { count: "exact" })
-        .eq("user_id", user.id)
+        .eq("org_id", orgId)
 
       if (countError) throw countError
 
@@ -107,6 +115,7 @@ export default function NewQuotationPage() {
         .from("quotations")
         .insert({
           user_id: user.id,
+          org_id: orgId,
           quote_no: quoteNo,
           order_no: orderNo || null,
           client_name: customerName,

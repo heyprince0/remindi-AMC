@@ -165,17 +165,25 @@ export default function ContractsPage() {
     try {
       if (!user?.id) return
 
+      const { data: membership } = await supabase
+        .from('memberships')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      const orgId = membership?.org_id
+      if (!orgId) return
+
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', orgId)
 
       if (contractsError) throw contractsError
 
       const { data: customersData } = await supabase
         .from('customers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', orgId)
 
       const displayed = (contractsData as Contract[]).map(contract => {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)

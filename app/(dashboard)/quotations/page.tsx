@@ -101,10 +101,18 @@ export default function QuotationsPage() {
     try {
       if (!user?.id) return
 
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+      const orgId = membership?.org_id
+      if (!orgId) return
+
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("org_id", orgId)
         .order("created_at", { ascending: false })
 
       if (error) throw error

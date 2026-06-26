@@ -60,10 +60,16 @@ export function MarkCompleteModal({
   const loadTechnicians = async () => {
     try {
       setLoadingTechs(true)
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", userId)
+        .maybeSingle()
+      const orgId = membership?.org_id
       const { data, error } = await supabase
         .from("technicians")
         .select("*")
-        .eq("user_id", userId)
+        .eq("org_id", orgId ?? "")
 
       if (error) throw error
       setTechnicians(data || [])
@@ -85,9 +91,18 @@ export function MarkCompleteModal({
       setLoading(true)
 
       // Step 1: Add to service_history table
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", userId)
+        .maybeSingle()
+      const orgId = membership?.org_id
+
       const { error: historyError } = await supabase
         .from("service_history")
         .insert({
+          user_id: userId,
+          org_id: orgId ?? null,
           contract_id: contract.id,
           technician_id: technicianId || null,
           service_date: serviceDate,

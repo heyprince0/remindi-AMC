@@ -1,0 +1,157 @@
+I have a Next.js + Supabase + TypeScript app called Remindi (AMC management SaaS).
+I recently added a team/multi-user feature that introduced an `org_id` column to
+all business tables and changed RLS policies to scope data by organization instead
+of individual user. The database migration is complete but the frontend code was
+never updated. There are THREE separate bugs to fix.
+
+═══════════════════════════════════════════════════════
+BUG 1 — INSERTS ARE MISSING org_id
+═══════════════════════════════════════════════════════
+
+Every create/save operation is missing `org_id` in the insert payload.
+RLS is currently DISABLED on affected tables as a temporary fix.
+
+Tables that need fixing:
+- customers
+- contracts
+- quotations
+- invoices
+- technicians
+- service_history
+- reminders_log
+
+Search the entire codebase for these patterns:
+  supabase.from("customers").insert
+  supabase.from("contracts").insert
+  supabase.from("quotations").insert
+  supabase.from("invoices").insert
+  supabase.from("technicians").insert
+  supabase.from("service_history").insert
+  supabase.from("reminders_log").insert
+
+Also search for .upsert() calls on the same tables.
+
+For EVERY occurrence found:
+
+STEP 1 — Add this org_id lookup at the top of the submit/save handler,
+before the insert call. Only add it once per function even if the function
+has multiple inserts:
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const orgId = membership?.org_id
+  if (!orgId) {
+    toast.error("Organization not found. Please contact support.")
+    return
+  }
+
+STEP 2 — Add org_id: orgId to the insert/upsert payload alongside the
+existing fields. Do NOT remove user_id. Example:
+
+  // BEFORE
+  await supabase.from("customers").insert({
+    user_id: user.id,
+    name: formData.name,
+    phone: formData.phone,
+  })
+
+  // AFTER
+  await supabase.from("customers").insert({
+    user_id: user.id,
+    org_id: orgId,
+    name: formData.name,
+    phone: formData.phone,
+  })
+
+═══════════════════════════════════════════════════════
+BUG 2 — SELECT QUERIES FILTER BY user_id, BLOCKING MEMBERS FROM SEEING DATA
+═══════════════════════════════════════════════════════
+
+Most fetch/load functions currently filter data like this:
+
+  supabase.from("customers").select("*").eq("user_id", user.id)
+
+This means an invited team member (who has a different user_id than the
+admin who owns the data) sees zero results even though RLS correctly allows
+them to read the org's data. The frontend query itself is blocking them.
+
+Search the entire codebase for these patterns on all seven tables above:
+  .eq("user_id", user.id)
+  .eq('user_id', user.id)
+  .eq("user_id", userId)
+
+For EVERY occurrence found on SELECT queries (not insert/update/delete):
+Remove the .eq("user_id", ...) filter entirely and let RLS handle the
+scoping instead. Example:
+
+  // BEFORE — member sees nothing because their user_id owns no rows
+  const { data } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+
+  // AFTER — RLS scopes to org automatically, member sees all org data
+  const { data } = await supabase
+    .from("customers")
+    .select("*")
+    .order("created_at", { ascending: false })
+
+IMPORTANT: Only remove .eq("user_id", ...) from SELECT queries.
+Keep it on INSERT and UPDATE calls — it still needs to be there for
+row ownership tracking alongside org_id.
+
+═══════════════════════════════════════════════════════
+BUG 3 — NEW RECORDS CREATED BY MEMBERS ARE NOT VISIBLE TO THE WHOLE TEAM
+═══════════════════════════════════════════════════════
+
+This is fixed automatically by Bug 1 fix — once inserts include org_id,
+new records belong to the org and are visible to all members. No extra
+work needed here beyond Bug 1.
+
+═══════════════════════════════════════════════════════
+CONSTRAINTS — READ THESE CAREFULLY
+═══════════════════════════════════════════════════════
+
+- Do NOT change any database schema, migrations, or RLS policies
+- Do NOT remove user_id from any insert or upsert payload — keep it
+- Do NOT add .eq("user_id", ...) filters to queries that don't already have them
+- Do NOT change UPDATE or DELETE query filters — leave those exactly as-is
+- Do NOT touch any auth, login, signup, or session management code
+- Do NOT touch these files:
+    lib/supabase.ts
+    lib/auth-context.tsx
+    lib/email-service.ts
+    lib/email-actions.ts
+    app/api/invites/*
+    app/(dashboard)/team/page.tsx
+    components/app-sidebar.tsx
+- The supabase client is imported from "@/lib/supabase" as `supabase`
+- The current user is accessed via useAuth() hook: const { user } = useAuth()
+- The auth context is imported from "@/lib/auth-context"
+
+═══════════════════════════════════════════════════════
+AFTER FIXING — REQUIRED OUTPUT
+═══════════════════════════════════════════════════════
+
+When done, provide a complete list in this exact format:
+
+BUG 1 FIXES (inserts):
+- File: app/(dashboard)/customers/page.tsx — function: handleSubmit — table: customers
+- File: components/add-contract-modal.tsx — function: handleSave — table: contracts
+(etc for every insert changed)
+
+BUG 2 FIXES (select filters removed):
+- File: app/(dashboard)/customers/page.tsx — removed .eq("user_id", user.id) from loadCustomers()
+- File: app/(dashboard)/contracts/page.tsx — removed .eq("user_id", user.id) from fetchContracts()
+(etc for every select changed)
+
+FILES NOT CHANGED:
+- List any files where you searched but found nothing to change
+
+This list is critical — I will manually verify every item before
+re-enabling RLS on the database.
