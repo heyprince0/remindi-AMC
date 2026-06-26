@@ -51,10 +51,10 @@ export default function QuotationsPage() {
   const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
   const [checkingProfile, setCheckingProfile] = useState(false)
 
-  // --- ADDED: organization ID state ---
+  // Organization ID
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- ADDED: fetch the user's organization ID ---
+  // Fetch org_id
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -97,15 +97,14 @@ export default function QuotationsPage() {
   }, [searchTerm, quotations])
 
   const handleDelete = async () => {
-    if (!quotationToDelete) return
+    if (!quotationToDelete || !currentOrgId) return
     setDeleting(true)
     try {
-      // Add org_id filter for extra safety (RLS will also enforce)
       const { error } = await supabase
         .from("quotations")
         .delete()
         .eq("id", quotationToDelete.id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
       if (error) throw error
       setQuotations(quotations.filter(q => q.id !== quotationToDelete.id))
       toast.success("Quotation deleted successfully")
@@ -126,7 +125,7 @@ export default function QuotationsPage() {
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -145,12 +144,12 @@ export default function QuotationsPage() {
     if (!user?.id || !currentOrgId) return
     setCheckingProfile(true)
     try {
-      // Fetch company profile scoped by org_id
+      // ✅ Use maybeSingle() to avoid 406 error when no profile exists
       const { data, error } = await supabase
         .from("company_profile")
         .select("company_name, address, phone")
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
-        .single()
+        .eq("org_id", currentOrgId)
+        .maybeSingle()   // <-- changed from .single()
 
       if (error && error.code !== "PGRST116") throw error
 
