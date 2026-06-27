@@ -59,18 +59,37 @@ export default function AuthCallback() {
 
     const redirectAfterLogin = async (userId: string) => {
       try {
+        // 1. Check if the user has a membership (belongs to an org)
+        const { data: membership, error: membershipError } = await supabase
+          .from('memberships')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle()
+
+        if (membership) {
+          // Member or admin – go to dashboard
+          router.replace('/')
+          return
+        }
+
+        // 2. No membership → check if they have a company profile (new user)
         const { data: profile } = await supabase
           .from('profiles')
           .select('company_name')
           .eq('id', userId)
-          .single()
+          .maybeSingle()
 
-        if (!profile?.company_name) {
-          router.replace('/profile-setup')
-        } else {
+        if (profile?.company_name) {
+          // They have a company name but no membership? Go to dashboard anyway.
           router.replace('/')
+        } else {
+          // New user with no profile → go to profile setup to create an org
+          router.replace('/profile-setup')
         }
-      } catch {
+      } catch (error) {
+        console.error('Redirect error:', error)
+        // Fallback – go to dashboard if anything fails
         router.replace('/')
       }
     }
