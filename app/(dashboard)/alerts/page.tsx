@@ -6,17 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { supabase, type Contract, type Customer, type Technician, getDaysUntilService } from "@/lib/supabase"
+import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { AlertTriangle, Clock, CalendarClock, CheckCircle2 } from "lucide-react"
+import { AlertTriangle, Clock, CalendarClock, CheckCircle2, Mail, Loader2 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
+import { toast } from "sonner"
+import {
+  triggerServiceReminderEmail,
+  triggerAMCExpiryReminderEmail,
+  triggerAMCExpiredEmail,
+} from "@/lib/email-actions"
 
 interface ServiceAlert {
   id: string
@@ -25,12 +24,23 @@ interface ServiceAlert {
   serviceType: string
   dueDate: string
   daysOverdue?: number
-  time?: string
   technician: string | null
   contractData?: Contract
 }
 
-function ServiceAlertCard({ service, variant, onMarkComplete }: { service: ServiceAlert; variant: "overdue" | "due-today" | "upcoming"; onMarkComplete: (contract: Contract) => void }) {
+function ServiceAlertCard({
+  service,
+  variant,
+  onMarkComplete,
+  onSendEmail,
+  sendingEmail,
+}: {
+  service: ServiceAlert
+  variant: "overdue" | "due-today" | "upcoming"
+  onMarkComplete: (contract: Contract) => void
+  onSendEmail: (service: ServiceAlert) => void
+  sendingEmail: boolean
+}) {
   const borderColor = {
     overdue: "border-l-alert-overdue",
     "due-today": "border-l-alert-due-today",
@@ -41,6 +51,12 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
     overdue: "bg-alert-overdue/5",
     "due-today": "bg-alert-due-today/5",
     upcoming: "bg-alert-upcoming/5",
+  }[variant]
+
+  const emailLabel = {
+    overdue: "Send Expired Alert",
+    "due-today": "Send Reminder",
+    upcoming: "Send Expiry Warning",
   }[variant]
 
   return (
@@ -62,7 +78,7 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
                   {variant === "overdue"
                     ? `${service.daysOverdue} days expired`
                     : variant === "due-today"
-                    ? `Today`
+                    ? "Today"
                     : service.dueDate}
                 </span>
               </div>
@@ -75,8 +91,21 @@ function ServiceAlertCard({ service, variant, onMarkComplete }: { service: Servi
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onSendEmail(service)}
+              disabled={sendingEmail}
+            >
+              {sendingEmail ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Mail className="mr-2 size-4" />
+              )}
+              {emailLabel}
+            </Button>
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => service.contractData && onMarkComplete(service.contractData)}
             >
@@ -98,8 +127,7 @@ export default function ServiceAlertsPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
-
-  // --- Org state ---
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -121,9 +149,7 @@ export default function ServiceAlertsPage() {
   }, [user?.id])
 
   useEffect(() => {
-    if (currentOrgId) {
-      loadServices()
-    }
+    if (currentOrgId) loadServices()
   }, [currentOrgId])
 
   const loadServices = async () => {
@@ -131,47 +157,43 @@ export default function ServiceAlertsPage() {
       if (!currentOrgId) return
 
       const { data: contractsData } = await supabase
-        .from('contracts')
-        .select('*')
-        .eq('org_id', currentOrgId)
+        .from("contracts")
+        .select("*")
+        .eq("org_id", currentOrgId)
 
       const { data: customersData } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('org_id', currentOrgId)
+        .from("customers")
+        .select("*")
+        .eq("org_id", currentOrgId)
 
       const overdue: ServiceAlert[] = []
       const dueToday: ServiceAlert[] = []
       const upcoming: ServiceAlert[] = []
 
       for (const contract of (contractsData as Contract[]) || []) {
-        const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        const customer = (customersData as Customer[])?.find((c) => c.id === contract.customer_id)
         const days = getDaysUntilService(contract.next_service_date)
 
         const alert: ServiceAlert = {
           id: contract.id,
-          customer: customer?.name || 'Unknown',
+          customer: customer?.name || "Unknown",
           contract: contract.contract_name,
           serviceType: contract.service_type || "Service",
           dueDate: contract.next_service_date,
           technician: null,
-          contractData: contract
+          contractData: contract,
         }
 
-        if (days < 0) {
-          overdue.push({ ...alert, daysOverdue: Math.abs(days) })
-        } else if (days === 0) {
-          dueToday.push(alert)
-        } else if (days <= 7) {
-          upcoming.push(alert)
-        }
+        if (days < 0) overdue.push({ ...alert, daysOverdue: Math.abs(days) })
+        else if (days === 0) dueToday.push(alert)
+        else if (days <= 7) upcoming.push(alert)
       }
 
       setOverdueServices(overdue)
       setDueTodayServices(dueToday)
       setUpcomingServices(upcoming)
     } catch (error) {
-      console.error('Error loading service alerts:', error)
+      console.error("Error loading service alerts:", error)
     } finally {
       setLoading(false)
     }
@@ -182,14 +204,59 @@ export default function ServiceAlertsPage() {
     setModalOpen(true)
   }
 
-  const handleModalSuccess = () => {
-    loadServices()
+  const handleModalSuccess = () => loadServices()
+
+  const handleSendEmail = async (
+    service: ServiceAlert,
+    variant: "overdue" | "due-today" | "upcoming"
+  ) => {
+    if (!user?.email) {
+      toast.error("Your account email is not available")
+      return
+    }
+
+    setSendingEmailId(service.id)
+    try {
+      let result
+
+      if (variant === "overdue") {
+        result = await triggerAMCExpiredEmail(
+          user.email,
+          service.contract,
+          service.dueDate,
+          service.customer
+        )
+      } else if (variant === "due-today") {
+        result = await triggerServiceReminderEmail(
+          user.email,
+          service.contract,
+          service.dueDate,
+          service.customer
+        )
+      } else {
+        result = await triggerAMCExpiryReminderEmail(
+          user.email,
+          service.contract,
+          service.dueDate,
+          service.customer
+        )
+      }
+
+      if (result.success) {
+        toast.success(`Email sent for ${service.contract}`)
+      } else {
+        toast.error(`Failed to send email: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error("Something went wrong sending the email")
+    } finally {
+      setSendingEmailId(null)
+    }
   }
 
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Service Alerts</h1>
@@ -197,7 +264,6 @@ export default function ServiceAlertsPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid gap-4 sm:grid-cols-3">
           <Card className="border-l-4 border-l-alert-overdue bg-alert-overdue/5">
             <CardHeader className="pb-2">
@@ -237,7 +303,6 @@ export default function ServiceAlertsPage() {
           </Card>
         </div>
 
-        {/* Tabs for Service Categories */}
         <Tabs defaultValue="overdue" className="w-full">
           <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
             <TabsTrigger value="overdue" className="flex items-center gap-2">
@@ -262,7 +327,14 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No expired services</div>
               ) : (
                 overdueServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="overdue" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard
+                    key={service.id}
+                    service={service}
+                    variant="overdue"
+                    onMarkComplete={handleMarkComplete}
+                    onSendEmail={(s) => handleSendEmail(s, "overdue")}
+                    sendingEmail={sendingEmailId === service.id}
+                  />
                 ))
               )}
             </div>
@@ -276,7 +348,14 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No services due today</div>
               ) : (
                 dueTodayServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="due-today" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard
+                    key={service.id}
+                    service={service}
+                    variant="due-today"
+                    onMarkComplete={handleMarkComplete}
+                    onSendEmail={(s) => handleSendEmail(s, "due-today")}
+                    sendingEmail={sendingEmailId === service.id}
+                  />
                 ))
               )}
             </div>
@@ -290,14 +369,20 @@ export default function ServiceAlertsPage() {
                 <div className="text-center py-8 text-muted-foreground">No services expiring soon</div>
               ) : (
                 upcomingServices.map((service) => (
-                  <ServiceAlertCard key={service.id} service={service} variant="upcoming" onMarkComplete={handleMarkComplete} />
+                  <ServiceAlertCard
+                    key={service.id}
+                    service={service}
+                    variant="upcoming"
+                    onMarkComplete={handleMarkComplete}
+                    onSendEmail={(s) => handleSendEmail(s, "upcoming")}
+                    sendingEmail={sendingEmailId === service.id}
+                  />
                 ))
               )}
             </div>
           </TabsContent>
         </Tabs>
 
-        {/* Mark Complete Modal */}
         {user && currentOrgId && (
           <MarkCompleteModal
             open={modalOpen}
