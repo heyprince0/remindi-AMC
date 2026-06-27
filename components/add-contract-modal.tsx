@@ -23,6 +23,7 @@ interface AddContractModalProps {
   onSuccess: () => void
   editingContract?: Contract | null
   userId: string
+  orgId: string   // <-- added
 }
 
 const FREQUENCY_OPTIONS = [
@@ -44,7 +45,8 @@ export function AddContractModal({
   onOpenChange,
   onSuccess,
   editingContract,
-  userId
+  userId,
+  orgId
 }: AddContractModalProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(false)
@@ -62,14 +64,12 @@ export function AddContractModal({
     contractPrice: ''
   })
 
-  // Load customers on mount
   useEffect(() => {
     if (open) {
       loadCustomers()
     }
   }, [open])
 
-  // Calculate next service date when start date or frequency changes
   useEffect(() => {
     if (formData.startDate && formData.frequency) {
       const nextDate = calculateNextServiceDate(formData.startDate, parseInt(formData.frequency))
@@ -77,7 +77,6 @@ export function AddContractModal({
     }
   }, [formData.startDate, formData.frequency])
 
-  // Prefill form if editing
   useEffect(() => {
     if (editingContract && open) {
       setFormData({
@@ -111,7 +110,7 @@ export function AddContractModal({
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .eq('user_id', userId)
+        .eq('org_id', orgId)   // <-- scope by org
 
       if (error) throw error
       setCustomers(data || [])
@@ -125,34 +124,20 @@ export function AddContractModal({
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
-
-    if (!formData.contractName.trim()) {
-      newErrors.contractName = 'Contract Name is required'
-    }
-    if (!formData.customerId) {
-      newErrors.customerId = 'Customer is required'
-    }
-    if (!formData.frequency) {
-      newErrors.frequency = 'Frequency is required'
-    }
-    if (!formData.startDate) {
-      newErrors.startDate = 'Start Date is required'
-    }
-
+    if (!formData.contractName.trim()) newErrors.contractName = 'Contract Name is required'
+    if (!formData.customerId) newErrors.customerId = 'Customer is required'
+    if (!formData.frequency) newErrors.frequency = 'Frequency is required'
+    if (!formData.startDate) newErrors.startDate = 'Start Date is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validateForm()) return
 
-    if (!validateForm()) {
-      return
-    }
-
+    setLoading(true)
     try {
-      setLoading(true)
-
       const contractData = {
         user_id: userId,
         customer_id: formData.customerId,
@@ -162,24 +147,22 @@ export function AddContractModal({
         next_service_date: nextServiceDate,
         status: formData.status,
         notes: formData.notes || null,
-        contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null
+        contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
+        org_id: orgId   // <-- include org_id
       }
 
       if (editingContract) {
-        // Update existing contract
         const { error } = await supabase
           .from('contracts')
           .update(contractData)
           .eq('id', editingContract.id)
-
+          .eq('org_id', orgId)
         if (error) throw error
         toast.success('Contract updated successfully')
       } else {
-        // Create new contract
         const { error } = await supabase
           .from('contracts')
           .insert([contractData])
-
         if (error) throw error
         toast.success('Contract added successfully')
       }
@@ -200,117 +183,67 @@ export function AddContractModal({
         <DialogHeader>
           <DialogTitle>{editingContract ? 'Edit Contract' : 'Add New Contract'}</DialogTitle>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Contract Name */}
           <div className="space-y-2">
-            <Label htmlFor="contractName">
-              Contract Name <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="contractName">Contract Name <span className="text-red-500">*</span></Label>
             <Input
               id="contractName"
               placeholder="e.g., AC Maintenance 2024"
               value={formData.contractName}
-              onChange={(e) => {
-                setFormData({ ...formData, contractName: e.target.value })
-                if (errors.contractName) {
-                  setErrors({ ...errors, contractName: '' })
-                }
-              }}
+              onChange={(e) => setFormData({ ...formData, contractName: e.target.value })}
               className={errors.contractName ? 'border-red-500' : ''}
             />
-            {errors.contractName && (
-              <p className="text-xs text-red-500">{errors.contractName}</p>
-            )}
+            {errors.contractName && <p className="text-xs text-red-500">{errors.contractName}</p>}
           </div>
 
-          {/* Customer */}
           <div className="space-y-2">
-            <Label htmlFor="customer">
-              Customer <span className="text-red-500">*</span>
-            </Label>
-            <Select value={formData.customerId} onValueChange={(value) => {
-              setFormData({ ...formData, customerId: value })
-              if (errors.customerId) {
-                setErrors({ ...errors, customerId: '' })
-              }
-            }}>
-              <SelectTrigger id="customer" className={errors.customerId ? 'border-red-500' : ''}>
+            <Label htmlFor="customer">Customer <span className="text-red-500">*</span></Label>
+            <Select value={formData.customerId} onValueChange={(value) => setFormData({ ...formData, customerId: value })}>
+              <SelectTrigger className={errors.customerId ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select a customer" />
               </SelectTrigger>
               <SelectContent>
                 {loadingCustomers ? (
-                  <SelectItem disabled value="loading">
-                    Loading customers...
-                  </SelectItem>
+                  <SelectItem disabled value="loading">Loading customers...</SelectItem>
                 ) : customers.length === 0 ? (
-                  <SelectItem disabled value="empty">
-                    No customers available
-                  </SelectItem>
+                  <SelectItem disabled value="empty">No customers available</SelectItem>
                 ) : (
                   customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </SelectItem>
+                    <SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
-            {errors.customerId && (
-              <p className="text-xs text-red-500">{errors.customerId}</p>
-            )}
+            {errors.customerId && <p className="text-xs text-red-500">{errors.customerId}</p>}
           </div>
 
-          {/* Frequency */}
           <div className="space-y-2">
-            <Label htmlFor="frequency">
-              Frequency <span className="text-red-500">*</span>
-            </Label>
-            <Select value={formData.frequency} onValueChange={(value) => {
-              setFormData({ ...formData, frequency: value })
-              if (errors.frequency) {
-                setErrors({ ...errors, frequency: '' })
-              }
-            }}>
-              <SelectTrigger id="frequency" className={errors.frequency ? 'border-red-500' : ''}>
+            <Label htmlFor="frequency">Frequency <span className="text-red-500">*</span></Label>
+            <Select value={formData.frequency} onValueChange={(value) => setFormData({ ...formData, frequency: value })}>
+              <SelectTrigger className={errors.frequency ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select frequency" />
               </SelectTrigger>
               <SelectContent>
-                {FREQUENCY_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
+                {FREQUENCY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.frequency && (
-              <p className="text-xs text-red-500">{errors.frequency}</p>
-            )}
+            {errors.frequency && <p className="text-xs text-red-500">{errors.frequency}</p>}
           </div>
 
-          {/* Start Date */}
           <div className="space-y-2">
-            <Label htmlFor="startDate">
-              Start Date <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="startDate">Start Date <span className="text-red-500">*</span></Label>
             <Input
               id="startDate"
               type="date"
               value={formData.startDate}
-              onChange={(e) => {
-                setFormData({ ...formData, startDate: e.target.value })
-                if (errors.startDate) {
-                  setErrors({ ...errors, startDate: '' })
-                }
-              }}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
               className={errors.startDate ? 'border-red-500' : ''}
             />
-            {errors.startDate && (
-              <p className="text-xs text-red-500">{errors.startDate}</p>
-            )}
+            {errors.startDate && <p className="text-xs text-red-500">{errors.startDate}</p>}
           </div>
 
-          {/* Next Service Date (Auto-calculated) */}
           <div className="space-y-2">
             <Label htmlFor="nextServiceDate">Next Service Date (Auto-calculated)</Label>
             <Input
@@ -323,26 +256,20 @@ export function AddContractModal({
             />
           </div>
 
-          {/* Status */}
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
-            <Select value={formData.status} onValueChange={(value) => {
-              setFormData({ ...formData, status: value })
-            }}>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
               <SelectTrigger id="status">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
+                {STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Contract Price */}
           <div className="space-y-2">
             <Label htmlFor="contractPrice">Contract Price (₹)</Label>
             <Input
@@ -356,7 +283,6 @@ export function AddContractModal({
             />
           </div>
 
-          {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
@@ -368,14 +294,8 @@ export function AddContractModal({
             />
           </div>
 
-          {/* Form Actions */}
           <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="flex-1">
