@@ -16,6 +16,7 @@ interface AddCustomerModalProps {
   onSuccess: () => void
   editingCustomer?: Customer | null
   userId: string
+  orgId: string   // <-- added
 }
 
 export function AddCustomerModal({
@@ -23,7 +24,8 @@ export function AddCustomerModal({
   onOpenChange,
   onSuccess,
   editingCustomer,
-  userId
+  userId,
+  orgId
 }: AddCustomerModalProps) {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -34,7 +36,6 @@ export function AddCustomerModal({
     address: ''
   })
 
-  // Populate form with editing data
   useEffect(() => {
     if (editingCustomer) {
       setFormData({
@@ -54,52 +55,41 @@ export function AddCustomerModal({
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required'
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone is required'
-    }
-    if (!formData.address.trim()) {
-      newErrors.address = 'Address is required'
-    }
-
+    if (!formData.name.trim()) newErrors.name = 'Name is required'
+    if (!formData.phone.trim()) newErrors.phone = 'Phone is required'
+    if (!formData.address.trim()) newErrors.address = 'Address is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!validateForm()) return
 
     setLoading(true)
     try {
+      const customerData = {
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+        org_id: orgId   // <-- include org_id
+      }
+
       if (editingCustomer) {
-        // Update existing customer
         const { error } = await supabase
           .from('customers')
-          .update({
-            name: formData.name.trim(),
-            phone: formData.phone.trim(),
-            address: formData.address.trim()
-          })
+          .update(customerData)
           .eq('id', editingCustomer.id)
-
+          .eq('org_id', orgId)
         if (error) throw error
         toast.success('Customer updated successfully')
       } else {
-        // Insert new customer
         const { error } = await supabase
           .from('customers')
           .insert({
             user_id: userId,
-            name: formData.name.trim(),
-            phone: formData.phone.trim(),
-            address: formData.address.trim()
+            ...customerData
           })
-
         if (error) throw error
         toast.success('Customer added!')
       }
@@ -118,17 +108,11 @@ export function AddCustomerModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
-          </DialogTitle>
+          <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add New Customer'}</DialogTitle>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name Field */}
           <div className="space-y-2">
-            <Label htmlFor="name">
-              Name <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="name">Name <span className="text-red-500">*</span></Label>
             <Input
               id="name"
               placeholder="Customer name"
@@ -138,12 +122,8 @@ export function AddCustomerModal({
             />
             {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
           </div>
-
-          {/* Phone Field */}
           <div className="space-y-2">
-            <Label htmlFor="phone">
-              Phone <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
             <Input
               id="phone"
               placeholder="Phone number"
@@ -153,12 +133,8 @@ export function AddCustomerModal({
             />
             {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
           </div>
-
-          {/* Address Field */}
           <div className="space-y-2">
-            <Label htmlFor="address">
-              Address <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="address">Address <span className="text-red-500">*</span></Label>
             <Textarea
               id="address"
               placeholder="Customer address"
@@ -169,29 +145,12 @@ export function AddCustomerModal({
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
-
-          {/* Buttons */}
           <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Customer'
-              )}
+            <Button type="submit" disabled={loading}>
+              {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : 'Save Customer'}
             </Button>
           </div>
         </form>
