@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   FileText,
@@ -15,6 +15,7 @@ import {
   FileCheck,
   Receipt,
   UsersRound,
+  LogOut,
 } from "lucide-react"
 import {
   Sidebar,
@@ -27,8 +28,9 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
-import { supabase, type Profile } from "@/lib/supabase"
+import { supabase, type Profile, signOut } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { toast } from "sonner"
 
 const memberNavItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -49,6 +51,7 @@ const adminOnlyNavItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { user } = useAuth()
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
@@ -118,6 +121,17 @@ export function AppSidebar() {
     }
   }, [user?.id])
 
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      toast.success('Logged out successfully')
+      router.push('/login')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to logout')
+    }
+  }
+
   // Combine nav items based on role
   const navItems = userRole === 'admin'
     ? [...memberNavItems, ...adminOnlyNavItems]
@@ -178,6 +192,19 @@ export function AppSidebar() {
             </span>
           </div>
         </div>
+
+        {/* Logout button – only for members */}
+        {userRole === 'member' && (
+          <div className="group-data-[collapsible=icon]:hidden">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <LogOut className="size-4" />
+              <span>Logout</span>
+            </button>
+          </div>
+        )}
       </SidebarFooter>
     </Sidebar>
   )
