@@ -62,45 +62,82 @@ export default function ServiceHistoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [exportModalOpen, setExportModalOpen] = useState(false)
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
   useEffect(() => {
-    const loadServiceHistory = async () => {
-      try {
-        if (!user?.id) return
-
-        const { data: historyData } = await supabase.from('service_history').select('*')
-        const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
-        const { data: techniciansData } = await supabase.from('technicians').select('*').eq('user_id', user.id)
-        const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
-
-        const records = (historyData as ServiceHistory[]).map(record => {
-          const contract = (contractsData as Contract[])?.find(c => c.id === record.contract_id)
-          const technician = (techniciansData as Technician[])?.find(t => t.id === record.technician_id)
-          const customer = (customersData as Customer[])?.find(c => c.id === contract?.customer_id)
-
-          return {
-            ...record,
-            customerName: customer?.name || 'Unknown',
-            contractName: contract?.contract_name || 'Unknown',
-            technicianName: technician?.name || 'Unknown',
-            contractPrice: contract?.contracts_price ?? null
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
           }
         })
-
-        setServiceRecords(records)
-        setFilteredRecords(records)
-      } catch (error) {
-        console.error('Error loading service history:', error)
-      } finally {
-        setLoading(false)
-      }
     }
-
-    loadServiceHistory()
   }, [user?.id])
+
+  useEffect(() => {
+    if (currentOrgId) {
+      loadServiceHistory()
+    }
+  }, [currentOrgId])
+
+  const loadServiceHistory = async () => {
+    try {
+      if (!currentOrgId) return
+
+      const { data: historyData } = await supabase
+        .from('service_history')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const { data: contractsData } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const { data: techniciansData } = await supabase
+        .from('technicians')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const records = (historyData as ServiceHistory[]).map(record => {
+        const contract = (contractsData as Contract[])?.find(c => c.id === record.contract_id)
+        const technician = (techniciansData as Technician[])?.find(t => t.id === record.technician_id)
+        const customer = (customersData as Customer[])?.find(c => c.id === contract?.customer_id)
+
+        return {
+          ...record,
+          customerName: customer?.name || 'Unknown',
+          contractName: contract?.contract_name || 'Unknown',
+          technicianName: technician?.name || 'Unknown',
+          contractPrice: contract?.contracts_price ?? null
+        }
+      })
+
+      setServiceRecords(records)
+      setFilteredRecords(records)
+    } catch (error) {
+      console.error('Error loading service history:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleFilter = () => {
     let filtered = serviceRecords
-
     if (searchTerm) {
       filtered = filtered.filter(r =>
         r.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -108,7 +145,6 @@ export default function ServiceHistoryPage() {
         r.technicianName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-
     setFilteredRecords(filtered)
   }
 
@@ -213,6 +249,7 @@ export default function ServiceHistoryPage() {
           open={exportModalOpen}
           onOpenChange={setExportModalOpen}
           records={filteredRecords}
+          orgId={currentOrgId} // pass if needed
         />
       </div>
     </DashboardLayout>
