@@ -22,6 +22,7 @@ interface AddTechnicianModalProps {
   onSuccess: () => void
   editingTechnician?: Technician | null
   userId: string
+  orgId: string   // <-- added
 }
 
 function parseSpecialization(raw: unknown): string {
@@ -59,7 +60,8 @@ export function AddTechnicianModal({
   onOpenChange,
   onSuccess,
   editingTechnician,
-  userId
+  userId,
+  orgId
 }: AddTechnicianModalProps) {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -71,7 +73,6 @@ export function AddTechnicianModal({
     status: 'Available'
   })
 
-  // Populate form with editing data
   useEffect(() => {
     if (editingTechnician) {
       setFormData({
@@ -93,24 +94,15 @@ export function AddTechnicianModal({
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required'
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone is required'
-    }
-    if (!formData.specialization.trim()) {
-      newErrors.specialization = 'Specialization is required'
-    }
-
+    if (!formData.name.trim()) newErrors.name = 'Name is required'
+    if (!formData.phone.trim()) newErrors.phone = 'Phone is required'
+    if (!formData.specialization.trim()) newErrors.specialization = 'Specialization is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!validateForm()) return
 
     setLoading(true)
@@ -119,27 +111,25 @@ export function AddTechnicianModal({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         specialization: formData.specialization,
-        status: formData.status.toLowerCase().replace(' ', '-')
+        status: formData.status.toLowerCase().replace(' ', '-'),
+        org_id: orgId   // <-- include org_id
       }
 
       if (editingTechnician) {
-        // Update existing technician
         const { error } = await supabase
           .from('technicians')
           .update(technicianData)
           .eq('id', editingTechnician.id)
-
+          .eq('org_id', orgId)  // safety
         if (error) throw error
         toast.success('Technician updated successfully!')
       } else {
-        // Create new technician
         const { error } = await supabase
           .from('technicians')
           .insert({
             user_id: userId,
             ...technicianData
           })
-
         if (error) throw error
         toast.success('Technician added!')
       }
@@ -158,13 +148,9 @@ export function AddTechnicianModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>
-            {editingTechnician ? 'Edit Technician' : 'Add Technician'}
-          </DialogTitle>
+          <DialogTitle>{editingTechnician ? 'Edit Technician' : 'Add Technician'}</DialogTitle>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
             <Input
@@ -174,12 +160,8 @@ export function AddTechnicianModal({
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className={errors.name ? 'border-red-500' : ''}
             />
-            {errors.name && (
-              <p className="text-sm text-red-500">{errors.name}</p>
-            )}
+            {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
           </div>
-
-          {/* Phone */}
           <div className="space-y-2">
             <Label htmlFor="phone">Phone *</Label>
             <Input
@@ -189,38 +171,25 @@ export function AddTechnicianModal({
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               className={errors.phone ? 'border-red-500' : ''}
             />
-            {errors.phone && (
-              <p className="text-sm text-red-500">{errors.phone}</p>
-            )}
+            {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
           </div>
-
-          {/* Specialization */}
           <div className="space-y-2">
             <Label htmlFor="specialization">Specialization *</Label>
             <Select
               value={formData.specialization}
               onValueChange={(value) => setFormData({ ...formData, specialization: value })}
             >
-              <SelectTrigger 
-                id="specialization"
-                className={errors.specialization ? 'border-red-500' : ''}
-              >
+              <SelectTrigger className={errors.specialization ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select specialization" />
               </SelectTrigger>
               <SelectContent>
                 {SPECIALIZATION_OPTIONS.map((spec) => (
-                  <SelectItem key={spec} value={spec}>
-                    {spec}
-                  </SelectItem>
+                  <SelectItem key={spec} value={spec}>{spec}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {errors.specialization && (
-              <p className="text-sm text-red-500">{errors.specialization}</p>
-            )}
+            {errors.specialization && <p className="text-sm text-red-500">{errors.specialization}</p>}
           </div>
-
-          {/* Status */}
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
             <Select
@@ -232,28 +201,16 @@ export function AddTechnicianModal({
               </SelectTrigger>
               <SelectContent>
                 {STATUS_OPTIONS.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
+                  <SelectItem key={status} value={status}>{status}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Action Buttons */}
           <div className="flex gap-3 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-            >
+            <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
               {editingTechnician ? 'Update Technician' : 'Save Technician'}
             </Button>
