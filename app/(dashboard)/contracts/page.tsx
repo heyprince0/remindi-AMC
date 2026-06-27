@@ -36,6 +36,8 @@ import { useAuth } from "@/lib/auth-context"
 import { Plus, Search, Edit, Trash2, Download } from "lucide-react"
 import { toast } from "sonner"
 import { AddContractModal } from "@/components/add-contract-modal"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -54,7 +56,6 @@ function getStatusBadge(days: number, status: string) {
   return <Badge variant="outline">{status}</Badge>
 }
 
-// Helper to get status label for PDF and filtering
 function getStatusLabel(days: number, status: string): string {
   if (days < 0) return 'Expired'
   if (days === 0) return 'Today Servicing'
@@ -63,24 +64,19 @@ function getStatusLabel(days: number, status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-// Helper to get status color for PDF
-function getStatusPdfColor(label: string): [number, number, number] {
-  switch (label) {
-    case 'Active':          return [22, 163, 74]  // green
-    case 'Expired':         return [220, 38, 38] // red
-    case 'Today Servicing': return [202, 138, 4] // yellow
-    case 'Expiring Soon':   return [234, 88, 12] // orange
-    default:                return [71, 85, 105] // slate
-  }
-}
-
-// Helper to get filter status values
 function getFilterStatusValue(days: number, status: string): string {
   if (days < 0) return 'expired'
   if (days === 0) return 'today-servicing'
   if (days <= 3) return 'expiring-soon'
   if (status === 'active') return 'active'
   return status
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [22, 45, 60] // default dark blue
 }
 
 export default function ContractsPage() {
@@ -96,22 +92,41 @@ export default function ContractsPage() {
   const [contractToDelete, setContractToDelete] = useState<ContractDisplay | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
   useEffect(() => {
-    loadContracts()
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
   }, [user?.id])
+
+  useEffect(() => {
+    if (currentOrgId) {
+      loadContracts()
+    }
+  }, [currentOrgId])
 
   const handleFilter = () => {
     let filtered = contracts
-
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(c =>
         c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customerName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-
-    // Apply status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter(c => {
         const days = getDaysUntilService(c.next_service_date)
@@ -119,7 +134,6 @@ export default function ContractsPage() {
         return statusLabel === filterStatus
       })
     }
-
     setFilteredContracts(filtered)
   }
 
@@ -128,13 +142,14 @@ export default function ContractsPage() {
   }, [searchTerm, filterStatus, contracts])
 
   const handleDelete = async () => {
-    if (!contractToDelete) return
+    if (!contractToDelete || !currentOrgId) return
     setDeleting(true)
     try {
       const { error } = await supabase
         .from('contracts')
         .delete()
         .eq('id', contractToDelete.id)
+        .eq('org_id', currentOrgId)
       if (error) throw error
       setContracts(contracts.filter(c => c.id !== contractToDelete.id))
       toast.success('Contract deleted successfully')
@@ -163,19 +178,19 @@ export default function ContractsPage() {
 
   const loadContracts = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)
 
       if (contractsError) throw contractsError
 
       const { data: customersData } = await supabase
         .from('customers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)
 
       const displayed = (contractsData as Contract[]).map(contract => {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
@@ -197,7 +212,6 @@ export default function ContractsPage() {
 
   const getStatusCounts = (data: ContractDisplay[]) => {
     let active = 0, expired = 0, todayServicing = 0, expiringSoon = 0
-    
     data.forEach(c => {
       const days = getDaysUntilService(c.next_service_date)
       if (days < 0) expired++
@@ -205,58 +219,91 @@ export default function ContractsPage() {
       else if (days <= 3) expiringSoon++
       else if (c.status === 'active') active++
     })
-    
     return { active, expired, todayServicing, expiringSoon }
   }
 
+  // ====== NEW PDF EXPORT using jsPDF + autoTable ======
   const exportContractsPDF = () => {
-    try {
-      const data = filteredContracts
-      const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-      const counts = getStatusCounts(data)
+    if (filteredContracts.length === 0) {
+      toast.error("No contracts to export")
+      return
+    }
 
-      const rows = data.map((c, i) => {
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+      const pageW = 297
+      const margin = 15
+      const themeColor = "#162d3c"
+      const [r, g, b] = hexToRgb(themeColor)
+
+      // Header
+      doc.setFillColor(r, g, b)
+      doc.rect(0, 0, pageW, 14, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("Contracts Report", margin, 9)
+      doc.setTextColor(200, 200, 200)
+      doc.setFontSize(8)
+      doc.text("AMC CONTRACTS", pageW - margin, 9, { align: "right" })
+
+      // Meta info
+      const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      const counts = getStatusCounts(filteredContracts)
+      doc.setTextColor(40, 40, 40)
+      doc.setFontSize(8)
+      doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
+
+      // Table
+      const tableData = filteredContracts.map(c => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
-        const statusColor = getStatusPdfColor(statusLabel)
-        const colorHex = `rgb(${statusColor[0]},${statusColor[1]},${statusColor[2]})`
-        const price = c.contracts_price != null ? `Rs.${Number(c.contracts_price).toLocaleString('en-IN')}` : '—'
-        return `<tr style="background:${i % 2 === 0 ? '#f0f9ff' : '#fff'}">
-          <td>${c.contract_name || '—'}</td>
-          <td>${c.customerName || '—'}</td>
-          <td>${c.frequency_days} days</td>
-          <td>${price}</td>
-          <td>${c.start_date || '—'}</td>
-          <td>${c.next_service_date || '—'}</td>
-          <td style="color:${colorHex};font-weight:bold">${statusLabel}</td>
-        </tr>`
-      }).join('')
+        return [
+          c.contract_name || '—',
+          c.customerName || '—',
+          `${c.frequency_days} days`,
+          c.contracts_price != null ? `₹${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
+          c.start_date || '—',
+          c.next_service_date || '—',
+          statusLabel
+        ]
+      })
 
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) { toast.error('Please allow popups to export PDF'); return }
-      printWindow.document.write(`<!DOCTYPE html><html><head><title>Contracts Report</title>
-        <style>body{font-family:helvetica,sans-serif;margin:20px;color:#0f172a}
-        .banner{background:#162d3c;color:#fff;padding:8px 14px;margin:-20px -20px 12px}
-        .banner h2{font-size:15px;margin:0;display:inline}
-        .meta{font-size:8px;color:#475569;margin-bottom:10px}
-        table{width:100%;border-collapse:collapse;font-size:9px}
-        th{background:#162d3c;color:#fff;padding:5px 4px;text-align:left}
-        td{padding:4px;border-bottom:1px solid #cbd5e1}
-        footer{font-size:8px;color:#94a3b8;text-align:center;margin-top:20px;border-top:2px solid #29abe2;padding-top:6px}
-        @media print{@page{size:landscape;margin:10mm}footer{position:fixed;bottom:0;width:100%}}</style></head>
-        <body>
-        <div class="banner"><h2>Contracts Report</h2><span style="float:right;font-size:9px;color:#b4d2e6">AMC CONTRACTS</span></div>
-        <div class="meta">Exported: ${dateStr} &nbsp;|&nbsp; Total: ${data.length} &nbsp;|&nbsp; Active: ${counts.active} &nbsp;|&nbsp; Expired: ${counts.expired} &nbsp;|&nbsp; Today Servicing: ${counts.todayServicing} &nbsp;|&nbsp; Expiring Soon: ${counts.expiringSoon}</div>
-        <table><thead><tr><th>Contract Name</th><th>Customer</th><th>Frequency</th><th>Price (Rs.)</th><th>Start Date</th><th>End Date</th><th>Status</th></tr></thead>
-        <tbody>${rows}</tbody></table>
-        <footer><strong>remindi</strong> — Smart AMC Management for Indian Contractors · www.remindi.online</footer>
-        <script>window.onload=function(){window.print();window.onafterprint=function(){window.close()}}</script>
-        </body></html>`)
-      printWindow.document.close()
-      toast.success('PDF export opened — use Print > Save as PDF')
+      autoTable(doc, {
+        startY: 28,
+        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Start Date", "End Date", "Status"]],
+        body: tableData,
+        theme: "striped",
+        headStyles: {
+          fillColor: [r, g, b],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+        },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      // Footer
+      const finalY = (doc as any).lastAutoTable.finalY + 8
+      doc.setFontSize(7)
+      doc.setTextColor(150, 150, 150)
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, finalY, { align: "center" })
+
+      doc.save(`Contracts_Report_${new Date().toISOString().split('T')[0]}.pdf`)
+      toast.success("PDF exported successfully")
     } catch (error) {
-      console.error('Error generating contracts PDF:', error)
-      toast.error('Failed to export PDF')
+      console.error("Error exporting PDF:", error)
+      toast.error("Failed to export PDF")
     }
   }
 
@@ -391,13 +438,14 @@ export default function ContractsPage() {
         </Card>
 
         {/* Add/Edit Contract Modal */}
-        {user && (
+        {user && currentOrgId && (
           <AddContractModal
             open={modalOpen}
             onOpenChange={setModalOpen}
             onSuccess={handleModalSuccess}
             editingContract={editingContract}
             userId={user.id}
+            orgId={currentOrgId}
           />
         )}
 
