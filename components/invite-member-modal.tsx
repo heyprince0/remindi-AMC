@@ -33,6 +33,7 @@ export function InviteMemberModal({
   onSuccess,
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState("")
+  const [displayName, setDisplayName] = useState("")
   const [role, setRole] = useState<"admin" | "member">("member")
   const [loading, setLoading] = useState(false)
 
@@ -41,6 +42,11 @@ export function InviteMemberModal({
 
     if (!email) {
       toast.error("Please enter an email address")
+      return
+    }
+
+    if (!displayName.trim()) {
+      toast.error("Please enter a name for this member")
       return
     }
 
@@ -53,10 +59,6 @@ export function InviteMemberModal({
     setLoading(true)
 
     try {
-      // Grab the current session so we can send its access token explicitly —
-      // the API route validates this token directly rather than relying on
-      // cookies, since this app's sessions live in localStorage
-      // (storageKey: 'remindi-auth-token'), which server code can't read.
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
@@ -74,6 +76,7 @@ export function InviteMemberModal({
         body: JSON.stringify({
           email,
           role,
+          displayName: displayName.trim(),  // <-- send the name
         }),
       })
 
@@ -97,6 +100,7 @@ export function InviteMemberModal({
       }
 
       setEmail("")
+      setDisplayName("")
       setRole("member")
       onOpenChange(false)
       onSuccess()
@@ -119,6 +123,18 @@ export function InviteMemberModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* NEW: Name input */}
+          <div className="space-y-2">
+            <Label htmlFor="displayName">Full Name</Label>
+            <Input
+              id="displayName"
+              placeholder="e.g. John Doe"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">Email Address</Label>
             <Input
