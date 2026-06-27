@@ -2,6 +2,11 @@ export const runtime = 'nodejs'
 
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import {
+  sendServiceReminderEmail,
+  sendAMCExpiryReminderEmail,
+  sendAMCExpiredEmail,
+} from '@/lib/email-service'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,6 +29,7 @@ export async function GET() {
     const in7DaysStr = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
+    // Fetch contracts with customer name
     const { data: contracts, error: dbError } = await supabase
       .from('contracts')
       .select('*, customers(name)')
@@ -37,10 +43,42 @@ export async function GET() {
     }
 
     if (!contracts?.length) {
-      return NextResponse.json({ sent: 0 })
+      return NextResponse.json({ sent: 0, message: 'No contracts to process' })
+    }
+
+    // Fetch org owners (role = 'owner') to get the user to send email to
+    const { data: memberships, error: membershipsError } = await supabase
+      .from('memberships')
+      .select('org_id, user_id, role')
+      .eq('role', 'owner')
+
+    if (membershipsError) {
+      console.error('Error fetching memberships:', membershipsError)
+      return NextResponse.json({ error: 'Failed to fetch owners' }, { status: 500 })
+    }
+
+    // Create a map: org_id -> owner_user_id
+    const orgOwnerMap: Record<string, string> = {}
+    for (const m of memberships || []) {
+      orgOwnerMap[m.org_id] = m.user_id
+    }
+
+    // Fetch user emails from auth (requires service role)
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+
+    if (usersError) {
+      console.error('Error fetching users:', usersError)
+      return NextResponse.json({ error: 'Failed to fetch user emails' }, { status: 500 })
+    }
+
+    // Create a map: user_id -> email
+    const userEmailMap: Record<string, string> = {}
+    for (const u of users || []) {
+      if (u.email) userEmailMap[u.id] = u.email
     }
 
     let sent = 0
+    let skipped = 0
     const errors: string[] = []
 
     for (const contract of contracts) {
@@ -50,40 +88,60 @@ export async function GET() {
         (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
       )
 
-      if (!NOTIFY_AT_DAYS.includes(daysUntil)) continue
-
-      let title = ''
-      let body = ''
-
-      if (daysUntil < 0) {
-        title = '🔴 Service Overdue!'
-        body = `${contract.contract_name} for ${contract.customers?.name} is ${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? '' : 's'} overdue`
-      } else if (daysUntil === 0) {
-        title = '🟠 Service Due Today!'
-        body = `${contract.contract_name} for ${contract.customers?.name} is due today`
-      } else {
-        title = '🟡 Service Due Soon'
-        body = `${contract.contract_name} for ${contract.customers?.name} is due in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`
+      if (!NOTIFY_AT_DAYS.includes(daysUntil)) {
+        skipped++
+        continue
       }
 
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/send-notification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: contract.user_id, title, body, url: '/' }),
-        })
-        if (res.ok) {
-          sent++
-        } else {
-          const errText = await res.text()
-          errors.push(`Contract ${contract.id}: ${res.status} - ${errText}`)
-        }
-      } catch (fetchErr) {
-        errors.push(`Contract ${contract.id}: fetch failed - ${fetchErr}`)
+      const customerName = contract.customers?.name || 'Unknown'
+
+      // Find the owner of this contract's org
+      const ownerUserId = orgOwnerMap[contract.org_id]
+      if (!ownerUserId) {
+        skipped++
+        console.warn(`No owner found for org ${contract.org_id}, contract ${contract.id}`)
+        continue
+      }
+
+      const userEmail = userEmailMap[ownerUserId]
+      if (!userEmail) {
+        skipped++
+        console.warn(`No email for owner ${ownerUserId}, contract ${contract.id}`)
+        continue
+      }
+
+      let result
+      if (daysUntil < 0) {
+        result = await sendAMCExpiredEmail(
+          userEmail,
+          contract.contract_name,
+          contract.next_service_date,
+          customerName
+        )
+      } else if (daysUntil === 0) {
+        result = await sendServiceReminderEmail(
+          userEmail,
+          contract.contract_name,
+          contract.next_service_date,
+          customerName
+        )
+      } else {
+        result = await sendAMCExpiryReminderEmail(
+          userEmail,
+          contract.contract_name,
+          contract.next_service_date,
+          customerName
+        )
+      }
+
+      if (result.success) {
+        sent++
+      } else {
+        errors.push(`Contract ${contract.id}: ${result.error}`)
       }
     }
 
-    return NextResponse.json({ sent, errors: errors.length ? errors : undefined })
+    return NextResponse.json({ sent, skipped, errors: errors.length ? errors : undefined })
   } catch (error) {
     console.error('check-contracts error:', error)
     return NextResponse.json({ error: 'Failed', detail: String(error) }, { status: 500 })
