@@ -22,7 +22,7 @@ interface NewInvoiceModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   userId: string
-  orgId: string   // <-- added
+  orgId: string
 }
 
 export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoiceModalProps) {
@@ -56,12 +56,13 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
       const nextNo = await generateNextInvoiceNo()
       setInvoiceNo(nextNo)
 
-      // ✅ Fetch accepted quotations scoped by org_id
+      // ✅ Fetch ALL quotations for this org (no status filter)
       const { data, error } = await supabase
         .from("quotations")
-        .select("id, quote_no, client_name, subtotal, sgst, cgst, grand_total, include_gst, items, client_address, client_district, client_state, client_pin_code, subject, body_text")
-        .eq("org_id", orgId)   // <-- changed from user_id
-        .eq("status", "Accepted")
+        .select("id, quote_no, client_name, subtotal, sgst, cgst, grand_total, include_gst, items, client_address, client_district, client_state, client_pin_code, subject, body_text, invoice_id")
+        .eq("org_id", orgId)
+        // Optional: exclude quotations that already have an invoice
+        // .is("invoice_id", null)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -76,11 +77,10 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
 
   const generateNextInvoiceNo = async () => {
     try {
-      // ✅ Count invoices scoped by org_id
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no", { count: "exact" })
-        .eq("org_id", orgId)   // <-- changed from user_id
+        .eq("org_id", orgId)
       if (error) throw error
       const count = (data?.length ?? 0) + 1
       return `INV-${String(count).padStart(3, '0')}`
@@ -104,7 +104,7 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
         .from("invoices")
         .insert({
           user_id: userId,
-          org_id: orgId,   // <-- include org_id
+          org_id: orgId,
           quotation_id: selectedQuotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,
@@ -167,7 +167,7 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
           ) : acceptedQuotations.length === 0 ? (
             <div className="py-4 text-center">
               <p className="text-sm text-muted-foreground">
-                No accepted quotations found. Accept a quotation first to create an invoice.
+                No quotations found. Create a quotation first to generate an invoice.
               </p>
             </div>
           ) : (
@@ -183,6 +183,7 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
                     {acceptedQuotations.map((qt) => (
                       <SelectItem key={qt.id} value={qt.id}>
                         {qt.quote_no} — {qt.client_name}
+                        {qt.invoice_id ? ' (Invoiced)' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
