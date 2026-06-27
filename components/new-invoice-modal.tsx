@@ -56,7 +56,7 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
       const nextNo = await generateNextInvoiceNo()
       setInvoiceNo(nextNo)
 
-      // ✅ Fetch ALL quotations for this org (no status filter)
+      // Fetch all quotations for this org (not just Accepted)
       const { data, error } = await supabase
         .from("quotations")
         .select("id, quote_no, client_name, subtotal, sgst, cgst, grand_total, include_gst, items, client_address, client_district, client_state, client_pin_code, subject, body_text, invoice_id")
@@ -100,7 +100,8 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
 
     setGeneratingInvoice(true)
     try {
-      const { data, error } = await supabase
+      // 1. Insert the invoice
+      const { data: invoiceData, error: insertError } = await supabase
         .from("invoices")
         .insert({
           user_id: userId,
@@ -131,10 +132,19 @@ export function NewInvoiceModal({ open, onOpenChange, userId, orgId }: NewInvoic
         .select()
         .single()
 
-      if (error) throw error
+      if (insertError) throw insertError
+
+      // 2. Update the quotation with the new invoice_id
+      const { error: updateError } = await supabase
+        .from("quotations")
+        .update({ invoice_id: invoiceData.id })
+        .eq("id", selectedQuotation.id)
+
+      if (updateError) throw updateError
+
       toast.success("Invoice created successfully")
       onOpenChange(false)
-      router.push(`/invoices/${data.id}`)
+      router.push(`/invoices/${invoiceData.id}`)
     } catch (err) {
       console.error(err)
       toast.error("Failed to create invoice: " + (err instanceof Error ? err.message : "Unknown error"))
