@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { supabase, type Contract, type Customer, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { AlertTriangle, Clock, CalendarClock, CheckCircle2, UserPlus } from "lucide-react"
+import { AlertTriangle, Clock, CalendarClock, CheckCircle2 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 
 interface ServiceAlert {
@@ -99,12 +99,46 @@ export default function ServiceAlertsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (currentOrgId) {
+      loadServices()
+    }
+  }, [currentOrgId])
+
   const loadServices = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
-      const { data: contractsData } = await supabase.from('contracts').select('*').eq('user_id', user.id)
-      const { data: customersData } = await supabase.from('customers').select('*').eq('user_id', user.id)
+      const { data: contractsData } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('org_id', currentOrgId)
 
       const overdue: ServiceAlert[] = []
       const dueToday: ServiceAlert[] = []
@@ -118,7 +152,7 @@ export default function ServiceAlertsPage() {
           id: contract.id,
           customer: customer?.name || 'Unknown',
           contract: contract.contract_name,
-          serviceType: contract.service_type,
+          serviceType: contract.service_type || "Service",
           dueDate: contract.next_service_date,
           technician: null,
           contractData: contract
@@ -142,10 +176,6 @@ export default function ServiceAlertsPage() {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    loadServices()
-  }, [user?.id])
 
   const handleMarkComplete = (contract: Contract) => {
     setSelectedContract(contract)
@@ -268,12 +298,13 @@ export default function ServiceAlertsPage() {
         </Tabs>
 
         {/* Mark Complete Modal */}
-        {user && (
+        {user && currentOrgId && (
           <MarkCompleteModal
             open={modalOpen}
             onOpenChange={setModalOpen}
             contract={selectedContract}
             userId={user.id}
+            orgId={currentOrgId}
             onSuccess={handleModalSuccess}
           />
         )}
