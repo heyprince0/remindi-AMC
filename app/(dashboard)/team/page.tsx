@@ -91,7 +91,7 @@ export default function TeamPage() {
           }
         }
 
-        // Get email from company_profile (most reliable)
+        // Get email from company_profile
         const { data: cpEmail } = await supabase
           .from("company_profile")
           .select("email")
@@ -102,11 +102,11 @@ export default function TeamPage() {
           email = cpEmail.email
         }
 
-        // Fallback: if no email in company_profile, check profiles (if we store email there)
+        // If still no email, try to get from profiles (if we store email there)
         if (!email) {
           const { data: profileEmail } = await supabase
             .from("profiles")
-            .select("email") // assumes profiles has email column
+            .select("email")
             .eq("id", membership.user_id)
             .maybeSingle()
           if (profileEmail?.email) {
@@ -153,9 +153,14 @@ export default function TeamPage() {
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
     try {
-      const { error } = await supabase.from("memberships").delete().eq("id", memberId)
+      const { error } = await supabase
+        .from("memberships")
+        .delete()
+        .eq("id", memberId)
+        .eq("org_id", currentOrgId)   // <-- added org filter
       if (error) throw error
-      setMembers(members.filter((m) => m.id !== memberId))
+      // Refresh the list after removal
+      if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Member removed successfully")
     } catch (error) {
       console.error("[team] Error removing member:", error)
@@ -169,8 +174,10 @@ export default function TeamPage() {
         .from("invites")
         .update({ status: "revoked" })
         .eq("id", inviteId)
+        .eq("org_id", currentOrgId)   // <-- added org filter
       if (error) throw error
-      setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
+      // Refresh the list after revoke
+      if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Invitation revoked")
     } catch (error) {
       console.error("[team] Error revoking invite:", error)
@@ -181,9 +188,14 @@ export default function TeamPage() {
   const handleDeleteInvite = async (inviteId: string) => {
     if (!confirm("Permanently delete this invitation? The person will need to be re-invited.")) return
     try {
-      const { error } = await supabase.from("invites").delete().eq("id", inviteId)
+      const { error } = await supabase
+        .from("invites")
+        .delete()
+        .eq("id", inviteId)
+        .eq("org_id", currentOrgId)   // <-- added org filter
       if (error) throw error
-      setPendingInvites(pendingInvites.filter((i) => i.id !== inviteId))
+      // Refresh the list after deletion
+      if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Invitation deleted")
     } catch (error) {
       console.error("[team] Error deleting invite:", error)
