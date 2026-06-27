@@ -53,7 +53,6 @@ export default function TeamPage() {
     try {
       if (!orgId) return
 
-      // 1. Fetch memberships for this org only
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
@@ -68,13 +67,9 @@ export default function TeamPage() {
         let fullName: string | undefined
         let email: string | undefined
 
-        // =====================================================
-        // Priority 1: display_name from memberships (admin‑set)
-        // =====================================================
         if (membership.display_name) {
           fullName = membership.display_name
         } else {
-          // Priority 2: full_name from profiles
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name")
@@ -85,7 +80,6 @@ export default function TeamPage() {
             fullName = profile.full_name
           }
 
-          // Priority 3: company_name from company_profile
           if (!fullName) {
             const { data: cp } = await supabase
               .from("company_profile")
@@ -98,7 +92,6 @@ export default function TeamPage() {
           }
         }
 
-        // Get email from company_profile
         const { data: cpEmail } = await supabase
           .from("company_profile")
           .select("email")
@@ -118,7 +111,6 @@ export default function TeamPage() {
 
       setMembers(membersWithProfiles)
 
-      // 2. Fetch pending invites – we can also show the display_name if present
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -144,20 +136,30 @@ export default function TeamPage() {
     }
   }, [userRole])
 
+  // ========== FIXED: Member removal ==========
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
     try {
-      const { error } = await supabase
+      console.log("Deleting membership with ID:", memberId)
+
+      const { data, error } = await supabase
         .from("memberships")
         .delete()
         .eq("id", memberId)
-        .eq("org_id", currentOrgId)
+        .select()
+
       if (error) throw error
+
+      if (!data || data.length === 0) {
+        toast.error("Member not found or you don't have permission to remove them")
+        return
+      }
+
       if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Member removed successfully")
     } catch (error) {
       console.error("[team] Error removing member:", error)
-      toast.error("Failed to remove member")
+      toast.error(error instanceof Error ? error.message : "Failed to remove member")
     }
   }
 
