@@ -226,8 +226,29 @@ export default function ReportsPage() {
 
   const [currentHistory, setCurrentHistory] = useState<HistoryRow[]>([])
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
   const fetchData = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id || !currentOrgId) return
     setLoading(true)
     try {
       const { start, end } = getDateRange(range)
@@ -242,20 +263,23 @@ export default function ReportsPage() {
         supabase
           .from("contracts")
           .select("id, status, contracts_price, customer_id, next_service_date")
-          .eq("user_id", user.id),
+          .eq("org_id", currentOrgId),
         supabase
           .from("service_history")
           .select("id, contract_id, status, service_date")
+          .eq("org_id", currentOrgId)
           .gte("service_date", toDateStr(start))
           .lte("service_date", toDateStr(end)),
         supabase
           .from("service_history")
           .select("id, contract_id, status, service_date")
+          .eq("org_id", currentOrgId)
           .gte("service_date", toDateStr(prevStart))
           .lte("service_date", toDateStr(prevEnd)),
         supabase
           .from("service_history")
           .select("id, contract_id, status, service_date")
+          .eq("org_id", currentOrgId)
           .gte("service_date", toDateStr(sixMonthsAgo))
       ])
 
@@ -272,9 +296,9 @@ export default function ReportsPage() {
         totalServices: getTotalServices(cHistory),
         completedServices: getCompletedServices(cHistory),
         activeContracts: contracts.filter(c => {
-  const days = getDaysUntilService(c.next_service_date)
-  return c.status === "active" && days > 7
-}).length,
+          const days = getDaysUntilService(c.next_service_date)
+          return c.status === "active" && days > 7
+        }).length,
         totalContracts: contracts.length,
         totalEarnings: getTotalEarnings(cHistory, contractMap),
         prevTotalServices: getTotalServices(pHistory),
@@ -289,12 +313,13 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, range])
+  }, [user?.id, range, currentOrgId])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
+    if (currentOrgId) {
+      fetchData()
+    }
+  }, [fetchData, currentOrgId])
 
   return (
     <DashboardLayout>
@@ -331,23 +356,21 @@ export default function ReportsPage() {
             </>
           ) : (
             <>
-              {/* Total Services */}
-               <Card>
-  <CardContent className="p-6">
-    <div className="flex items-start justify-between">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-muted-foreground">Total Contracts</span>
-        <span className="text-3xl font-bold">{stats.totalContracts}</span>
-        <span className="text-xs text-muted-foreground">All time</span>
-      </div>
-      <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
-        <Activity className="size-6 text-primary" />
-      </div>
-    </div>
-  </CardContent>
-</Card>
-             
-
+              {/* Total Contracts */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-muted-foreground">Total Contracts</span>
+                      <span className="text-3xl font-bold">{stats.totalContracts}</span>
+                      <span className="text-xs text-muted-foreground">All time</span>
+                    </div>
+                    <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+                      <Activity className="size-6 text-primary" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
               {/* Completed Services */}
               <Card>
                 <CardContent className="p-6">
@@ -364,7 +387,6 @@ export default function ReportsPage() {
                   <p className="mt-2 text-xs text-muted-foreground">{RANGE_LABELS[range]}</p>
                 </CardContent>
               </Card>
-
               {/* Active Contracts */}
               <Card>
                 <CardContent className="p-6">
@@ -381,7 +403,6 @@ export default function ReportsPage() {
                   <p className="mt-2 text-xs text-muted-foreground">All time</p>
                 </CardContent>
               </Card>
-
               {/* Total Earnings */}
               <Card>
                 <CardContent className="p-6">
