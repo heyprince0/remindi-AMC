@@ -41,15 +41,36 @@ export default function LoginPage() {
         return
       }
       if (data.session) {
+        const userId = data.session.user.id
+
+        // 1. Check if the user has a membership (i.e., belongs to an organization)
+        const { data: membership, error: membershipError } = await supabase
+          .from('memberships')
+          .select('id')
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle()
+
+        if (membership) {
+          // Member or admin – they belong to an org → go to dashboard
+          window.location.href = '/'
+          return
+        }
+
+        // 2. No membership → check if they have a profile (new user who signed up directly)
         const { data: profile } = await supabase
           .from('profiles')
           .select('company_name')
-          .eq('id', data.session.user.id)
-          .single()
-        if (!profile?.company_name) {
-          router.replace('/profile-setup')
-        } else {
+          .eq('id', userId)
+          .maybeSingle()
+
+        if (profile?.company_name) {
+          // They have a company name but no membership? Might be an edge case.
+          // Redirect to dashboard anyway (or profile-setup if you prefer).
           window.location.href = '/'
+        } else {
+          // New user with no profile → go to profile setup to create an organization
+          router.replace('/profile-setup')
         }
       }
     } catch (err) {
