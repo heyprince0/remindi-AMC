@@ -27,21 +27,48 @@ export default function CustomersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (currentOrgId) {
+      loadCustomers()
+    }
+  }, [currentOrgId])
+
   const loadCustomers = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)
 
       if (customersError) throw customersError
 
       const { data: contractsData } = await supabase
         .from('contracts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)
 
       const customersWithContracts = (customersData as Customer[]).map(customer => {
         const contractCount = (contractsData as Contract[])?.filter(c => c.customer_id === customer.id).length || 0
@@ -61,10 +88,6 @@ export default function CustomersPage() {
     }
   }
 
-  useEffect(() => {
-    loadCustomers()
-  }, [user?.id])
-
   const handleSearch = (term: string) => {
     setSearchTerm(term)
     const filtered = customers.filter(c =>
@@ -76,13 +99,14 @@ export default function CustomersPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!currentOrgId) return
     if (confirm('Are you sure you want to delete this customer?')) {
       try {
         const { error } = await supabase
           .from('customers')
           .delete()
           .eq('id', id)
-
+          .eq('org_id', currentOrgId)
         if (error) throw error
         setCustomers(customers.filter(c => c.id !== id))
         toast.success('Customer deleted successfully')
@@ -106,6 +130,7 @@ export default function CustomersPage() {
   const handleModalSuccess = () => {
     loadCustomers()
   }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -206,13 +231,14 @@ export default function CustomersPage() {
         </div>
 
         {/* Add/Edit Customer Modal */}
-        {user && (
+        {user && currentOrgId && (
           <AddCustomerModal
             open={modalOpen}
             onOpenChange={setModalOpen}
             onSuccess={handleModalSuccess}
             editingCustomer={editingCustomer}
             userId={user.id}
+            orgId={currentOrgId}
           />
         )}
       </div>
