@@ -28,6 +28,7 @@ interface MarkCompleteModalProps {
   onOpenChange: (open: boolean) => void
   contract: Contract | null
   userId: string
+  orgId: string   // <-- added
   onSuccess: () => void
 }
 
@@ -36,6 +37,7 @@ export function MarkCompleteModal({
   onOpenChange,
   contract,
   userId,
+  orgId,
   onSuccess,
 }: MarkCompleteModalProps) {
   const [serviceDate, setServiceDate] = useState("")
@@ -63,7 +65,7 @@ export function MarkCompleteModal({
       const { data, error } = await supabase
         .from("technicians")
         .select("*")
-        .eq("user_id", userId)
+        .eq("org_id", orgId)   // <-- changed from user_id
 
       if (error) throw error
       setTechnicians(data || [])
@@ -84,7 +86,7 @@ export function MarkCompleteModal({
 
       setLoading(true)
 
-      // Step 1: Add to service_history table
+      // Step 1: Add to service_history table with org_id
       const { error: historyError } = await supabase
         .from("service_history")
         .insert({
@@ -93,12 +95,12 @@ export function MarkCompleteModal({
           service_date: serviceDate,
           status: "completed",
           notes: notes || null,
+          org_id: orgId,   // <-- added
         })
 
       if (historyError) throw historyError
 
-      // Step 2: Update contracts table
-      // Calculate next_service_date = service_date + frequency_days
+      // Step 2: Update contracts table (scoped by org_id)
       const serviceDateObj = new Date(serviceDate)
       const nextServiceDate = new Date(serviceDateObj)
       nextServiceDate.setDate(nextServiceDate.getDate() + contract.frequency_days)
@@ -110,10 +112,10 @@ export function MarkCompleteModal({
           status: "active",
         })
         .eq("id", contract.id)
+        .eq("org_id", orgId)   // <-- added for safety
 
       if (contractError) throw contractError
 
-      // Step 3: Success
       toast.success("Service marked as complete!")
       onOpenChange(false)
       onSuccess()
