@@ -68,26 +68,33 @@ export default function TeamPage() {
         let fullName: string | undefined
         let email: string | undefined
 
-        // Try to get full_name from profiles
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", membership.user_id)
-          .maybeSingle()
-
-        if (profile?.full_name) {
-          fullName = profile.full_name
-        }
-
-        // If no full_name, try company_profile (company_name as fallback)
-        if (!fullName) {
-          const { data: cp } = await supabase
-            .from("company_profile")
-            .select("company_name")
-            .eq("user_id", membership.user_id)
+        // =====================================================
+        // Priority 1: display_name from memberships (admin‑set)
+        // =====================================================
+        if (membership.display_name) {
+          fullName = membership.display_name
+        } else {
+          // Priority 2: full_name from profiles
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", membership.user_id)
             .maybeSingle()
-          if (cp?.company_name) {
-            fullName = cp.company_name
+
+          if (profile?.full_name) {
+            fullName = profile.full_name
+          }
+
+          // Priority 3: company_name from company_profile
+          if (!fullName) {
+            const { data: cp } = await supabase
+              .from("company_profile")
+              .select("company_name")
+              .eq("user_id", membership.user_id)
+              .maybeSingle()
+            if (cp?.company_name) {
+              fullName = cp.company_name
+            }
           }
         }
 
@@ -102,18 +109,6 @@ export default function TeamPage() {
           email = cpEmail.email
         }
 
-        // If still no email, try to get from profiles (if we store email there)
-        if (!email) {
-          const { data: profileEmail } = await supabase
-            .from("profiles")
-            .select("email")
-            .eq("id", membership.user_id)
-            .maybeSingle()
-          if (profileEmail?.email) {
-            email = profileEmail.email
-          }
-        }
-
         membersWithProfiles.push({
           ...membership,
           full_name: fullName,
@@ -123,7 +118,7 @@ export default function TeamPage() {
 
       setMembers(membersWithProfiles)
 
-      // 2. Fetch pending invites for this org
+      // 2. Fetch pending invites – we can also show the display_name if present
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -146,7 +141,6 @@ export default function TeamPage() {
   useEffect(() => {
     if (userRole && userRole !== "admin") {
       toast.error("You don't have permission to view this page")
-      // Optionally redirect: router.push("/dashboard")
     }
   }, [userRole])
 
@@ -157,9 +151,8 @@ export default function TeamPage() {
         .from("memberships")
         .delete()
         .eq("id", memberId)
-        .eq("org_id", currentOrgId)   // <-- added org filter
+        .eq("org_id", currentOrgId)
       if (error) throw error
-      // Refresh the list after removal
       if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Member removed successfully")
     } catch (error) {
@@ -174,9 +167,8 @@ export default function TeamPage() {
         .from("invites")
         .update({ status: "revoked" })
         .eq("id", inviteId)
-        .eq("org_id", currentOrgId)   // <-- added org filter
+        .eq("org_id", currentOrgId)
       if (error) throw error
-      // Refresh the list after revoke
       if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Invitation revoked")
     } catch (error) {
@@ -192,9 +184,8 @@ export default function TeamPage() {
         .from("invites")
         .delete()
         .eq("id", inviteId)
-        .eq("org_id", currentOrgId)   // <-- added org filter
+        .eq("org_id", currentOrgId)
       if (error) throw error
-      // Refresh the list after deletion
       if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Invitation deleted")
     } catch (error) {
@@ -355,8 +346,12 @@ export default function TeamPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-base">{invite.email}</CardTitle>
-                        <CardDescription className="text-xs">Pending invitation</CardDescription>
+                        <CardTitle className="text-base">
+                          {invite.display_name || invite.email}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {invite.email}
+                        </CardDescription>
                       </div>
                       {userRole === "admin" && (
                         <DropdownMenu>
