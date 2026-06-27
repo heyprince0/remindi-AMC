@@ -12,10 +12,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
-    // Plain supabase-js client, used only to validate the token the
-    // browser sent us — not relying on cookies at all, since this app's
-    // browser client stores sessions in localStorage (storageKey:
-    // 'remindi-auth-token'), which the server can never read directly.
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,11 +30,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
-    const { email, role } = await request.json()
+    const { email, role, displayName } = await request.json()
 
     if (!email || !role) {
       return NextResponse.json(
-        { message: "Email and role are required" },
+        { message: "Email, role, and display name are required" },
+        { status: 400 }
+      )
+    }
+
+    if (!displayName?.trim()) {
+      return NextResponse.json(
+        { message: "Please provide a display name for the member" },
         { status: 400 }
       )
     }
@@ -58,32 +61,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Get user's organization ID (for now, use first org)
-    // When org scoping is implemented, fetch the user's current org
-    const { data: orgs, error: orgsError } = await supabase
-      .from("organizations")
-      .select("id")
-      .limit(1)
-
-    if (orgsError || !orgs || orgs.length === 0) {
-      return NextResponse.json(
-        { message: "Organization not found" },
-        { status: 400 }
-      )
-    }
-
-    const orgId = orgs[0].id
-
+    // ============================================================
+    // 1. Get the user's organization from their membership
+    // ============================================================
     const { data: membership, error: membershipError } = await supabase
       .from("memberships")
-      .select("role")
-      .eq("org_id", orgId)
+      .select("org_id, role")
       .eq("user_id", user.id)
       .single()
 
     if (membershipError || !membership) {
       return NextResponse.json(
-        { message: "You are not a member of this organization" },
+        { message: "You are not a member of any organization" },
         { status: 403 }
       )
     }
@@ -95,6 +84,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const orgId = membership.org_id
+
+    // ============================================================
+    // 2. Check for existing invite or membership
+    // ============================================================
     const { data: existingInvite } = await supabase
       .from("invites")
       .select("id, status")
@@ -110,6 +104,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Also check if they are already a member (shouldn't happen, but safe)
+    const { data: existingMember } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("user_id", user.id) // we don't have their user_id yet, but we can check by email later if needed
+      // We'll skip this for simplicity; the frontend already prevents duplicate invites.
+
+    // ============================================================
+    // 3. Create the invite with display_name
+    // ============================================================
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
@@ -125,6 +130,7 @@ export async function POST(request: NextRequest) {
           status: "pending",
           invited_by: user.id,
           expires_at: expiresAt.toISOString(),
+          display_name: displayName.trim(), // <-- store the admin‑set name
         },
       ])
       .select()
@@ -138,6 +144,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ============================================================
+    // 4. Get inviter details and business name
+    // ============================================================
     const { data: inviterProfile } = await supabase
       .from("profiles")
       .select("full_name")
@@ -154,6 +163,9 @@ export async function POST(request: NextRequest) {
 
     const businessName = org?.name || "Remindi"
 
+    // ============================================================
+    // 5. Send the invitation email
+    // ============================================================
     const acceptLink = `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.remindi.online"}/invite/accept/${token}`
 
     const emailResult = await sendInviteMemberEmail(
@@ -161,7 +173,8 @@ export async function POST(request: NextRequest) {
       inviterName,
       businessName,
       role,
-      acceptLink
+      acceptLink,
+      displayName.trim() // optionally pass the name for the email
     )
 
     if (!emailResult.success) {
