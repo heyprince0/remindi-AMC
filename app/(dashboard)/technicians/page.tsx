@@ -58,22 +58,49 @@ export default function TechniciansPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null)
 
+  // --- Org state ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from("memberships")
+        .select("org_id")
+        .eq("user_id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
+          }
+        })
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (currentOrgId) {
+      loadTechnicians()
+    }
+  }, [currentOrgId])
+
   const loadTechnicians = async () => {
     try {
-      if (!user?.id) return
+      if (!currentOrgId) return
 
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('org_id', currentOrgId)
 
       if (techniciansError) throw techniciansError
 
       const { data: historyData } = await supabase
         .from('service_history')
         .select('technician_id')
+        .eq('org_id', currentOrgId)   // scope history too
 
-      // Count jobs for each technician
       const techniciansWithJobs = (techniciansData as Technician[]).map(tech => {
         const jobCount = (historyData as ServiceHistory[])?.filter(h => h.technician_id === tech.id).length || 0
         return {
@@ -92,10 +119,6 @@ export default function TechniciansPage() {
     }
   }
 
-  useEffect(() => {
-    loadTechnicians()
-  }, [user?.id])
-
   const handleSearch = (term: string) => {
     setSearchTerm(term)
     const filtered = technicians.filter(t => {
@@ -110,13 +133,14 @@ export default function TechniciansPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!currentOrgId) return
     if (confirm('Are you sure you want to delete this technician?')) {
       try {
         const { error } = await supabase
           .from('technicians')
           .delete()
           .eq('id', id)
-
+          .eq('org_id', currentOrgId)
         if (error) throw error
         setTechnicians(technicians.filter(t => t.id !== id))
         toast.success('Technician deleted successfully')
@@ -140,6 +164,7 @@ export default function TechniciansPage() {
   const handleModalSuccess = () => {
     loadTechnicians()
   }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -252,13 +277,14 @@ export default function TechniciansPage() {
         </div>
 
         {/* Add/Edit Technician Modal */}
-        {user && (
+        {user && currentOrgId && (
           <AddTechnicianModal
             open={modalOpen}
             onOpenChange={setModalOpen}
             onSuccess={handleModalSuccess}
             editingTechnician={editingTechnician}
             userId={user.id}
+            orgId={currentOrgId}
           />
         )}
       </div>
