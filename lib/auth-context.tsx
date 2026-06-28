@@ -9,8 +9,9 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   error: string | null
-  role: string | null      // <-- new
-  orgId: string | null     // <-- new
+  role: string | null
+  orgId: string | null
+  orgName: string | null   // <-- new
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -22,8 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [orgName, setOrgName] = useState<string | null>(null)
 
-  // Fetch initial session
+  // Initial session
   useEffect(() => {
     const getInitialSession = async () => {
       try {
@@ -40,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialSession()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session)
@@ -49,19 +50,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     )
 
-    return () => {
-      subscription?.unsubscribe()
-    }
+    return () => subscription?.unsubscribe()
   }, [])
 
-  // Fetch role & org when user changes
+  // Fetch role, orgId, and orgName whenever user changes
   useEffect(() => {
     const fetchMembership = async () => {
       if (!user) {
         setRole(null)
         setOrgId(null)
+        setOrgName(null)
         return
       }
+
       const { data, error } = await supabase
         .from('memberships')
         .select('role, org_id')
@@ -71,16 +72,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data) {
         setRole(data.role)
         setOrgId(data.org_id)
+
+        // Fetch organization name
+        if (data.org_id) {
+          const { data: orgData, error: orgError } = await supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', data.org_id)
+            .single()
+
+          if (!orgError && orgData?.name) {
+            setOrgName(orgData.name)
+          } else {
+            setOrgName(null)
+          }
+        } else {
+          setOrgName(null)
+        }
       } else {
         setRole(null)
         setOrgId(null)
+        setOrgName(null)
       }
     }
+
     fetchMembership()
   }, [user])
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, error, role, orgId }}>
+    <AuthContext.Provider value={{ user, session, loading, error, role, orgId, orgName }}>
       {children}
     </AuthContext.Provider>
   )
