@@ -8,14 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { AlertTriangle, Clock, CalendarClock, CheckCircle2, Mail, Loader2 } from "lucide-react"
+import { AlertTriangle, Clock, CalendarClock, CheckCircle2 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 import { toast } from "sonner"
-import {
-  triggerServiceReminderEmail,
-  triggerAMCExpiryReminderEmail,
-  triggerAMCExpiredEmail,
-} from "@/lib/email-actions"
 
 interface ServiceAlert {
   id: string
@@ -32,14 +27,10 @@ function ServiceAlertCard({
   service,
   variant,
   onMarkComplete,
-  onSendEmail,
-  sendingEmail,
 }: {
   service: ServiceAlert
   variant: "overdue" | "due-today" | "upcoming"
   onMarkComplete: (contract: Contract) => void
-  onSendEmail: (service: ServiceAlert) => void
-  sendingEmail: boolean
 }) {
   const borderColor = {
     overdue: "border-l-alert-overdue",
@@ -51,12 +42,6 @@ function ServiceAlertCard({
     overdue: "bg-alert-overdue/5",
     "due-today": "bg-alert-due-today/5",
     upcoming: "bg-alert-upcoming/5",
-  }[variant]
-
-  const emailLabel = {
-    overdue: "Send Expired Alert",
-    "due-today": "Send Reminder",
-    upcoming: "Send Expiry Warning",
   }[variant]
 
   return (
@@ -94,19 +79,6 @@ function ServiceAlertCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onSendEmail(service)}
-              disabled={sendingEmail}
-            >
-              {sendingEmail ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <Mail className="mr-2 size-4" />
-              )}
-              {emailLabel}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => service.contractData && onMarkComplete(service.contractData)}
             >
               <CheckCircle2 className="mr-2 size-4" />
@@ -127,7 +99,6 @@ export default function ServiceAlertsPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
-  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -205,54 +176,6 @@ export default function ServiceAlertsPage() {
   }
 
   const handleModalSuccess = () => loadServices()
-
-  const handleSendEmail = async (
-    service: ServiceAlert,
-    variant: "overdue" | "due-today" | "upcoming"
-  ) => {
-    if (!user?.email) {
-      toast.error("Your account email is not available")
-      return
-    }
-
-    setSendingEmailId(service.id)
-    try {
-      let result
-
-      if (variant === "overdue") {
-        result = await triggerAMCExpiredEmail(
-          user.email,
-          service.contract,
-          service.dueDate,
-          service.customer
-        )
-      } else if (variant === "due-today") {
-        result = await triggerServiceReminderEmail(
-          user.email,
-          service.contract,
-          service.dueDate,
-          service.customer
-        )
-      } else {
-        result = await triggerAMCExpiryReminderEmail(
-          user.email,
-          service.contract,
-          service.dueDate,
-          service.customer
-        )
-      }
-
-      if (result.success) {
-        toast.success(`Email sent for ${service.contract}`)
-      } else {
-        toast.error(`Failed to send email: ${result.error}`)
-      }
-    } catch (error) {
-      toast.error("Something went wrong sending the email")
-    } finally {
-      setSendingEmailId(null)
-    }
-  }
 
   return (
     <DashboardLayout>
@@ -332,8 +255,6 @@ export default function ServiceAlertsPage() {
                     service={service}
                     variant="overdue"
                     onMarkComplete={handleMarkComplete}
-                    onSendEmail={(s) => handleSendEmail(s, "overdue")}
-                    sendingEmail={sendingEmailId === service.id}
                   />
                 ))
               )}
@@ -353,8 +274,6 @@ export default function ServiceAlertsPage() {
                     service={service}
                     variant="due-today"
                     onMarkComplete={handleMarkComplete}
-                    onSendEmail={(s) => handleSendEmail(s, "due-today")}
-                    sendingEmail={sendingEmailId === service.id}
                   />
                 ))
               )}
@@ -374,8 +293,6 @@ export default function ServiceAlertsPage() {
                     service={service}
                     variant="upcoming"
                     onMarkComplete={handleMarkComplete}
-                    onSendEmail={(s) => handleSendEmail(s, "upcoming")}
-                    sendingEmail={sendingEmailId === service.id}
                   />
                 ))
               )}
