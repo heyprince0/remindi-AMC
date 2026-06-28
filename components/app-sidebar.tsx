@@ -52,76 +52,36 @@ const adminOnlyNavItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, role, loading } = useAuth() // <-- get role from context
+
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
   const [fullName, setFullName] = useState("")
-  const [userRole, setUserRole] = useState<string | null>(null)
 
+  // Load company profile for display (this is still fine)
   useEffect(() => {
     const loadProfile = async () => {
-      try {
-        if (!user?.id) return
-
-        // Load profile for display name
-        const { data } = await supabase
-          .from('profiles')
-          .select('company_name, full_name')
-          .eq('id', user.id)
-          .single()
-
-        if (data?.company_name) {
-          const names = data.company_name.split(' ')
-          setCompanyName(names[0] || "Remindi")
-          setCompanySubtitle(names.slice(1).join(' ') || "")
-        }
-        if (data?.full_name) {
-          setFullName(data.full_name)
-        }
-
-        // Load user's role in their org
-        const { data: membership } = await supabase
-          .from('memberships')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        if (membership) {
-          setUserRole(membership.role)
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error)
+      if (!user?.id) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('company_name, full_name')
+        .eq('id', user.id)
+        .single()
+      if (data?.company_name) {
+        const names = data.company_name.split(' ')
+        setCompanyName(names[0] || "Remindi")
+        setCompanySubtitle(names.slice(1).join(' ') || "")
       }
+      if (data?.full_name) setFullName(data.full_name)
     }
-
     loadProfile()
-
-    const subscription = supabase
-      .channel('profile_changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'profiles',
-        filter: `user_id=eq.${user?.id}`
-      }, (payload) => {
-        const profile = payload.new as Profile
-        if (profile?.company_name) {
-          const names = profile.company_name.split(' ')
-          setCompanyName(names[0] || "Remindi")
-          setCompanySubtitle(names.slice(1).join(' ') || "")
-        }
-        if (profile?.full_name) {
-          setFullName(profile.full_name)
-        }
-      })
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
   }, [user?.id])
 
-  // Handle logout
+  // Combine nav items – role is now always up‑to‑date
+  const navItems = role === 'admin'
+    ? [...memberNavItems, ...adminOnlyNavItems]
+    : memberNavItems
+
   const handleLogout = async () => {
     try {
       await signOut()
@@ -132,10 +92,10 @@ export function AppSidebar() {
     }
   }
 
-  // Combine nav items based on role
-  const navItems = userRole === 'admin'
-    ? [...memberNavItems, ...adminOnlyNavItems]
-    : memberNavItems
+  // If still loading, you can show a skeleton or just render nothing
+  if (loading) {
+    return <div className="w-16 md:w-64 h-screen animate-pulse bg-muted/20" />
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -188,13 +148,13 @@ export function AppSidebar() {
               {fullName || user?.email || 'User'}
             </span>
             <span className="text-xs text-sidebar-foreground/70">
-              {userRole === 'admin' ? 'Administrator' : 'Member'}
+              {role === 'admin' ? 'Administrator' : 'Member'}
             </span>
           </div>
         </div>
 
         {/* Logout button – only for members */}
-        {userRole === 'member' && (
+        {role === 'member' && (
           <div className="group-data-[collapsible=icon]:hidden">
             <button
               onClick={handleLogout}
