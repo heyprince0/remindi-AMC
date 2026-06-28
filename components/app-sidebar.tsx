@@ -58,7 +58,7 @@ export function AppSidebar() {
   const [companySubtitle, setCompanySubtitle] = useState("")
   const [fullName, setFullName] = useState("")
 
-  // Load company profile for display (this is still fine)
+  // Load company profile for display
   useEffect(() => {
     const loadProfile = async () => {
       if (!user?.id) return
@@ -77,7 +77,7 @@ export function AppSidebar() {
     loadProfile()
   }, [user?.id])
 
-  // Combine nav items – role is now always up‑to‑date
+  // Combine nav items – role is now stable
   const navItems = role === 'admin'
     ? [...memberNavItems, ...adminOnlyNavItems]
     : memberNavItems
@@ -92,7 +92,7 @@ export function AppSidebar() {
     }
   }
 
-  // If still loading, you can show a skeleton or just render nothing
+  // Show skeleton while auth is still loading
   if (loading) {
     return <div className="w-16 md:w-64 h-screen animate-pulse bg-muted/20" />
   }
