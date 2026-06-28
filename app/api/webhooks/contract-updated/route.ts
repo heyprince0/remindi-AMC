@@ -11,7 +11,6 @@ import {
 // Verify that the request comes from Supabase (webhook secret)
 function isAuthorized(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
-  // You'll set this secret in Vercel env vars and in the webhook config
   return authHeader === `Bearer ${process.env.WEBHOOK_SECRET}`
 }
 
@@ -24,39 +23,30 @@ function getDaysUntil(dateStr: string): number {
 }
 
 export async function POST(req: NextRequest) {
-  // 1. Verify webhook secret
   if (!isAuthorized(req)) {
     console.warn('[Webhook] Unauthorized request')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    // 2. Parse the webhook payload
     const body = await req.json()
-    const record = body.record // the new/updated contract row
+    const record = body.record
 
     if (!record || !record.id) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    // 3. Check if we should send an email for this contract
     const daysUntil = getDaysUntil(record.next_service_date)
-
-    // Only send if it's due today or overdue (days <= 0) – you can extend this to positive days if you want.
-    // Also, only send once per day using last_email_sent.
     const todayStr = new Date().toISOString().split('T')[0]
 
     if (daysUntil > 0) {
-      // Not due yet – skip
       return NextResponse.json({ message: 'Not due yet', daysUntil })
     }
 
-    // If we already sent an email today for this contract, skip
     if (record.last_email_sent === todayStr) {
       return NextResponse.json({ message: 'Already emailed today' })
     }
 
-    // 4. Get customer name
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -75,36 +65,34 @@ export async function POST(req: NextRequest) {
 
     const customerName = customer?.name || 'Unknown'
 
-    // 5. Find the organization owner's email
+    // ✅ FIX: Look for either 'admin' or 'owner' (using .in())
     const { data: memberships, error: membershipsError } = await supabase
       .from('memberships')
       .select('user_id, role')
       .eq('org_id', record.org_id)
-      .eq('role', 'owner')
+      .in('role', ['admin', 'owner'])
       .limit(1)
 
     if (membershipsError || !memberships || memberships.length === 0) {
-      console.error('[Webhook] No owner found for org:', record.org_id)
-      return NextResponse.json({ error: 'No owner found' }, { status: 404 })
+      console.error('[Webhook] No admin/owner found for org:', record.org_id)
+      return NextResponse.json({ error: 'No admin/owner found' }, { status: 404 })
     }
 
-    const ownerUserId = memberships[0].user_id
+    const adminUserId = memberships[0].user_id
 
-    // 6. Get owner email from auth.users
     const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
     if (usersError) {
       console.error('[Webhook] Failed to fetch users:', usersError)
       return NextResponse.json({ error: 'Failed to get user email' }, { status: 500 })
     }
 
-    const owner = users?.find(u => u.id === ownerUserId)
-    const userEmail = owner?.email
+    const admin = users?.find(u => u.id === adminUserId)
+    const userEmail = admin?.email
     if (!userEmail) {
-      console.error('[Webhook] No email for owner:', ownerUserId)
-      return NextResponse.json({ error: 'Owner email not found' }, { status: 404 })
+      console.error('[Webhook] No email for admin:', adminUserId)
+      return NextResponse.json({ error: 'Admin email not found' }, { status: 404 })
     }
 
-    // 7. Send the appropriate email
     let result
     if (daysUntil < 0) {
       result = await sendAMCExpiredEmail(
@@ -121,7 +109,6 @@ export async function POST(req: NextRequest) {
         customerName
       )
     } else {
-      // This case shouldn't happen (daysUntil > 0 already skipped), but just in case:
       result = await sendAMCExpiryReminderEmail(
         userEmail,
         record.contract_name,
@@ -131,7 +118,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (result.success) {
-      // 8. Update last_email_sent to today so we don't send again
       await supabase
         .from('contracts')
         .update({ last_email_sent: todayStr })
