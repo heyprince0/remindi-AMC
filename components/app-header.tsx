@@ -25,14 +25,15 @@ interface NotificationItem {
 }
 
 export function AppHeader() {
-  const { user } = useAuth()
+  const { user, role } = useAuth() // <-- get role from context
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [expiredCount, setExpiredCount] = useState(0)
   const [todayServicingCount, setTodayServicingCount] = useState(0)
   const [expiringSoonCount, setExpiringSoonCount] = useState(0)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [orgName, setOrgName] = useState<string | null>(null)
 
-  // Fetch org_id from memberships
+  // Fetch org_id and (if member) org name
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -45,10 +46,27 @@ export function AppHeader() {
             console.error("Failed to fetch organization:", error)
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+            // If the user is a member, fetch the organization name
+            if (role === "member") {
+              supabase
+                .from("organizations")
+                .select("name")
+                .eq("id", data.org_id)
+                .single()
+                .then(({ data: orgData, error: orgError }) => {
+                  if (orgError) {
+                    console.error("Failed to fetch org name:", orgError)
+                  } else if (orgData?.name) {
+                    setOrgName(orgData.name)
+                  }
+                })
+            } else {
+              setOrgName(null)
+            }
           }
         })
     }
-  }, [user?.id])
+  }, [user?.id, role])
 
   const loadAlerts = async () => {
     if (!user?.id || !currentOrgId) return
@@ -135,6 +153,13 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
       <SidebarTrigger className="md:hidden" />
+
+      {/* Show organization name for members only */}
+      {role === "member" && orgName && (
+        <div className="hidden md:block ml-2 text-sm font-medium text-muted-foreground">
+          {orgName}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 ml-auto">
         <DropdownMenu>
