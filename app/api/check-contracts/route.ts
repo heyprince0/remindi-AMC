@@ -29,7 +29,6 @@ export async function GET() {
     const in7DaysStr = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
-    // Fetch contracts with customer name
     const { data: contracts, error: dbError } = await supabase
       .from('contracts')
       .select('*, customers(name)')
@@ -46,32 +45,28 @@ export async function GET() {
       return NextResponse.json({ sent: 0, message: 'No contracts to process' })
     }
 
-    // Fetch org owners (role = 'owner') to get the user to send email to
+    // ✅ FIX: Look for either 'admin' or 'owner'
     const { data: memberships, error: membershipsError } = await supabase
       .from('memberships')
       .select('org_id, user_id, role')
-      .eq('role', 'owner')
+      .in('role', ['admin', 'owner'])
 
     if (membershipsError) {
       console.error('Error fetching memberships:', membershipsError)
-      return NextResponse.json({ error: 'Failed to fetch owners' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to fetch admins' }, { status: 500 })
     }
 
-    // Create a map: org_id -> owner_user_id
-    const orgOwnerMap: Record<string, string> = {}
+    const orgAdminMap: Record<string, string> = {}
     for (const m of memberships || []) {
-      orgOwnerMap[m.org_id] = m.user_id
+      orgAdminMap[m.org_id] = m.user_id
     }
 
-    // Fetch user emails from auth (requires service role)
     const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
-
     if (usersError) {
       console.error('Error fetching users:', usersError)
       return NextResponse.json({ error: 'Failed to fetch user emails' }, { status: 500 })
     }
 
-    // Create a map: user_id -> email
     const userEmailMap: Record<string, string> = {}
     for (const u of users || []) {
       if (u.email) userEmailMap[u.id] = u.email
@@ -95,18 +90,17 @@ export async function GET() {
 
       const customerName = contract.customers?.name || 'Unknown'
 
-      // Find the owner of this contract's org
-      const ownerUserId = orgOwnerMap[contract.org_id]
-      if (!ownerUserId) {
+      const adminUserId = orgAdminMap[contract.org_id]
+      if (!adminUserId) {
         skipped++
-        console.warn(`No owner found for org ${contract.org_id}, contract ${contract.id}`)
+        console.warn(`No admin/owner found for org ${contract.org_id}, contract ${contract.id}`)
         continue
       }
 
-      const userEmail = userEmailMap[ownerUserId]
+      const userEmail = userEmailMap[adminUserId]
       if (!userEmail) {
         skipped++
-        console.warn(`No email for owner ${ownerUserId}, contract ${contract.id}`)
+        console.warn(`No email for admin ${adminUserId}, contract ${contract.id}`)
         continue
       }
 
