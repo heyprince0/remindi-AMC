@@ -15,7 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Contract, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { toast } from "sonner"
 
 interface NotificationItem {
   id: string
@@ -25,63 +24,26 @@ interface NotificationItem {
 }
 
 export function AppHeader() {
-  const { user, role } = useAuth() // <-- get role from context
+  const { user, role, orgId, orgName } = useAuth() // <-- get from context
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [expiredCount, setExpiredCount] = useState(0)
   const [todayServicingCount, setTodayServicingCount] = useState(0)
   const [expiringSoonCount, setExpiringSoonCount] = useState(0)
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [orgName, setOrgName] = useState<string | null>(null)
-
-  // Fetch org_id and (if member) org name
-  useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Failed to fetch organization:", error)
-          } else if (data?.org_id) {
-            setCurrentOrgId(data.org_id)
-            // If the user is a member, fetch the organization name
-            if (role === "member") {
-              supabase
-                .from("organizations")
-                .select("name")
-                .eq("id", data.org_id)
-                .single()
-                .then(({ data: orgData, error: orgError }) => {
-                  if (orgError) {
-                    console.error("Failed to fetch org name:", orgError)
-                  } else if (orgData?.name) {
-                    setOrgName(orgData.name)
-                  }
-                })
-            } else {
-              setOrgName(null)
-            }
-          }
-        })
-    }
-  }, [user?.id, role])
 
   const loadAlerts = async () => {
-    if (!user?.id || !currentOrgId) return
+    if (!user?.id || !orgId) return
     try {
       const { data: contractsData } = await supabase
         .from("contracts")
         .select("id, contract_name, next_service_date, status, customer_id")
-        .eq("org_id", currentOrgId)
+        .eq("org_id", orgId)
 
       if (!contractsData) return
 
       const { data: customersData } = await supabase
         .from("customers")
         .select("id, name")
-        .eq("org_id", currentOrgId)
+        .eq("org_id", orgId)
 
       let expired = 0
       let todayServicing = 0
@@ -129,24 +91,23 @@ export function AppHeader() {
     }
   }
 
+  // Load alerts whenever orgId is available (stable)
   useEffect(() => {
-    if (currentOrgId) {
-      loadAlerts()
-    }
-  }, [currentOrgId])
+    if (orgId) loadAlerts()
+  }, [orgId])
 
-  // Subscribe to changes on contracts
+  // Subscribe to contract changes
   useEffect(() => {
-    if (!currentOrgId) return
+    if (!orgId) return
     const subscription = supabase
       .channel("header_contracts")
-      .on("postgres_changes", { event: "*", schema: "public", table: "contracts", filter: `org_id=eq.${currentOrgId}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "contracts", filter: `org_id=eq.${orgId}` }, () => {
         loadAlerts()
       })
       .subscribe()
 
-    return () => { subscription.unsubscribe() }
-  }, [currentOrgId])
+    return () => subscription.unsubscribe()
+  }, [orgId])
 
   const totalCount = expiredCount + todayServicingCount + expiringSoonCount
 
@@ -190,7 +151,7 @@ export function AppHeader() {
                         ? "text-red-600"
                         : n.type === "today-servicing"
                         ? "text-amber-600"
-                        : "text-orange-600"  // expiring-soon
+                        : "text-orange-600"
                     }`}
                   >
                     {n.title}
