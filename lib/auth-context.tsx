@@ -9,6 +9,8 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   error: string | null
+  role: string | null      // <-- new
+  orgId: string | null     // <-- new
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -18,9 +20,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [role, setRole] = useState<string | null>(null)
+  const [orgId, setOrgId] = useState<string | null>(null)
 
+  // Fetch initial session
   useEffect(() => {
-    // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session }, error: err } = await supabase.auth.getSession()
@@ -50,8 +54,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Fetch role & org when user changes
+  useEffect(() => {
+    const fetchMembership = async () => {
+      if (!user) {
+        setRole(null)
+        setOrgId(null)
+        return
+      }
+      const { data, error } = await supabase
+        .from('memberships')
+        .select('role, org_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (data) {
+        setRole(data.role)
+        setOrgId(data.org_id)
+      } else {
+        setRole(null)
+        setOrgId(null)
+      }
+    }
+    fetchMembership()
+  }, [user])
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, error }}>
+    <AuthContext.Provider value={{ user, session, loading, error, role, orgId }}>
       {children}
     </AuthContext.Provider>
   )
