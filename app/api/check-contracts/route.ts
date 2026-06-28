@@ -13,7 +13,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const NOTIFY_AT_DAYS = [7, 3, 1, 0, -1, -3, -7, -14, -30]
+const NOTIFY_AT_DAYS = [3, 0, -1, -3, -7]
 
 export async function GET() {
   try {
