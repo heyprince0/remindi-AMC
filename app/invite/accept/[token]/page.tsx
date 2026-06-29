@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import Link from "next/link"
 
 export default function AcceptInvitePage() {
   const params = useParams()
@@ -23,6 +22,7 @@ export default function AcceptInvitePage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [mode, setMode] = useState<"signin" | "signup">("signin")
+  const [resettingPassword, setResettingPassword] = useState(false)
 
   useEffect(() => {
     const fetchInvite = async () => {
@@ -61,7 +61,6 @@ export default function AcceptInvitePage() {
       }
 
       if (authResponse.error) {
-        // Show specific error messages
         const msg = authResponse.error.message
         if (msg.includes("Invalid login credentials")) {
           toast.error("Invalid password. Please check your password or reset it.")
@@ -126,6 +125,31 @@ export default function AcceptInvitePage() {
     }
   }
 
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("No email address available")
+      return
+    }
+    setResettingPassword(true)
+    try {
+      // Redirect back to this page after password reset
+      const redirectTo = `${window.location.origin}/invite/accept/${token}`
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      })
+      if (error) {
+        toast.error(error.message)
+      } else {
+        toast.success("Password reset email sent! Check your inbox, then sign in with your new password.")
+      }
+    } catch (err) {
+      toast.error("Failed to send reset email")
+    } finally {
+      setResettingPassword(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -185,7 +209,11 @@ export default function AcceptInvitePage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "signin" ? "Enter your password" : "Create a password (min 6 characters)"}
+                placeholder={
+                  mode === "signin"
+                    ? "Enter your password"
+                    : "Create a password (min 6 characters)"
+                }
                 required
               />
             </div>
@@ -204,9 +232,14 @@ export default function AcceptInvitePage() {
                 </button>
               </div>
               {mode === "signin" && (
-                <Link href="/forgot-password" className="text-blue-600 hover:underline">
-                  Forgot password?
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resettingPassword}
+                  className="text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {resettingPassword ? "Sending..." : "Forgot password?"}
+                </button>
               )}
             </div>
 
