@@ -17,7 +17,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Helper to detect recovery session
 function isRecoverySession(session: Session | null): boolean {
   if (!session) return false
   const amr = session.user?.amr
@@ -35,7 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [orgName, setOrgName] = useState<string | null>(null)
   const [recovery, setRecovery] = useState(false)
 
-  // Initial session & recovery detection
   useEffect(() => {
     const getInitialSession = async () => {
       try {
@@ -43,9 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (err) throw err
         setSession(session)
         setUser(session?.user ?? null)
-        if (isRecoverySession(session)) {
-          setRecovery(true)
-        }
+        if (isRecoverySession(session)) setRecovery(true)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to get session')
       } finally {
@@ -60,7 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
         setError(null)
-
         if (event === 'PASSWORD_RECOVERY' || isRecoverySession(session)) {
           setRecovery(true)
         } else {
@@ -72,48 +67,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription?.unsubscribe()
   }, [])
 
-  // Fetch role, orgId, orgName (unchanged)
   useEffect(() => {
     const fetchMembership = async () => {
       if (!user) {
-        setRole(null)
-        setOrgId(null)
-        setOrgName(null)
+        setRole(null); setOrgId(null); setOrgName(null)
         return
       }
-
       const { data, error } = await supabase
         .from('memberships')
         .select('role, org_id')
         .eq('user_id', user.id)
         .maybeSingle()
-
       if (data) {
         setRole(data.role)
         setOrgId(data.org_id)
-
         if (data.org_id) {
           const { data: orgData, error: orgError } = await supabase
             .from('organizations')
             .select('name')
             .eq('id', data.org_id)
             .maybeSingle()
-
-          if (!orgError && orgData?.name) {
-            setOrgName(orgData.name)
-          } else {
-            setOrgName(null)
-          }
-        } else {
-          setOrgName(null)
-        }
+          if (!orgError && orgData?.name) setOrgName(orgData.name)
+          else setOrgName(null)
+        } else setOrgName(null)
       } else {
-        setRole(null)
-        setOrgId(null)
-        setOrgName(null)
+        setRole(null); setOrgId(null); setOrgName(null)
       }
     }
-
     fetchMembership()
   }, [user])
 
@@ -126,8 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }
