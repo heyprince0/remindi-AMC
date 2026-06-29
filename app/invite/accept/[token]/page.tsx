@@ -31,11 +31,9 @@ export default function AcceptInvitePage() {
         const data = await res.json()
 
         if (!res.ok) {
-          // Handle 410 (Gone) – invite expired, revoked, or already accepted
           if (res.status === 410) {
             const status = data.status
             if (status === 'accepted') {
-              // Already accepted – redirect to dashboard
               toast.info("You've already accepted this invitation.")
               router.push('/')
               return
@@ -46,19 +44,19 @@ export default function AcceptInvitePage() {
             } else {
               setError(data.message || 'Invalid or expired invitation')
             }
+            setLoading(false)
             return
           }
-          // Other errors (404, 500, etc.)
           setError(data.message || 'Invalid or expired invitation')
+          setLoading(false)
           return
         }
 
-        // Success – store invite details
         setInvite(data)
         setEmail(data.email)
+        setLoading(false)
       } catch (err) {
         setError("Failed to load invitation")
-      } finally {
         setLoading(false)
       }
     }
@@ -105,7 +103,7 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 1. Mark invite as accepted
+      // Mark invite as accepted
       const { error: updateError } = await supabase
         .from("invites")
         .update({ status: "accepted", accepted_at: new Date().toISOString() })
@@ -118,7 +116,7 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 2. Create membership
+      // Create membership
       const { error: membershipError } = await supabase
         .from("memberships")
         .insert({
@@ -183,6 +181,23 @@ export default function AcceptInvitePage() {
           <CardHeader>
             <CardTitle>Invitation Error</CardTitle>
             <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/")}>Go Home</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ✅ Guard against null invite
+  if (!invite) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Invitation Not Found</CardTitle>
+            <CardDescription>This invitation could not be found. It may have been removed.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => router.push("/")}>Go Home</Button>
