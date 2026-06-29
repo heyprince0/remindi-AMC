@@ -7,11 +7,13 @@ import Image from 'next/image'
 import { supabase, signInWithGoogle } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { Download } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
@@ -43,8 +45,7 @@ export default function LoginPage() {
       if (data.session) {
         const userId = data.session.user.id
 
-        // 1. Check if the user has a membership (i.e., belongs to an organization)
-        const { data: membership, error: membershipError } = await supabase
+        const { data: membership } = await supabase
           .from('memberships')
           .select('id')
           .eq('user_id', userId)
@@ -52,12 +53,10 @@ export default function LoginPage() {
           .maybeSingle()
 
         if (membership) {
-          // Member or admin – they belong to an org → go to dashboard
           window.location.href = '/'
           return
         }
 
-        // 2. No membership → check if they have a profile (new user who signed up directly)
         const { data: profile } = await supabase
           .from('profiles')
           .select('company_name')
@@ -65,11 +64,8 @@ export default function LoginPage() {
           .maybeSingle()
 
         if (profile?.company_name) {
-          // They have a company name but no membership? Might be an edge case.
-          // Redirect to dashboard anyway (or profile-setup if you prefer).
           window.location.href = '/'
         } else {
-          // New user with no profile → go to profile setup to create an organization
           router.replace('/profile-setup')
         }
       }
@@ -77,6 +73,28 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error('Please enter your email address first')
+      return
+    }
+    setResetting(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) {
+        toast.error(error.message)
+      } else {
+        toast.success('Password reset email sent! Check your inbox.')
+      }
+    } catch (err) {
+      toast.error('Failed to send reset email')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -121,7 +139,17 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium mb-1">Password</label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetting}
+                  className="text-sm text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {resetting ? 'Sending...' : 'Forgot password?'}
+                </button>
+              </div>
               <input
                 type="password"
                 value={password}
