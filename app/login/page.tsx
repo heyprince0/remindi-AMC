@@ -15,42 +15,44 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [error, setError] = useState('')
-  const [isRecovery, setIsRecovery] = useState(false)
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, recovery } = useAuth()
 
-  // Listen for auth state changes to detect PASSWORD_RECOVERY
+  // Redirect based on recovery flag or URL hash
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'PASSWORD_RECOVERY') {
-          setIsRecovery(true)
+    if (!authLoading && user) {
+      // If recovery flag is true, go to reset password
+      if (recovery) {
+        router.replace('/reset-password')
+        return
+      }
+      // Also check the URL hash directly (fallback)
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash
+        if (hash && hash.includes('access_token')) {
+          router.replace('/reset-password')
+          return
+        }
+      }
+      // Normal login – go to dashboard
+      window.location.href = '/'
+    }
+  }, [user, authLoading, recovery, router])
+
+  // Listen for hash changes (in case the hash appears after load)
+  useEffect(() => {
+    const checkHash = () => {
+      if (typeof window !== 'undefined' && !recovery) {
+        const hash = window.location.hash
+        if (hash && hash.includes('access_token')) {
           router.replace('/reset-password')
         }
       }
-    )
-
-    return () => subscription?.unsubscribe()
-  }, [router])
-
-  // Handle normal login redirect
-  useEffect(() => {
-    if (!authLoading && user && !isRecovery) {
-      window.location.href = '/'
     }
-  }, [user, authLoading, isRecovery])
-
-  // If it's a recovery session, show loading state
-  if (isRecovery) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Redirecting to reset password...</p>
-        </div>
-      </div>
-    )
-  }
+    checkHash()
+    window.addEventListener('hashchange', checkHash)
+    return () => window.removeEventListener('hashchange', checkHash)
+  }, [recovery, router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
