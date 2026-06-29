@@ -66,24 +66,28 @@ export default function DashboardPage() {
   // --- NEW: organization ID state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- fetch org_id ---
+  // --- fetch org_id – use maybeSingle() to handle missing memberships ---
   useEffect(() => {
     if (user?.id) {
       supabase
         .from("memberships")
         .select("org_id")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()   // <-- changed from .single()
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
             toast.error("Could not determine your organization")
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+          } else {
+            // No membership – user might be new or in reset flow
+            toast.error("You are not part of any organization. Please complete your profile.")
+            router.push("/profile-setup")
           }
         })
     }
-  }, [user?.id])
+  }, [user?.id, router])
 
   const handleEnableNotifications = async () => {
     if (!user?.id) {
