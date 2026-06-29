@@ -29,10 +29,31 @@ export default function AcceptInvitePage() {
       try {
         const res = await fetch(`/api/invites/token/${token}`)
         const data = await res.json()
+
         if (!res.ok) {
-          setError(data.message || "Invalid or expired invitation")
+          // Handle 410 (Gone) – invite expired, revoked, or already accepted
+          if (res.status === 410) {
+            const status = data.status
+            if (status === 'accepted') {
+              // Already accepted – redirect to dashboard
+              toast.info("You've already accepted this invitation.")
+              router.push('/')
+              return
+            } else if (status === 'expired') {
+              setError('This invitation has expired. Please contact the admin for a new one.')
+            } else if (status === 'revoked') {
+              setError('This invitation has been revoked.')
+            } else {
+              setError(data.message || 'Invalid or expired invitation')
+            }
+            return
+          }
+          // Other errors (404, 500, etc.)
+          setError(data.message || 'Invalid or expired invitation')
           return
         }
+
+        // Success – store invite details
         setInvite(data)
         setEmail(data.email)
       } catch (err) {
@@ -42,7 +63,7 @@ export default function AcceptInvitePage() {
       }
     }
     fetchInvite()
-  }, [token])
+  }, [token, router])
 
   const handleAccept = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,7 +137,7 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("You've joined the team!")
-      router.push("/")   // ✅ Fixed: redirect to root
+      router.push("/")
     } catch (err) {
       console.error(err)
       toast.error("Something went wrong")
@@ -125,7 +146,6 @@ export default function AcceptInvitePage() {
     }
   }
 
-  // Forgot password handler (in case user needs to reset)
   const handleForgotPassword = async () => {
     if (!email) {
       toast.error("No email address available")
