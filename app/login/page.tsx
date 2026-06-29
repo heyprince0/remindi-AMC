@@ -18,7 +18,7 @@ export default function LoginPage() {
   const router = useRouter()
   const { user, loading: authLoading, recovery } = useAuth()
 
-  // === IMMEDIATE: Redirect if URL has access_token (password reset) ===
+  // Immediate hash detection
   useEffect(() => {
     if (typeof window === 'undefined') return
     const hash = window.location.hash
@@ -27,18 +27,17 @@ export default function LoginPage() {
     }
   }, [router])
 
-  // === SECONDARY: Handle recovery flag and normal login ===
+  // Secondary redirect based on recovery flag
   useEffect(() => {
     if (authLoading) return
     if (!user) return
 
-    // If recovery flag is true, go to reset
     if (recovery) {
       router.replace('/reset-password')
       return
     }
 
-    // Double-check hash again (in case it was added after first effect)
+    // Double-check hash
     if (typeof window !== 'undefined') {
       const hash = window.location.hash
       if (hash && hash.includes('access_token')) {
@@ -47,11 +46,10 @@ export default function LoginPage() {
       }
     }
 
-    // Normal login – go to dashboard
     window.location.href = '/'
   }, [user, authLoading, recovery, router])
 
-  // Listen for hash changes (in case the hash appears after load)
+  // Listen for hash changes
   useEffect(() => {
     const checkHash = () => {
       if (typeof window !== 'undefined' && !recovery) {
