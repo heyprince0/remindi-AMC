@@ -15,26 +15,42 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [error, setError] = useState('')
+  const [isRecovery, setIsRecovery] = useState(false)
   const router = useRouter()
-  const { user, loading: authLoading, session } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
+  // Listen for auth state changes to detect PASSWORD_RECOVERY
   useEffect(() => {
-    if (!authLoading && user) {
-      // Detect password reset session
-      const isRecoverySession = session?.user?.amr?.some(
-        (factor: any) => factor.method === 'password' && factor.type === 'recovery'
-      )
-
-      if (isRecoverySession) {
-        // Redirect to reset password page
-        router.replace('/reset-password')
-        return
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecovery(true)
+          router.replace('/reset-password')
+        }
       }
+    )
 
-      // Normal login – go to dashboard
+    return () => subscription?.unsubscribe()
+  }, [router])
+
+  // Handle normal login redirect
+  useEffect(() => {
+    if (!authLoading && user && !isRecovery) {
       window.location.href = '/'
     }
-  }, [user, authLoading, router, session])
+  }, [user, authLoading, isRecovery])
+
+  // If it's a recovery session, show loading state
+  if (isRecovery) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto" />
+          <p className="mt-4 text-gray-600">Redirecting to reset password...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
