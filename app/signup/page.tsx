@@ -18,13 +18,21 @@ export default function SignupPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, recovery } = useAuth()
 
   useEffect(() => {
-    if (!authLoading && user) {
-      router.replace('/profile-setup')
+    if (!authLoading) {
+      if (user) {
+        // If it's a recovery session, redirect to reset password
+        if (recovery) {
+          router.replace('/reset-password')
+          return
+        }
+        // Normal user without membership → profile setup
+        router.replace('/profile-setup')
+      }
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, recovery, router])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
