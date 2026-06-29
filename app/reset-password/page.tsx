@@ -22,6 +22,8 @@ export default function ResetPasswordPage() {
       if (error || !data.session) {
         toast.error("Invalid or expired reset link")
         router.push("/login")
+        setValidating(false)
+        return
       }
       setValidating(false)
     }
@@ -40,6 +42,7 @@ export default function ResetPasswordPage() {
       toast.error(error.message)
     } else {
       toast.success("Password updated! Please sign in.")
+      // Sign out to clear the reset session and force re-login
       await supabase.auth.signOut()
       router.push("/login")
     }
