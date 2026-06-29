@@ -17,10 +17,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Helper to check if a session is a recovery session
+// Helper to detect recovery session
 function isRecoverySession(session: Session | null): boolean {
   if (!session) return false
-  // Check amr claim: method=password, type=recovery
   const amr = session.user?.amr
   if (!amr || !Array.isArray(amr)) return false
   return amr.some((factor: any) => factor.method === 'password' && factor.type === 'recovery')
@@ -44,7 +43,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (err) throw err
         setSession(session)
         setUser(session?.user ?? null)
-        // Check if this is a recovery session right away
         if (isRecoverySession(session)) {
           setRecovery(true)
         }
@@ -57,17 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialSession()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
         setError(null)
 
-        if (event === 'PASSWORD_RECOVERY') {
-          setRecovery(true)
-        } else if (isRecoverySession(session)) {
-          // In case the event is missed, check the session directly
+        if (event === 'PASSWORD_RECOVERY' || isRecoverySession(session)) {
           setRecovery(true)
         } else {
           setRecovery(false)
