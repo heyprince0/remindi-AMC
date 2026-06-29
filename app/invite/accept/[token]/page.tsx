@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import Link from "next/link"
 
 export default function AcceptInvitePage() {
   const params = useParams()
@@ -23,6 +22,7 @@ export default function AcceptInvitePage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [mode, setMode] = useState<"signin" | "signup">("signin")
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     const fetchInvite = async () => {
@@ -116,9 +116,7 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("You've joined the team!")
-
-      // ✅ FIX: Redirect to root (dashboard) instead of /dashboard
-      router.push("/")
+      router.push("/")   // ✅ Fixed: redirect to root
     } catch (err) {
       console.error(err)
       toast.error("Something went wrong")
@@ -127,5 +125,131 @@ export default function AcceptInvitePage() {
     }
   }
 
-  // ... (rest of the component – loading, error states, JSX) remains unchanged
+  // Forgot password handler (in case user needs to reset)
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("No email address available")
+      return
+    }
+    setResetting(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) {
+        toast.error(error.message)
+      } else {
+        toast.success("Password reset email sent! Check your inbox.")
+      }
+    } catch (err) {
+      toast.error("Failed to send reset email")
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Invitation Error</CardTitle>
+            <CardDescription>{error}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/")}>Go Home</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/20">
+      <Card className="max-w-md w-full">
+        <CardHeader>
+          <CardTitle>You're Invited!</CardTitle>
+          <CardDescription>
+            You've been invited to join <strong>{invite.businessName}</strong> as a{" "}
+            <strong>{invite.role}</strong>.
+            <br />
+            {invite.inviterName} has invited you.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleAccept} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">
+                {mode === "signin" ? "Password" : "Create Password"}
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={mode === "signin" ? "Enter your password" : "Create a password (min 6 characters)"}
+                required
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">
+                  {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+                  className="text-blue-600 hover:underline"
+                >
+                  {mode === "signin" ? "Sign up" : "Sign in"}
+                </button>
+              </div>
+              {mode === "signin" && (
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetting}
+                  className="text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {resetting ? "Sending..." : "Forgot password?"}
+                </button>
+              )}
+            </div>
+
+            <Button type="submit" className="w-full" disabled={accepting}>
+              {accepting ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Accepting...
+                </>
+              ) : (
+                `Accept Invitation & ${mode === "signin" ? "Sign in" : "Sign up"}`
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
