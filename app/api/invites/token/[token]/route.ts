@@ -6,21 +6,17 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    // params is async in Next.js 15+ — must be awaited
     const { token } = await params
 
     if (!token) {
       return NextResponse.json({ message: "Token is required" }, { status: 400 })
     }
 
-    // This is a public endpoint — no auth needed, anyone with the link can
-    // view invite details. Use anon key with no auth header.
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    // Fetch invite — RLS SELECT policy on invites allows anon reads by token
     const { data: invite, error: inviteError } = await supabase
       .from("invites")
       .select("*")
@@ -52,33 +48,29 @@ export async function GET(
       )
     }
 
-    // Get org name
     const { data: org } = await supabase
       .from("organizations")
       .select("name")
       .eq("id", invite.org_id)
       .maybeSingle()
 
-    // Get inviter name from company_profile (which has company_name, not full_name)
     const { data: inviterProfile } = await supabase
       .from("company_profile")
       .select("company_name")
       .eq("user_id", invite.invited_by)
       .maybeSingle()
 
-    return NextResponse.json(
-      {
-        email: invite.email,
-        role: invite.role,
-        businessName: org?.name || "Remindi",
-        inviterName: inviterProfile?.company_name || "A team admin",
-        expiresAt: invite.expires_at,
-        status: invite.status,
-      },
-      { status: 200 }
-    )
+    return NextResponse.json({
+      email: invite.email,
+      role: invite.role,
+      businessName: org?.name || "Remindi",
+      inviterName: inviterProfile?.company_name || "A team admin",
+      expiresAt: invite.expires_at,
+      status: invite.status,
+      displayName: invite.display_name,   // <-- NEW
+    })
   } catch (error) {
-    console.error("[invites/token] Unhandled error:", error)
+    console.error("[invites/token] Error:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
