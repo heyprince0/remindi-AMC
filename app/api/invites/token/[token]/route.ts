@@ -63,11 +63,12 @@ export async function GET(
     return NextResponse.json({
       email: invite.email,
       role: invite.role,
+      org_id: invite.org_id,          // ✅ ADDED
       businessName: org?.name || "Remindi",
       inviterName: inviterProfile?.company_name || "A team admin",
       expiresAt: invite.expires_at,
       status: invite.status,
-      displayName: invite.display_name,   // <-- NEW
+      displayName: invite.display_name,
     })
   } catch (error) {
     console.error("[invites/token] Error:", error)
