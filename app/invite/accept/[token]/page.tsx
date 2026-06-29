@@ -103,7 +103,7 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // Mark invite as accepted
+      // 1. Mark invite as accepted
       const { error: updateError } = await supabase
         .from("invites")
         .update({ status: "accepted", accepted_at: new Date().toISOString() })
@@ -116,7 +116,7 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // Create membership
+      // 2. Create membership
       const { error: membershipError } = await supabase
         .from("memberships")
         .insert({
@@ -135,6 +135,8 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("You've joined the team!")
+
+      // ✅ FIX: Redirect to root (dashboard) instead of /dashboard
       router.push("/")
     } catch (err) {
       console.error(err)
