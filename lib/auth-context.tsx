@@ -11,7 +11,7 @@ interface AuthContextType {
   error: string | null
   role: string | null
   orgId: string | null
-  orgName: string | null   // <-- new
+  orgName: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -67,19 +67,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('memberships')
         .select('role, org_id')
         .eq('user_id', user.id)
-        .maybeSingle()
+        .maybeSingle()   // ✅ FIXED
 
       if (data) {
         setRole(data.role)
         setOrgId(data.org_id)
 
-        // Fetch organization name
         if (data.org_id) {
           const { data: orgData, error: orgError } = await supabase
             .from('organizations')
             .select('name')
             .eq('id', data.org_id)
-            .single()
+            .maybeSingle()   // also use maybeSingle here
 
           if (!orgError && orgData?.name) {
             setOrgName(orgData.name)
