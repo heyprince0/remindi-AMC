@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import Link from "next/link"
 
 export default function AcceptInvitePage() {
   const params = useParams()
@@ -23,7 +24,6 @@ export default function AcceptInvitePage() {
   const [password, setPassword] = useState("")
   const [mode, setMode] = useState<"signin" | "signup">("signin")
 
-  // Fetch invite details
   useEffect(() => {
     const fetchInvite = async () => {
       try {
@@ -34,7 +34,7 @@ export default function AcceptInvitePage() {
           return
         }
         setInvite(data)
-        setEmail(data.email) // pre‑fill email
+        setEmail(data.email)
       } catch (err) {
         setError("Failed to load invitation")
       } finally {
@@ -44,7 +44,6 @@ export default function AcceptInvitePage() {
     fetchInvite()
   }, [token])
 
-  // Handle accept (sign‑in or sign‑up)
   const handleAccept = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
@@ -62,7 +61,19 @@ export default function AcceptInvitePage() {
       }
 
       if (authResponse.error) {
-        toast.error(authResponse.error.message)
+        // Show specific error messages
+        const msg = authResponse.error.message
+        if (msg.includes("Invalid login credentials")) {
+          toast.error("Invalid password. Please check your password or reset it.")
+        } else if (msg.includes("User not found")) {
+          toast.error("No account found with this email. Please sign up instead.")
+        } else if (msg.includes("Email not confirmed")) {
+          toast.error("Please confirm your email before signing in. Check your inbox.")
+        } else if (msg.includes("already registered") || msg.includes("already been used")) {
+          toast.error("This email is already registered. Please sign in instead.")
+        } else {
+          toast.error(msg)
+        }
         setAccepting(false)
         return
       }
@@ -87,14 +98,14 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 2. Create membership (with display_name)
+      // 2. Create membership
       const { error: membershipError } = await supabase
         .from("memberships")
         .insert({
           org_id: invite.org_id,
           user_id: user.id,
           role: invite.role,
-          display_name: invite.display_name, // <-- copy the admin‑set name
+          display_name: invite.display_name,
           created_at: new Date().toISOString(),
         })
 
@@ -174,22 +185,29 @@ export default function AcceptInvitePage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "signin" ? "Enter your password" : "Create a password"}
+                placeholder={mode === "signin" ? "Enter your password" : "Create a password (min 6 characters)"}
                 required
               />
             </div>
 
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">
-                {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-                className="text-blue-600 hover:underline"
-              >
-                {mode === "signin" ? "Sign up" : "Sign in"}
-              </button>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">
+                  {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+                  className="text-blue-600 hover:underline"
+                >
+                  {mode === "signin" ? "Sign up" : "Sign in"}
+                </button>
+              </div>
+              {mode === "signin" && (
+                <Link href="/forgot-password" className="text-blue-600 hover:underline">
+                  Forgot password?
+                </Link>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={accepting}>
