@@ -32,16 +32,9 @@ export async function POST(request: NextRequest) {
 
     const { email, role, displayName } = await request.json()
 
-    if (!email || !role) {
+    if (!email || !role || !displayName?.trim()) {
       return NextResponse.json(
         { message: "Email, role, and display name are required" },
-        { status: 400 }
-      )
-    }
-
-    if (!displayName?.trim()) {
-      return NextResponse.json(
-        { message: "Please provide a display name for the member" },
         { status: 400 }
       )
     }
@@ -61,9 +54,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ============================================================
-    // 1. Get the user's organization from their membership
-    // ============================================================
+    // 1. Get the inviter's org and role
     const { data: membership, error: membershipError } = await supabase
       .from("memberships")
       .select("org_id, role")
@@ -86,35 +77,73 @@ export async function POST(request: NextRequest) {
 
     const orgId = membership.org_id
 
-    // ============================================================
-    // 2. Check for existing invite or membership
-    // ============================================================
-    const { data: existingInvite } = await supabase
+    // 2. Check for a valid pending invite (not expired)
+    const now = new Date().toISOString()
+    const { data: pendingInvite, error: pendingError } = await supabase
       .from("invites")
-      .select("id, status")
+      .select("id, status, expires_at")
       .eq("org_id", orgId)
       .eq("email", email)
-      .in("status", ["pending", "accepted"])
+      .eq("status", "pending")
       .maybeSingle()
 
-    if (existingInvite) {
-      return NextResponse.json(
-        { message: "This person has already been invited or is already a member" },
-        { status: 409 }
-      )
+    if (pendingInvite) {
+      // If the invite is still valid (not expired), block
+      if (new Date(pendingInvite.expires_at) > new Date()) {
+        return NextResponse.json(
+          { message: "This person already has a pending invitation" },
+          { status: 409 }
+        )
+      } else {
+        // If the pending invite is expired, delete it so we can create a new one
+        await supabase
+          .from("invites")
+          .delete()
+          .eq("id", pendingInvite.id)
+      }
     }
 
-    // Also check if they are already a member (shouldn't happen, but safe)
-    const { data: existingMember } = await supabase
-      .from("memberships")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("user_id", user.id) // we don't have their user_id yet, but we can check by email later if needed
-      // We'll skip this for simplicity; the frontend already prevents duplicate invites.
+    // 3. Check if the email belongs to an existing user who is currently a member
+    // Use service role to list users by email
+    const adminSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
-    // ============================================================
-    // 3. Create the invite with display_name
-    // ============================================================
+    const { data: { users }, error: usersError } = await adminSupabase.auth.admin.listUsers()
+
+    if (usersError) {
+      console.error("Failed to list users:", usersError)
+      // Proceed with invite creation anyway (fallback)
+    }
+
+    const existingUser = users?.find((u) => u.email === email)
+    if (existingUser) {
+      // Check if this user already has a membership in this org
+      const { data: existingMembership, error: memCheckError } = await supabase
+        .from("memberships")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("user_id", existingUser.id)
+        .maybeSingle()
+
+      if (existingMembership) {
+        return NextResponse.json(
+          { message: "This person is already a member of your organization" },
+          { status: 409 }
+        )
+      }
+    }
+
+    // 4. Delete any stale accepted/revoked invites for this email/org to keep clean
+    await supabase
+      .from("invites")
+      .delete()
+      .eq("org_id", orgId)
+      .eq("email", email)
+      .neq("status", "pending") // delete any accepted or revoked invites
+
+    // 5. Create the new invite
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
@@ -130,7 +159,7 @@ export async function POST(request: NextRequest) {
           status: "pending",
           invited_by: user.id,
           expires_at: expiresAt.toISOString(),
-          display_name: displayName.trim(), // <-- store the admin‑set name
+          display_name: displayName.trim(),
         },
       ])
       .select()
@@ -144,9 +173,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ============================================================
-    // 4. Get inviter details and business name
-    // ============================================================
+    // 6. Send email
     const { data: inviterProfile } = await supabase
       .from("profiles")
       .select("full_name")
@@ -163,9 +190,6 @@ export async function POST(request: NextRequest) {
 
     const businessName = org?.name || "Remindi"
 
-    // ============================================================
-    // 5. Send the invitation email
-    // ============================================================
     const acceptLink = `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.remindi.online"}/invite/accept/${token}`
 
     const emailResult = await sendInviteMemberEmail(
@@ -174,11 +198,11 @@ export async function POST(request: NextRequest) {
       businessName,
       role,
       acceptLink,
-      displayName.trim() // optionally pass the name for the email
+      displayName.trim()
     )
 
     if (!emailResult.success) {
-      console.warn("[v0] Email sending had issue:", emailResult.error)
+      console.warn("[v0] Email sending issue:", emailResult.error)
       return NextResponse.json(
         {
           success: true,
