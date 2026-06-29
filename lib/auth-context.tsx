@@ -12,10 +12,19 @@ interface AuthContextType {
   role: string | null
   orgId: string | null
   orgName: string | null
-  recovery: boolean  // <-- add this
+  recovery: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+// Helper to check if a session is a recovery session
+function isRecoverySession(session: Session | null): boolean {
+  if (!session) return false
+  // Check amr claim: method=password, type=recovery
+  const amr = session.user?.amr
+  if (!amr || !Array.isArray(amr)) return false
+  return amr.some((factor: any) => factor.method === 'password' && factor.type === 'recovery')
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -25,9 +34,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState<string | null>(null)
-  const [recovery, setRecovery] = useState(false)  // <-- add this
+  const [recovery, setRecovery] = useState(false)
 
-  // Initial session
+  // Initial session & recovery detection
   useEffect(() => {
     const getInitialSession = async () => {
       try {
@@ -35,6 +44,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (err) throw err
         setSession(session)
         setUser(session?.user ?? null)
+        // Check if this is a recovery session right away
+        if (isRecoverySession(session)) {
+          setRecovery(true)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to get session')
       } finally {
@@ -44,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialSession()
 
-    // Listen for auth changes – capture PASSWORD_RECOVERY
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session)
@@ -52,6 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null)
 
         if (event === 'PASSWORD_RECOVERY') {
+          setRecovery(true)
+        } else if (isRecoverySession(session)) {
+          // In case the event is missed, check the session directly
           setRecovery(true)
         } else {
           setRecovery(false)
@@ -62,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription?.unsubscribe()
   }, [])
 
-  // Fetch role, orgId, and orgName whenever user changes
+  // Fetch role, orgId, orgName (unchanged)
   useEffect(() => {
     const fetchMembership = async () => {
       if (!user) {
