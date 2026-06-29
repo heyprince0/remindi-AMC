@@ -3,25 +3,29 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [validating, setValidating] = useState(true)
 
   useEffect(() => {
-    // Check if we have a session (the reset link sets one)
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
+    const checkSession = async () => {
+      const { data, error } = await supabase.auth.getSession()
+      if (error || !data.session) {
         toast.error("Invalid or expired reset link")
         router.push("/login")
       }
-    })
+      setValidating(false)
+    }
+    checkSession()
   }, [router])
 
   const handleReset = async (e: React.FormEvent) => {
@@ -36,20 +40,30 @@ export default function ResetPasswordPage() {
       toast.error(error.message)
     } else {
       toast.success("Password updated! Please sign in.")
+      await supabase.auth.signOut()
       router.push("/login")
     }
     setLoading(false)
   }
 
+  if (validating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/20">
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle>Reset Password</CardTitle>
+          <CardDescription>Enter your new password below</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleReset} className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="new-password">New Password</Label>
               <Input
                 id="new-password"
@@ -61,7 +75,14 @@ export default function ResetPasswordPage() {
               />
             </div>
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Updating..." : "Update Password"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Password"
+              )}
             </Button>
           </form>
         </CardContent>
