@@ -31,7 +31,6 @@ export default function TeamPage() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Fetch current user's org and role
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -67,39 +66,40 @@ export default function TeamPage() {
         let fullName: string | undefined
         let email: string | undefined
 
+        // 1. Use display_name (set by admin)
         if (membership.display_name) {
           fullName = membership.display_name
         } else {
+          // 2. Try profiles.full_name
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name")
             .eq("id", membership.user_id)
             .maybeSingle()
+          if (profile?.full_name) fullName = profile.full_name
 
-          if (profile?.full_name) {
-            fullName = profile.full_name
-          }
-
+          // 3. Try company_profile.company_name
           if (!fullName) {
             const { data: cp } = await supabase
               .from("company_profile")
               .select("company_name")
               .eq("user_id", membership.user_id)
               .maybeSingle()
-            if (cp?.company_name) {
-              fullName = cp.company_name
-            }
+            if (cp?.company_name) fullName = cp.company_name
           }
         }
 
+        // Get email from company_profile (or fallback)
         const { data: cpEmail } = await supabase
           .from("company_profile")
           .select("email")
           .eq("user_id", membership.user_id)
           .maybeSingle()
+        if (cpEmail?.email) email = cpEmail.email
 
-        if (cpEmail?.email) {
-          email = cpEmail.email
+        // ✅ FALLBACK: if still no name, use email or a short user ID
+        if (!fullName) {
+          fullName = email || `User ${membership.user_id.slice(0, 6)}`
         }
 
         membersWithProfiles.push({
@@ -136,7 +136,6 @@ export default function TeamPage() {
     }
   }, [userRole])
 
-  // ========== FIXED: Member removal ==========
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
     try {
@@ -234,7 +233,7 @@ export default function TeamPage() {
   }
 
   const getInitials = (name?: string, email?: string) => {
-    if (name && name !== "Team Member") {
+    if (name && name !== "Team Member" && name !== "User") {
       return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     }
     if (email) return email[0].toUpperCase()
@@ -282,7 +281,7 @@ export default function TeamPage() {
                         </div>
                         <div>
                           <CardTitle className="text-base">
-                            {member.full_name || member.email || "Team Member"}
+                            {member.full_name || "Team Member"}
                           </CardTitle>
                           <CardDescription className="text-xs">
                             {member.email || `ID: ${member.user_id.slice(0, 8)}...`}
