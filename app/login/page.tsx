@@ -16,13 +16,25 @@ export default function LoginPage() {
   const [resetting, setResetting] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, session } = useAuth()
 
   useEffect(() => {
     if (!authLoading && user) {
+      // Detect password reset session
+      const isRecoverySession = session?.user?.amr?.some(
+        (factor: any) => factor.method === 'password' && factor.type === 'recovery'
+      )
+
+      if (isRecoverySession) {
+        // Redirect to reset password page
+        router.replace('/reset-password')
+        return
+      }
+
+      // Normal login – go to dashboard
       window.location.href = '/'
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, session])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
