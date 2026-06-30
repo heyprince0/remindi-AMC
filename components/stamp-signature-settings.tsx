@@ -119,34 +119,47 @@ export function StampSignatureSettings() {
 
   // Save stamp
   const handleSaveStamp = async () => {
-    if (!newStampFile || !orgId) return
+    if (!newStampFile || !orgId) {
+      toast.error('Missing file or organization')
+      return
+    }
 
     setSaving(true)
     try {
-      // Get file extension from original file
       const extension = newStampFile.name.split('.').pop() || 'png'
       const filePath = STAMP_FILE_PATH(orgId, extension)
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      console.log('[Upload] Starting upload to bucket: company-assets')
+      console.log('[Upload] Path:', filePath)
+      console.log('[Upload] File type:', newStampFile.type)
+      console.log('[Upload] File size:', newStampFile.size)
+
+      // Attempt upload
+      const { error: uploadError, data } = await supabase.storage
         .from('company-assets')
         .upload(filePath, newStampFile, {
           upsert: true,
           contentType: newStampFile.type,
-          cacheControl: '3600',
         })
 
       if (uploadError) {
-        console.error('Upload error:', uploadError)
-        if (uploadError.message?.toLowerCase().includes('bucket not found') || uploadError.statusCode === 404) {
-          toast.error('Storage bucket "company-assets" does not exist. Please create it in Supabase Storage.')
-        } else {
-          toast.error('Upload failed: ' + uploadError.message)
+        console.error('[Upload] Error:', uploadError)
+        // Show a detailed error message
+        let msg = uploadError.message
+        if (uploadError.statusCode === 400) {
+          msg = 'Bad request – check bucket name, file path, or file format.'
+        } else if (uploadError.statusCode === 403) {
+          msg = 'Permission denied – check storage policies.'
+        } else if (uploadError.statusCode === 404) {
+          msg = 'Bucket "company-assets" not found – please create it in Supabase Storage.'
         }
+        toast.error('Upload failed: ' + msg)
         return
       }
 
-      // Update company_profile using org_id
+      console.log('[Upload] Success, file uploaded:', data)
+
+      // Update DB
       const { error: dbError } = await supabase
         .from('company_profile')
         .upsert({
@@ -157,18 +170,16 @@ export function StampSignatureSettings() {
         })
 
       if (dbError) {
-        console.error('DB error:', dbError)
-        toast.error('Failed to save: ' + dbError.message)
+        console.error('[DB] Error:', dbError)
+        toast.error('Failed to save to database: ' + dbError.message)
         return
       }
 
-      // Get public URL
       const { data: publicData } = supabase.storage
         .from('company-assets')
         .getPublicUrl(filePath)
 
       const freshUrl = `${publicData.publicUrl}?t=${Date.now()}`
-
       setStampStoragePath(filePath)
       setDisplayUrl(freshUrl)
       setNewStampFile(null)
@@ -177,7 +188,7 @@ export function StampSignatureSettings() {
 
       toast.success('Stamp saved successfully')
     } catch (error) {
-      console.error('Save stamp error:', error)
+      console.error('[Upload] Exception:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to save stamp')
     } finally {
       setSaving(false)
