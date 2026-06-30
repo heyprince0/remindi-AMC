@@ -18,7 +18,7 @@ const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control'
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { user, role, loading: authLoading } = useAuth()
+  const { user, role, loading: authLoading, orgId } = useAuth()   // ✅ also get orgId
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState("")
   const [companyName, setCompanyName] = useState("")
@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)          // ✅ new state
 
   // Redirect non‑admin users
   useEffect(() => {
@@ -41,7 +42,28 @@ export default function SettingsPage() {
     }
   }, [authLoading, user, role, router])
 
-  // Load user profile (personal info)
+  // Check if current user is the organization owner
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (!orgId || !user) return
+      try {
+        const { data, error } = await supabase
+          .from('organizations')
+          .select('owner_id')
+          .eq('id', orgId)
+          .maybeSingle()
+
+        if (error) throw error
+        setIsOwner(data?.owner_id === user.id)
+      } catch (error) {
+        console.error('Error checking ownership:', error)
+        setIsOwner(false)
+      }
+    }
+    checkOwnership()
+  }, [orgId, user])
+
+  // Load user profile (personal info) – only needed if owner
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -143,109 +165,115 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Org‑level settings – visible to all admins */}
         <CompanyProfileSettings />
         <StampSignatureSettings />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Business Information</CardTitle>
-            <CardDescription>Update your company details and contact information</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {loading ? (
-              <div className="text-muted-foreground">Loading profile...</div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="full-name">Your Name</Label>
-                  <Input
-                    id="full-name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Your full name"
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+        {/* Business Information Card – only for the organization owner */}
+        {isOwner && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Business Information</CardTitle>
+              <CardDescription>Update your company details and contact information</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loading ? (
+                <div className="text-muted-foreground">Loading profile...</div>
+              ) : (
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
+                    <Label htmlFor="full-name">Your Name</Label>
                     <Input
-                      id="company-name"
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="Your company name"
+                      id="full-name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Your full name"
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="company-name">Company Name</Label>
+                      <Input
+                        id="company-name"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="Your company name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="business-email">Email</Label>
+                      <Input
+                        id="business-email"
+                        type="email"
+                        value={user?.email || ""}
+                        placeholder="company@gmail.com"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 XXXXX XXXXX"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="business-email">Email</Label>
+                    <Label htmlFor="city">City</Label>
                     <Input
-                      id="business-email"
-                      type="email"
-                      value={user?.email || ""}
-                      placeholder="company@gmail.com"
-                      disabled
+                      id="city"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Nashik"
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 XXXXX XXXXX"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Nashik"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label>Service Types</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {SERVICE_TYPES.map(service => (
-                      <button
-                        key={service}
-                        type="button"
-                        onClick={() => toggleService(service)}
-                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                          selectedServices.includes(service)
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-foreground hover:bg-secondary/80'
-                        }`}
-                      >
-                        {service}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveProfile} disabled={saving}>
-                    <Save className="mr-2 size-4" />
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
-                <div className="border-t border-border pt-6 mt-6">
                   <div className="space-y-3">
-                    <Label>Account Actions</Label>
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      onClick={handleLogout}
-                    >
-                      <LogOut className="mr-2 size-4" />
-                      Logout
+                    <Label>Service Types</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {SERVICE_TYPES.map(service => (
+                        <button
+                          key={service}
+                          type="button"
+                          onClick={() => toggleService(service)}
+                          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            selectedServices.includes(service)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-secondary text-foreground hover:bg-secondary/80'
+                          }`}
+                        >
+                          {service}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSaveProfile} disabled={saving}>
+                      <Save className="mr-2 size-4" />
+                      {saving ? 'Saving...' : 'Save Changes'}
                     </Button>
                   </div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Logout button – visible to all admins */}
+        <div className="border-t border-border pt-6 mt-6">
+          <div className="space-y-3">
+            <Label>Account Actions</Label>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 size-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   )
