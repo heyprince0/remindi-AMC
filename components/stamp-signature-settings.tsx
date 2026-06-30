@@ -13,8 +13,8 @@ const MAX_FILE_SIZE_MB = 2
 const MAX_WIDTH_PX = 1536
 const MAX_HEIGHT_PX = 1536
 
-// Storage path now uses orgId instead of userId
-const STAMP_FILE_PATH = (orgId: string) => `${orgId}/stamp`
+// Storage path now uses orgId and includes file extension
+const STAMP_FILE_PATH = (orgId: string, extension: string) => `${orgId}/stamp.${extension}`
 
 // Validate image dimensions using a browser Image object
 const validateImageDimensions = (file: File): Promise<{ valid: boolean; width: number; height: number }> => {
@@ -38,20 +38,13 @@ const validateImageDimensions = (file: File): Promise<{ valid: boolean; width: n
 }
 
 export function StampSignatureSettings() {
-  const { user, orgId } = useAuth()   // ✅ use orgId from context
+  const { user, orgId } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Clean storage path saved in DB (e.g. "org-id/stamp")
   const [stampStoragePath, setStampStoragePath] = useState<string | null>(null)
-
-  // Public URL for displaying the saved stamp
   const [displayUrl, setDisplayUrl] = useState<string | null>(null)
-
-  // Pending file selected but NOT yet saved
   const [newStampFile, setNewStampFile] = useState<File | null>(null)
-
-  // Local base64 preview while file is pending
   const [localPreview, setLocalPreview] = useState<string | null>(null)
 
   const stampInputRef = useRef<HTMLInputElement>(null)
@@ -65,7 +58,7 @@ export function StampSignatureSettings() {
         const { data, error } = await supabase
           .from('company_profile')
           .select('stamp_url')
-          .eq('org_id', orgId)          // ✅ changed from user_id
+          .eq('org_id', orgId)
           .maybeSingle()
 
         if (error && error.code !== 'PGRST116') throw error
@@ -87,9 +80,9 @@ export function StampSignatureSettings() {
     }
 
     loadProfile()
-  }, [orgId])   // ✅ depend on orgId
+  }, [orgId])
 
-  // Step 1: User selects file — validate then show local preview only
+  // Handle file selection
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -124,45 +117,52 @@ export function StampSignatureSettings() {
     reader.readAsDataURL(file)
   }
 
-  // Step 2: User clicks Save — upload and save PATH to DB
+  // Save stamp
   const handleSaveStamp = async () => {
     if (!newStampFile || !orgId) return
 
     setSaving(true)
     try {
-      const filePath = STAMP_FILE_PATH(orgId)   // ✅ now uses orgId
+      // Get file extension from original file
+      const extension = newStampFile.name.split('.').pop() || 'png'
+      const filePath = STAMP_FILE_PATH(orgId, extension)
 
+      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('company-assets')
         .upload(filePath, newStampFile, {
           upsert: true,
           contentType: newStampFile.type,
+          cacheControl: '3600',
         })
 
       if (uploadError) {
-        if (uploadError.message.toLowerCase().includes('bucket')) {
-          toast.error('Storage bucket not found. Please create the "company-assets" bucket in Supabase Storage first.')
+        console.error('Upload error:', uploadError)
+        if (uploadError.message?.toLowerCase().includes('bucket not found') || uploadError.statusCode === 404) {
+          toast.error('Storage bucket "company-assets" does not exist. Please create it in Supabase Storage.')
         } else {
           toast.error('Upload failed: ' + uploadError.message)
         }
         return
       }
 
-      // ✅ Update using org_id
+      // Update company_profile using org_id
       const { error: dbError } = await supabase
         .from('company_profile')
         .upsert({
           org_id: orgId,
           stamp_url: filePath,
         }, {
-          onConflict: 'org_id'    // ✅ now conflicts on org_id
+          onConflict: 'org_id'
         })
 
       if (dbError) {
+        console.error('DB error:', dbError)
         toast.error('Failed to save: ' + dbError.message)
         return
       }
 
+      // Get public URL
       const { data: publicData } = supabase.storage
         .from('company-assets')
         .getPublicUrl(filePath)
@@ -177,6 +177,7 @@ export function StampSignatureSettings() {
 
       toast.success('Stamp saved successfully')
     } catch (error) {
+      console.error('Save stamp error:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to save stamp')
     } finally {
       setSaving(false)
@@ -189,14 +190,13 @@ export function StampSignatureSettings() {
     if (stampInputRef.current) stampInputRef.current.value = ''
   }
 
-  // Remove stamp from DB (does not delete from storage)
   const handleRemoveStamp = async () => {
     if (!orgId) return
     try {
       const { error } = await supabase
         .from('company_profile')
         .update({ stamp_url: null })
-        .eq('org_id', orgId)     // ✅ changed from user_id
+        .eq('org_id', orgId)
 
       if (error) throw error
 
@@ -239,7 +239,6 @@ export function StampSignatureSettings() {
         <div className="max-w-sm space-y-3">
           <Label>Company Stamp</Label>
 
-          {/* STATE 1: No image at all — show upload dropzone */}
           {!imageToShow && (
             <label htmlFor="stamp-upload" className="cursor-pointer block">
               <input
@@ -260,7 +259,6 @@ export function StampSignatureSettings() {
             </label>
           )}
 
-          {/* STATE 2 & 4: Image exists (local preview or saved) — show it */}
           {imageToShow && (
             <div className="flex items-center justify-center w-full h-40 rounded-lg border border-border overflow-hidden bg-secondary">
               <img
@@ -271,7 +269,6 @@ export function StampSignatureSettings() {
             </div>
           )}
 
-          {/* STATE 3: New file selected, NOT saved — Save + Cancel */}
           {newStampFile && (
             <div className="flex gap-2">
               <Button
@@ -305,7 +302,6 @@ export function StampSignatureSettings() {
             </div>
           )}
 
-          {/* STATE 4: Stamp saved, no pending file — Change + Remove */}
           {stampStoragePath && !newStampFile && (
             <div className="flex gap-2">
               <label htmlFor="stamp-upload-change" className="flex-1 cursor-pointer">
