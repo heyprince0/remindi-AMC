@@ -92,10 +92,10 @@ export default function ViewQuotationPage() {
   const [orderDate, setOrderDate] = useState("")
   const id = params.id as string
 
-  // --- ADDED: organization ID state ---
+  // Organization ID state
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- ADDED: fetch user's organization ID ---
+  // Fetch org_id
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -114,20 +114,19 @@ export default function ViewQuotationPage() {
     }
   }, [user?.id])
 
-  // Load stamp toggle from localStorage on mount
+  // Load stamp toggle from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`stamp_toggle_q_${id}`)
     if (saved === "true") setIncludeStamp(true)
   }, [id])
 
-  // Save stamp toggle to localStorage whenever it changes
   const handleStampToggle = () => {
     const newVal = !includeStamp
     setIncludeStamp(newVal)
     localStorage.setItem(`stamp_toggle_q_${id}`, String(newVal))
   }
 
-  // Load data only when org ID is available
+  // Load data when org ID is available
   useEffect(() => {
     if (user?.id && id && currentOrgId) {
       loadData()
@@ -143,21 +142,19 @@ export default function ViewQuotationPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Fetch quotation with org_id filter
       const { data: qData, error: qErr } = await supabase
         .from("quotations")
         .select("*")
         .eq("id", id)
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
         .single()
 
       if (qErr) throw qErr
 
-      // Fetch company profile with org_id filter
       const { data: pData } = await supabase
         .from("company_profile")
         .select("*")
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
         .single()
 
       setQuotation(qData as Quotation)
@@ -172,11 +169,10 @@ export default function ViewQuotationPage() {
 
   const generateNextInvoiceNo = async () => {
     try {
-      // Filter invoices by org_id
       const { data, error } = await supabase
         .from("invoices")
         .select("invoice_no")
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
       if (error) throw error
       if (!data || data.length === 0) return "INV-001"
       const numbers = data
@@ -208,7 +204,7 @@ export default function ViewQuotationPage() {
         .from("invoices")
         .insert({
           user_id: user.id,
-          org_id: currentOrgId,               // <-- added
+          org_id: currentOrgId,
           quotation_id: quotation.id,
           invoice_no: invoiceNo,
           order_no: orderNo || null,
@@ -237,7 +233,6 @@ export default function ViewQuotationPage() {
 
       if (error) throw error
 
-      // Update the quotation record with the invoice_id
       const { error: updateErr } = await supabase
         .from("quotations")
         .update({ invoice_id: data.id })
@@ -308,7 +303,9 @@ export default function ViewQuotationPage() {
     window.open("https://wa.me/?text=" + encodeURIComponent(msg))
   }
 
-  // PDF generation (unchanged – uses jsPDF)
+  // ============================================================
+  // PDF GENERATION – with improved stamp handling
+  // ============================================================
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!quotation) return
 
@@ -329,7 +326,7 @@ export default function ViewQuotationPage() {
 
       let y = margin
 
-      // Header section (unchanged)
+      // ===== HEADER SECTION =====
       const headerStyle = profile?.header_style ?? "single_logo"
       if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         try {
@@ -344,7 +341,7 @@ export default function ViewQuotationPage() {
           const bannerH = Math.round(bannerW / (1462 / 396))
           doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
           y += bannerH
-        } catch (e) { /* skip */ }
+        } catch (e) { /* skip banner silently */ }
       } else {
         let logoX = margin
         let logoAdded = false
@@ -360,7 +357,7 @@ export default function ViewQuotationPage() {
             doc.addImage(base64, "PNG", logoX, y, 22, 22)
             logoAdded = true
           }
-        } catch (e) { /* skip */ }
+        } catch (e) { /* skip logo silently */ }
 
         const infoX = logoAdded ? logoX + 24 : logoX
         doc.setFontSize(14)
@@ -389,7 +386,7 @@ export default function ViewQuotationPage() {
       doc.line(margin, y, pageW - margin, y)
       y += 6
 
-      // Quotation header
+      // ===== QUOTATION HEADER =====
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
@@ -425,7 +422,7 @@ export default function ViewQuotationPage() {
       }
       doc.setTextColor(0, 0, 0)
 
-      // Client block
+      // ===== CLIENT BLOCK =====
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(150, 150, 150)
@@ -452,7 +449,7 @@ export default function ViewQuotationPage() {
       }
       y += 3
 
-      // Subject & Body
+      // ===== SUBJECT & BODY =====
       if (quotation.subject) {
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
@@ -467,7 +464,7 @@ export default function ViewQuotationPage() {
         y += (bodyLines.length * 4) + 3
       }
 
-      // Items table
+      // ===== ITEMS TABLE =====
       const items = quotation.items ?? []
       const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
       const tableBody = items.map((item: any, idx: number) => [
@@ -506,7 +503,7 @@ export default function ViewQuotationPage() {
 
       y = (doc as any).lastAutoTable.finalY + 8
 
-      // Totals
+      // ===== TOTALS =====
       if (quotation.include_gst) {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
@@ -535,7 +532,7 @@ export default function ViewQuotationPage() {
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
       }
 
-      // In words
+      // ===== IN WORDS =====
       y += 2
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
@@ -544,7 +541,7 @@ export default function ViewQuotationPage() {
       doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
       y += 20
 
-      // Payment Details
+      // ===== PAYMENT DETAILS =====
       if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
         if (y + 30 > pageH - 10) { doc.addPage(); y = margin }
         y += 10
@@ -562,7 +559,7 @@ export default function ViewQuotationPage() {
         if (quotation.payment_terms) { doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y); y += 4 }
       }
 
-      // Tax Information
+      // ===== TAX INFORMATION =====
       if (y + 25 > pageH - 10) { doc.addPage(); y = margin }
       y += 6
       doc.setFontSize(9)
@@ -577,7 +574,7 @@ export default function ViewQuotationPage() {
       doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
       y += 6
 
-      // Notes
+      // ===== NOTES =====
       if (quotation.notes) {
         if (y + 20 > pageH - 10) { doc.addPage(); y = margin }
         y += 3
@@ -593,7 +590,7 @@ export default function ViewQuotationPage() {
         y += (noteLines.length * 4)
       }
 
-      // Footer
+      // ===== FOOTER =====
       if (y + 40 > pageH - 10) { doc.addPage(); y = margin }
       y += 10
       doc.setFont('helvetica', 'normal')
@@ -604,15 +601,22 @@ export default function ViewQuotationPage() {
       doc.setFont('helvetica', 'bold')
       doc.text('For ' + safeStr(profile?.company_name), 195, y+12, { align: 'right' })
 
-      // Stamp
+      // ===== STAMP – IMPROVED WITH BETTER ERROR HANDLING =====
       if (stampToggle && profile?.stamp_url) {
         let stampY = y + 18
         try {
+          console.log('[Stamp] Attempting to fetch stamp from:', profile.stamp_url)
           const { data: publicUrlData } = supabase.storage
             .from('company-assets')
             .getPublicUrl(profile.stamp_url)
+
+          console.log('[Stamp] Public URL:', publicUrlData.publicUrl)
           const stampResponse = await fetch(publicUrlData.publicUrl)
-          if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
+          if (!stampResponse.ok) {
+            console.warn('[Stamp] Fetch failed:', stampResponse.status, stampResponse.statusText)
+            throw new Error(`HTTP ${stampResponse.status}`)
+          }
+
           const stampBlob = await stampResponse.blob()
           const stampBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
@@ -620,25 +624,32 @@ export default function ViewQuotationPage() {
             reader.onerror = reject
             reader.readAsDataURL(stampBlob)
           })
+
           const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+
           const stampW = 30
           const stampH = 30
           const stampX = pageW - margin - stampW
           doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
           stampY += stampH + 2
+
           doc.setDrawColor(200, 200, 200)
           doc.setLineWidth(0.5)
           doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
           stampY += 4
+
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(8)
           doc.setTextColor(120, 120, 120)
           doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
         } catch (e) {
-          console.error('Error adding stamp to PDF:', e)
+          console.warn('[Stamp] Failed to load stamp image:', e)
+          // Don't fail the whole PDF; just log and show a warning toast
+          toast.warning('Stamp image could not be loaded – skipping stamp')
         }
       }
 
+      // ===== BOTTOM LINE =====
       doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
       doc.setFont("helvetica", "normal")
@@ -655,6 +666,7 @@ export default function ViewQuotationPage() {
     }
   }
 
+  // ===== RENDER =====
   if (loading) {
     return (
       <DashboardLayout>
