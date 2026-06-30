@@ -13,8 +13,8 @@ const MAX_FILE_SIZE_MB = 2
 const MAX_WIDTH_PX = 1536
 const MAX_HEIGHT_PX = 1536
 
-// Fixed storage path per user — no extension, no timestamps
-const STAMP_FILE_PATH = (userId: string) => `${userId}/stamp`
+// Storage path now uses orgId instead of userId
+const STAMP_FILE_PATH = (orgId: string) => `${orgId}/stamp`
 
 // Validate image dimensions using a browser Image object
 const validateImageDimensions = (file: File): Promise<{ valid: boolean; width: number; height: number }> => {
@@ -38,11 +38,11 @@ const validateImageDimensions = (file: File): Promise<{ valid: boolean; width: n
 }
 
 export function StampSignatureSettings() {
-  const { user } = useAuth()
+  const { user, orgId } = useAuth()   // ✅ use orgId from context
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Clean storage path saved in DB (e.g. "user-id/stamp")
+  // Clean storage path saved in DB (e.g. "org-id/stamp")
   const [stampStoragePath, setStampStoragePath] = useState<string | null>(null)
 
   // Public URL for displaying the saved stamp
@@ -56,29 +56,27 @@ export function StampSignatureSettings() {
 
   const stampInputRef = useRef<HTMLInputElement>(null)
 
-  // Load existing stamp path from DB and build public URL
+  // Load existing stamp path from DB using org_id
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        if (!user?.id) return
+        if (!orgId) return
 
         const { data, error } = await supabase
           .from('company_profile')
           .select('stamp_url')
-          .eq('user_id', user.id)
-          .single()
+          .eq('org_id', orgId)          // ✅ changed from user_id
+          .maybeSingle()
 
         if (error && error.code !== 'PGRST116') throw error
 
         if (data?.stamp_url) {
           setStampStoragePath(data.stamp_url)
 
-          // Bucket is public — getPublicUrl works reliably on every reload
           const { data: publicData } = supabase.storage
             .from('company-assets')
             .getPublicUrl(data.stamp_url)
 
-          // Add cache-busting only for display, NOT stored in DB
           setDisplayUrl(`${publicData.publicUrl}?t=${Date.now()}`)
         }
       } catch (error) {
@@ -89,14 +87,13 @@ export function StampSignatureSettings() {
     }
 
     loadProfile()
-  }, [user?.id])
+  }, [orgId])   // ✅ depend on orgId
 
   // Step 1: User selects file — validate then show local preview only
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please upload PNG, JPG, or WEBP only')
@@ -104,14 +101,12 @@ export function StampSignatureSettings() {
       return
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size must be less than ${MAX_FILE_SIZE_MB}MB`)
       if (stampInputRef.current) stampInputRef.current.value = ''
       return
     }
 
-    // Validate image dimensions
     const { valid, width, height } = await validateImageDimensions(file)
     if (!valid) {
       toast.error(
@@ -121,7 +116,6 @@ export function StampSignatureSettings() {
       return
     }
 
-    // All validations passed — store file and show local preview
     setNewStampFile(file)
     const reader = new FileReader()
     reader.onload = (event) => {
@@ -132,13 +126,12 @@ export function StampSignatureSettings() {
 
   // Step 2: User clicks Save — upload and save PATH to DB
   const handleSaveStamp = async () => {
-    if (!newStampFile || !user?.id) return
+    if (!newStampFile || !orgId) return
 
     setSaving(true)
     try {
-      const filePath = STAMP_FILE_PATH(user.id)
+      const filePath = STAMP_FILE_PATH(orgId)   // ✅ now uses orgId
 
-      // Upload to Supabase Storage — upsert overwrites the same path cleanly
       const { error: uploadError } = await supabase.storage
         .from('company-assets')
         .upload(filePath, newStampFile, {
@@ -147,7 +140,6 @@ export function StampSignatureSettings() {
         })
 
       if (uploadError) {
-        // Give a clear message if bucket doesn't exist
         if (uploadError.message.toLowerCase().includes('bucket')) {
           toast.error('Storage bucket not found. Please create the "company-assets" bucket in Supabase Storage first.')
         } else {
@@ -156,25 +148,27 @@ export function StampSignatureSettings() {
         return
       }
 
-      // Save only the clean path to DB (no URLs, no timestamps)
+      // ✅ Update using org_id
       const { error: dbError } = await supabase
         .from('company_profile')
-        .update({ stamp_url: filePath })
-        .eq('user_id', user.id)
+        .upsert({
+          org_id: orgId,
+          stamp_url: filePath,
+        }, {
+          onConflict: 'org_id'    // ✅ now conflicts on org_id
+        })
 
       if (dbError) {
         toast.error('Failed to save: ' + dbError.message)
         return
       }
 
-      // Get public URL for immediate display (with cache-bust for browser)
       const { data: publicData } = supabase.storage
         .from('company-assets')
         .getPublicUrl(filePath)
 
       const freshUrl = `${publicData.publicUrl}?t=${Date.now()}`
 
-      // Commit all state
       setStampStoragePath(filePath)
       setDisplayUrl(freshUrl)
       setNewStampFile(null)
@@ -189,7 +183,6 @@ export function StampSignatureSettings() {
     }
   }
 
-  // Cancel pending selection — discard preview, keep existing saved stamp
   const handleCancelSelect = () => {
     setNewStampFile(null)
     setLocalPreview(null)
@@ -198,12 +191,12 @@ export function StampSignatureSettings() {
 
   // Remove stamp from DB (does not delete from storage)
   const handleRemoveStamp = async () => {
-    if (!user?.id) return
+    if (!orgId) return
     try {
       const { error } = await supabase
         .from('company_profile')
         .update({ stamp_url: null })
-        .eq('user_id', user.id)
+        .eq('org_id', orgId)     // ✅ changed from user_id
 
       if (error) throw error
 
@@ -231,7 +224,6 @@ export function StampSignatureSettings() {
     )
   }
 
-  // Show local base64 preview if file is pending, otherwise show saved URL
   const imageToShow = localPreview ?? displayUrl
 
   return (
