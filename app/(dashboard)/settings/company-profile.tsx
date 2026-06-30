@@ -13,7 +13,7 @@ import { toast } from "sonner"
 
 export interface CompanyProfile {
   id: string
-  user_id: string
+  org_id: string          // ✅ changed from user_id
   company_name: string | null
   tagline: string | null
   email: string | null
@@ -31,16 +31,18 @@ export interface CompanyProfile {
   payment_terms: string | null
   logo_url: string | null
   theme_color: string
+  header_style: string
+  header_thumbnail_url: string | null
   created_at: string
   updated_at: string
 }
 
 export function CompanyProfileSettings() {
-  const { user } = useAuth()
+  const { user, orgId } = useAuth()   // ✅ get orgId from context
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  
+
   const [companyName, setCompanyName] = useState("")
   const [tagline, setTagline] = useState("")
   const [email, setEmail] = useState("")
@@ -65,17 +67,17 @@ export function CompanyProfileSettings() {
   const [newThumbnailFile, setNewThumbnailFile] = useState<File | null>(null)
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null)
 
-
+  // Load profile using org_id
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        if (!user?.id) return
+        if (!orgId) return
 
         const { data, error } = await supabase
           .from('company_profile')
           .select('*')
-          .eq('user_id', user.id)
-          .single()
+          .eq('org_id', orgId)
+          .maybeSingle()
 
         if (error && error.code !== 'PGRST116') throw error
 
@@ -97,12 +99,9 @@ export function CompanyProfileSettings() {
           setIfscCode(data.ifsc_code || "")
           setUpiId(data.upi_id || "")
           setPaymentTerms(data.payment_terms || "100% advance along with work order")
-          // Set existing logo URL for preview
           setExistingLogoUrl(data.logo_url ?? null)
-          // Reset any pending upload
           setNewImageFile(null)
           setPreviewUrl(null)
-          // Load header style settings
           setHeaderStyle(data.header_style ?? "single_logo")
           setThumbnailUrl(data.header_thumbnail_url ?? null)
         }
@@ -115,61 +114,43 @@ export function CompanyProfileSettings() {
     }
 
     loadProfile()
-  }, [user?.id])
+  }, [orgId])
 
   const handleSaveProfile = async () => {
-    if (!user?.id) return
+    if (!orgId) return
 
     setSaving(true)
     try {
       let logoUrl = existingLogoUrl
       let finalThumbnailUrl = thumbnailUrl
 
-      // Step 1: if new logo selected, upload it first
+      // Upload logo
       if (newImageFile) {
-        const fileName = `logo-${user.id}-${Date.now()}.png`
+        const fileName = `logo-${orgId}-${Date.now()}.png`
         const { error: uploadError } = await supabase.storage
           .from('logos')
           .upload(fileName, newImageFile, { upsert: true })
-
-        if (uploadError) {
-          toast.error('Logo upload failed: ' + uploadError.message)
-          setSaving(false)
-          return
-        }
-
-        const { data: urlData } = supabase.storage
-          .from('logos')
-          .getPublicUrl(fileName)
-
-        logoUrl = urlData.publicUrl // update logoUrl with new URL
+        if (uploadError) throw uploadError
+        const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
+        logoUrl = urlData.publicUrl
       }
 
-      // Step 1b: if new thumbnail selected, upload it
+      // Upload thumbnail
       if (newThumbnailFile) {
-        const fileName = `thumbnail-${user.id}-${Date.now()}.png`
+        const fileName = `thumbnail-${orgId}-${Date.now()}.png`
         const { error: uploadError } = await supabase.storage
           .from('header-thumbnails')
           .upload(fileName, newThumbnailFile, { upsert: true })
-
-        if (uploadError) {
-          toast.error('Thumbnail upload failed: ' + uploadError.message)
-          setSaving(false)
-          return
-        }
-
-        const { data: urlData } = supabase.storage
-          .from('header-thumbnails')
-          .getPublicUrl(fileName)
-
+        if (uploadError) throw uploadError
+        const { data: urlData } = supabase.storage.from('header-thumbnails').getPublicUrl(fileName)
         finalThumbnailUrl = urlData.publicUrl
       }
 
-      // Step 2: now save profile with correct logoUrl and thumbnail
+      // Upsert profile with org_id
       const { error } = await supabase
         .from('company_profile')
         .upsert({
-          user_id: user.id,
+          org_id: orgId,
           company_name: companyName,
           tagline: tagline,
           email: email,
@@ -190,21 +171,15 @@ export function CompanyProfileSettings() {
           header_style: headerStyle,
           header_thumbnail_url: finalThumbnailUrl,
         }, {
-          onConflict: 'user_id'
+          onConflict: 'org_id'
         })
 
-      if (error) {
-        toast.error('Failed to save: ' + error.message)
-        setSaving(false)
-        return
-      }
+      if (error) throw error
 
       toast.success('Profile saved successfully')
-      // Update existing logo URL after successful save
       setExistingLogoUrl(logoUrl)
       setNewImageFile(null)
       setPreviewUrl(null)
-      // Reset thumbnail after save
       setNewThumbnailFile(null)
       setThumbnailPreviewUrl(null)
       setThumbnailUrl(finalThumbnailUrl)
@@ -219,23 +194,19 @@ export function CompanyProfileSettings() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type - only PNG, JPG, JPEG, WEBP
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please upload PNG, JPG, JPEG, or WEBP only')
       return
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       toast.error('File size must be less than 2MB')
       return
     }
 
-    // Store the file
     setNewImageFile(file)
-    
-    // Create preview
+
     const reader = new FileReader()
     reader.onload = (event) => {
       setPreviewUrl(event.target?.result as string)
@@ -247,27 +218,23 @@ export function CompanyProfileSettings() {
     setNewImageFile(null)
     setPreviewUrl(null)
     setExistingLogoUrl(null)
-    // this will clear logo on next save
   }
 
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file type - only PNG, JPG, JPEG
     const allowedTypes = ['image/png', 'image/jpeg']
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please upload PNG or JPG only')
       return
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       toast.error('File size must be less than 2MB')
       return
     }
 
-    // Validate aspect ratio (5:1 to 10:1)
     const reader = new FileReader()
     reader.onload = (event) => {
       const img = new Image()
@@ -277,7 +244,6 @@ export function CompanyProfileSettings() {
           toast.error("Please upload a wide banner image (recommended: 1462×396px)")
           return
         }
-        // Valid - store the file
         setNewThumbnailFile(file)
         setThumbnailPreviewUrl(event.target?.result as string)
       }
@@ -376,7 +342,7 @@ export function CompanyProfileSettings() {
         {/* Company Information */}
         <div className="border-t border-border pt-6">
           <h3 className="font-semibold text-sm mb-4">Company Information</h3>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="company-name">Company Name</Label>
@@ -465,7 +431,7 @@ export function CompanyProfileSettings() {
         {/* Tax Information */}
         <div className="border-t border-border pt-6">
           <h3 className="font-semibold text-sm mb-4">Tax Information</h3>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="gstin">GSTIN</Label>
@@ -492,7 +458,7 @@ export function CompanyProfileSettings() {
         <div className="border-t border-border pt-6">
           <h3 className="font-semibold text-sm mb-4">Payment Details</h3>
           <p className="text-xs text-muted-foreground mb-4">These details will appear on your invoices</p>
-          
+
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -570,14 +536,13 @@ export function CompanyProfileSettings() {
         {/* Header Style Section */}
         <div className="border-t border-border pt-6 mt-6">
           <h3 className="font-semibold text-sm mb-4">Header Style</h3>
-          
+
           {companyName.trim() === "" || email.trim() === "" ? (
             <div className="text-sm text-muted-foreground">
               Please save your Company Information above before choosing a header style.
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Option Cards */}
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Single Logo Card */}
                 <div
@@ -624,9 +589,9 @@ export function CompanyProfileSettings() {
                   {(thumbnailPreviewUrl || thumbnailUrl) ? (
                     <div className="space-y-3">
                       <div className="rounded-lg border border-border overflow-hidden bg-secondary flex items-center justify-center" style={{ height: '96px' }}>
-                        <img 
-                          src={thumbnailPreviewUrl ?? thumbnailUrl ?? ''} 
-                          alt="Thumbnail preview" 
+                        <img
+                          src={thumbnailPreviewUrl ?? thumbnailUrl ?? ''}
+                          alt="Thumbnail preview"
                           className="w-full h-full object-contain"
                         />
                       </div>
@@ -660,7 +625,6 @@ export function CompanyProfileSettings() {
                 </div>
               )}
 
-              {/* Save Header Style Button */}
               <Button
                 onClick={handleSaveProfile}
                 disabled={saving}
