@@ -727,6 +727,17 @@
       font-weight: 500;
       margin-bottom: 6px;
     }
+    .pricing-discount-badge {
+      display: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #16a34a;
+      background: rgba(22, 163, 74, 0.1);
+      border-radius: 999px;
+      padding: 2px 10px;
+      margin: 6px 0 0;
+    }
+    .pricing-discount-badge.show { display: inline-block; }
     .pricing-price.free .amount {
       font-size: 2.2rem;
       color: var(--blue);
@@ -1435,7 +1446,7 @@
   <div class="container text-center">
     <div class="section-badge reveal">Pricing</div>
     <h2 class="section-title reveal">Simple, Transparent Pricing</h2>
-    <p class="section-subtitle reveal">Start free for 30 days. No credit card required.</p>
+    <p class="section-subtitle reveal">Start free for 15 days. No credit card required.</p>
 
     <div class="pricing-tabs">
       <button class="pricing-tab active" data-duration="monthly" onclick="switchPricingDuration('monthly')">Monthly</button>
@@ -1452,20 +1463,19 @@
         <div class="pricing-price free">
           <span class="amount">FREE</span>
         </div>
-        <div class="pricing-desc">for 30 days &nbsp;·&nbsp; No credit card required</div>
+        <div class="pricing-desc">for 15 days &nbsp;·&nbsp; No credit card required</div>
         <div class="pricing-divider"></div>
         <ul class="pricing-features">
           <li><span class="pf-check">✓</span> All features unlocked</li>
-          <li><span class="pf-check">✓</span> Unlimited contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Unlimited technicians</li>
-          <li><span class="pf-check">✓</span> Quotation & Invoice Management</li>
+          <li><span class="pf-check">✓</span> Unlimited contracts &amp; customers</li>
+          <li><span class="pf-check">✓</span> Unlimited team members</li>
+          <li><span class="pf-check">✓</span> Quotation &amp; invoice management</li>
           <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
           <li><span class="pf-check">✓</span> Full dashboard</li>
-          <li><span class="pf-check">✓</span> No credit card required</li>
         </ul>
         <a href="/signup" class="btn-pricing">Start Free Trial</a>
       </div>
+
 
       <!-- Basic -->
       <div class="pricing-card reveal reveal-delay-2" data-plan="basic">
@@ -1475,19 +1485,20 @@
           <span class="amount" data-monthly="499" data-3months="1399" data-6months="2499" data-yearly="4799">499</span>
           <span class="period" data-monthly="/month" data-3months="/ 3 months" data-6months="/ 6 months" data-yearly="/ year">/month</span>
         </div>
+        <div class="pricing-discount-badge" data-monthly="" data-3months="Save 7%" data-6months="Save 17%" data-yearly="Save 20%"></div>
         <div class="pricing-desc">Perfect for small contractors just getting started</div>
         <div class="pricing-divider"></div>
         <ul class="pricing-features">
-          <li><span class="pf-check">✓</span> Up to 50 contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Up to 5 technicians</li>
-          <li><span class="pf-check">✓</span> Up to 50 Quotation</li>
-          <li><span class="pf-check">✓</span> Up to 50 Invoice</li>
+          <li><span class="pf-check">✓</span> Up to 75 contracts</li>
+          <li><span class="pf-check">✓</span> Up to 100 customers</li>
+          <li><span class="pf-check">✓</span> Up to 2 team members (technicians + invites)</li>
+          <li><span class="pf-check">✓</span> Up to 50 Quotations / month</li>
+          <li><span class="pf-check">✓</span> Up to 50 Invoices / month</li>
           <li><span class="pf-check">✓</span> Service alerts &amp; notifications</li>
           <li><span class="pf-check">✓</span> Full dashboard</li>
           <li><span class="pf-check">✓</span> Service history</li>
           <li><span class="pf-check">✓</span> Reports</li>
-          <li><span class="pf-check">✓</span> Priority support</li>
+          <li><span class="pf-check">✓</span> Email support</li>
         </ul>
         <a href="/signup" class="btn-pricing">Get Started</a>
       </div>
@@ -1501,13 +1512,16 @@
           <span class="amount" data-monthly="799" data-3months="2199" data-6months="3999" data-yearly="7499">799</span>
           <span class="period" data-monthly="/month" data-3months="/ 3 months" data-6months="/ 6 months" data-yearly="/ year">/month</span>
         </div>
+        <div class="pricing-discount-badge" data-monthly="" data-3months="Save 8%" data-6months="Save 17%" data-yearly="Save 22%"></div>
         <div class="pricing-desc">For growing businesses managing large client bases</div>
         <div class="pricing-divider"></div>
         <ul class="pricing-features">
-          <li><span class="pf-check">✓</span> Unlimited contracts</li>
-          <li><span class="pf-check">✓</span> Unlimited customers</li>
-          <li><span class="pf-check">✓</span> Unlimited technicians</li>
-          <li><span class="pf-check">✓</span> Unlimited Quotation & Invoice</li>
+          <li><span class="pf-check">✓</span> Up to 500 contracts</li>
+          <li><span class="pf-check">✓</span> Up to 500 customers</li>
+          <li><span class="pf-check">✓</span> Up to 10 team members (technicians + invites)</li>
+          <li><span class="pf-check">✓</span> Role-based permissions for team members</li>
+          <li><span class="pf-check">✓</span> Up to 300 Quotations / month</li>
+          <li><span class="pf-check">✓</span> Up to 300 Invoices / month</li>
           <li><span class="pf-check">✓</span> Everything in Basic</li>
           <li><span class="pf-check">✓</span> Advanced reports</li>
           <li><span class="pf-check">✓</span> Data export</li>
@@ -1778,6 +1792,7 @@
       const priceContainer = card.querySelector('.pricing-price');
       const amountEl = card.querySelector('.amount');
       const periodEl = card.querySelector('.period');
+      const badgeEl = card.querySelector('.pricing-discount-badge');
 
       if (priceContainer && amountEl && periodEl) {
         const newAmount = priceContainer.getAttribute(`data-${duration}`);
@@ -1788,6 +1803,17 @@
         }
         if (newPeriod) {
           periodEl.textContent = newPeriod;
+        }
+      }
+
+      if (badgeEl) {
+        const badgeText = badgeEl.getAttribute(`data-${duration}`);
+        if (badgeText) {
+          badgeEl.textContent = badgeText;
+          badgeEl.classList.add('show');
+        } else {
+          badgeEl.textContent = '';
+          badgeEl.classList.remove('show');
         }
       }
     });
