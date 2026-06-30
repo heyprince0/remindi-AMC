@@ -18,7 +18,7 @@ const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control'
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { user, role, loading: authLoading } = useAuth() // ✅ use global role
+  const { user, role, loading: authLoading } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState("")
   const [companyName, setCompanyName] = useState("")
@@ -28,24 +28,20 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Redirect non‑admin users away from Settings
+  // Redirect non‑admin users
   useEffect(() => {
-    // Wait until auth is done loading
     if (authLoading) return
-
     if (!user) {
       router.push("/login")
       return
     }
-
-    // If role is known and not admin, redirect
     if (role && role !== "admin") {
       toast.error("You don't have permission to access Settings")
       router.push("/")
     }
   }, [authLoading, user, role, router])
 
-  // Load user profile (personal info, not org profile)
+  // Load user profile (personal info)
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -122,7 +118,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Show loading state while auth is loading or role is being determined
   if (authLoading || loading) {
     return (
       <DashboardLayout>
@@ -133,7 +128,6 @@ export default function SettingsPage() {
     )
   }
 
-  // If not admin, return null (redirect will handle it)
   if (role !== "admin") {
     return null
   }
@@ -149,7 +143,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Only admins can see these sections */}
         <CompanyProfileSettings />
         <StampSignatureSettings />
 
