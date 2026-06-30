@@ -18,7 +18,7 @@ const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control'
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, role, loading: authLoading } = useAuth() // ✅ use global role
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState("")
   const [companyName, setCompanyName] = useState("")
@@ -28,43 +28,24 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Organization & role state
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [checkingRole, setCheckingRole] = useState(true)
-
-  // Fetch org_id and role
-  useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id, role")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Failed to fetch membership:", error)
-            toast.error("Could not determine your organization role")
-          } else if (data) {
-            setCurrentOrgId(data.org_id)
-            setUserRole(data.role)
-          }
-          setCheckingRole(false)
-        })
-    } else {
-      setCheckingRole(false)
-    }
-  }, [user?.id])
-
   // Redirect non‑admin users away from Settings
   useEffect(() => {
-    if (!checkingRole && userRole && userRole !== "admin") {
-      toast.error("You don't have permission to access Settings")
-      router.push("/dashboard")
-    }
-  }, [checkingRole, userRole, router])
+    // Wait until auth is done loading
+    if (authLoading) return
 
-  // Load user profile (this is personal info, not org profile)
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    // If role is known and not admin, redirect
+    if (role && role !== "admin") {
+      toast.error("You don't have permission to access Settings")
+      router.push("/")
+    }
+  }, [authLoading, user, role, router])
+
+  // Load user profile (personal info, not org profile)
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -141,8 +122,8 @@ export default function SettingsPage() {
     }
   }
 
-  // Show loading state while checking role
-  if (checkingRole) {
+  // Show loading state while auth is loading or role is being determined
+  if (authLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
@@ -152,8 +133,8 @@ export default function SettingsPage() {
     )
   }
 
-  // If not admin, return null (will redirect)
-  if (userRole !== "admin") {
+  // If not admin, return null (redirect will handle it)
+  if (role !== "admin") {
     return null
   }
 
