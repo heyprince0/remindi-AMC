@@ -58,11 +58,14 @@ export default function PlanSelectionModal({
           .order('price_monthly', { ascending: true });
 
         if (error) throw error;
+        // Parse features if stored as JSON string
         const parsed = (data || []).map((p: any) => ({
           ...p,
           features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
         }));
-        setPlans(parsed);
+        // Filter out the free plan – we already show it on the billing page
+        const filtered = parsed.filter((p: Plan) => p.id !== 'free');
+        setPlans(filtered);
       } catch (error) {
         console.error('Error fetching plans:', error);
         toast.error('Failed to load plans');
@@ -91,9 +94,23 @@ export default function PlanSelectionModal({
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-7xl">
-          <div className="flex justify-center items-center py-16">
-            <Loader2 className="size-10 animate-spin text-muted-foreground" />
+        <DialogContent className="max-w-screen-xl">
+          <div className="flex justify-center items-center py-20">
+            <Loader2 className="size-12 animate-spin text-muted-foreground" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // If no plans (other than free) are found, show a message
+  if (plans.length === 0) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-screen-xl">
+          <div className="text-center py-12">
+            <p className="text-gray-500">No paid plans available at the moment.</p>
+            <Button onClick={onClose} className="mt-4">Close</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -102,7 +119,7 @@ export default function PlanSelectionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto p-8">
+      <DialogContent className="max-w-screen-xl max-h-[90vh] overflow-y-auto p-8">
         <DialogHeader>
           <DialogTitle className="text-3xl font-bold text-center">Choose Your Plan</DialogTitle>
           <DialogDescription className="text-center text-base">
@@ -127,11 +144,11 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        {/* Plan Cards Grid – wider and better spaced */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-4">
+        {/* Plan Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8 lg:gap-10 mt-6">
           {plans.map((plan) => {
             const price = getPrice(plan);
-            const isFree = price === 0;
+            const isFree = price === 0; // will never be true since we filtered free
             const isPopular = plan.id === 'pro';
 
             return (
@@ -153,7 +170,7 @@ export default function PlanSelectionModal({
           })}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-10">
+        <p className="text-center text-sm text-gray-500 mt-12">
           All plans include free updates. Cancel anytime.
         </p>
       </DialogContent>
