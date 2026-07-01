@@ -16,6 +16,7 @@ import {
   Receipt,
   UsersRound,
   LogOut,
+  CreditCard,
 } from "lucide-react"
 import {
   Sidebar,
@@ -45,6 +46,7 @@ const memberNavItems = [
 ]
 
 const adminOnlyNavItems = [
+  { title: "Billing", icon: CreditCard, href: "/dashboard/billing" },
   { title: "Settings", icon: Settings, href: "/settings" },
   { title: "Team", icon: UsersRound, href: "/team" },
 ]
