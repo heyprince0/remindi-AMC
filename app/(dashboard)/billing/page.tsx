@@ -10,10 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
-import UsageIndicators from '@/components/billing/usage-indicators';
-import TeamSeatsIndicator from '@/components/billing/team-seats-indicator';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
-import PlanSelectionModal from '@/components/billing/PlanSelectionModal';   // ✅ changed
+import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
 import { BillingCycle, Plan } from '@/lib/billing-types';
 
@@ -25,14 +23,6 @@ export default function BillingPage() {
   const [subscription, setSubscription] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
   const [freePlan, setFreePlan] = useState<any>(null);
-  const [usage, setUsage] = useState({
-    contracts: { used: 0, total: 0 },
-    customers: { used: 0, total: 0 },
-    technicians: { used: 0, total: 0 },
-    teamSeats: { used: 0, total: 0 },
-    quotations: { used: 0, total: 0 },
-    invoices: { used: 0, total: 0 },
-  });
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
 
   // UI states
@@ -62,55 +52,11 @@ export default function BillingPage() {
       if (subError) throw subError;
       setSubscription(subData);
 
-      // 3. Determine active plan
+      // 3. Determine active plan (fallback to free if none)
       const activePlan = subData?.plan || freePlanData;
       setPlan(activePlan);
 
-      // 4. Get usage counts
-      const [
-        { count: contractsCount },
-        { count: customersCount },
-        { count: techniciansCount },
-        { count: teamSeatsCount },
-      ] = await Promise.all([
-        supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
-        supabase.from('customers').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
-        supabase.from('technicians').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
-        supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
-      ]);
-
-      // Monthly quotations and invoices
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-
-      const { count: quotationsCount } = await supabase
-        .from('quotations')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .gte('created_at', startOfMonth)
-        .lte('created_at', endOfMonth);
-
-      const { count: invoicesCount } = await supabase
-        .from('invoices')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .gte('created_at', startOfMonth)
-        .lte('created_at', endOfMonth);
-
-      // Build usage object in the shape expected by components
-      const max = (plan: any) => ({
-        contracts: { used: contractsCount || 0, total: plan?.max_contracts || 99999 },
-        customers: { used: customersCount || 0, total: plan?.max_customers || 99999 },
-        technicians: { used: techniciansCount || 0, total: plan?.max_technicians || 99999 },
-        teamSeats: { used: teamSeatsCount || 0, total: plan?.max_team_seats || 99999 },
-        quotations: { used: quotationsCount || 0, total: plan?.max_quotations_monthly || 99999 },
-        invoices: { used: invoicesCount || 0, total: plan?.max_invoices_monthly || 99999 },
-      });
-
-      setUsage(max(activePlan));
-
-      // 5. Get payment history
+      // 4. Get payment history
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
         .select('*')
@@ -186,14 +132,6 @@ export default function BillingPage() {
               </CardContent>
             </Card>
           )}
-        </section>
-
-        {/* Usage & Team Seats */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <UsageIndicators usage={usage} />
-          </div>
-          <TeamSeatsIndicator usage={usage} />
         </section>
 
         {/* Payment History */}
