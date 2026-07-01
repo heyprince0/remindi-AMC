@@ -21,17 +21,17 @@ export default function BillingPage() {
   const { user, orgId } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  // Real data states
+  // Data states
   const [subscription, setSubscription] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
-  const [freePlan, setFreePlan] = useState<any>(null); // fallback plan
+  const [freePlan, setFreePlan] = useState<any>(null);
   const [usage, setUsage] = useState({
-    contracts: 0,
-    customers: 0,
-    technicians: 0,
-    teamSeats: 0,
-    quotationsThisMonth: 0,
-    invoicesThisMonth: 0,
+    contracts: { used: 0, total: 0 },
+    customers: { used: 0, total: 0 },
+    technicians: { used: 0, total: 0 },
+    teamSeats: { used: 0, total: 0 },
+    quotations: { used: 0, total: 0 },
+    invoices: { used: 0, total: 0 },
   });
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
 
@@ -40,18 +40,16 @@ export default function BillingPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired');
 
-  // Fetch all billing data
   const fetchData = async () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      // 1. Get the Free plan (fallback)
+      // 1. Get free plan (fallback)
       const { data: freePlanData } = await supabase
         .from('subscription_plans')
         .select('*')
         .eq('id', 'free')
         .single();
-
       if (freePlanData) setFreePlan(freePlanData);
 
       // 2. Get current subscription
@@ -64,14 +62,11 @@ export default function BillingPage() {
       if (subError) throw subError;
       setSubscription(subData);
 
-      // 3. Set the active plan (if subscription exists, use its plan, else use free plan)
-      if (subData?.plan) {
-        setPlan(subData.plan);
-      } else {
-        setPlan(freePlanData || null);
-      }
+      // 3. Determine active plan
+      const activePlan = subData?.plan || freePlanData;
+      setPlan(activePlan);
 
-      // 4. Get usage stats
+      // 4. Get usage counts
       const [
         { count: contractsCount },
         { count: customersCount },
@@ -103,14 +98,17 @@ export default function BillingPage() {
         .gte('created_at', startOfMonth)
         .lte('created_at', endOfMonth);
 
-      setUsage({
-        contracts: contractsCount || 0,
-        customers: customersCount || 0,
-        technicians: techniciansCount || 0,
-        teamSeats: teamSeatsCount || 0,
-        quotationsThisMonth: quotationsCount || 0,
-        invoicesThisMonth: invoicesCount || 0,
+      // Build usage object in the shape expected by components
+      const max = (plan: any) => ({
+        contracts: { used: contractsCount || 0, total: plan?.max_contracts || 99999 },
+        customers: { used: customersCount || 0, total: plan?.max_customers || 99999 },
+        technicians: { used: techniciansCount || 0, total: plan?.max_technicians || 99999 },
+        teamSeats: { used: teamSeatsCount || 0, total: plan?.max_team_seats || 99999 },
+        quotations: { used: quotationsCount || 0, total: plan?.max_quotations_monthly || 99999 },
+        invoices: { used: invoicesCount || 0, total: plan?.max_invoices_monthly || 99999 },
       });
+
+      setUsage(max(activePlan));
 
       // 5. Get payment history
       const { data: txData, error: txError } = await supabase
@@ -135,15 +133,11 @@ export default function BillingPage() {
     if (orgId) fetchData();
   }, [orgId]);
 
-  const handleUpgrade = () => {
-    setShowUpgradeModal(true);
-  };
-
+  const handleUpgrade = () => setShowUpgradeModal(true);
   const handleSelectUpgradePlan = (plan: Plan, billingCycle: BillingCycle) => {
-    // TODO: Implement Razorpay integration
+    // TODO: Razorpay integration
     alert(`Upgrading to ${plan.name} (${billingCycle})`);
   };
-
   const handleOpenLimitModal = (type: LimitModalType) => {
     setLimitModalType(type);
     setShowLimitModal(true);
@@ -159,24 +153,18 @@ export default function BillingPage() {
     );
   }
 
-  // Determine if the user has an active subscription
   const hasSubscription = subscription && subscription.status === 'active';
-
-  // Plan to use for usage limits: active plan or fallback to free plan
-  const activePlan = plan || freePlan;
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Page Header */}
+        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Billing & Subscription</h1>
-          <p className="mt-2 text-muted-foreground">
-            Manage your subscription, view usage, and payment history
-          </p>
+          <p className="mt-2 text-muted-foreground">Manage your subscription, view usage, and payment history</p>
         </div>
 
-        {/* Current Plan Section – shows either the subscription or a "No plan" card */}
+        {/* Current Plan */}
         <section>
           {hasSubscription ? (
             <CurrentPlanCard
@@ -199,12 +187,12 @@ export default function BillingPage() {
           )}
         </section>
 
-        {/* Usage & Team Seats Grid – always show usage, using the active plan (or free plan) for limits */}
+        {/* Usage & Team Seats */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <UsageIndicators usage={usage} plan={activePlan} />
+            <UsageIndicators usage={usage} />
           </div>
-          <TeamSeatsIndicator usage={usage} plan={activePlan} />
+          <TeamSeatsIndicator usage={usage} />
         </section>
 
         {/* Payment History */}
@@ -212,11 +200,9 @@ export default function BillingPage() {
           <PaymentHistoryTable transactions={paymentHistory} />
         </section>
 
-        {/* Demo Section: Limit Modals */}
+        {/* Demo Modals */}
         <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">
-            🎯 Demo: Paywall Scenarios
-          </h3>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">🎯 Demo: Paywall Scenarios</h3>
           <p className="mb-4 text-sm text-muted-foreground">
             Click any button below to see how paywall modals appear when users hit limits:
           </p>
@@ -251,7 +237,6 @@ export default function BillingPage() {
           onClose={() => setShowUpgradeModal(false)}
           onSelectPlan={handleSelectUpgradePlan}
         />
-
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
