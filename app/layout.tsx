@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { Toaster } from 'sonner'
 import { InstallCacheCleanup } from '@/components/install-cache-cleanup'
+import Script from 'next/script'   // ✅ added
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -28,6 +29,11 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="theme-color" content="#ffffff" />
+        {/* ✅ Razorpay checkout script */}
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
