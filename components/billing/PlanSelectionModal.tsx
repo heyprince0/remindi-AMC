@@ -39,13 +39,6 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string }> = {
   annual: { label: 'Yearly', period: 'year' },
 };
 
-const CYCLE_SAVINGS: Record<BillingCycle, string> = {
-  monthly: '',
-  quarterly: 'Save 7%',
-  'semi-annual': 'Save 17%',
-  annual: 'Save 20%',
-};
-
 export default function PlanSelectionModal({
   isOpen,
   onClose,
@@ -65,7 +58,6 @@ export default function PlanSelectionModal({
           .order('price_monthly', { ascending: true });
 
         if (error) throw error;
-        // Parse features if stored as JSON string
         const parsed = (data || []).map((p: any) => ({
           ...p,
           features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
@@ -99,7 +91,7 @@ export default function PlanSelectionModal({
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl">
+        <DialogContent className="max-w-7xl">
           <div className="flex justify-center items-center py-16">
             <Loader2 className="size-10 animate-spin text-muted-foreground" />
           </div>
@@ -110,7 +102,7 @@ export default function PlanSelectionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto p-6">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto p-8">
         <DialogHeader>
           <DialogTitle className="text-3xl font-bold text-center">Choose Your Plan</DialogTitle>
           <DialogDescription className="text-center text-base">
@@ -119,7 +111,7 @@ export default function PlanSelectionModal({
         </DialogHeader>
 
         {/* Billing Cycle Tabs */}
-        <div className="flex flex-wrap justify-center gap-3 my-6">
+        <div className="flex flex-wrap justify-center gap-3 my-8">
           {Object.entries(CYCLE_LABELS).map(([cycle, { label }]) => (
             <button
               key={cycle}
@@ -135,8 +127,8 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        {/* Plan Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+        {/* Plan Cards Grid – wider and better spaced */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-4">
           {plans.map((plan) => {
             const price = getPrice(plan);
             const isFree = price === 0;
@@ -161,7 +153,7 @@ export default function PlanSelectionModal({
           })}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-8">
+        <p className="text-center text-sm text-gray-500 mt-10">
           All plans include free updates. Cancel anytime.
         </p>
       </DialogContent>
