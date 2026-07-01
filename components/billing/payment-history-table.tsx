@@ -14,6 +14,23 @@ interface PaymentHistoryTableProps {
   transactions: PaymentTransaction[];
 }
 
+// Safe formatters that never throw
+const safeFormatCurrency = (amount: any): string => {
+  if (amount === undefined || amount === null || typeof amount !== 'number' || isNaN(amount)) {
+    return '—';
+  }
+  return formatCurrency(amount);
+};
+
+const safeFormatDate = (date: any): string => {
+  if (!date) return '—';
+  try {
+    return formatDate(date);
+  } catch {
+    return '—';
+  }
+};
+
 export default function PaymentHistoryTable({
   transactions,
 }: PaymentHistoryTableProps) {
@@ -50,19 +67,25 @@ export default function PaymentHistoryTable({
               className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
             >
               <td className="py-4 px-4 text-gray-900">
-                {txn.date ? formatDate(txn.date) : '—'}
+                {safeFormatDate(txn.date)}
               </td>
-              <td className="py-4 px-4 text-gray-900">{txn.plan || '—'}</td>
+              <td className="py-4 px-4 text-gray-900">
+                {txn.plan || '—'}
+              </td>
               <td className="py-4 px-4 text-gray-600">
                 {txn.billingCycle ? txn.billingCycle.replace(/-/g, ' ') : '—'}
               </td>
               <td className="py-4 px-4 text-right font-medium text-gray-900">
-                {txn.amount != null ? formatCurrency(txn.amount) : formatCurrency(0)}
+                {safeFormatCurrency(txn.amount)}
               </td>
               <td className="py-4 px-4">
-                <Badge className={getPaymentStatusBadgeColor(txn.status)}>
-                  {txn.status ? getPaymentStatusLabel(txn.status) : '—'}
-                </Badge>
+                {txn.status ? (
+                  <Badge className={getPaymentStatusBadgeColor(txn.status)}>
+                    {getPaymentStatusLabel(txn.status)}
+                  </Badge>
+                ) : (
+                  '—'
+                )}
               </td>
               <td className="py-4 px-4 text-center">
                 {txn.invoiceUrl ? (
