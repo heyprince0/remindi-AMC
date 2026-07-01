@@ -9,32 +9,51 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-import CurrentPlanCard from '@/components/billing/current-plan-card';
-import PaymentHistoryTable from '@/components/billing/payment-history-table';
-import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
-import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
-import { BillingCycle, Plan } from '@/lib/billing-types';
+// Temporarily commented out – will be re-enabled when payment is implemented
+// import CurrentPlanCard from '@/components/billing/current-plan-card';
+// import PaymentHistoryTable from '@/components/billing/payment-history-table';
+// import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
+// import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
+// import { BillingCycle, Plan } from '@/lib/billing-types';
+
+// Feature flag – set to false to completely disable billing features
+const BILLING_ENABLED = false;
 
 export default function BillingPage() {
   const { user, orgId } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  // Data states
+  // Data states – kept but will be empty
   const [subscription, setSubscription] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
   const [freePlan, setFreePlan] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
 
-  // UI states
+  // UI states – kept but not used
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired');
+  const [limitModalType, setLimitModalType] = useState<any>('expired');
 
+  // Fetch data – completely disabled when BILLING_ENABLED is false
   const fetchData = async () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      // 1. Get free plan (fallback)
+      if (!BILLING_ENABLED) {
+        // 🔒 Billing is disabled – just set empty states and return
+        setSubscription(null);
+        setPlan(null);
+        setFreePlan(null);
+        setPaymentHistory([]);
+        setLoading(false);
+        return;
+      }
+
+      // ——— 🔓 Everything below is only run when BILLING_ENABLED = true ———
+      // (Keep your existing fetch logic here, but it's commented out for now)
+
+      /*
+      // 1. Get free plan
       const { data: freePlanData } = await supabase
         .from('subscription_plans')
         .select('*')
@@ -48,24 +67,20 @@ export default function BillingPage() {
         .select('*, plan:plan_id(*)')
         .eq('org_id', orgId)
         .maybeSingle();
-
       if (subError) throw subError;
       setSubscription(subData);
+      setPlan(subData?.plan || freePlanData);
 
-      // 3. Determine active plan (fallback to free if none)
-      const activePlan = subData?.plan || freePlanData;
-      setPlan(activePlan);
-
-      // 4. Get payment history
+      // 3. Get payment history
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
         .select('*')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
         .limit(10);
-
       if (txError) throw txError;
       setPaymentHistory(txData || []);
+      */
 
     } catch (error) {
       console.error('Error fetching billing data:', error);
@@ -79,13 +94,15 @@ export default function BillingPage() {
     if (orgId) fetchData();
   }, [orgId]);
 
-  const handleUpgrade = () => setShowUpgradeModal(true);
-  const handleSelectUpgradePlan = (plan: Plan, billingCycle: BillingCycle) => {
-    // TODO: Razorpay integration
-    alert(`Upgrading to ${plan.name} (${billingCycle})`);
+  // Placeholder handlers (do nothing)
+  const handleUpgrade = () => {
+    toast.info('Billing is currently disabled. Coming soon!');
+  };
+  const handleSelectUpgradePlan = (plan: any, billingCycle: any) => {
+    toast.info('Billing is currently disabled. Coming soon!');
     setShowUpgradeModal(false);
   };
-  const handleOpenLimitModal = (type: LimitModalType) => {
+  const handleOpenLimitModal = (type: any) => {
     setLimitModalType(type);
     setShowLimitModal(true);
   };
@@ -100,8 +117,6 @@ export default function BillingPage() {
     );
   }
 
-  const hasSubscription = subscription && subscription.status === 'active';
-
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -111,77 +126,59 @@ export default function BillingPage() {
           <p className="mt-2 text-muted-foreground">Manage your subscription, view usage, and payment history</p>
         </div>
 
-        {/* Current Plan */}
-        <section>
-          {hasSubscription ? (
-            <CurrentPlanCard
-              subscription={subscription}
-              plan={subscription.plan}
-              onUpgrade={handleUpgrade}
-            />
-          ) : (
+        {BILLING_ENABLED ? (
+          // 🔓 Real billing UI (will be re-enabled later)
+          <>
+            {/* Current Plan */}
+            <section>
+              {/* Uncomment when ready: <CurrentPlanCard ... /> */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Current Plan</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">Your plan details will appear here.</p>
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* Payment History */}
+            <section>
+              {/* Uncomment when ready: <PaymentHistoryTable transactions={paymentHistory} /> */}
+              <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+                <p>Payment history will be available soon.</p>
+              </div>
+            </section>
+
+            {/* Demo Modals – also disabled */}
+            {/* ... */}
+          </>
+        ) : (
+          // 🔒 Placeholder – everything is coming soon
+          <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>No Active Subscription</CardTitle>
+                <CardTitle>🚧 Billing Under Construction</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground mb-4">
-                  You are currently on the <strong>Free Trial</strong> plan. Upgrade to unlock more features and higher limits.
+                <p className="text-muted-foreground">
+                  We're building the billing system. You'll be able to manage your subscription and view payment history soon.
                 </p>
-                <Button onClick={handleUpgrade}>Upgrade Now</Button>
+                <Button className="mt-4" variant="outline" disabled>
+                  Upgrade (Coming Soon)
+                </Button>
               </CardContent>
             </Card>
-          )}
-        </section>
 
-        {/* Payment History */}
-        <section>
-          <PaymentHistoryTable transactions={paymentHistory} />
-        </section>
-
-        {/* Demo Modals */}
-        <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">🎯 Demo: Paywall Scenarios</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Click any button below to see how paywall modals appear when users hit limits:
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={() => handleOpenLimitModal('expired')}
-              variant="outline"
-              className="border-orange-300 text-orange-700 hover:bg-orange-50"
-            >
-              Subscription Expired
-            </Button>
-            <Button
-              onClick={() => handleOpenLimitModal('monthly-limit')}
-              variant="outline"
-              className="border-blue-300 text-blue-700 hover:bg-blue-50"
-            >
-              Monthly Limit Reached
-            </Button>
-            <Button
-              onClick={() => handleOpenLimitModal('team-seats')}
-              variant="outline"
-              className="border-purple-300 text-purple-700 hover:bg-purple-50"
-            >
-              Team Seat Limit Reached
-            </Button>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+              <p>Payment history will appear here after your first payment.</p>
+            </div>
           </div>
-        </section>
+        )}
 
-        {/* Modals */}
-        <PlanSelectionModal
-          isOpen={showUpgradeModal}
-          onClose={() => setShowUpgradeModal(false)}
-          onSelectPlan={handleSelectUpgradePlan}
-        />
-        <LimitReachedModal
-          isOpen={showLimitModal}
-          onClose={() => setShowLimitModal(false)}
-          type={limitModalType}
-          onUpgrade={handleUpgrade}
-        />
+        {/* Modals – kept but won't be shown because BILLING_ENABLED is false */}
+        {/* <PlanSelectionModal ... /> */}
+        {/* <LimitReachedModal ... /> */}
       </div>
     </DashboardLayout>
   );
