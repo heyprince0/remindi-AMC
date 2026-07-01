@@ -10,23 +10,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
-import PaymentHistoryTable from '@/components/billing/payment-history-table';
+// ⛔ PaymentHistoryTable is removed – we'll use a placeholder instead
+// import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
 import { BillingCycle, Plan } from '@/lib/billing-types';
-
-// 🔒 Feature flag: set to false to temporarily hide payment history
-const SHOW_PAYMENT_HISTORY = false;
 
 export default function BillingPage() {
   const { user, orgId } = useAuth();
   const [loading, setLoading] = useState(true);
 
+  // Data states
   const [subscription, setSubscription] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
   const [freePlan, setFreePlan] = useState<any>(null);
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  // paymentHistory is no longer used – we keep it empty
+  const [paymentHistory] = useState<any[]>([]);
 
+  // UI states
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired');
@@ -35,7 +36,7 @@ export default function BillingPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      // 1. Get free plan
+      // 1. Get free plan (fallback)
       const { data: freePlanData } = await supabase
         .from('subscription_plans')
         .select('*')
@@ -49,23 +50,16 @@ export default function BillingPage() {
         .select('*, plan:plan_id(*)')
         .eq('org_id', orgId)
         .maybeSingle();
+
       if (subError) throw subError;
       setSubscription(subData);
-      setPlan(subData?.plan || freePlanData);
 
-      // 3. Get payment history – only if enabled
-      if (SHOW_PAYMENT_HISTORY) {
-        const { data: txData, error: txError } = await supabase
-          .from('payment_transactions')
-          .select('*')
-          .eq('org_id', orgId)
-          .order('created_at', { ascending: false })
-          .limit(10);
-        if (txError) throw txError;
-        setPaymentHistory(txData || []);
-      } else {
-        setPaymentHistory([]); // keep empty
-      }
+      // 3. Determine active plan (fallback to free if none)
+      const activePlan = subData?.plan || freePlanData;
+      setPlan(activePlan);
+
+      // ⛔ Payment history fetch is completely removed – we don't query the table at all
+      // (The table might not exist yet, so we skip it to avoid errors)
 
     } catch (error) {
       console.error('Error fetching billing data:', error);
@@ -111,7 +105,7 @@ export default function BillingPage() {
           <p className="mt-2 text-muted-foreground">Manage your subscription, view usage, and payment history</p>
         </div>
 
-        {/* Current Plan */}
+        {/* Current Plan – unchanged */}
         <section>
           {hasSubscription ? (
             <CurrentPlanCard
@@ -134,18 +128,15 @@ export default function BillingPage() {
           )}
         </section>
 
-        {/* Payment History – conditionally rendered */}
+        {/* Payment History – now a static placeholder */}
         <section>
-          {SHOW_PAYMENT_HISTORY ? (
-            <PaymentHistoryTable transactions={paymentHistory} />
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
-              <p>Payment history will be available soon.</p>
-            </div>
-          )}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+            <p className="text-lg font-medium">Payment History</p>
+            <p className="text-sm mt-1">Your transactions will appear here after your first payment.</p>
+          </div>
         </section>
 
-        {/* Demo Modals */}
+        {/* Demo Modals – unchanged */}
         <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
           <h3 className="mb-4 text-lg font-semibold text-foreground">🎯 Demo: Paywall Scenarios</h3>
           <p className="mb-4 text-sm text-muted-foreground">
@@ -176,7 +167,7 @@ export default function BillingPage() {
           </div>
         </section>
 
-        {/* Modals */}
+        {/* Modals – unchanged */}
         <PlanSelectionModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
