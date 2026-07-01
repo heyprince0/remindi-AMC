@@ -33,11 +33,11 @@ interface PlanSelectionModalProps {
   onSelectPlan: (plan: Plan, billingCycle: BillingCycle) => void;
 }
 
-const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string }> = {
-  monthly: { label: 'Monthly', period: 'month' },
-  quarterly: { label: '3 Months', period: '3 months' },
-  'semi-annual': { label: '6 Months', period: '6 months' },
-  annual: { label: 'Yearly', period: 'year' },
+const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
+  monthly: { label: 'Monthly', period: 'month', months: 1 },
+  quarterly: { label: '3 Months', period: '3 months', months: 3 },
+  'semi-annual': { label: '6 Months', period: '6 months', months: 6 },
+  annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
 export default function PlanSelectionModal({
@@ -87,6 +87,31 @@ export default function PlanSelectionModal({
     return map[selectedCycle] || 0;
   };
 
+  // Calculates the real % saved vs paying monthly for that many months,
+  // so the badge is always mathematically accurate — never hardcoded.
+  const getDiscountPercent = (plan: Plan) => {
+    const { months } = CYCLE_LABELS[selectedCycle];
+    if (months === 1) return 0; // no discount badge on the monthly tab
+
+    const currentPrice = getPrice(plan);
+    const equivalentMonthlyTotal = plan.price_monthly * months;
+
+    if (!equivalentMonthlyTotal || !currentPrice) return 0;
+
+    const savings = equivalentMonthlyTotal - currentPrice;
+    if (savings <= 0) return 0;
+
+    return Math.round((savings / equivalentMonthlyTotal) * 100);
+  };
+
+  const getSavingsAmount = (plan: Plan) => {
+    const { months } = CYCLE_LABELS[selectedCycle];
+    if (months === 1) return 0;
+    const currentPrice = getPrice(plan);
+    const equivalentMonthlyTotal = plan.price_monthly * months;
+    return Math.max(equivalentMonthlyTotal - currentPrice, 0);
+  };
+
   const handleSelect = (plan: Plan) => {
     onSelectPlan(plan, selectedCycle);
     onClose();
@@ -125,7 +150,7 @@ export default function PlanSelectionModal({
         default max-w-* class baked into your base Dialog component
         (shadcn's dialog.tsx usually ships with sm:max-w-lg by default,
         which was silently overriding max-w-screen-xl before and causing
-        the cramped, narrow modal in the screenshot).
+        the cramped, narrow modal seen previously).
       */}
       <DialogContent className="!max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
         <DialogHeader>
@@ -160,6 +185,8 @@ export default function PlanSelectionModal({
             const price = getPrice(plan);
             const isFree = price === 0; // will never be true since we filtered free
             const isPopular = plan.id === 'pro';
+            const discountPercent = getDiscountPercent(plan);
+            const savingsAmount = getSavingsAmount(plan);
 
             return (
               <PlanCard
@@ -173,6 +200,8 @@ export default function PlanSelectionModal({
                   features: plan.features,
                   isPopular,
                   isFree,
+                  discountPercent,
+                  savingsAmount,
                   onSelect: () => handleSelect(plan),
                 }}
               />
