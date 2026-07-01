@@ -16,7 +16,7 @@ import {
   Receipt,
   UsersRound,
   LogOut,
-  CreditCard,
+  CreditCard,   // <-- ADD THIS
 } from "lucide-react"
 import {
   Sidebar,
@@ -46,15 +46,15 @@ const memberNavItems = [
 ]
 
 const adminOnlyNavItems = [
-  { title: "Billing", icon: CreditCard, href: "/dashboard/billing" },
   { title: "Settings", icon: Settings, href: "/settings" },
   { title: "Team", icon: UsersRound, href: "/team" },
+  { title: "Billing", icon: CreditCard, href: "/billing" },   // <-- ADD THIS
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, role, loading } = useAuth() // <-- get role from context
+  const { user, role, loading } = useAuth()
 
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
@@ -79,7 +79,7 @@ export function AppSidebar() {
     loadProfile()
   }, [user?.id])
 
-  // Combine nav items – role is now stable
+  // Combine nav items based on role
   const navItems = role === 'admin'
     ? [...memberNavItems, ...adminOnlyNavItems]
     : memberNavItems
@@ -94,7 +94,6 @@ export function AppSidebar() {
     }
   }
 
-  // Show skeleton while auth is still loading
   if (loading) {
     return <div className="w-16 md:w-64 h-screen animate-pulse bg-muted/20" />
   }
