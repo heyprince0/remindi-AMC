@@ -104,26 +104,32 @@ export default function ContractsPage() {
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
   const [limitValue, setLimitValue] = useState(0)
 
-  // Fetch org_id
+  // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
         .from("memberships")
         .select("org_id")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()   // use maybeSingle to avoid error if no row
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
             toast.error("Could not determine your organization")
+            setLoading(false)
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+          } else {
+            // No membership, but we can still show an empty state
+            setLoading(false)
           }
         })
+    } else {
+      setLoading(false)
     }
   }, [user?.id])
 
-  // Fetch subscription and plan when org_id is available
+  // --- Fetch subscription and plan ---
   useEffect(() => {
     const fetchSubscription = async () => {
       if (!currentOrgId) return
@@ -155,7 +161,7 @@ export default function ContractsPage() {
     fetchSubscription()
   }, [currentOrgId])
 
-  // Fetch contract count for limit checking
+  // --- Fetch contract count for limit checking ---
   const fetchContractCount = async () => {
     if (!currentOrgId) return
     try {
@@ -171,9 +177,16 @@ export default function ContractsPage() {
     }
   }
 
+  // --- Load contracts and count ---
   useEffect(() => {
     if (currentOrgId) {
-      fetchContractCount()
+      // Both functions will set loading states, but we manage loading separately
+      const loadData = async () => {
+        setLoading(true)
+        await Promise.all([loadContracts(), fetchContractCount()])
+        setLoading(false)
+      }
+      loadData()
     }
   }, [currentOrgId])
 
@@ -257,8 +270,13 @@ export default function ContractsPage() {
   }
 
   const handleModalSuccess = () => {
-    loadContracts()
-    fetchContractCount() // refresh count after successful add
+    // Refresh contracts and count after adding
+    const refresh = async () => {
+      setLoading(true)
+      await Promise.all([loadContracts(), fetchContractCount()])
+      setLoading(false)
+    }
+    refresh()
   }
 
   const loadContracts = async () => {
@@ -291,7 +309,7 @@ export default function ContractsPage() {
       console.error('Error loading contracts:', error)
       toast.error('Failed to load contracts')
     } finally {
-      setLoading(false)
+      // loading state is managed by the parent useEffect, so we don't set it here
     }
   }
 
