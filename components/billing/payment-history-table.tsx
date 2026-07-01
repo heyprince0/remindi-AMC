@@ -17,6 +17,15 @@ interface PaymentHistoryTableProps {
 export default function PaymentHistoryTable({
   transactions,
 }: PaymentHistoryTableProps) {
+  if (transactions.length === 0) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+        <p>No payment history yet.</p>
+        <p className="text-sm">Your transactions will appear here once you make a payment.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6 overflow-x-auto">
       <h3 className="mb-6 text-lg font-semibold text-gray-900">
