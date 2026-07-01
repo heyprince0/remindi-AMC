@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
+import { Check, Tag } from 'lucide-react';
 
 interface PlanCardProps {
   plan: {
@@ -14,6 +14,8 @@ interface PlanCardProps {
     features: string[];
     isPopular?: boolean;
     isFree?: boolean;
+    discountPercent?: number;  // e.g. 17 for "Save 17%"
+    savingsAmount?: number;    // in paise, e.g. 49500 for "₹495 saved"
     onSelect: () => void;
   };
 }
@@ -32,10 +34,13 @@ export default function PlanCard({ plan }: PlanCardProps) {
     features,
     isPopular = false,
     isFree = false,
+    discountPercent = 0,
+    savingsAmount = 0,
     onSelect,
   } = plan;
 
   const displayPrice = isFree ? 'FREE' : formatPrice(price);
+  const hasOffer = !isFree && discountPercent > 0;
 
   return (
     <div
@@ -51,6 +56,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
       <div className="flex-1 min-w-0">
         <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{name}</h3>
         <p className="text-sm text-gray-500 mt-1 leading-relaxed">{description}</p>
+
         <div className="mt-4">
           {isFree ? (
             <span className="text-3xl font-bold text-blue-600">FREE</span>
@@ -62,7 +68,23 @@ export default function PlanCard({ plan }: PlanCardProps) {
               <span className="text-sm text-gray-500 whitespace-nowrap">/ {period}</span>
             </div>
           )}
+
+          {/* Offer / discount badge — only shows on multi-month cycles with real savings */}
+          {hasOffer && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                <Tag className="size-3" />
+                Save {discountPercent}%
+              </span>
+              {savingsAmount > 0 && (
+                <span className="text-xs text-gray-500">
+                  You save {formatPrice(savingsAmount)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
         <ul className="mt-6 space-y-2.5">
           {features.map((feature, idx) => (
             <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
@@ -72,6 +94,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
           ))}
         </ul>
       </div>
+
       <Button
         onClick={onSelect}
         className={`mt-8 w-full py-3.5 text-base font-semibold ${
