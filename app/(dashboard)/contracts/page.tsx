@@ -38,6 +38,7 @@ import { toast } from "sonner"
 import { AddContractModal } from "@/components/add-contract-modal"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -76,7 +77,7 @@ function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [22, 45, 60] // default dark blue
+    : [22, 45, 60]
 }
 
 export default function ContractsPage() {
@@ -95,6 +96,15 @@ export default function ContractsPage() {
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // --- Billing & limit states ---
+  const [subscription, setSubscription] = useState<any>(null)
+  const [plan, setPlan] = useState<any>(null)
+  const [contractCount, setContractCount] = useState(0)
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
+  const [limitValue, setLimitValue] = useState(0)
+
+  // Fetch org_id
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -113,9 +123,57 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
+  // Fetch subscription and plan when org_id is available
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!currentOrgId) return
+      try {
+        const { data: subData, error } = await supabase
+          .from('subscriptions')
+          .select('*, plan:plan_id(*)')
+          .eq('org_id', currentOrgId)
+          .maybeSingle()
+
+        if (error) throw error
+
+        if (subData) {
+          setSubscription(subData)
+          setPlan(subData.plan)
+        } else {
+          // fallback to free plan
+          const { data: freePlan } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('id', 'free')
+            .single()
+          setPlan(freePlan)
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error)
+      }
+    }
+    fetchSubscription()
+  }, [currentOrgId])
+
+  // Fetch contract count for limit checking
+  const fetchContractCount = async () => {
+    if (!currentOrgId) return
+    try {
+      const { count, error } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', currentOrgId)
+
+      if (error) throw error
+      setContractCount(count || 0)
+    } catch (error) {
+      console.error('Error fetching contract count:', error)
+    }
+  }
+
   useEffect(() => {
     if (currentOrgId) {
-      loadContracts()
+      fetchContractCount()
     }
   }, [currentOrgId])
 
@@ -167,13 +225,40 @@ export default function ContractsPage() {
     setModalOpen(true)
   }
 
+  // --- Modified handleAddClick with limit checks ---
   const handleAddClick = () => {
+    // Check if subscription is expired
+    if (subscription && subscription.status === 'expired') {
+      setLimitModalType('expired')
+      setShowLimitModal(true)
+      return
+    }
+    // Check trial end date
+    if (subscription && subscription.trial_end_date) {
+      const trialEnd = new Date(subscription.trial_end_date)
+      const today = new Date()
+      if (trialEnd < today && subscription.status !== 'active') {
+        setLimitModalType('expired')
+        setShowLimitModal(true)
+        return
+      }
+    }
+    // Check contract limit
+    const maxContracts = plan?.max_contracts ?? 99999
+    if (contractCount >= maxContracts) {
+      setLimitModalType('contracts-limit')
+      setLimitValue(maxContracts)
+      setShowLimitModal(true)
+      return
+    }
+    // All checks passed
     setEditingContract(null)
     setModalOpen(true)
   }
 
   const handleModalSuccess = () => {
     loadContracts()
+    fetchContractCount() // refresh count after successful add
   }
 
   const loadContracts = async () => {
@@ -222,7 +307,6 @@ export default function ContractsPage() {
     return { active, expired, todayServicing, expiringSoon }
   }
 
-  // ====== NEW PDF EXPORT using jsPDF + autoTable ======
   const exportContractsPDF = () => {
     if (filteredContracts.length === 0) {
       toast.error("No contracts to export")
@@ -236,7 +320,6 @@ export default function ContractsPage() {
       const themeColor = "#162d3c"
       const [r, g, b] = hexToRgb(themeColor)
 
-      // Header
       doc.setFillColor(r, g, b)
       doc.rect(0, 0, pageW, 14, "F")
       doc.setTextColor(255, 255, 255)
@@ -247,14 +330,12 @@ export default function ContractsPage() {
       doc.setFontSize(8)
       doc.text("AMC CONTRACTS", pageW - margin, 9, { align: "right" })
 
-      // Meta info
       const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
       const counts = getStatusCounts(filteredContracts)
       doc.setTextColor(40, 40, 40)
       doc.setFontSize(8)
       doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
 
-      // Table
       const tableData = filteredContracts.map(c => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
@@ -293,7 +374,6 @@ export default function ContractsPage() {
         margin: { left: margin, right: margin },
       })
 
-      // Footer
       const finalY = (doc as any).lastAutoTable.finalY + 8
       doc.setFontSize(7)
       doc.setTextColor(150, 150, 150)
@@ -471,6 +551,14 @@ export default function ContractsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={() => window.location.href = '/billing'}
+          limitValue={limitValue}
+        />
       </div>
     </DashboardLayout>
   )
