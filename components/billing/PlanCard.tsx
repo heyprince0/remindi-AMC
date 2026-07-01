@@ -39,7 +39,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
 
   return (
     <div
-      className={`relative rounded-2xl border-2 p-8 flex flex-col transition-all hover:shadow-xl ${
+      className={`relative rounded-2xl border-2 p-6 sm:p-8 flex flex-col w-full min-w-0 transition-all hover:shadow-xl ${
         isPopular ? 'border-blue-500 shadow-lg' : 'border-gray-200'
       }`}
     >
@@ -48,16 +48,18 @@ export default function PlanCard({ plan }: PlanCardProps) {
           Most Popular
         </span>
       )}
-      <div className="flex-1">
-        <h3 className="text-2xl font-bold text-gray-900">{name}</h3>
-        <p className="text-sm text-gray-500 mt-1">{description}</p>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{name}</h3>
+        <p className="text-sm text-gray-500 mt-1 leading-relaxed">{description}</p>
         <div className="mt-4">
           {isFree ? (
             <span className="text-3xl font-bold text-blue-600">FREE</span>
           ) : (
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold text-gray-900">{displayPrice}</span>
-              <span className="text-sm text-gray-500">/ {period}</span>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-3xl sm:text-4xl font-bold text-gray-900 whitespace-nowrap">
+                {displayPrice}
+              </span>
+              <span className="text-sm text-gray-500 whitespace-nowrap">/ {period}</span>
             </div>
           )}
         </div>
@@ -65,7 +67,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
           {features.map((feature, idx) => (
             <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
               <Check className="size-4 text-blue-600 shrink-0 mt-0.5" />
-              <span>{feature}</span>
+              <span className="leading-snug">{feature}</span>
             </li>
           ))}
         </ul>
