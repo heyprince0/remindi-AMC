@@ -18,7 +18,7 @@ interface PlanCardProps {
   };
 }
 
-// Helper to format price from paise to rupees
+// Helper to format price from paise to rupees with ₹ symbol
 const formatPrice = (paise: number) => {
   if (paise === 0) return 'FREE';
   return `₹${(paise / 100).toLocaleString('en-IN')}`;
@@ -29,7 +29,6 @@ export default function PlanCard({ plan }: PlanCardProps) {
     name,
     description,
     price,
-    currency = '₹',
     period,
     features,
     isPopular = false,
@@ -46,12 +45,12 @@ export default function PlanCard({ plan }: PlanCardProps) {
       }`}
     >
       {isPopular && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-1 rounded-full">
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-5 py-1 rounded-full whitespace-nowrap">
           Most Popular
         </span>
       )}
       <div className="flex-1">
-        <h3 className="text-xl font-bold text-gray-900">{name}</h3>
+        <h3 className="text-2xl font-bold text-gray-900">{name}</h3>
         <p className="text-sm text-gray-500 mt-1">{description}</p>
         <div className="mt-4">
           {isFree ? (
@@ -63,7 +62,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
             </div>
           )}
         </div>
-        <ul className="mt-6 space-y-2">
+        <ul className="mt-6 space-y-2.5">
           {features.map((feature, idx) => (
             <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
               <Check className="size-4 text-blue-600 shrink-0 mt-0.5" />
@@ -74,7 +73,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
       </div>
       <Button
         onClick={onSelect}
-        className={`mt-6 w-full py-2.5 text-sm font-semibold ${
+        className={`mt-8 w-full py-3 text-base font-semibold ${
           isPopular
             ? 'bg-blue-600 hover:bg-blue-700 text-white'
             : 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50'
