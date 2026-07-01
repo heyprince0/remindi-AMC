@@ -18,7 +18,6 @@ interface PlanCardProps {
   };
 }
 
-// Helper to format price from paise to rupees with ₹ symbol
 const formatPrice = (paise: number) => {
   if (paise === 0) return 'FREE';
   return `₹${(paise / 100).toLocaleString('en-IN')}`;
@@ -40,12 +39,12 @@ export default function PlanCard({ plan }: PlanCardProps) {
 
   return (
     <div
-      className={`relative rounded-2xl border-2 p-6 flex flex-col transition-all hover:shadow-xl ${
-        isPopular ? 'border-blue-500 shadow-md' : 'border-gray-200'
+      className={`relative rounded-2xl border-2 p-8 flex flex-col transition-all hover:shadow-xl ${
+        isPopular ? 'border-blue-500 shadow-lg' : 'border-gray-200'
       }`}
     >
       {isPopular && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-5 py-1 rounded-full whitespace-nowrap">
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-5 py-1.5 rounded-full whitespace-nowrap shadow">
           Most Popular
         </span>
       )}
@@ -56,9 +55,9 @@ export default function PlanCard({ plan }: PlanCardProps) {
           {isFree ? (
             <span className="text-3xl font-bold text-blue-600">FREE</span>
           ) : (
-            <div>
-              <span className="text-3xl font-bold text-gray-900">{displayPrice}</span>
-              <span className="text-sm text-gray-500 ml-1">/ {period}</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-4xl font-bold text-gray-900">{displayPrice}</span>
+              <span className="text-sm text-gray-500">/ {period}</span>
             </div>
           )}
         </div>
@@ -73,7 +72,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
       </div>
       <Button
         onClick={onSelect}
-        className={`mt-8 w-full py-3 text-base font-semibold ${
+        className={`mt-8 w-full py-3.5 text-base font-semibold ${
           isPopular
             ? 'bg-blue-600 hover:bg-blue-700 text-white'
             : 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50'
