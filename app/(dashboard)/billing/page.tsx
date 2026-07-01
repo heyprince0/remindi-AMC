@@ -6,19 +6,16 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-// Import components – they will receive real data
 import CurrentPlanCard from '@/components/billing/current-plan-card';
 import UsageIndicators from '@/components/billing/usage-indicators';
 import TeamSeatsIndicator from '@/components/billing/team-seats-indicator';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import UpgradePlanModal from '@/components/billing/upgrade-plan-modal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
-import { Button } from '@/components/ui/button';
 import { BillingCycle, Plan } from '@/lib/billing-types';
-
-// Helper to convert paise to rupees (for display)
-const formatPrice = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 
 export default function BillingPage() {
   const { user, orgId } = useAuth();
@@ -27,6 +24,7 @@ export default function BillingPage() {
   // Real data states
   const [subscription, setSubscription] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
+  const [freePlan, setFreePlan] = useState<any>(null); // fallback plan
   const [usage, setUsage] = useState({
     contracts: 0,
     customers: 0,
@@ -47,7 +45,16 @@ export default function BillingPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      // 1. Get current subscription
+      // 1. Get the Free plan (fallback)
+      const { data: freePlanData } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('id', 'free')
+        .single();
+
+      if (freePlanData) setFreePlan(freePlanData);
+
+      // 2. Get current subscription
       const { data: subData, error: subError } = await supabase
         .from('subscriptions')
         .select('*, plan:plan_id(*)')
@@ -56,15 +63,20 @@ export default function BillingPage() {
 
       if (subError) throw subError;
       setSubscription(subData);
-      if (subData?.plan) setPlan(subData.plan);
 
-      // 2. Get usage stats
+      // 3. Set the active plan (if subscription exists, use its plan, else use free plan)
+      if (subData?.plan) {
+        setPlan(subData.plan);
+      } else {
+        setPlan(freePlanData || null);
+      }
+
+      // 4. Get usage stats
       const [
         { count: contractsCount },
         { count: customersCount },
         { count: techniciansCount },
         { count: teamSeatsCount },
-        // For monthly quotations/invoices, we'll count records created this month
       ] = await Promise.all([
         supabase.from('contracts').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
         supabase.from('customers').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
@@ -72,7 +84,7 @@ export default function BillingPage() {
         supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('org_id', orgId),
       ]);
 
-      // Monthly quotations and invoices (current month)
+      // Monthly quotations and invoices
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
@@ -100,7 +112,7 @@ export default function BillingPage() {
         invoicesThisMonth: invoicesCount || 0,
       });
 
-      // 3. Get payment history (last 10 transactions)
+      // 5. Get payment history
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
         .select('*')
@@ -128,7 +140,7 @@ export default function BillingPage() {
   };
 
   const handleSelectUpgradePlan = (plan: Plan, billingCycle: BillingCycle) => {
-    // Will be implemented in next step (Razorpay integration)
+    // TODO: Implement Razorpay integration
     alert(`Upgrading to ${plan.name} (${billingCycle})`);
   };
 
@@ -147,11 +159,11 @@ export default function BillingPage() {
     );
   }
 
-  // Prepare data for child components
-  // CurrentPlanCard expects: subscription object with plan details
-  // UsageIndicators expects usage object
-  // TeamSeatsIndicator expects usage.teamSeats and plan.max_team_seats
-  // PaymentHistoryTable expects an array of transactions
+  // Determine if the user has an active subscription
+  const hasSubscription = subscription && subscription.status === 'active';
+
+  // Plan to use for usage limits: active plan or fallback to free plan
+  const activePlan = plan || freePlan;
 
   return (
     <DashboardLayout>
@@ -164,21 +176,35 @@ export default function BillingPage() {
           </p>
         </div>
 
-        {/* Current Plan Section */}
+        {/* Current Plan Section – shows either the subscription or a "No plan" card */}
         <section>
-          <CurrentPlanCard
-            subscription={subscription}
-            plan={plan}
-            onUpgrade={handleUpgrade}
-          />
+          {hasSubscription ? (
+            <CurrentPlanCard
+              subscription={subscription}
+              plan={subscription.plan}
+              onUpgrade={handleUpgrade}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>No Active Subscription</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4">
+                  You are currently on the <strong>Free Trial</strong> plan. Upgrade to unlock more features and higher limits.
+                </p>
+                <Button onClick={handleUpgrade}>Upgrade Now</Button>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
-        {/* Usage & Team Seats Grid */}
+        {/* Usage & Team Seats Grid – always show usage, using the active plan (or free plan) for limits */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <UsageIndicators usage={usage} plan={plan} />
+            <UsageIndicators usage={usage} plan={activePlan} />
           </div>
-          <TeamSeatsIndicator usage={usage} plan={plan} />
+          <TeamSeatsIndicator usage={usage} plan={activePlan} />
         </section>
 
         {/* Payment History */}
@@ -186,7 +212,7 @@ export default function BillingPage() {
           <PaymentHistoryTable transactions={paymentHistory} />
         </section>
 
-        {/* Demo Section: Limit Modals (kept for testing) */}
+        {/* Demo Section: Limit Modals */}
         <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
           <h3 className="mb-4 text-lg font-semibold text-foreground">
             🎯 Demo: Paywall Scenarios
