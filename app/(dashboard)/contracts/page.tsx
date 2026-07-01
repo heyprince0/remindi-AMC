@@ -39,6 +39,7 @@ import { AddContractModal } from "@/components/add-contract-modal"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
+import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -104,6 +105,9 @@ export default function ContractsPage() {
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
   const [limitValue, setLimitValue] = useState(0)
 
+  // --- Plan modal state ---
+  const [showPlanModal, setShowPlanModal] = useState(false)
+
   // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
@@ -111,7 +115,7 @@ export default function ContractsPage() {
         .from("memberships")
         .select("org_id")
         .eq("user_id", user.id)
-        .maybeSingle()   // use maybeSingle to avoid error if no row
+        .maybeSingle()
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
@@ -120,7 +124,6 @@ export default function ContractsPage() {
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
           } else {
-            // No membership, but we can still show an empty state
             setLoading(false)
           }
         })
@@ -146,7 +149,6 @@ export default function ContractsPage() {
           setSubscription(subData)
           setPlan(subData.plan)
         } else {
-          // fallback to free plan
           const { data: freePlan } = await supabase
             .from('subscription_plans')
             .select('*')
@@ -161,7 +163,7 @@ export default function ContractsPage() {
     fetchSubscription()
   }, [currentOrgId])
 
-  // --- Fetch contract count for limit checking ---
+  // --- Fetch contract count ---
   const fetchContractCount = async () => {
     if (!currentOrgId) return
     try {
@@ -180,7 +182,6 @@ export default function ContractsPage() {
   // --- Load contracts and count ---
   useEffect(() => {
     if (currentOrgId) {
-      // Both functions will set loading states, but we manage loading separately
       const loadData = async () => {
         setLoading(true)
         await Promise.all([loadContracts(), fetchContractCount()])
@@ -238,15 +239,25 @@ export default function ContractsPage() {
     setModalOpen(true)
   }
 
+  // --- Handle "View Plans" from limit modal ---
+  const handleViewPlans = () => {
+    setShowLimitModal(false)
+    setShowPlanModal(true)
+  }
+
+  // --- Handle plan selection (will integrate with Razorpay later) ---
+  const handleSelectPlan = (plan: any, billingCycle: any) => {
+    alert(`Selected plan: ${plan.name} (${billingCycle})`)
+    setShowPlanModal(false)
+  }
+
   // --- Modified handleAddClick with limit checks ---
   const handleAddClick = () => {
-    // Check if subscription is expired
     if (subscription && subscription.status === 'expired') {
       setLimitModalType('expired')
       setShowLimitModal(true)
       return
     }
-    // Check trial end date
     if (subscription && subscription.trial_end_date) {
       const trialEnd = new Date(subscription.trial_end_date)
       const today = new Date()
@@ -256,7 +267,6 @@ export default function ContractsPage() {
         return
       }
     }
-    // Check contract limit
     const maxContracts = plan?.max_contracts ?? 99999
     if (contractCount >= maxContracts) {
       setLimitModalType('contracts-limit')
@@ -264,13 +274,11 @@ export default function ContractsPage() {
       setShowLimitModal(true)
       return
     }
-    // All checks passed
     setEditingContract(null)
     setModalOpen(true)
   }
 
   const handleModalSuccess = () => {
-    // Refresh contracts and count after adding
     const refresh = async () => {
       setLoading(true)
       await Promise.all([loadContracts(), fetchContractCount()])
@@ -308,8 +316,6 @@ export default function ContractsPage() {
     } catch (error) {
       console.error('Error loading contracts:', error)
       toast.error('Failed to load contracts')
-    } finally {
-      // loading state is managed by the parent useEffect, so we don't set it here
     }
   }
 
@@ -574,8 +580,15 @@ export default function ContractsPage() {
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
           type={limitModalType}
-          onUpgrade={() => window.location.href = '/billing'}
+          onUpgrade={handleViewPlans}   // ✅ now opens the plan modal
           limitValue={limitValue}
+        />
+
+        {/* Plan Selection Modal */}
+        <PlanSelectionModal
+          isOpen={showPlanModal}
+          onClose={() => setShowPlanModal(false)}
+          onSelectPlan={handleSelectPlan}
         />
       </div>
     </DashboardLayout>
