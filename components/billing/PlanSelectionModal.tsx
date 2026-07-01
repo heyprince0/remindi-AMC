@@ -91,17 +91,6 @@ export default function PlanSelectionModal({
     return map[selectedCycle] || 0;
   };
 
-  const getSavings = (plan: Plan) => {
-    if (selectedCycle === 'monthly') return undefined;
-    const monthlyPrice = plan.price_monthly;
-    const cyclePrice = getPrice(plan);
-    const monthlyTotal = monthlyPrice * (selectedCycle === 'quarterly' ? 3 : selectedCycle === 'semi-annual' ? 6 : 12);
-    if (monthlyTotal === 0) return undefined;
-    const saved = ((monthlyTotal - cyclePrice) / monthlyTotal) * 100;
-    if (saved < 1) return undefined;
-    return `Save ${Math.round(saved)}%`;
-  };
-
   const handleSelect = (plan: Plan) => {
     onSelectPlan(plan, selectedCycle);
     onClose();
@@ -147,12 +136,11 @@ export default function PlanSelectionModal({
         </div>
 
         {/* Plan Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
           {plans.map((plan) => {
             const price = getPrice(plan);
             const isFree = price === 0;
             const isPopular = plan.id === 'pro';
-            const savings = getSavings(plan);
 
             return (
               <PlanCard
