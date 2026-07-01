@@ -13,7 +13,7 @@ import CurrentPlanCard from '@/components/billing/current-plan-card';
 import UsageIndicators from '@/components/billing/usage-indicators';
 import TeamSeatsIndicator from '@/components/billing/team-seats-indicator';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
-import UpgradePlanModal from '@/components/billing/upgrade-plan-modal';
+import PlanSelectionModal from '@/components/billing/PlanSelectionModal';   // ✅ changed
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
 import { BillingCycle, Plan } from '@/lib/billing-types';
 
@@ -137,6 +137,7 @@ export default function BillingPage() {
   const handleSelectUpgradePlan = (plan: Plan, billingCycle: BillingCycle) => {
     // TODO: Razorpay integration
     alert(`Upgrading to ${plan.name} (${billingCycle})`);
+    setShowUpgradeModal(false);
   };
   const handleOpenLimitModal = (type: LimitModalType) => {
     setLimitModalType(type);
@@ -232,7 +233,7 @@ export default function BillingPage() {
         </section>
 
         {/* Modals */}
-        <UpgradePlanModal
+        <PlanSelectionModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
           onSelectPlan={handleSelectUpgradePlan}
