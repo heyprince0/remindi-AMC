@@ -15,97 +15,277 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { supabase, type Contract, type Customer } from "@/lib/supabase"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
-import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Download } from "lucide-react"
 import { toast } from "sonner"
-import Link from "next/link"
+import { AddContractModal } from "@/components/add-contract-modal"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
+import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
+import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
-// Color-coded status badges — matches the convention used across the rest
-// of the app (e.g. payment status badges) instead of the generic
-// default/secondary variant the table was using before.
-const getStatusBadgeClass = (status: string | null | undefined) => {
-  const normalized = (status || "active").toLowerCase()
-  switch (normalized) {
-    case "active":
-      return "bg-green-100 text-green-800 hover:bg-green-100"
-    case "expiring soon":
-      return "bg-orange-100 text-orange-800 hover:bg-orange-100"
-    case "expired":
-      return "bg-red-100 text-red-800 hover:bg-red-100"
-    default:
-      return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-  }
+interface ContractDisplay extends Contract {
+  customerName: string
 }
 
-const getStatusLabel = (status: string | null | undefined) => {
-  if (!status) return "Active"
+function getStatusBadge(days: number, status: string) {
+  if (days < 0) {
+    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
+  } else if (days === 0) {
+    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
+  } else if (days <= 3) {
+    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Expiring Soon</Badge>
+  } else if (status === "active") {
+    return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Active</Badge>
+  }
+  return <Badge variant="outline">{status}</Badge>
+}
+
+function getStatusLabel(days: number, status: string): string {
+  if (days < 0) return 'Expired'
+  if (days === 0) return 'Today Servicing'
+  if (days <= 3) return 'Expiring Soon'
+  if (status === 'active') return 'Active'
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+function getFilterStatusValue(days: number, status: string): string {
+  if (days < 0) return 'expired'
+  if (days === 0) return 'today-servicing'
+  if (days <= 3) return 'expiring-soon'
+  if (status === 'active') return 'active'
   return status
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [22, 45, 60]
 }
 
 export default function ContractsPage() {
   const { user } = useAuth()
-  const [contracts, setContracts] = useState<(Contract & { customer_name?: string })[]>([])
-  const [filteredContracts, setFilteredContracts] = useState<(Contract & { customer_name?: string })[]>([])
+  const [contracts, setContracts] = useState<ContractDisplay[]>([])
+  const [filteredContracts, setFilteredContracts] = useState<ContractDisplay[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [contractToDelete, setContractToDelete] = useState<ContractDisplay | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits — unchanged from the working version
-  const { maxContracts, currentContractCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
-
-  // Limit modal state — unchanged from the working version
+  // --- Billing & limit states ---
+  const [subscription, setSubscription] = useState<any>(null)
+  const [plan, setPlan] = useState<any>(null)
+  const [contractCount, setContractCount] = useState(0)
   const [showLimitModal, setShowLimitModal] = useState(false)
-  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
-  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+  const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
+  const [limitValue, setLimitValue] = useState(0)
 
+  // --- Plan modal state ---
+  const [showPlanModal, setShowPlanModal] = useState(false)
+
+  // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
         .from("memberships")
         .select("org_id")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
             toast.error("Could not determine your organization")
+            setLoading(false)
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+          } else {
+            setLoading(false)
           }
         })
+    } else {
+      setLoading(false)
     }
   }, [user?.id])
 
+  // --- Fetch subscription and plan ---
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!currentOrgId) return
+      try {
+        const { data: subData, error } = await supabase
+          .from('subscriptions')
+          .select('*, plan:plan_id(*)')
+          .eq('org_id', currentOrgId)
+          .maybeSingle()
+
+        if (error) throw error
+
+        if (subData) {
+          setSubscription(subData)
+          setPlan(subData.plan)
+        } else {
+          const { data: freePlan } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('id', 'free')
+            .single()
+          setPlan(freePlan)
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error)
+      }
+    }
+    fetchSubscription()
+  }, [currentOrgId])
+
+  // --- Fetch contract count ---
+  const fetchContractCount = async () => {
+    if (!currentOrgId) return
+    try {
+      const { count, error } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', currentOrgId)
+
+      if (error) throw error
+      setContractCount(count || 0)
+    } catch (error) {
+      console.error('Error fetching contract count:', error)
+    }
+  }
+
+  // --- Load contracts and count ---
   useEffect(() => {
     if (currentOrgId) {
-      loadContracts()
+      const loadData = async () => {
+        setLoading(true)
+        await Promise.all([loadContracts(), fetchContractCount()])
+        setLoading(false)
+      }
+      loadData()
     }
   }, [currentOrgId])
 
-  // Check limits on page load — unchanged from the working version
-  useEffect(() => {
-    if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-    } else if (maxContracts > 0 && currentContractCount >= maxContracts) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your contract limit",
-        description: `Your current plan allows a maximum of ${maxContracts} contracts. You have already created ${currentContractCount}. Upgrade to manage more contracts.`,
-      })
-      setShowLimitModal(true)
+  const handleFilter = () => {
+    let filtered = contracts
+    if (searchTerm) {
+      filtered = filtered.filter(c =>
+        c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.customerName.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     }
-  }, [limitsLoading, status, maxContracts, currentContractCount])
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(c => {
+        const days = getDaysUntilService(c.next_service_date)
+        const statusLabel = getFilterStatusValue(days, c.status)
+        return statusLabel === filterStatus
+      })
+    }
+    setFilteredContracts(filtered)
+  }
+
+  useEffect(() => {
+    handleFilter()
+  }, [searchTerm, filterStatus, contracts])
+
+  const handleDelete = async () => {
+    if (!contractToDelete || !currentOrgId) return
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .delete()
+        .eq('id', contractToDelete.id)
+        .eq('org_id', currentOrgId)
+      if (error) throw error
+      setContracts(contracts.filter(c => c.id !== contractToDelete.id))
+      toast.success('Contract deleted successfully')
+      setDeleteDialogOpen(false)
+      setContractToDelete(null)
+    } catch (error) {
+      toast.error('Failed to delete contract')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleEditClick = (contract: ContractDisplay) => {
+    setEditingContract(contract as Contract)
+    setModalOpen(true)
+  }
+
+  // --- Handle "View Plans" from limit modal ---
+  const handleViewPlans = () => {
+    setShowLimitModal(false)
+    setShowPlanModal(true)
+  }
+
+  // --- Handle plan selection (will integrate with Razorpay later) ---
+  const handleSelectPlan = (plan: any, billingCycle: any) => {
+    alert(`Selected plan: ${plan.name} (${billingCycle})`)
+    setShowPlanModal(false)
+  }
+
+  // --- Modified handleAddClick with limit checks ---
+  const handleAddClick = () => {
+    if (subscription && subscription.status === 'expired') {
+      setLimitModalType('expired')
+      setShowLimitModal(true)
+      return
+    }
+    if (subscription && subscription.trial_end_date) {
+      const trialEnd = new Date(subscription.trial_end_date)
+      const today = new Date()
+      if (trialEnd < today && subscription.status !== 'active') {
+        setLimitModalType('expired')
+        setShowLimitModal(true)
+        return
+      }
+    }
+    const maxContracts = plan?.max_contracts ?? 99999
+    if (contractCount >= maxContracts) {
+      setLimitModalType('contracts-limit')
+      setLimitValue(maxContracts)
+      setShowLimitModal(true)
+      return
+    }
+    setEditingContract(null)
+    setModalOpen(true)
+  }
+
+  const handleModalSuccess = () => {
+    const refresh = async () => {
+      setLoading(true)
+      await Promise.all([loadContracts(), fetchContractCount()])
+      setLoading(false)
+    }
+    refresh()
+  }
 
   const loadContracts = async () => {
     try {
@@ -118,123 +298,168 @@ export default function ContractsPage() {
 
       if (contractsError) throw contractsError
 
-      // Fetch customer names
-      const customerIds = [...new Set(contractsData.map(c => c.customer_id).filter(Boolean))]
-      let customerMap: Record<string, string> = {}
-      if (customerIds.length > 0) {
-        const { data: customersData } = await supabase
-          .from('customers')
-          .select('id, name')
-          .in('id', customerIds)
-        if (customersData) {
-          customerMap = customersData.reduce((acc, c) => { acc[c.id] = c.name; return acc }, {} as Record<string, string>)
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('org_id', currentOrgId)
+
+      const displayed = (contractsData as Contract[]).map(contract => {
+        const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        return {
+          ...contract,
+          customerName: customer?.name || 'Unknown'
         }
-      }
+      })
 
-      const contractsWithNames = contractsData.map(c => ({
-        ...c,
-        customer_name: c.customer_id ? customerMap[c.customer_id] || 'Unknown' : '—'
-      }))
-
-      setContracts(contractsWithNames)
-      setFilteredContracts(contractsWithNames)
+      setContracts(displayed)
+      setFilteredContracts(displayed)
     } catch (error) {
       console.error('Error loading contracts:', error)
       toast.error('Failed to load contracts')
-    } finally {
-      setLoading(false)
     }
   }
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
-    const filtered = contracts.filter(c =>
-      c.contract_name.toLowerCase().includes(term.toLowerCase()) ||
-      (c.customer_name && c.customer_name.toLowerCase().includes(term.toLowerCase())) ||
-      c.frequency_days?.toString().includes(term)
-    )
-    setFilteredContracts(filtered)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!currentOrgId) return
-    if (confirm('Are you sure you want to delete this contract?')) {
-      try {
-        const { error } = await supabase
-          .from('contracts')
-          .delete()
-          .eq('id', id)
-          .eq('org_id', currentOrgId)
-        if (error) throw error
-        setContracts(contracts.filter(c => c.id !== id))
-        toast.success('Contract deleted successfully')
-      } catch (error) {
-        console.error('Error deleting contract:', error)
-        toast.error('Failed to delete contract')
-      }
-    }
-  }
-
-  const handleAddClick = () => {
-    // Check limits before navigating to add form — unchanged
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-      return
-    }
-    if (maxContracts > 0 && currentContractCount >= maxContracts) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your contract limit",
-        description: `Your current plan allows a maximum of ${maxContracts} contracts. You have already created ${currentContractCount}. Upgrade to manage more contracts.`,
-      })
-      setShowLimitModal(true)
-      return
-    }
-    window.location.href = '/contracts/new'
-  }
-
-  const handleUpgrade = () => {
-    window.location.href = '/billing'
-  }
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
+  const getStatusCounts = (data: ContractDisplay[]) => {
+    let active = 0, expired = 0, todayServicing = 0, expiringSoon = 0
+    data.forEach(c => {
+      const days = getDaysUntilService(c.next_service_date)
+      if (days < 0) expired++
+      else if (days === 0) todayServicing++
+      else if (days <= 3) expiringSoon++
+      else if (c.status === 'active') active++
     })
+    return { active, expired, todayServicing, expiringSoon }
+  }
+
+  const exportContractsPDF = () => {
+    if (filteredContracts.length === 0) {
+      toast.error("No contracts to export")
+      return
+    }
+
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+      const pageW = 297
+      const margin = 15
+      const themeColor = "#162d3c"
+      const [r, g, b] = hexToRgb(themeColor)
+
+      doc.setFillColor(r, g, b)
+      doc.rect(0, 0, pageW, 14, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.text("Contracts Report", margin, 9)
+      doc.setTextColor(200, 200, 200)
+      doc.setFontSize(8)
+      doc.text("AMC CONTRACTS", pageW - margin, 9, { align: "right" })
+
+      const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      const counts = getStatusCounts(filteredContracts)
+      doc.setTextColor(40, 40, 40)
+      doc.setFontSize(8)
+      doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
+
+      const tableData = filteredContracts.map(c => {
+        const days = getDaysUntilService(c.next_service_date)
+        const statusLabel = getStatusLabel(days, c.status)
+        return [
+          c.contract_name || '—',
+          c.customerName || '—',
+          `${c.frequency_days} days`,
+          c.contracts_price != null ? `₹${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
+          c.start_date || '—',
+          c.next_service_date || '—',
+          statusLabel
+        ]
+      })
+
+      autoTable(doc, {
+        startY: 28,
+        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Start Date", "End Date", "Status"]],
+        body: tableData,
+        theme: "striped",
+        headStyles: {
+          fillColor: [r, g, b],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+        },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      const finalY = (doc as any).lastAutoTable.finalY + 8
+      doc.setFontSize(7)
+      doc.setTextColor(150, 150, 150)
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, finalY, { align: "center" })
+
+      doc.save(`Contracts_Report_${new Date().toISOString().split('T')[0]}.pdf`)
+      toast.success("PDF exported successfully")
+    } catch (error) {
+      console.error("Error exporting PDF:", error)
+      toast.error("Failed to export PDF")
+    }
   }
 
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header — same pattern as Customers page */}
+        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
-            <p className="text-muted-foreground">Manage your service contracts and renewal schedules</p>
+            <p className="text-muted-foreground">Manage your AMC contracts and service agreements</p>
           </div>
-          <Button onClick={handleAddClick}>
-            <Plus className="mr-2 size-4" />
-            Add Contract
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={exportContractsPDF} disabled={filteredContracts.length === 0}>
+              <Download className="mr-2 size-4" />
+              Export PDF
+            </Button>
+            <Button onClick={handleAddClick}>
+              <Plus className="mr-2 size-4" />
+              Add Contract
+            </Button>
+          </div>
         </div>
 
-        {/* Search — identical Card/Input pattern as Customers page */}
+        {/* Filters */}
         <Card>
           <CardContent className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search contracts by name, customer, or frequency..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search contracts..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="today-servicing">Today Servicing</SelectItem>
+                    <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -244,93 +469,126 @@ export default function ContractsPage() {
           <CardHeader>
             <CardTitle>All Contracts</CardTitle>
             <CardDescription>
-              You have {filteredContracts.length} contracts {searchTerm ? 'matching your search' : 'in total'}
+              You have {filteredContracts.length} contracts {filterStatus !== 'all' ? 'matching filters' : 'in total'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Loading contracts...</div>
             ) : filteredContracts.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  {contracts.length === 0
-                    ? 'No contracts yet. Create your first contract!'
-                    : 'No contracts matching your filters'}
-                </p>
-              </div>
+              <div className="text-center py-8 text-muted-foreground">No contracts found</div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-border">
-                      <TableHead className="font-medium text-foreground">Contract Name</TableHead>
-                      <TableHead className="font-medium text-foreground">Customer</TableHead>
-                      <TableHead className="font-medium text-foreground">Frequency</TableHead>
-                      <TableHead className="font-medium text-foreground">Next Service</TableHead>
-                      <TableHead className="font-medium text-foreground">Price</TableHead>
-                      <TableHead className="font-medium text-foreground">Status</TableHead>
-                      <TableHead className="w-[80px] font-medium text-foreground">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredContracts.map((contract) => (
-                      <TableRow
-                        key={contract.id}
-                        className="border-b border-border hover:bg-muted/50 transition-colors"
-                      >
-                        <TableCell className="font-medium text-foreground">{contract.contract_name}</TableCell>
-                        <TableCell className="text-muted-foreground">{contract.customer_name || '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">Every {contract.frequency_days} days</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(contract.next_service_date)}</TableCell>
-                        <TableCell className="text-foreground">
-                          {contract.contracts_price ? `₹${Number(contract.contracts_price).toLocaleString()}` : '—'}
-                        </TableCell>
+              <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contract Name</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Frequency</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Start Date</TableHead>
+                    <TableHead>End Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[70px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredContracts.map((contract) => {
+                    const days = getDaysUntilService(contract.next_service_date)
+                    return (
+                      <TableRow key={contract.id}>
+                        <TableCell className="font-medium">{contract.contract_name}</TableCell>
+                        <TableCell>{contract.customerName}</TableCell>
+                        <TableCell>{contract.frequency_days} days</TableCell>
                         <TableCell>
-                          <Badge className={getStatusBadgeClass(contract.status)}>
-                            {getStatusLabel(contract.status)}
-                          </Badge>
+                          {contract.contracts_price != null
+                            ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
+                            : '—'}
                         </TableCell>
+                        <TableCell>{contract.start_date}</TableCell>
+                        <TableCell>{contract.next_service_date}</TableCell>
+                        <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="size-4" />
-                                  <span className="sr-only">Actions</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem asChild>
-                                  <Link href={`/contracts/${contract.id}`}>
-                                    <Eye className="mr-2 size-4" />
-                                    View
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDelete(contract.id)} className="text-red-600">
-                                  <Trash2 className="mr-2 size-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditClick(contract)}
+                              title="Edit Contract"
+                            >
+                              <Edit className="size-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete Contract"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    )
+                  })}
+                </TableBody>
+              </Table>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Limit Modal — unchanged from the working version */}
+        {/* Add/Edit Contract Modal */}
+        {user && currentOrgId && (
+          <AddContractModal
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+            onSuccess={handleModalSuccess}
+            editingContract={editingContract}
+            userId={user.id}
+            orgId={currentOrgId}
+          />
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Contract</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {contractToDelete?.contract_name}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Limit Reached Modal */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
           type={limitModalType}
-          onUpgrade={handleUpgrade}
-          customTitle={limitModalCustom.title}
-          customDescription={limitModalCustom.description}
+          onUpgrade={handleViewPlans}   // ✅ now opens the plan modal
+          limitValue={limitValue}
+        />
+
+        {/* Plan Selection Modal */}
+        <PlanSelectionModal
+          isOpen={showPlanModal}
+          onClose={() => setShowPlanModal(false)}
+          onSelectPlan={handleSelectPlan}
         />
       </div>
     </DashboardLayout>
