@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { createClient } from '@supabase/supabase-js';
 
-// Trim environment variables to avoid hidden newlines
 const keyId = process.env.RAZORPAY_KEY_ID?.trim()!;
 const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()!;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()!;
@@ -19,7 +18,6 @@ export async function POST(req: NextRequest) {
   try {
     const { planId, billingCycle, orgId } = await req.json();
 
-    // Validate required fields
     if (!planId || !billingCycle || !orgId) {
       return NextResponse.json(
         { error: 'Missing required fields: planId, billingCycle, orgId' },
@@ -27,7 +25,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Fetch plan details
+    // --- Validate org exists ---
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('id', orgId)
+      .single();
+
+    if (orgError || !org) {
+      console.error('[Org check error]', orgError);
+      return NextResponse.json(
+        { error: `Organization not found: ${orgId}` },
+        { status: 400 }
+      );
+    }
+
+    // 1. Fetch plan
     const { data: plan, error: planError } = await supabase
       .from('subscription_plans')
       .select('*')
@@ -39,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    // 2. Determine amount in paise
+    // 2. Determine amount
     const amountMap: Record<string, number> = {
       monthly: plan.price_monthly,
       quarterly: plan.price_quarterly,
@@ -72,13 +85,14 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       console.error('[Insert transaction error]', insertError);
+      // Return the actual error message for debugging
       return NextResponse.json(
         { error: `Database insert failed: ${insertError.message}` },
         { status: 500 }
       );
     }
 
-    // 5. Return success with trimmed public key
+    // 5. Return success
     const publicKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || keyId;
     return NextResponse.json({
       orderId: order.id,
