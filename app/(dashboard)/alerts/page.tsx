@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { AlertTriangle, Clock, CalendarClock, CheckCircle2 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 import { toast } from "sonner"
@@ -101,6 +103,14 @@ export default function ServiceAlertsPage() {
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // Plan limits
+  const { status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -122,6 +132,16 @@ export default function ServiceAlertsPage() {
   useEffect(() => {
     if (currentOrgId) loadServices()
   }, [currentOrgId])
+
+  // Check limits on page load
+  useEffect(() => {
+    if (limitsLoading || !currentOrgId) return
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+    }
+  }, [limitsLoading, status, currentOrgId])
 
   const loadServices = async () => {
     try {
@@ -176,6 +196,10 @@ export default function ServiceAlertsPage() {
   }
 
   const handleModalSuccess = () => loadServices()
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
+  }
 
   return (
     <DashboardLayout>
@@ -310,6 +334,16 @@ export default function ServiceAlertsPage() {
             onSuccess={handleModalSuccess}
           />
         )}
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
+        />
       </div>
     </DashboardLayout>
   )
