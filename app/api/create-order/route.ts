@@ -16,11 +16,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Log the raw body
     const rawBody = await req.text();
     console.log('📥 Raw request body:', rawBody);
 
-    // 2. Parse JSON
     let body;
     try {
       body = JSON.parse(rawBody);
@@ -32,14 +30,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Destructure and trim each value
     const planId = body.planId?.trim();
     const billingCycle = body.billingCycle?.trim();
     const orgId = body.orgId?.trim();
 
     console.log('📥 Parsed & trimmed:', { planId, billingCycle, orgId });
 
-    // 4. Validate
     if (!planId || !billingCycle || !orgId) {
       return NextResponse.json(
         { error: 'Missing required fields: planId, billingCycle, orgId' },
@@ -87,11 +83,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Free plan does not require payment' }, { status: 400 });
     }
 
+    // ✅ FIX: receipt must be <= 40 characters
+    // Generate a short unique receipt (e.g., "ord_k3x9p2_4f7g")
+    const shortReceipt = `ord_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+
     // 7. Create Razorpay order
     const order = await razorpay.orders.create({
       amount,
       currency: 'INR',
-      receipt: `order_${orgId}_${Date.now()}`,
+      receipt: shortReceipt,  // 👈 now under 40 chars
       notes: { orgId, planId, billingCycle },
     });
 
