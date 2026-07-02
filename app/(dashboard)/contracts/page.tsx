@@ -28,6 +28,28 @@ import { Plus, Search, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 
+// Color-coded status badges — matches the convention used across the rest
+// of the app (e.g. payment status badges) instead of the generic
+// default/secondary variant the table was using before.
+const getStatusBadgeClass = (status: string | null | undefined) => {
+  const normalized = (status || "active").toLowerCase()
+  switch (normalized) {
+    case "active":
+      return "bg-green-100 text-green-800 hover:bg-green-100"
+    case "expiring soon":
+      return "bg-orange-100 text-orange-800 hover:bg-orange-100"
+    case "expired":
+      return "bg-red-100 text-red-800 hover:bg-red-100"
+    default:
+      return "bg-gray-100 text-gray-800 hover:bg-gray-100"
+  }
+}
+
+const getStatusLabel = (status: string | null | undefined) => {
+  if (!status) return "Active"
+  return status
+}
+
 export default function ContractsPage() {
   const { user } = useAuth()
   const [contracts, setContracts] = useState<(Contract & { customer_name?: string })[]>([])
@@ -36,10 +58,10 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
+  // Plan limits — unchanged from the working version
   const { maxContracts, currentContractCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
-  // Limit modal state
+  // Limit modal state — unchanged from the working version
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
@@ -68,7 +90,7 @@ export default function ContractsPage() {
     }
   }, [currentOrgId])
 
-  // Check limits on page load
+  // Check limits on page load — unchanged from the working version
   useEffect(() => {
     if (limitsLoading || !currentOrgId) return
     if (status === 'expired' || status === 'cancelled') {
@@ -154,7 +176,7 @@ export default function ContractsPage() {
   }
 
   const handleAddClick = () => {
-    // Check limits before navigating to add form
+    // Check limits before navigating to add form — unchanged
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
@@ -170,7 +192,6 @@ export default function ContractsPage() {
       setShowLimitModal(true)
       return
     }
-    // Otherwise navigate to add contract page
     window.location.href = '/contracts/new'
   }
 
@@ -190,7 +211,7 @@ export default function ContractsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
+        {/* Page Header — same pattern as Customers page */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
@@ -202,7 +223,7 @@ export default function ContractsPage() {
           </Button>
         </div>
 
-        {/* Search */}
+        {/* Search — identical Card/Input pattern as Customers page */}
         <Card>
           <CardContent className="p-4">
             <div className="relative">
@@ -238,32 +259,35 @@ export default function ContractsPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border border-border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Contract Name</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Frequency</TableHead>
-                      <TableHead>Next Service</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                    <TableRow className="border-b border-border">
+                      <TableHead className="font-medium text-foreground">Contract Name</TableHead>
+                      <TableHead className="font-medium text-foreground">Customer</TableHead>
+                      <TableHead className="font-medium text-foreground">Frequency</TableHead>
+                      <TableHead className="font-medium text-foreground">Next Service</TableHead>
+                      <TableHead className="font-medium text-foreground">Price</TableHead>
+                      <TableHead className="font-medium text-foreground">Status</TableHead>
+                      <TableHead className="w-[80px] font-medium text-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredContracts.map((contract) => (
-                      <TableRow key={contract.id}>
-                        <TableCell className="font-medium">{contract.contract_name}</TableCell>
-                        <TableCell>{contract.customer_name || '—'}</TableCell>
-                        <TableCell>Every {contract.frequency_days} days</TableCell>
-                        <TableCell>{formatDate(contract.next_service_date)}</TableCell>
-                        <TableCell>
+                      <TableRow
+                        key={contract.id}
+                        className="border-b border-border hover:bg-muted/50 transition-colors"
+                      >
+                        <TableCell className="font-medium text-foreground">{contract.contract_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{contract.customer_name || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">Every {contract.frequency_days} days</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(contract.next_service_date)}</TableCell>
+                        <TableCell className="text-foreground">
                           {contract.contracts_price ? `₹${Number(contract.contracts_price).toLocaleString()}` : '—'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={contract.status === 'active' ? 'default' : 'secondary'}>
-                            {contract.status || 'Active'}
+                          <Badge className={getStatusBadgeClass(contract.status)}>
+                            {getStatusLabel(contract.status)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -299,7 +323,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* Limit Modal */}
+        {/* Limit Modal — unchanged from the working version */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
