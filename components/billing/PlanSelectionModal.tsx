@@ -30,7 +30,7 @@ interface Plan {
 interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  orgId: string; // required to create the order
+  orgId?: string; // optional – we'll fetch if not provided
 }
 
 const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
@@ -40,7 +40,6 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
-// Load Razorpay script only once
 let razorpayLoaded = false;
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -60,12 +59,59 @@ const loadRazorpayScript = () => {
 export default function PlanSelectionModal({
   isOpen,
   onClose,
-  orgId,
+  orgId: propOrgId,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [orgId, setOrgId] = useState<string | undefined>(propOrgId);
+  const [isFetchingOrg, setIsFetchingOrg] = useState(false);
+
+  // Fetch orgId from memberships if not provided
+  useEffect(() => {
+    const fetchOrgId = async () => {
+      if (propOrgId) {
+        setOrgId(propOrgId);
+        return;
+      }
+      if (!isOpen) return;
+
+      setIsFetchingOrg(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.error('No user logged in');
+          return;
+        }
+
+        const { data: membership, error } = await supabase
+          .from('memberships')
+          .select('org_id')
+          .eq('user_id', user.id)
+          .maybeSingle(); // use maybeSingle to avoid error if none
+
+        if (error) {
+          console.error('Error fetching membership:', error);
+          toast.error('Could not retrieve organization information.');
+          return;
+        }
+
+        if (membership?.org_id) {
+          setOrgId(membership.org_id);
+        } else {
+          console.error('No organization found for this user.');
+          toast.error('You are not assigned to any organization.');
+        }
+      } catch (err) {
+        console.error('Failed to fetch org id:', err);
+      } finally {
+        setIsFetchingOrg(false);
+      }
+    };
+
+    fetchOrgId();
+  }, [propOrgId, isOpen]);
 
   // Fetch plans from Supabase
   useEffect(() => {
@@ -94,7 +140,7 @@ export default function PlanSelectionModal({
     if (isOpen) fetchPlans();
   }, [isOpen]);
 
-  // Helper functions for pricing/discounts (unchanged)
+  // Helper functions for pricing/discounts
   const getPrice = (plan: Plan) => {
     const map: Record<BillingCycle, number> = {
       monthly: plan.price_monthly,
@@ -127,6 +173,11 @@ export default function PlanSelectionModal({
   // Main handler – creates order and opens Razorpay
   const handleSelect = async (plan: Plan) => {
     if (isProcessing) return;
+    if (!orgId) {
+      toast.error('Organization ID not found. Please refresh and try again.');
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
@@ -176,14 +227,11 @@ export default function PlanSelectionModal({
           // optional: prefill user contact info (you can fetch from session)
         },
         handler: function (response: any) {
-          // Payment successful – webhook will activate the subscription.
-          // We just close the modal and show a success toast.
           toast.success('Payment successful! Your subscription is being activated.');
           onClose();
         },
         modal: {
           ondismiss: function () {
-            // User closed the modal without completing payment
             toast.info('Payment cancelled.');
           },
         },
@@ -199,9 +247,8 @@ export default function PlanSelectionModal({
     }
   };
 
-  // ... loading and empty states (same as before)
-
-  if (loading) {
+  // Loading states: plans loading or fetching org
+  if (loading || isFetchingOrg) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="!max-w-4xl w-[95vw]">
@@ -226,7 +273,6 @@ export default function PlanSelectionModal({
     );
   }
 
-  // Main JSX – unchanged except we pass `onSelect` which now calls the async handler
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
@@ -279,8 +325,8 @@ export default function PlanSelectionModal({
                   isFree,
                   discountPercent,
                   savingsAmount,
-                  onSelect: () => handleSelect(plan), // now calls async function
-                  disabled: isProcessing, // optional: disable button while processing
+                  onSelect: () => handleSelect(plan),
+                  disabled: isProcessing,
                 }}
               />
             );
