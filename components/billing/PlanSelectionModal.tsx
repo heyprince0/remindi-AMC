@@ -31,6 +31,7 @@ interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   orgId?: string;
+  onSuccess?: () => void;   // 👈 added
 }
 
 const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
@@ -60,6 +61,7 @@ export default function PlanSelectionModal({
   isOpen,
   onClose,
   orgId: propOrgId,
+  onSuccess,   // 👈 added
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +175,6 @@ export default function PlanSelectionModal({
   const handleSelect = async (plan: Plan) => {
     if (isProcessing) return;
 
-    // Guard against missing orgId (including empty string)
     if (!orgId || orgId.trim() === '') {
       toast.error('Organization ID not found. Please refresh and try again.');
       return;
@@ -196,7 +197,6 @@ export default function PlanSelectionModal({
         return;
       }
 
-      // Build payload and log it
       const payload = {
         planId: plan.id,
         billingCycle: selectedCycle,
@@ -227,6 +227,7 @@ export default function PlanSelectionModal({
         prefill: {},
         handler: function (response: any) {
           toast.success('Payment successful! Your subscription is being activated.');
+          onSuccess?.();   // 👈 call refresh callback
           onClose();
         },
         modal: {
@@ -322,7 +323,7 @@ export default function PlanSelectionModal({
                   discountPercent,
                   savingsAmount,
                   onSelect: () => handleSelect(plan),
-                  disabled: isProcessing || !orgId, // 👈 disable if orgId missing
+                  disabled: isProcessing || !orgId,
                 }}
               />
             );
