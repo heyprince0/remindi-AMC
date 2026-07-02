@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, Search, MoreHorizontal, Eye, Edit, Phone, MapPin, FileText, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
@@ -29,6 +31,14 @@ export default function CustomersPage() {
 
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // Plan limits
+  const { maxCustomers, currentCustomerCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -53,6 +63,23 @@ export default function CustomersPage() {
       loadCustomers()
     }
   }, [currentOrgId])
+
+  // Check limits on page load
+  useEffect(() => {
+    if (limitsLoading || !currentOrgId) return
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+    } else if (maxCustomers > 0 && currentCustomerCount >= maxCustomers) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your customer limit",
+        description: `Your current plan allows a maximum of ${maxCustomers} customers. You have already created ${currentCustomerCount}. Upgrade to manage more customers.`,
+      })
+      setShowLimitModal(true)
+    }
+  }, [limitsLoading, status, maxCustomers, currentCustomerCount])
 
   const loadCustomers = async () => {
     try {
@@ -118,6 +145,23 @@ export default function CustomersPage() {
   }
 
   const handleAddClick = () => {
+    // Check limits before opening modal
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return
+    }
+    if (maxCustomers > 0 && currentCustomerCount >= maxCustomers) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your customer limit",
+        description: `Your current plan allows a maximum of ${maxCustomers} customers. You have already created ${currentCustomerCount}. Upgrade to manage more customers.`,
+      })
+      setShowLimitModal(true)
+      return
+    }
+    // Otherwise open the add modal
     setEditingCustomer(null)
     setModalOpen(true)
   }
@@ -129,6 +173,10 @@ export default function CustomersPage() {
 
   const handleModalSuccess = () => {
     loadCustomers()
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
   }
 
   return (
@@ -241,6 +289,16 @@ export default function CustomersPage() {
             orgId={currentOrgId}
           />
         )}
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
+        />
       </div>
     </DashboardLayout>
   )
