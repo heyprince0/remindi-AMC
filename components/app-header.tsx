@@ -35,26 +35,32 @@ export function AppHeader() {
   // Plan limits for trial detection
   const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
 
-  // Real trial countdown — usePlanLimits doesn't expose trial_end_date, so
-  // we fetch it directly here (this component already talks to Supabase
-  // directly for notifications, so this follows the same pattern).
-  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null)
-  const [trialDateLoading, setTrialDateLoading] = useState(true)
+  // --- Ref to persist trial data across re‑mounts / background refetches ---
+  const trialCache = useRef<{
+    isTrial: boolean
+    daysRemaining: number | null
+    planName: string | null
+    hasEverLoaded: boolean // marks if we've ever received data
+  }>({
+    isTrial: false,
+    daysRemaining: null,
+    planName: null,
+    hasEverLoaded: false,
+  })
+
+  // Update the cache whenever status or planName changes
+  useEffect(() => {
+    if (status) {
+      trialCache.current.isTrial = status === 'trial'
+      trialCache.current.planName = planName || null
+      trialCache.current.hasEverLoaded = true
+    }
+  }, [status, planName])
 
   // Modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
-  // FIXED: tracks whether limits/trial data has loaded at least once.
-  // usePlanLimits' isLoading (and orgId itself) can flip briefly on every
-  // page navigation as auth/session state re-checks — previously this
-  // caused the trial banner to disappear and the skeleton to flash back
-  // in every time you moved to a new page. Once loaded once, we keep
-  // showing the last known banner state during any background refetch.
-  const hasLoadedLimitsOnce = useRef(false)
-  if (!limitsLoading && orgId) {
-    hasLoadedLimitsOnce.current = true
-  }
-
+  // Load notifications (unchanged)
   const loadAlerts = async () => {
     if (!user?.id || !orgId) return
     try {
@@ -116,10 +122,9 @@ export function AppHeader() {
     }
   }
 
-  // Fetch the real trial_end_date so the countdown is accurate instead of hardcoded
+  // Load real trial_end_date and update cache
   const loadTrialDate = async () => {
     if (!orgId) return
-    setTrialDateLoading(true)
     try {
       const { data, error } = await supabase
         .from("subscriptions")
@@ -135,15 +140,14 @@ export function AppHeader() {
         end.setHours(0, 0, 0, 0)
         today.setHours(0, 0, 0, 0)
         const diffDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        setTrialDaysRemaining(Math.max(diffDays, 0))
+        trialCache.current.daysRemaining = Math.max(diffDays, 0)
       } else {
-        setTrialDaysRemaining(null)
+        trialCache.current.daysRemaining = null
       }
+      trialCache.current.hasEverLoaded = true
     } catch (error) {
       console.error("Error loading trial date:", error)
-      setTrialDaysRemaining(null)
-    } finally {
-      setTrialDateLoading(false)
+      trialCache.current.daysRemaining = null
     }
   }
 
@@ -179,13 +183,18 @@ export function AppHeader() {
     loadTrialDate()
   }
 
-  const showTrialBanner = status === 'trial' && (!limitsLoading || hasLoadedLimitsOnce.current)
+  // ---- Banner visibility ----
+  // Show banner if we have ever loaded trial data and the cached status is 'trial'
+  const showBanner = trialCache.current.hasEverLoaded && trialCache.current.isTrial
 
-  // Urgency-based styling — the banner escalates visually as the trial
-  // gets closer to ending, instead of staying the same calm blue the
-  // whole time (which undersells the urgency near the end).
+  // ---- Skeleton visibility ----
+  // Only show skeleton on the very first load (before any data has been cached)
+  const showSkeleton = !trialCache.current.hasEverLoaded && limitsLoading && orgId
+
+  // ---- Urgency styles (using cached days) ----
   const getUrgencyStyles = () => {
-    if (trialDaysRemaining === null) {
+    const days = trialCache.current.daysRemaining
+    if (days === null) {
       return {
         wrapper: "from-blue-50 to-indigo-50 border-blue-200/60",
         iconBg: "bg-blue-100 text-blue-600",
@@ -194,7 +203,7 @@ export function AppHeader() {
         button: "bg-blue-600 hover:bg-blue-700",
       }
     }
-    if (trialDaysRemaining <= 3) {
+    if (days <= 3) {
       return {
         wrapper: "from-red-50 to-orange-50 border-red-200/60",
         iconBg: "bg-red-100 text-red-600",
@@ -203,7 +212,7 @@ export function AppHeader() {
         button: "bg-red-600 hover:bg-red-700",
       }
     }
-    if (trialDaysRemaining <= 7) {
+    if (days <= 7) {
       return {
         wrapper: "from-orange-50 to-amber-50 border-orange-200/60",
         iconBg: "bg-orange-100 text-orange-600",
@@ -228,9 +237,8 @@ export function AppHeader() {
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
         <SidebarTrigger className="md:hidden" />
 
-        {/* Trial Banner — redesigned: gradient background, icon badge,
-            urgency-based color escalation, clearer visual hierarchy */}
-        {showTrialBanner && (
+        {/* Trial Banner – now persistent after first load */}
+        {showBanner && (
           <div
             className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-4 py-2`}
           >
@@ -240,18 +248,17 @@ export function AppHeader() {
               </div>
               <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
                 <span className={`font-semibold text-sm ${urgency.text} truncate`}>
-                  {trialDateLoading ? (
-                    "You're on a free trial"
-                  ) : trialDaysRemaining !== null ? (
+                  {trialCache.current.daysRemaining !== null ? (
                     <>
-                      {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left in your trial
+                      {trialCache.current.daysRemaining}{" "}
+                      {trialCache.current.daysRemaining === 1 ? "day" : "days"} left in your trial
                     </>
                   ) : (
                     "You're on a free trial"
                   )}
                 </span>
                 <span className={`text-xs ${urgency.subtext} truncate`}>
-                  {planName || "Free Trial"} plan
+                  {trialCache.current.planName || "Free Trial"} plan
                 </span>
               </div>
             </div>
@@ -266,10 +273,8 @@ export function AppHeader() {
           </div>
         )}
 
-        {/* Loading skeleton for the banner slot — only shown on the very
-            first load before we've ever had data, not on every
-            background revalidation during navigation */}
-        {limitsLoading && !showTrialBanner && !hasLoadedLimitsOnce.current && orgId && (
+        {/* Skeleton – only on the very first load */}
+        {showSkeleton && (
           <div className="flex flex-1 items-center">
             <div className="h-9 w-64 rounded-xl bg-muted animate-pulse" />
           </div>
