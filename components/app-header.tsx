@@ -15,6 +15,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Contract, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface NotificationItem {
   id: string
@@ -24,11 +26,17 @@ interface NotificationItem {
 }
 
 export function AppHeader() {
-  const { user, role, orgId, orgName } = useAuth() // <-- get from context
+  const { user, role, orgId, orgName } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [expiredCount, setExpiredCount] = useState(0)
   const [todayServicingCount, setTodayServicingCount] = useState(0)
   const [expiringSoonCount, setExpiringSoonCount] = useState(0)
+
+  // Plan limits for trial detection
+  const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
+
+  // Modal state
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const loadAlerts = async () => {
     if (!user?.id || !orgId) return
@@ -91,7 +99,7 @@ export function AppHeader() {
     }
   }
 
-  // Load alerts whenever orgId is available (stable)
+  // Load alerts whenever orgId is available
   useEffect(() => {
     if (orgId) loadAlerts()
   }, [orgId])
@@ -111,58 +119,99 @@ export function AppHeader() {
 
   const totalCount = expiredCount + todayServicingCount + expiringSoonCount
 
+  const handleUpgrade = () => {
+    setShowUpgradeModal(true)
+  }
+
+  const handleUpgradeSuccess = () => {
+    // Refetch limits to update the header (hide trial banner if upgraded)
+    refetchLimits()
+  }
+
+  // Show trial banner only if status is 'trial' and we have an org
+  const showTrialBanner = status === 'trial' && !limitsLoading
+
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
-      <SidebarTrigger className="md:hidden" />
+    <>
+      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
+        <SidebarTrigger className="md:hidden" />
 
-      {/* Show organization name for members only */}
-      {role === "member" && orgName && (
-        <div className="hidden md:block ml-2 text-sm font-medium text-muted-foreground">
-          {orgName}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 ml-auto">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="size-5" />
-              {totalCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 size-5 p-0 flex items-center justify-center text-[10px]">
-                  {totalCount > 9 ? "9+" : totalCount}
-                </Badge>
-              )}
-              <span className="sr-only">Notifications</span>
+        {/* Trial Banner - shown between sidebar trigger and other content */}
+        {showTrialBanner && (
+          <div className="flex flex-1 items-center justify-between gap-4 rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+            <span className="flex items-center gap-2">
+              <span className="font-medium">🚀 You're on a free trial</span>
+              <span className="text-xs opacity-75">
+                {planName} plan — {14} days remaining
+              </span>
+            </span>
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-8"
+              onClick={handleUpgrade}
+            >
+              Upgrade Now
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {notifications.length === 0 ? (
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <span className="text-sm text-muted-foreground">No alerts — all services are on track</span>
-              </DropdownMenuItem>
-            ) : (
-              notifications.map((n) => (
-                <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 py-3">
-                  <span
-                    className={`font-medium text-sm ${
-                      n.type === "expired"
-                        ? "text-red-600"
-                        : n.type === "today-servicing"
-                        ? "text-amber-600"
-                        : "text-orange-600"
-                    }`}
-                  >
-                    {n.title}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{n.description}</span>
+          </div>
+        )}
+
+        {/* Show organization name for members only */}
+        {role === "member" && orgName && (
+          <div className="hidden md:block ml-2 text-sm font-medium text-muted-foreground">
+            {orgName}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="size-5" />
+                {totalCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 size-5 p-0 flex items-center justify-center text-[10px]">
+                    {totalCount > 9 ? "9+" : totalCount}
+                  </Badge>
+                )}
+                <span className="sr-only">Notifications</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {notifications.length === 0 ? (
+                <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
+                  <span className="text-sm text-muted-foreground">No alerts — all services are on track</span>
                 </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
+              ) : (
+                notifications.map((n) => (
+                  <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 py-3">
+                    <span
+                      className={`font-medium text-sm ${
+                        n.type === "expired"
+                          ? "text-red-600"
+                          : n.type === "today-servicing"
+                          ? "text-amber-600"
+                          : "text-orange-600"
+                      }`}
+                    >
+                      {n.title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{n.description}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* Upgrade Modal */}
+      <PlanSelectionModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        orgId={orgId || undefined}
+        onSuccess={handleUpgradeSuccess}
+      />
+    </>
   )
 }
