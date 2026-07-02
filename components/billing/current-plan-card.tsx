@@ -22,9 +22,30 @@ export default function CurrentPlanCard({
   onUpgrade,
   onCancel,
 }: CurrentPlanCardProps) {
+  // Guard the whole component against a missing/malformed subscription object —
+  // this is what was crashing the page. Your Supabase `subscriptions` table
+  // doesn't have a `currentPrice` field, so `subscription.currentPrice` was
+  // always undefined. We now pull the price from the joined plan_price data
+  // instead, and fall back gracefully if it's still missing for any reason.
+  if (!subscription || !subscription.plan) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+        <p>No plan details available.</p>
+      </div>
+    );
+  }
+
   const trialPercentage = subscription.trialDaysRemaining
     ? (subscription.trialDaysRemaining / 15) * 100
     : 0;
+
+  // Price now comes from the joined plan_price row (price_inr), which is
+  // the field that actually exists in your Supabase schema — NOT
+  // subscription.currentPrice, which never existed.
+  const monthlyPrice =
+    subscription.planPrice?.price_inr ??
+    subscription.plan?.price_monthly ??
+    null;
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6">
@@ -32,21 +53,21 @@ export default function CurrentPlanCard({
         <div>
           <div className="flex items-center gap-3 mb-2">
             <h3 className="text-2xl font-bold text-gray-900">
-              {subscription.plan.name}
+              {subscription.plan.name || 'Unknown Plan'}
             </h3>
             <Badge className={getStatusColor(subscription.status)}>
               {getStatusLabel(subscription.status)}
             </Badge>
           </div>
           <p className="text-sm text-gray-600">
-            {subscription.plan.description}
+            {subscription.plan.description || ''}
           </p>
         </div>
       </div>
 
       <div className="space-y-4 mb-6">
         {/* Trial Progress */}
-        {subscription.status === 'trial' && subscription.trialDaysRemaining && (
+        {subscription.status === 'trial' && subscription.trialDaysRemaining != null && (
           <div className="rounded-lg bg-blue-50 p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-medium text-blue-900">
@@ -89,11 +110,11 @@ export default function CurrentPlanCard({
           </div>
         )}
 
-        {/* Price Info */}
+        {/* Price Info — now null-safe, shows '—' instead of crashing if missing */}
         <div className="rounded-lg bg-gray-50 p-4">
-          <p className="text-sm text-gray-600">Monthly Price</p>
+          <p className="text-sm text-gray-600">Plan Price</p>
           <p className="text-2xl font-bold text-gray-900">
-            {formatCurrency(subscription.currentPrice)}/month
+            {monthlyPrice != null ? `${formatCurrency(monthlyPrice)}/month` : '—'}
           </p>
         </div>
       </div>
