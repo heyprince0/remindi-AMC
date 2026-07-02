@@ -153,14 +153,14 @@ export default function ContractsPage() {
           setSubscription(subData)
           setPlan(subData.plan)
         } else {
-          // No subscription record → treat as expired/free (but we'll still fetch free plan for limits)
+          // No subscription record → fetch the free plan for limits
           const { data: freePlan } = await supabase
             .from('subscription_plans')
             .select('*')
             .eq('id', 'free')
             .single()
           setPlan(freePlan)
-          // subscription remains null
+          // subscription stays null
         }
       } catch (error) {
         console.error('Error fetching subscription:', error)
@@ -192,40 +192,37 @@ export default function ContractsPage() {
         setLoading(true)
         await Promise.all([loadContracts(), fetchContractCount()])
         setLoading(false)
-        setDataReady(true) // all data loaded
+        setDataReady(true)
       }
       loadData()
     }
   }, [currentOrgId])
 
-  // --- Centralized check & show modal ---
+  // --- Centralized check & show modal (FIXED: missing subscription is NOT expired) ---
   const checkAndShowLimitModal = (showOnLoad = false) => {
-    // If we already auto-shown and this is the load trigger, skip
     if (showOnLoad && autoShown) return
 
-    // Determine if subscription is expired or missing
     let isExpired = false
-    if (!subscription) {
-      // No subscription record → treat as expired (no active plan)
-      isExpired = true
-    } else if (subscription.status === 'expired') {
-      isExpired = true
-    } else if (subscription.trial_end_date) {
-      const trialEnd = new Date(subscription.trial_end_date)
-      const today = new Date()
-      if (trialEnd < today && subscription.status !== 'active') {
+    if (subscription) {
+      if (subscription.status === 'expired') {
         isExpired = true
+      } else if (subscription.trial_end_date) {
+        const trialEnd = new Date(subscription.trial_end_date)
+        const today = new Date()
+        if (trialEnd < today && subscription.status !== 'active') {
+          isExpired = true
+        }
       }
     }
+    // If subscription is null → treat as active (no expiration)
 
     if (isExpired) {
       setLimitModalType('expired')
       setShowLimitModal(true)
       if (showOnLoad) setAutoShown(true)
-      return true // blocked
+      return true
     }
 
-    // Check contract limit
     const maxContracts = plan?.max_contracts ?? 99999
     if (contractCount >= maxContracts) {
       setLimitModalType('contracts-limit')
@@ -235,7 +232,7 @@ export default function ContractsPage() {
       return true
     }
 
-    return false // no block
+    return false
   }
 
   // --- Auto-show on load when data is ready ---
@@ -289,30 +286,23 @@ export default function ContractsPage() {
   }
 
   const handleEditClick = (contract: ContractDisplay) => {
-    // Ensure user can edit even if expired? Usually editing might be allowed but we keep the same check.
-    // For safety, we can still allow edit if they already have the contract.
     setEditingContract(contract as Contract)
     setModalOpen(true)
   }
 
-  // --- Handle "View Plans" from limit modal ---
   const handleViewPlans = () => {
     setShowLimitModal(false)
     setShowPlanModal(true)
   }
 
-  // --- Handle plan selection (will integrate with Razorpay later) ---
   const handleSelectPlan = (plan: any, billingCycle: any) => {
     alert(`Selected plan: ${plan.name} (${billingCycle})`)
     setShowPlanModal(false)
   }
 
-  // --- Modified handleAddClick uses the same check ---
   const handleAddClick = () => {
-    // Use the centralized check (but don't set autoShown)
     const blocked = checkAndShowLimitModal(false)
-    if (blocked) return // modal is shown inside check
-    // If not blocked, open the add modal
+    if (blocked) return
     setEditingContract(null)
     setModalOpen(true)
   }
