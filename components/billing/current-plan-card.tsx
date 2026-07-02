@@ -123,10 +123,10 @@ export default function CurrentPlanCard({
             <p className="text-sm text-green-900">
               <span className="font-medium">Started on</span> {formatDate(subscription.start_date)}
             </p>
-            {subscription.next_billing_date && (
+            {(subscription.next_billing_date || subscription.end_date) && (
               <p className="text-sm text-green-900 mt-1">
                 <span className="font-medium">Renews on</span>{' '}
-                {formatDate(subscription.next_billing_date)}
+                {formatDate(subscription.next_billing_date || subscription.end_date)}
               </p>
             )}
           </div>
