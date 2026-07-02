@@ -23,13 +23,15 @@ export function getBillingCycleLabel(billingCycle: BillingCycle): string {
   return cycle?.label || 'Monthly';
 }
 
-// FIXED: guards against undefined/null/NaN — this was the exact line
-// crashing the billing page when subscription.currentPrice was undefined.
+// FIXED: your Supabase data is stored in paise (e.g. 49900 = ₹499), which
+// matches what Razorpay's API expects when creating orders later. This was
+// displaying the raw paise value with no conversion — dividing by 100 here
+// is the fix, not changing how the data is stored.
 export function formatCurrency(amount: number | null | undefined): string {
   if (amount === null || amount === undefined || typeof amount !== 'number' || isNaN(amount)) {
     return '—';
   }
-  return `₹${amount.toLocaleString('en-IN')}`;
+  return `₹${(amount / 100).toLocaleString('en-IN')}`;
 }
 
 // FIXED: guards against a missing/invalid date instead of throwing inside Intl.DateTimeFormat.
