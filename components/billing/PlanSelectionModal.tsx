@@ -30,7 +30,7 @@ interface Plan {
 interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  orgId?: string; // optional – we'll fetch if not provided
+  orgId?: string;
 }
 
 const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
@@ -89,7 +89,7 @@ export default function PlanSelectionModal({
           .from('memberships')
           .select('org_id')
           .eq('user_id', user.id)
-          .maybeSingle(); // use maybeSingle to avoid error if none
+          .maybeSingle();
 
         if (error) {
           console.error('Error fetching membership:', error);
@@ -99,6 +99,7 @@ export default function PlanSelectionModal({
 
         if (membership?.org_id) {
           setOrgId(membership.org_id);
+          console.log('✅ Fetched orgId:', membership.org_id);
         } else {
           console.error('No organization found for this user.');
           toast.error('You are not assigned to any organization.');
@@ -140,7 +141,6 @@ export default function PlanSelectionModal({
     if (isOpen) fetchPlans();
   }, [isOpen]);
 
-  // Helper functions for pricing/discounts
   const getPrice = (plan: Plan) => {
     const map: Record<BillingCycle, number> = {
       monthly: plan.price_monthly,
@@ -170,10 +170,11 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
-  // Main handler – creates order and opens Razorpay
   const handleSelect = async (plan: Plan) => {
     if (isProcessing) return;
-    if (!orgId) {
+
+    // Guard against missing orgId (including empty string)
+    if (!orgId || orgId.trim() === '') {
       toast.error('Organization ID not found. Please refresh and try again.');
       return;
     }
@@ -181,7 +182,6 @@ export default function PlanSelectionModal({
     setIsProcessing(true);
 
     try {
-      // 1. Load Razorpay script if not loaded
       const loaded = await loadRazorpayScript();
       if (!loaded) {
         toast.error('Payment system could not be loaded. Please try again.');
@@ -189,7 +189,6 @@ export default function PlanSelectionModal({
         return;
       }
 
-      // 2. Get price for the selected cycle
       const amount = getPrice(plan);
       if (amount === 0) {
         toast.error('This plan is free – no payment required.');
@@ -197,15 +196,18 @@ export default function PlanSelectionModal({
         return;
       }
 
-      // 3. Call our API to create a Razorpay order
+      // Build payload and log it
+      const payload = {
+        planId: plan.id,
+        billingCycle: selectedCycle,
+        orgId: orgId.trim(),
+      };
+      console.log('📤 Sending to API:', payload);
+
       const response = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId: plan.id,
-          billingCycle: selectedCycle,
-          orgId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -215,7 +217,6 @@ export default function PlanSelectionModal({
 
       const { orderId, amount: orderAmount, currency, keyId } = await response.json();
 
-      // 4. Open Razorpay Checkout
       const options = {
         key: keyId,
         amount: orderAmount,
@@ -223,9 +224,7 @@ export default function PlanSelectionModal({
         order_id: orderId,
         name: 'Remindi AMC',
         description: `${plan.name} Plan – ${CYCLE_LABELS[selectedCycle].label}`,
-        prefill: {
-          // optional: prefill user contact info (you can fetch from session)
-        },
+        prefill: {},
         handler: function (response: any) {
           toast.success('Payment successful! Your subscription is being activated.');
           onClose();
@@ -247,7 +246,6 @@ export default function PlanSelectionModal({
     }
   };
 
-  // Loading states: plans loading or fetching org
   if (loading || isFetchingOrg) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -285,7 +283,6 @@ export default function PlanSelectionModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Billing Cycle Tabs */}
         <div className="flex flex-wrap justify-center gap-2 sm:gap-3 my-6 sm:my-8">
           {Object.entries(CYCLE_LABELS).map(([cycle, { label }]) => (
             <button
@@ -302,7 +299,6 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        {/* Plan Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-6">
           {plans.map((plan) => {
             const price = getPrice(plan);
@@ -326,7 +322,7 @@ export default function PlanSelectionModal({
                   discountPercent,
                   savingsAmount,
                   onSelect: () => handleSelect(plan),
-                  disabled: isProcessing,
+                  disabled: isProcessing || !orgId, // 👈 disable if orgId missing
                 }}
               />
             );
