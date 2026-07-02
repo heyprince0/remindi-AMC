@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase, type Membership, type Invite } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, MoreHorizontal, Trash2, RotateCw } from "lucide-react"
 import { toast } from "sonner"
 import { InviteMemberModal } from "@/components/invite-member-modal"
@@ -31,6 +33,14 @@ export default function TeamPage() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // Plan limits
+  const { maxTeamSeats, currentTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -47,6 +57,23 @@ export default function TeamPage() {
         })
     }
   }, [user?.id])
+
+  // Check limits on page load
+  useEffect(() => {
+    if (limitsLoading || !currentOrgId) return
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+    } else if (maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your team seat limit",
+        description: `Your current plan allows a maximum of ${maxTeamSeats} team members. You currently have ${currentTeamSeats}. Upgrade to add more team members.`,
+      })
+      setShowLimitModal(true)
+    }
+  }, [limitsLoading, status, maxTeamSeats, currentTeamSeats])
 
   const loadTeamData = async (orgId: string) => {
     try {
@@ -226,6 +253,31 @@ export default function TeamPage() {
     }
   }
 
+  const handleInviteMemberClick = () => {
+    // Check limits before opening modal
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return
+    }
+    if (maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your team seat limit",
+        description: `Your current plan allows a maximum of ${maxTeamSeats} team members. You currently have ${currentTeamSeats}. Upgrade to add more team members.`,
+      })
+      setShowLimitModal(true)
+      return
+    }
+    // Otherwise open the invite modal
+    setInviteModalOpen(true)
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
+  }
+
   const getRoleColor = (role: string) => {
     return role === "admin"
       ? "bg-blue-100 text-blue-800 border-blue-200"
@@ -249,7 +301,7 @@ export default function TeamPage() {
             <p className="text-muted-foreground">Manage your team members and invitations</p>
           </div>
           {userRole === "admin" && (
-            <Button onClick={() => setInviteModalOpen(true)}>
+            <Button onClick={handleInviteMemberClick}>
               <Plus className="mr-2 size-4" />
               Invite Member
             </Button>
@@ -422,6 +474,16 @@ export default function TeamPage() {
           onSuccess={() => {
             if (currentOrgId) loadTeamData(currentOrgId)
           }}
+        />
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
         />
       </div>
     </DashboardLayout>
