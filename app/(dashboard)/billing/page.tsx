@@ -30,11 +30,6 @@ export default function BillingPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      // Get current subscription, joined with its plan.
-      // Using the explicit constraint name here as a safety net — if
-      // Supabase's schema cache is still stale after dropping the
-      // duplicate FK, or another duplicate resurfaces later, this avoids
-      // the ambiguity error regardless.
       const { data: subData, error: subError } = await supabase
         .from('subscriptions')
         .select('*, plan:subscription_plans!fk_subscriptions_plan(*)')
@@ -44,7 +39,6 @@ export default function BillingPage() {
       if (subError) throw subError;
       setSubscription(subData);
 
-      // Fetch payment history
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
         .select('*')
@@ -54,11 +48,6 @@ export default function BillingPage() {
 
       if (txError) throw txError;
 
-      // Fetch plan names separately instead of relying on an embedded
-      // join — the join syntax (plan:plan_id(name)) requires Supabase to
-      // already see a foreign key relationship, and breaks with a 400 if
-      // that constraint isn't set up. This two-step approach works
-      // regardless.
       const planIds = [...new Set((txData || []).map((row: any) => row.plan_id).filter(Boolean))];
       let planNameMap: Record<string, string> = {};
 
@@ -74,21 +63,18 @@ export default function BillingPage() {
         }, {});
       }
 
-      // Map raw Supabase rows to the shape PaymentHistoryTable expects
       const mappedHistory: PaymentTransaction[] = (txData || []).map((row: any) => ({
         id: row.id,
         date: row.created_at,
         plan: planNameMap[row.plan_id] || row.plan_id || '—',
         billingCycle: row.billing_cycle || '—',
-        amount: row.amount, // stays in paise — formatCurrency divides for display
+        amount: row.amount,
         status: row.status,
         invoiceUrl: row.invoice_url || null,
       }));
 
       setPaymentHistory(mappedHistory);
     } catch (error: any) {
-      // Log the actual Supabase error fields — logging the raw object
-      // alone just prints "Object" in the console with no useful detail.
       console.error('Error fetching billing data:', {
         message: error?.message,
         details: error?.details,
@@ -106,11 +92,6 @@ export default function BillingPage() {
   }, [orgId]);
 
   const handleUpgrade = () => setShowUpgradeModal(true);
-  const handleSelectUpgradePlan = (plan: Plan, billingCycle: BillingCycle) => {
-    // TODO: Razorpay integration
-    alert(`Upgrading to ${plan.name} (${billingCycle})`);
-    setShowUpgradeModal(false);
-  };
   const handleOpenLimitModal = (type: LimitModalType) => {
     setLimitModalType(type);
     setShowLimitModal(true);
@@ -126,11 +107,6 @@ export default function BillingPage() {
     );
   }
 
-  // FIXED: previously only 'active' rendered CurrentPlanCard — trial,
-  // expired, and cancelled subscriptions all fell through to the generic
-  // "No Active Subscription" card, hiding their dates entirely. Now any
-  // real subscription row (regardless of status) renders the full card,
-  // which itself handles each status's display internally.
   const hasSubscription = !!subscription;
 
   return (
@@ -199,7 +175,10 @@ export default function BillingPage() {
         <PlanSelectionModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
-          onSelectPlan={handleSelectUpgradePlan}
+          orgId={orgId || undefined}      // 👈 pass orgId from auth
+          onSuccess={() => {
+            fetchData();                  // 👈 refresh after payment
+          }}
         />
         <LimitReachedModal
           isOpen={showLimitModal}
