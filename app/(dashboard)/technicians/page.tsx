@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { supabase, type Technician, type ServiceHistory } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { AddTechnicianModal } from "@/components/add-technician-modal"
@@ -61,6 +63,14 @@ export default function TechniciansPage() {
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // Plan limits
+  const { maxTechnicians, currentTechnicianCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -85,6 +95,23 @@ export default function TechniciansPage() {
     }
   }, [currentOrgId])
 
+  // Check limits on page load
+  useEffect(() => {
+    if (limitsLoading || !currentOrgId) return
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+    } else if (maxTechnicians > 0 && currentTechnicianCount >= maxTechnicians) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your technician limit",
+        description: `Your current plan allows a maximum of ${maxTechnicians} technicians. You have already added ${currentTechnicianCount}. Upgrade to add more technicians.`,
+      })
+      setShowLimitModal(true)
+    }
+  }, [limitsLoading, status, maxTechnicians, currentTechnicianCount])
+
   const loadTechnicians = async () => {
     try {
       if (!currentOrgId) return
@@ -99,7 +126,7 @@ export default function TechniciansPage() {
       const { data: historyData } = await supabase
         .from('service_history')
         .select('technician_id')
-        .eq('org_id', currentOrgId)   // scope history too
+        .eq('org_id', currentOrgId)
 
       const techniciansWithJobs = (techniciansData as Technician[]).map(tech => {
         const jobCount = (historyData as ServiceHistory[])?.filter(h => h.technician_id === tech.id).length || 0
@@ -152,6 +179,23 @@ export default function TechniciansPage() {
   }
 
   const handleAddClick = () => {
+    // Check limits before opening modal
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return
+    }
+    if (maxTechnicians > 0 && currentTechnicianCount >= maxTechnicians) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your technician limit",
+        description: `Your current plan allows a maximum of ${maxTechnicians} technicians. You have already added ${currentTechnicianCount}. Upgrade to add more technicians.`,
+      })
+      setShowLimitModal(true)
+      return
+    }
+    // Otherwise open the add modal
     setEditingTechnician(null)
     setModalOpen(true)
   }
@@ -163,6 +207,10 @@ export default function TechniciansPage() {
 
   const handleModalSuccess = () => {
     loadTechnicians()
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
   }
 
   return (
@@ -287,6 +335,16 @@ export default function TechniciansPage() {
             orgId={currentOrgId}
           />
         )}
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
+        />
       </div>
     </DashboardLayout>
   )
