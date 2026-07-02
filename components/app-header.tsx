@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Bell, Sparkles, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -43,6 +43,17 @@ export function AppHeader() {
 
   // Modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
+  // FIXED: tracks whether limits/trial data has loaded at least once.
+  // usePlanLimits' isLoading (and orgId itself) can flip briefly on every
+  // page navigation as auth/session state re-checks — previously this
+  // caused the trial banner to disappear and the skeleton to flash back
+  // in every time you moved to a new page. Once loaded once, we keep
+  // showing the last known banner state during any background refetch.
+  const hasLoadedLimitsOnce = useRef(false)
+  if (!limitsLoading && orgId) {
+    hasLoadedLimitsOnce.current = true
+  }
 
   const loadAlerts = async () => {
     if (!user?.id || !orgId) return
@@ -168,7 +179,7 @@ export function AppHeader() {
     loadTrialDate()
   }
 
-  const showTrialBanner = status === 'trial' && !limitsLoading
+  const showTrialBanner = status === 'trial' && (!limitsLoading || hasLoadedLimitsOnce.current)
 
   // Urgency-based styling — the banner escalates visually as the trial
   // gets closer to ending, instead of staying the same calm blue the
@@ -255,9 +266,10 @@ export function AppHeader() {
           </div>
         )}
 
-        {/* Loading skeleton for the banner slot — avoids the header
-            looking like content vanished while status/trial date load */}
-        {limitsLoading && !showTrialBanner && orgId && (
+        {/* Loading skeleton for the banner slot — only shown on the very
+            first load before we've ever had data, not on every
+            background revalidation during navigation */}
+        {limitsLoading && !showTrialBanner && !hasLoadedLimitsOnce.current && orgId && (
           <div className="flex flex-1 items-center">
             <div className="h-9 w-64 rounded-xl bg-muted animate-pulse" />
           </div>
