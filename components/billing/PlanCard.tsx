@@ -17,6 +17,7 @@ interface PlanCardProps {
     discountPercent?: number;  // e.g. 17 for "Save 17%"
     savingsAmount?: number;    // in paise, e.g. 49500 for "₹495 saved"
     onSelect: () => void;
+    disabled?: boolean;       // 👈 new prop
   };
 }
 
@@ -37,6 +38,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
     discountPercent = 0,
     savingsAmount = 0,
     onSelect,
+    disabled = false,       // 👈 default to false
   } = plan;
 
   const displayPrice = isFree ? 'FREE' : formatPrice(price);
@@ -69,7 +71,6 @@ export default function PlanCard({ plan }: PlanCardProps) {
             </div>
           )}
 
-          {/* Offer / discount badge — only shows on multi-month cycles with real savings */}
           {hasOffer && (
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
@@ -97,6 +98,7 @@ export default function PlanCard({ plan }: PlanCardProps) {
 
       <Button
         onClick={onSelect}
+        disabled={disabled}          // 👈 apply the disabled prop
         className={`mt-8 w-full py-3.5 text-base font-semibold ${
           isPopular
             ? 'bg-blue-600 hover:bg-blue-700 text-white'
