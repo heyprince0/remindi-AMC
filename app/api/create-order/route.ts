@@ -16,8 +16,30 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
   try {
-    const { planId, billingCycle, orgId } = await req.json();
+    // 1. Log the raw body
+    const rawBody = await req.text();
+    console.log('📥 Raw request body:', rawBody);
 
+    // 2. Parse JSON
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error('❌ Failed to parse JSON:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+    }
+
+    // 3. Destructure and trim each value
+    const planId = body.planId?.trim();
+    const billingCycle = body.billingCycle?.trim();
+    const orgId = body.orgId?.trim();
+
+    console.log('📥 Parsed & trimmed:', { planId, billingCycle, orgId });
+
+    // 4. Validate
     if (!planId || !billingCycle || !orgId) {
       return NextResponse.json(
         { error: 'Missing required fields: planId, billingCycle, orgId' },
@@ -40,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Fetch plan
+    // 5. Fetch plan
     const { data: plan, error: planError } = await supabase
       .from('subscription_plans')
       .select('*')
@@ -52,7 +74,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    // 2. Determine amount
+    // 6. Determine amount
     const amountMap: Record<string, number> = {
       monthly: plan.price_monthly,
       quarterly: plan.price_quarterly,
@@ -65,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Free plan does not require payment' }, { status: 400 });
     }
 
-    // 3. Create Razorpay order
+    // 7. Create Razorpay order
     const order = await razorpay.orders.create({
       amount,
       currency: 'INR',
@@ -73,7 +95,7 @@ export async function POST(req: NextRequest) {
       notes: { orgId, planId, billingCycle },
     });
 
-    // 4. Insert pending transaction
+    // 8. Insert pending transaction
     const { error: insertError } = await supabase.from('payment_transactions').insert({
       org_id: orgId,
       amount,
@@ -85,14 +107,13 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       console.error('[Insert transaction error]', insertError);
-      // Return the actual error message for debugging
       return NextResponse.json(
         { error: `Database insert failed: ${insertError.message}` },
         { status: 500 }
       );
     }
 
-    // 5. Return success
+    // 9. Return success
     const publicKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || keyId;
     return NextResponse.json({
       orderId: order.id,
