@@ -40,22 +40,41 @@ export default function BillingPage() {
       if (subError) throw subError;
       setSubscription(subData);
 
-      // Fetch payment history, joined with plan name so the table can
-      // show "Basic" / "Pro" instead of the raw plan_id ('basic', 'pro')
+      // Fetch payment history
       const { data: txData, error: txError } = await supabase
         .from('payment_transactions')
-        .select('*, plan:plan_id(name)')
+        .select('*')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (txError) throw txError;
 
+      // Fetch plan names separately instead of relying on an embedded
+      // join — the join syntax (plan:plan_id(name)) requires Supabase to
+      // already see a foreign key relationship, and breaks with a 400 if
+      // that constraint isn't set up. This two-step approach works
+      // regardless.
+      const planIds = [...new Set((txData || []).map((row: any) => row.plan_id).filter(Boolean))];
+      let planNameMap: Record<string, string> = {};
+
+      if (planIds.length > 0) {
+        const { data: plansData } = await supabase
+          .from('subscription_plans')
+          .select('id, name')
+          .in('id', planIds);
+
+        planNameMap = (plansData || []).reduce((acc: Record<string, string>, p: any) => {
+          acc[p.id] = p.name;
+          return acc;
+        }, {});
+      }
+
       // Map raw Supabase rows to the shape PaymentHistoryTable expects
       const mappedHistory: PaymentTransaction[] = (txData || []).map((row: any) => ({
         id: row.id,
         date: row.created_at,
-        plan: row.plan?.name || row.plan_id || '—',
+        plan: planNameMap[row.plan_id] || row.plan_id || '—',
         billingCycle: row.billing_cycle || '—',
         amount: row.amount, // stays in paise — formatCurrency divides for display
         status: row.status,
@@ -63,8 +82,15 @@ export default function BillingPage() {
       }));
 
       setPaymentHistory(mappedHistory);
-    } catch (error) {
-      console.error('Error fetching billing data:', error);
+    } catch (error: any) {
+      // Log the actual Supabase error fields — logging the raw object
+      // alone just prints "Object" in the console with no useful detail.
+      console.error('Error fetching billing data:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
       toast.error('Failed to load billing data');
     } finally {
       setLoading(false);
