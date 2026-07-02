@@ -30,10 +30,14 @@ export default function BillingPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      // Get current subscription, joined with its plan
+      // Get current subscription, joined with its plan.
+      // Using the explicit constraint name here as a safety net — if
+      // Supabase's schema cache is still stale after dropping the
+      // duplicate FK, or another duplicate resurfaces later, this avoids
+      // the ambiguity error regardless.
       const { data: subData, error: subError } = await supabase
         .from('subscriptions')
-        .select('*, plan:plan_id(*)')
+        .select('*, plan:subscription_plans!fk_subscriptions_plan(*)')
         .eq('org_id', orgId)
         .maybeSingle();
 
