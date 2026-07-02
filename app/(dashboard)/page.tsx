@@ -23,6 +23,9 @@ import {
 import { AddContractModal } from "@/components/add-contract-modal"
 import { subscribeToNotifications } from "@/lib/push-notifications"
 import { toast } from "sonner"
+// --- New imports for limit modal ---
+import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
+import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface UpcomingService {
   id: string
@@ -63,17 +66,32 @@ export default function DashboardPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
 
-  // --- NEW: organization ID state ---
+  // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- fetch org_id – use maybeSingle() to handle missing memberships ---
+  // --- Billing & limit states ---
+  const [subscription, setSubscription] = useState<any>(null)
+  const [plan, setPlan] = useState<any>(null)
+  const [contractCount, setContractCount] = useState(0)
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
+  const [limitValue, setLimitValue] = useState(0)
+
+  // --- Plan modal state ---
+  const [showPlanModal, setShowPlanModal] = useState(false)
+
+  // --- Data ready flag for auto-show ---
+  const [dataReady, setDataReady] = useState(false)
+  const [autoShown, setAutoShown] = useState(false)
+
+  // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
         .from("memberships")
         .select("org_id")
         .eq("user_id", user.id)
-        .maybeSingle()   // <-- changed from .single()
+        .maybeSingle()
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
@@ -81,7 +99,6 @@ export default function DashboardPage() {
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
           } else {
-            // No membership – user might be new or in reset flow
             toast.error("You are not part of any organization. Please complete your profile.")
             router.push("/profile-setup")
           }
@@ -89,62 +106,82 @@ export default function DashboardPage() {
     }
   }, [user?.id, router])
 
-  const handleEnableNotifications = async () => {
-    if (!user?.id) {
-      toast.error('User not found')
-      return
-    }
+  // --- Fetch subscription and plan ---
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!currentOrgId) return
+      try {
+        const { data: subData, error } = await supabase
+          .from('subscriptions')
+          .select('*, plan:plan_id(*)')
+          .eq('org_id', currentOrgId)
+          .maybeSingle()
 
-    setNotificationLoading(true)
-    const result = await subscribeToNotifications(user.id)
-    
-    if (result.success) {
-      toast.success('Notifications enabled successfully!')
-    } else {
-      toast.error(result.error || 'Failed to enable notifications')
+        if (error) throw error
+
+        if (subData) {
+          setSubscription(subData)
+          setPlan(subData.plan)
+        } else {
+          // No subscription → fetch free plan for limits
+          const { data: freePlan } = await supabase
+            .from('subscription_plans')
+            .select('*')
+            .eq('id', 'free')
+            .single()
+          setPlan(freePlan)
+          // subscription stays null
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error)
+      }
     }
-    
-    setNotificationLoading(false)
+    fetchSubscription()
+  }, [currentOrgId])
+
+  // --- Fetch contract count ---
+  const fetchContractCount = async () => {
+    if (!currentOrgId) return
+    try {
+      const { count, error } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', currentOrgId)
+
+      if (error) throw error
+      setContractCount(count || 0)
+    } catch (error) {
+      console.error('Error fetching contract count:', error)
+    }
   }
 
-  // ✅ AUTH CHECK
-  useEffect(() => {
-    if (!authLoading && !user) {
-      window.location.href = '/landing.html'
-    }
-  }, [user, authLoading])
-
+  // --- Load dashboard data and contract count, then mark ready ---
   const loadData = async () => {
     try {
       if (!user?.id || !currentOrgId) return
 
-      // Fetch contracts scoped by org_id
+      // Fetch contracts
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
-        .eq('org_id', currentOrgId)   // <-- changed from user_id
+        .eq('org_id', currentOrgId)
       if (contractsError) throw contractsError
 
-      // Fetch customers scoped by org_id
+      // Fetch customers
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
-        .eq('org_id', currentOrgId)   // <-- changed from user_id
+        .eq('org_id', currentOrgId)
       if (customersError) throw customersError
 
-      // Fetch technicians scoped by org_id
+      // Fetch technicians
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
-        .eq('org_id', currentOrgId)   // <-- changed from user_id
+        .eq('org_id', currentOrgId)
       if (techniciansError) throw techniciansError
 
       const activeContracts = (contractsData as Contract[]).filter(c => c.status === 'active').length
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const nextWeek = new Date(today)
-      nextWeek.setDate(nextWeek.getDate() + 7)
-
       let todayServicing = 0
       let expiringSoon = 0
       let expired = 0
@@ -200,6 +237,11 @@ export default function DashboardPage() {
       })
 
       setUpcomingServices(services.slice(0, 4))
+
+      // Also fetch contract count for limit check
+      await fetchContractCount()
+
+      setDataReady(true) // all data loaded
     } catch (error) {
       console.error('Error loading dashboard data:', error)
     } finally {
@@ -214,7 +256,51 @@ export default function DashboardPage() {
     }
   }, [user?.id, currentOrgId])
 
-  // Real-time subscriptions using org_id filter
+  // --- Centralized check & show modal (same as ContractsPage) ---
+  const checkAndShowLimitModal = (showOnLoad = false) => {
+    if (showOnLoad && autoShown) return
+
+    let isExpired = false
+    if (subscription) {
+      if (subscription.status === 'expired') {
+        isExpired = true
+      } else if (subscription.trial_end_date) {
+        const trialEnd = new Date(subscription.trial_end_date)
+        const today = new Date()
+        if (trialEnd < today && subscription.status !== 'active') {
+          isExpired = true
+        }
+      }
+    }
+    // subscription null → treat as active (not expired)
+
+    if (isExpired) {
+      setLimitModalType('expired')
+      setShowLimitModal(true)
+      if (showOnLoad) setAutoShown(true)
+      return true
+    }
+
+    const maxContracts = plan?.max_contracts ?? 99999
+    if (contractCount >= maxContracts) {
+      setLimitModalType('contracts-limit')
+      setLimitValue(maxContracts)
+      setShowLimitModal(true)
+      if (showOnLoad) setAutoShown(true)
+      return true
+    }
+
+    return false
+  }
+
+  // --- Auto-show on load when data is ready ---
+  useEffect(() => {
+    if (dataReady && !autoShown) {
+      checkAndShowLimitModal(true)
+    }
+  }, [dataReady, autoShown, subscription, plan, contractCount])
+
+  // --- Real-time subscriptions (unchanged) ---
   useEffect(() => {
     if (!user?.id || !currentOrgId) return
 
@@ -240,7 +326,49 @@ export default function DashboardPage() {
     }
   }, [user?.id, currentOrgId])
 
-  // Show spinner while checking auth
+  // --- Handlers ---
+  const handleEnableNotifications = async () => {
+    if (!user?.id) {
+      toast.error('User not found')
+      return
+    }
+    setNotificationLoading(true)
+    const result = await subscribeToNotifications(user.id)
+    if (result.success) {
+      toast.success('Notifications enabled successfully!')
+    } else {
+      toast.error(result.error || 'Failed to enable notifications')
+    }
+    setNotificationLoading(false)
+  }
+
+  const handleAddClick = () => {
+    const blocked = checkAndShowLimitModal(false)
+    if (blocked) return
+    setModalOpen(true)
+  }
+
+  const handleViewPlans = () => {
+    setShowLimitModal(false)
+    setShowPlanModal(true)
+  }
+
+  const handleSelectPlan = (plan: any, billingCycle: any) => {
+    alert(`Selected plan: ${plan.name} (${billingCycle})`)
+    setShowPlanModal(false)
+  }
+
+  const handleModalSuccess = () => {
+    loadData() // refresh dashboard data after contract add/edit
+  }
+
+  // Auth redirect
+  useEffect(() => {
+    if (!authLoading && !user) {
+      window.location.href = '/landing.html'
+    }
+  }, [user, authLoading])
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -249,7 +377,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Don't render while redirecting to landing
   if (!user) return null
 
   return (
@@ -278,7 +405,7 @@ export default function DashboardPage() {
               <Plus className="mr-2 size-4" />
               Add Technician
             </Button>
-            <Button size="sm" onClick={() => setModalOpen(true)}>
+            <Button size="sm" onClick={handleAddClick}>
               <Plus className="mr-2 size-4" />
               Add Contract
             </Button>
@@ -358,12 +485,28 @@ export default function DashboardPage() {
           <AddContractModal
             open={modalOpen}
             onOpenChange={setModalOpen}
-            onSuccess={loadData}
+            onSuccess={handleModalSuccess}
             editingContract={null}
             userId={user.id}
-            orgId={currentOrgId}   // <-- added
+            orgId={currentOrgId}
           />
         )}
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleViewPlans}
+          limitValue={limitValue}
+        />
+
+        {/* Plan Selection Modal */}
+        <PlanSelectionModal
+          isOpen={showPlanModal}
+          onClose={() => setShowPlanModal(false)}
+          onSelectPlan={handleSelectPlan}
+        />
       </div>
     </DashboardLayout>
   )
