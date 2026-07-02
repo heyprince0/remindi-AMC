@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, Search, Eye, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -64,6 +66,14 @@ export default function InvoicesPage() {
   // --- Organization state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
+  // Plan limits
+  const { maxInvoicesMonthly, currentInvoicesThisMonth, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
   // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
@@ -89,6 +99,23 @@ export default function InvoicesPage() {
       loadInvoices()
     }
   }, [currentOrgId])
+
+  // Check limits on page load
+  useEffect(() => {
+    if (limitsLoading || !currentOrgId) return
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+    } else if (maxInvoicesMonthly > 0 && currentInvoicesThisMonth >= maxInvoicesMonthly) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your monthly invoice limit",
+        description: `Your current plan allows a maximum of ${maxInvoicesMonthly} invoices per month. You have already created ${currentInvoicesThisMonth} this month. Upgrade to increase your limit.`,
+      })
+      setShowLimitModal(true)
+    }
+  }, [limitsLoading, status, maxInvoicesMonthly, currentInvoicesThisMonth])
 
   const handleFilter = () => {
     let filtered = invoices
@@ -118,7 +145,7 @@ export default function InvoicesPage() {
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -142,7 +169,7 @@ export default function InvoicesPage() {
         .from("invoices")
         .delete()
         .eq("id", invoiceToDelete.id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
 
       if (error) throw error
 
@@ -157,6 +184,31 @@ export default function InvoicesPage() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  const handleNewInvoiceClick = () => {
+    // Check limits before opening modal
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return
+    }
+    if (maxInvoicesMonthly > 0 && currentInvoicesThisMonth >= maxInvoicesMonthly) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your monthly invoice limit",
+        description: `Your current plan allows a maximum of ${maxInvoicesMonthly} invoices per month. You have already created ${currentInvoicesThisMonth} this month. Upgrade to increase your limit.`,
+      })
+      setShowLimitModal(true)
+      return
+    }
+    // Otherwise open the new invoice modal
+    setShowNewInvoiceModal(true)
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
   }
 
   const formatCurrency = (value: number) => {
@@ -182,7 +234,7 @@ export default function InvoicesPage() {
             <p className="text-muted-foreground">Manage and track your invoices</p>
           </div>
           <Button
-            onClick={() => setShowNewInvoiceModal(true)}
+            onClick={handleNewInvoiceClick}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="mr-2 size-4" />
@@ -318,15 +370,25 @@ export default function InvoicesPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* New Invoice Modal - pass org_id */}
+        {/* New Invoice Modal */}
         {user?.id && currentOrgId && (
           <NewInvoiceModal
             open={showNewInvoiceModal}
             onOpenChange={setShowNewInvoiceModal}
             userId={user.id}
-            orgId={currentOrgId}   // <-- added
+            orgId={currentOrgId}
           />
         )}
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
+        />
       </div>
     </DashboardLayout>
   )
