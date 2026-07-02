@@ -35,12 +35,12 @@ export function AppHeader() {
   // Plan limits for trial detection
   const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
 
-  // --- Ref to persist trial data across re‑mounts / background refetches ---
+  // --- Cache to persist trial data across re‑mounts / background refetches ---
   const trialCache = useRef<{
     isTrial: boolean
     daysRemaining: number | null
     planName: string | null
-    hasEverLoaded: boolean // marks if we've ever received data
+    hasEverLoaded: boolean
   }>({
     isTrial: false,
     daysRemaining: null,
@@ -48,14 +48,14 @@ export function AppHeader() {
     hasEverLoaded: false,
   })
 
-  // Update the cache whenever status or planName changes
+  // Update cache only when we have a definitive status (not loading)
   useEffect(() => {
-    if (status) {
+    if (!limitsLoading && status) {
       trialCache.current.isTrial = status === 'trial'
       trialCache.current.planName = planName || null
       trialCache.current.hasEverLoaded = true
     }
-  }, [status, planName])
+  }, [status, planName, limitsLoading])
 
   // Modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
@@ -122,7 +122,7 @@ export function AppHeader() {
     }
   }
 
-  // Load real trial_end_date and update cache
+  // Load real trial_end_date and update cache (does not set hasEverLoaded)
   const loadTrialDate = async () => {
     if (!orgId) return
     try {
@@ -144,7 +144,6 @@ export function AppHeader() {
       } else {
         trialCache.current.daysRemaining = null
       }
-      trialCache.current.hasEverLoaded = true
     } catch (error) {
       console.error("Error loading trial date:", error)
       trialCache.current.daysRemaining = null
@@ -184,7 +183,7 @@ export function AppHeader() {
   }
 
   // ---- Banner visibility ----
-  // Show banner if we have ever loaded trial data and the cached status is 'trial'
+  // Show banner only if we have ever loaded a valid status and it's trial
   const showBanner = trialCache.current.hasEverLoaded && trialCache.current.isTrial
 
   // ---- Skeleton visibility ----
@@ -237,7 +236,7 @@ export function AppHeader() {
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
         <SidebarTrigger className="md:hidden" />
 
-        {/* Trial Banner – now persistent after first load */}
+        {/* Trial Banner – persistent after first load */}
         {showBanner && (
           <div
             className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-4 py-2`}
