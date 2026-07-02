@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Bell } from "lucide-react"
+import { Bell, Sparkles, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
@@ -34,6 +34,12 @@ export function AppHeader() {
 
   // Plan limits for trial detection
   const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
+
+  // Real trial countdown — usePlanLimits doesn't expose trial_end_date, so
+  // we fetch it directly here (this component already talks to Supabase
+  // directly for notifications, so this follows the same pattern).
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null)
+  const [trialDateLoading, setTrialDateLoading] = useState(true)
 
   // Modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
@@ -99,9 +105,43 @@ export function AppHeader() {
     }
   }
 
-  // Load alerts whenever orgId is available
+  // Fetch the real trial_end_date so the countdown is accurate instead of hardcoded
+  const loadTrialDate = async () => {
+    if (!orgId) return
+    setTrialDateLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("trial_end_date")
+        .eq("org_id", orgId)
+        .maybeSingle()
+
+      if (error) throw error
+
+      if (data?.trial_end_date) {
+        const end = new Date(data.trial_end_date)
+        const today = new Date()
+        end.setHours(0, 0, 0, 0)
+        today.setHours(0, 0, 0, 0)
+        const diffDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        setTrialDaysRemaining(Math.max(diffDays, 0))
+      } else {
+        setTrialDaysRemaining(null)
+      }
+    } catch (error) {
+      console.error("Error loading trial date:", error)
+      setTrialDaysRemaining(null)
+    } finally {
+      setTrialDateLoading(false)
+    }
+  }
+
+  // Load alerts and trial date whenever orgId is available
   useEffect(() => {
-    if (orgId) loadAlerts()
+    if (orgId) {
+      loadAlerts()
+      loadTrialDate()
+    }
   }, [orgId])
 
   // Subscribe to contract changes
@@ -124,34 +164,102 @@ export function AppHeader() {
   }
 
   const handleUpgradeSuccess = () => {
-    // Refetch limits to update the header (hide trial banner if upgraded)
     refetchLimits()
+    loadTrialDate()
   }
 
-  // Show trial banner only if status is 'trial' and we have an org
   const showTrialBanner = status === 'trial' && !limitsLoading
+
+  // Urgency-based styling — the banner escalates visually as the trial
+  // gets closer to ending, instead of staying the same calm blue the
+  // whole time (which undersells the urgency near the end).
+  const getUrgencyStyles = () => {
+    if (trialDaysRemaining === null) {
+      return {
+        wrapper: "from-blue-50 to-indigo-50 border-blue-200/60",
+        iconBg: "bg-blue-100 text-blue-600",
+        text: "text-blue-900",
+        subtext: "text-blue-700/70",
+        button: "bg-blue-600 hover:bg-blue-700",
+      }
+    }
+    if (trialDaysRemaining <= 3) {
+      return {
+        wrapper: "from-red-50 to-orange-50 border-red-200/60",
+        iconBg: "bg-red-100 text-red-600",
+        text: "text-red-900",
+        subtext: "text-red-700/70",
+        button: "bg-red-600 hover:bg-red-700",
+      }
+    }
+    if (trialDaysRemaining <= 7) {
+      return {
+        wrapper: "from-orange-50 to-amber-50 border-orange-200/60",
+        iconBg: "bg-orange-100 text-orange-600",
+        text: "text-orange-900",
+        subtext: "text-orange-700/70",
+        button: "bg-orange-600 hover:bg-orange-700",
+      }
+    }
+    return {
+      wrapper: "from-blue-50 to-indigo-50 border-blue-200/60",
+      iconBg: "bg-blue-100 text-blue-600",
+      text: "text-blue-900",
+      subtext: "text-blue-700/70",
+      button: "bg-blue-600 hover:bg-blue-700",
+    }
+  }
+
+  const urgency = getUrgencyStyles()
 
   return (
     <>
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
         <SidebarTrigger className="md:hidden" />
 
-        {/* Trial Banner - shown between sidebar trigger and other content */}
+        {/* Trial Banner — redesigned: gradient background, icon badge,
+            urgency-based color escalation, clearer visual hierarchy */}
         {showTrialBanner && (
-          <div className="flex flex-1 items-center justify-between gap-4 rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-            <span className="flex items-center gap-2">
-              <span className="font-medium">🚀 You're on a free trial</span>
-              <span className="text-xs opacity-75">
-                {planName} plan — {14} days remaining
-              </span>
-            </span>
+          <div
+            className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-4 py-2`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${urgency.iconBg}`}>
+                <Sparkles className="size-4" />
+              </div>
+              <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                <span className={`font-semibold text-sm ${urgency.text} truncate`}>
+                  {trialDateLoading ? (
+                    "You're on a free trial"
+                  ) : trialDaysRemaining !== null ? (
+                    <>
+                      {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left in your trial
+                    </>
+                  ) : (
+                    "You're on a free trial"
+                  )}
+                </span>
+                <span className={`text-xs ${urgency.subtext} truncate`}>
+                  {planName || "Free Trial"} plan
+                </span>
+              </div>
+            </div>
             <Button
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-8"
+              className={`${urgency.button} text-white text-xs px-3 py-1 h-8 gap-1 shrink-0`}
               onClick={handleUpgrade}
             >
-              Upgrade Now
+              Upgrade
+              <ArrowRight className="size-3" />
             </Button>
+          </div>
+        )}
+
+        {/* Loading skeleton for the banner slot — avoids the header
+            looking like content vanished while status/trial date load */}
+        {limitsLoading && !showTrialBanner && orgId && (
+          <div className="flex flex-1 items-center">
+            <div className="h-9 w-64 rounded-xl bg-muted animate-pulse" />
           </div>
         )}
 
