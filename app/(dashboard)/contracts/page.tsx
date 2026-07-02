@@ -108,8 +108,9 @@ export default function ContractsPage() {
   // --- Plan modal state ---
   const [showPlanModal, setShowPlanModal] = useState(false)
 
-  // --- Auto-show flag to prevent repeated popups ---
-  const [autoShownLimitModal, setAutoShownLimitModal] = useState(false)
+  // --- Data ready flag for auto-show ---
+  const [dataReady, setDataReady] = useState(false)
+  const [autoShown, setAutoShown] = useState(false)
 
   // --- Fetch org_id ---
   useEffect(() => {
@@ -152,12 +153,14 @@ export default function ContractsPage() {
           setSubscription(subData)
           setPlan(subData.plan)
         } else {
+          // No subscription record → treat as expired/free (but we'll still fetch free plan for limits)
           const { data: freePlan } = await supabase
             .from('subscription_plans')
             .select('*')
             .eq('id', 'free')
             .single()
           setPlan(freePlan)
+          // subscription remains null
         }
       } catch (error) {
         console.error('Error fetching subscription:', error)
@@ -182,56 +185,65 @@ export default function ContractsPage() {
     }
   }
 
-  // --- Load contracts and count ---
+  // --- Load contracts and count, then mark data ready ---
   useEffect(() => {
     if (currentOrgId) {
       const loadData = async () => {
         setLoading(true)
         await Promise.all([loadContracts(), fetchContractCount()])
         setLoading(false)
+        setDataReady(true) // all data loaded
       }
       loadData()
     }
   }, [currentOrgId])
 
-  // --- Auto-show limit modal on page load if conditions are met ---
-  useEffect(() => {
-    if (!autoShownLimitModal && subscription && plan && contractCount !== undefined && currentOrgId) {
-      // Check for expired subscription or trial
-      let shouldShow = false
-      let type: LimitModalType = 'expired'
-      let value = 0
+  // --- Centralized check & show modal ---
+  const checkAndShowLimitModal = (showOnLoad = false) => {
+    // If we already auto-shown and this is the load trigger, skip
+    if (showOnLoad && autoShown) return
 
-      if (subscription.status === 'expired') {
-        shouldShow = true
-        type = 'expired'
-      } else if (subscription.trial_end_date) {
-        const trialEnd = new Date(subscription.trial_end_date)
-        const today = new Date()
-        if (trialEnd < today && subscription.status !== 'active') {
-          shouldShow = true
-          type = 'expired'
-        }
-      }
-
-      if (!shouldShow) {
-        // Check contract limit
-        const maxContracts = plan?.max_contracts ?? 99999
-        if (contractCount >= maxContracts) {
-          shouldShow = true
-          type = 'contracts-limit'
-          value = maxContracts
-        }
-      }
-
-      if (shouldShow) {
-        setLimitModalType(type)
-        setLimitValue(value)
-        setShowLimitModal(true)
-        setAutoShownLimitModal(true)
+    // Determine if subscription is expired or missing
+    let isExpired = false
+    if (!subscription) {
+      // No subscription record → treat as expired (no active plan)
+      isExpired = true
+    } else if (subscription.status === 'expired') {
+      isExpired = true
+    } else if (subscription.trial_end_date) {
+      const trialEnd = new Date(subscription.trial_end_date)
+      const today = new Date()
+      if (trialEnd < today && subscription.status !== 'active') {
+        isExpired = true
       }
     }
-  }, [subscription, plan, contractCount, currentOrgId, autoShownLimitModal])
+
+    if (isExpired) {
+      setLimitModalType('expired')
+      setShowLimitModal(true)
+      if (showOnLoad) setAutoShown(true)
+      return true // blocked
+    }
+
+    // Check contract limit
+    const maxContracts = plan?.max_contracts ?? 99999
+    if (contractCount >= maxContracts) {
+      setLimitModalType('contracts-limit')
+      setLimitValue(maxContracts)
+      setShowLimitModal(true)
+      if (showOnLoad) setAutoShown(true)
+      return true
+    }
+
+    return false // no block
+  }
+
+  // --- Auto-show on load when data is ready ---
+  useEffect(() => {
+    if (dataReady && !autoShown) {
+      checkAndShowLimitModal(true)
+    }
+  }, [dataReady, autoShown, subscription, plan, contractCount])
 
   const handleFilter = () => {
     let filtered = contracts
@@ -277,6 +289,8 @@ export default function ContractsPage() {
   }
 
   const handleEditClick = (contract: ContractDisplay) => {
+    // Ensure user can edit even if expired? Usually editing might be allowed but we keep the same check.
+    // For safety, we can still allow edit if they already have the contract.
     setEditingContract(contract as Contract)
     setModalOpen(true)
   }
@@ -293,29 +307,12 @@ export default function ContractsPage() {
     setShowPlanModal(false)
   }
 
-  // --- Modified handleAddClick with limit checks ---
+  // --- Modified handleAddClick uses the same check ---
   const handleAddClick = () => {
-    if (subscription && subscription.status === 'expired') {
-      setLimitModalType('expired')
-      setShowLimitModal(true)
-      return
-    }
-    if (subscription && subscription.trial_end_date) {
-      const trialEnd = new Date(subscription.trial_end_date)
-      const today = new Date()
-      if (trialEnd < today && subscription.status !== 'active') {
-        setLimitModalType('expired')
-        setShowLimitModal(true)
-        return
-      }
-    }
-    const maxContracts = plan?.max_contracts ?? 99999
-    if (contractCount >= maxContracts) {
-      setLimitModalType('contracts-limit')
-      setLimitValue(maxContracts)
-      setShowLimitModal(true)
-      return
-    }
+    // Use the centralized check (but don't set autoShown)
+    const blocked = checkAndShowLimitModal(false)
+    if (blocked) return // modal is shown inside check
+    // If not blocked, open the add modal
     setEditingContract(null)
     setModalOpen(true)
   }
