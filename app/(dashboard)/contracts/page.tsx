@@ -108,6 +108,9 @@ export default function ContractsPage() {
   // --- Plan modal state ---
   const [showPlanModal, setShowPlanModal] = useState(false)
 
+  // --- Auto-show flag to prevent repeated popups ---
+  const [autoShownLimitModal, setAutoShownLimitModal] = useState(false)
+
   // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
@@ -190,6 +193,45 @@ export default function ContractsPage() {
       loadData()
     }
   }, [currentOrgId])
+
+  // --- Auto-show limit modal on page load if conditions are met ---
+  useEffect(() => {
+    if (!autoShownLimitModal && subscription && plan && contractCount !== undefined && currentOrgId) {
+      // Check for expired subscription or trial
+      let shouldShow = false
+      let type: LimitModalType = 'expired'
+      let value = 0
+
+      if (subscription.status === 'expired') {
+        shouldShow = true
+        type = 'expired'
+      } else if (subscription.trial_end_date) {
+        const trialEnd = new Date(subscription.trial_end_date)
+        const today = new Date()
+        if (trialEnd < today && subscription.status !== 'active') {
+          shouldShow = true
+          type = 'expired'
+        }
+      }
+
+      if (!shouldShow) {
+        // Check contract limit
+        const maxContracts = plan?.max_contracts ?? 99999
+        if (contractCount >= maxContracts) {
+          shouldShow = true
+          type = 'contracts-limit'
+          value = maxContracts
+        }
+      }
+
+      if (shouldShow) {
+        setLimitModalType(type)
+        setLimitValue(value)
+        setShowLimitModal(true)
+        setAutoShownLimitModal(true)
+      }
+    }
+  }, [subscription, plan, contractCount, currentOrgId, autoShownLimitModal])
 
   const handleFilter = () => {
     let filtered = contracts
@@ -580,7 +622,7 @@ export default function ContractsPage() {
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
           type={limitModalType}
-          onUpgrade={handleViewPlans}   // ✅ now opens the plan modal
+          onUpgrade={handleViewPlans}
           limitValue={limitValue}
         />
 
