@@ -23,16 +23,25 @@ export function getBillingCycleLabel(billingCycle: BillingCycle): string {
   return cycle?.label || 'Monthly';
 }
 
-export function formatCurrency(amount: number): string {
+// FIXED: guards against undefined/null/NaN — this was the exact line
+// crashing the billing page when subscription.currentPrice was undefined.
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || typeof amount !== 'number' || isNaN(amount)) {
+    return '—';
+  }
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
-export function formatDate(date: Date): string {
+// FIXED: guards against a missing/invalid date instead of throwing inside Intl.DateTimeFormat.
+export function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '—';
   return new Intl.DateTimeFormat('en-IN', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  }).format(date);
+  }).format(d);
 }
 
 export function getStatusColor(
@@ -110,8 +119,11 @@ export function calculateRenewalDate(
   return renewalDate;
 }
 
+// FIXED: guards against limit being 0 (real division-by-zero risk once
+// real usage data is wired in, not just the Infinity case).
 export function getUsagePercentage(used: number, limit: number): number {
-  if (limit === Infinity) return 0;
+  if (!limit || limit === Infinity || limit <= 0) return 0;
+  if (used === null || used === undefined || isNaN(used)) return 0;
   return Math.round((used / limit) * 100);
 }
 
