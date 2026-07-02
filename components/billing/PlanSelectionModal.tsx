@@ -27,10 +27,10 @@ interface Plan {
   max_invoices_monthly: number;
 }
 
-// onSelectPlan is no longer needed – we open Razorpay directly
 interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  orgId: string; // required to create the order
 }
 
 const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
@@ -40,30 +40,34 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
-// Razorpay payment links for each plan and cycle
-const PAYMENT_LINKS: Record<string, Record<BillingCycle, string>> = {
-  basic: {
-    monthly: 'https://rzp.io/rzp/tYnvcz1',
-    quarterly: 'https://rzp.io/rzp/pTUiceQb',
-    'semi-annual': 'https://rzp.io/rzp/iqyaXDY',
-    annual: 'https://rzp.io/rzp/1P1G0fT',
-  },
-  pro: {
-    monthly: 'https://rzp.io/rzp/kCn0ski2',
-    quarterly: 'https://rzp.io/rzp/AkQvZYC1',
-    'semi-annual': 'https://rzp.io/rzp/fS9DVi4w',
-    annual: 'https://rzp.io/rzp/Qtp9IHuV',
-  },
+// Load Razorpay script only once
+let razorpayLoaded = false;
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 };
 
 export default function PlanSelectionModal({
   isOpen,
   onClose,
+  orgId,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
+  const [isProcessing, setIsProcessing] = useState(false);
 
+  // Fetch plans from Supabase
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -78,7 +82,6 @@ export default function PlanSelectionModal({
           ...p,
           features: Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]'),
         }));
-        // Filter out the free plan – we already show it on the billing page
         const filtered = parsed.filter((p: Plan) => p.id !== 'free');
         setPlans(filtered);
       } catch (error) {
@@ -91,6 +94,7 @@ export default function PlanSelectionModal({
     if (isOpen) fetchPlans();
   }, [isOpen]);
 
+  // Helper functions for pricing/discounts (unchanged)
   const getPrice = (plan: Plan) => {
     const map: Record<BillingCycle, number> = {
       monthly: plan.price_monthly,
@@ -120,22 +124,82 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
-  // Updated: redirect to Razorpay payment link
-  const handleSelect = (plan: Plan) => {
-    const linksForPlan = PAYMENT_LINKS[plan.id];
-    if (!linksForPlan) {
-      toast.error('Payment link not configured for this plan');
-      return;
+  // Main handler – creates order and opens Razorpay
+  const handleSelect = async (plan: Plan) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      // 1. Load Razorpay script if not loaded
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast.error('Payment system could not be loaded. Please try again.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Get price for the selected cycle
+      const amount = getPrice(plan);
+      if (amount === 0) {
+        toast.error('This plan is free – no payment required.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // 3. Call our API to create a Razorpay order
+      const response = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: plan.id,
+          billingCycle: selectedCycle,
+          orgId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create order');
+      }
+
+      const { orderId, amount: orderAmount, currency, keyId } = await response.json();
+
+      // 4. Open Razorpay Checkout
+      const options = {
+        key: keyId,
+        amount: orderAmount,
+        currency,
+        order_id: orderId,
+        name: 'Remindi AMC',
+        description: `${plan.name} Plan – ${CYCLE_LABELS[selectedCycle].label}`,
+        prefill: {
+          // optional: prefill user contact info (you can fetch from session)
+        },
+        handler: function (response: any) {
+          // Payment successful – webhook will activate the subscription.
+          // We just close the modal and show a success toast.
+          toast.success('Payment successful! Your subscription is being activated.');
+          onClose();
+        },
+        modal: {
+          ondismiss: function () {
+            // User closed the modal without completing payment
+            toast.info('Payment cancelled.');
+          },
+        },
+      };
+
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (error: any) {
+      console.error('Payment initiation error:', error);
+      toast.error(error.message || 'Something went wrong. Please try again.');
+    } finally {
+      setIsProcessing(false);
     }
-    const link = linksForPlan[selectedCycle];
-    if (!link) {
-      toast.error('Payment link not available for this billing cycle');
-      return;
-    }
-    // Open payment link in a new tab
-    window.open(link, '_blank');
-    onClose(); // close modal after redirect
   };
+
+  // ... loading and empty states (same as before)
 
   if (loading) {
     return (
@@ -162,6 +226,7 @@ export default function PlanSelectionModal({
     );
   }
 
+  // Main JSX – unchanged except we pass `onSelect` which now calls the async handler
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
@@ -191,7 +256,7 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        {/* Plan Cards Grid */}
+        {/* Plan Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-6">
           {plans.map((plan) => {
             const price = getPrice(plan);
@@ -214,7 +279,8 @@ export default function PlanSelectionModal({
                   isFree,
                   discountPercent,
                   savingsAmount,
-                  onSelect: () => handleSelect(plan),
+                  onSelect: () => handleSelect(plan), // now calls async function
+                  disabled: isProcessing, // optional: disable button while processing
                 }}
               />
             );
