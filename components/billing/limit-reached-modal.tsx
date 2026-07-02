@@ -13,23 +13,30 @@ import {
   Lock,
   TrendingUp,
   Users,
+  AlertCircle,
 } from 'lucide-react';
 
-export type LimitModalType = 'expired' | 'monthly-limit' | 'team-seats';
+export type LimitModalType = 'expired' | 'monthly-limit' | 'team-seats' | 'resource-limit';
 
 interface LimitReachedModalProps {
   isOpen: boolean;
   onClose: () => void;
   type: LimitModalType;
   onUpgrade?: () => void;
+  // Custom overrides
+  customTitle?: string;
+  customDescription?: string;
+  customIcon?: React.ReactNode;
+  primaryLabel?: string;
+  secondaryLabel?: string;
 }
 
-const MODAL_CONFIG = {
+const MODAL_CONFIG: Record<LimitModalType, { icon: React.ElementType; title: string; description: string; primaryLabel: string; secondaryLabel: string }> = {
   expired: {
     icon: Lock,
     title: 'Your plan has expired',
     description:
-      'Renew your subscription to continue creating contracts, quotations, and invoices.',
+      'Renew your subscription to continue creating customers, contracts, and more.',
     primaryLabel: 'View Plans',
     secondaryLabel: 'Maybe Later',
   },
@@ -49,6 +56,14 @@ const MODAL_CONFIG = {
     primaryLabel: 'Upgrade Plan',
     secondaryLabel: 'Maybe Later',
   },
+  'resource-limit': {
+    icon: AlertCircle,
+    title: "You've reached your limit",
+    description:
+      'You have reached the maximum allowed for this resource on your current plan.',
+    primaryLabel: 'Upgrade Plan',
+    secondaryLabel: 'Maybe Later',
+  },
 };
 
 export default function LimitReachedModal({
@@ -56,9 +71,19 @@ export default function LimitReachedModal({
   onClose,
   type,
   onUpgrade,
+  customTitle,
+  customDescription,
+  customIcon,
+  primaryLabel,
+  secondaryLabel,
 }: LimitReachedModalProps) {
   const config = MODAL_CONFIG[type];
-  const Icon = config.icon;
+  const Icon = customIcon ? undefined : config.icon;
+
+  const title = customTitle || config.title;
+  const description = customDescription || config.description;
+  const primary = primaryLabel || config.primaryLabel;
+  const secondary = secondaryLabel || config.secondaryLabel;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -66,14 +91,14 @@ export default function LimitReachedModal({
         <DialogHeader>
           <div className="flex justify-center mb-4">
             <div className="rounded-full bg-red-100 p-3">
-              <Icon className="h-6 w-6 text-red-600" />
+              {customIcon || <Icon className="h-6 w-6 text-red-600" />}
             </div>
           </div>
           <DialogTitle className="text-center text-xl">
-            {config.title}
+            {title}
           </DialogTitle>
           <DialogDescription className="text-center">
-            {config.description}
+            {description}
           </DialogDescription>
         </DialogHeader>
 
@@ -83,7 +108,7 @@ export default function LimitReachedModal({
             variant="ghost"
             className="text-gray-700 hover:bg-gray-100"
           >
-            {config.secondaryLabel}
+            {secondary}
           </Button>
           <Button
             onClick={() => {
@@ -92,7 +117,7 @@ export default function LimitReachedModal({
             }}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {config.primaryLabel}
+            {primary}
           </Button>
         </DialogFooter>
       </DialogContent>
