@@ -10,8 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
-// ⛔ PaymentHistoryTable is removed – we'll use a placeholder instead
-// import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
 import { BillingCycle, Plan } from '@/lib/billing-types';
@@ -20,14 +18,9 @@ export default function BillingPage() {
   const { user, orgId } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  // Data states
   const [subscription, setSubscription] = useState<any>(null);
-  const [plan, setPlan] = useState<any>(null);
-  const [freePlan, setFreePlan] = useState<any>(null);
-  // paymentHistory is no longer used – we keep it empty
   const [paymentHistory] = useState<any[]>([]);
 
-  // UI states
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired');
@@ -36,15 +29,7 @@ export default function BillingPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      // 1. Get free plan (fallback)
-      const { data: freePlanData } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .eq('id', 'free')
-        .single();
-      if (freePlanData) setFreePlan(freePlanData);
-
-      // 2. Get current subscription
+      // Get current subscription, joined with its plan
       const { data: subData, error: subError } = await supabase
         .from('subscriptions')
         .select('*, plan:plan_id(*)')
@@ -53,14 +38,6 @@ export default function BillingPage() {
 
       if (subError) throw subError;
       setSubscription(subData);
-
-      // 3. Determine active plan (fallback to free if none)
-      const activePlan = subData?.plan || freePlanData;
-      setPlan(activePlan);
-
-      // ⛔ Payment history fetch is completely removed – we don't query the table at all
-      // (The table might not exist yet, so we skip it to avoid errors)
-
     } catch (error) {
       console.error('Error fetching billing data:', error);
       toast.error('Failed to load billing data');
@@ -94,23 +71,25 @@ export default function BillingPage() {
     );
   }
 
-  const hasSubscription = subscription && subscription.status === 'active';
+  // FIXED: previously only 'active' rendered CurrentPlanCard — trial,
+  // expired, and cancelled subscriptions all fell through to the generic
+  // "No Active Subscription" card, hiding their dates entirely. Now any
+  // real subscription row (regardless of status) renders the full card,
+  // which itself handles each status's display internally.
+  const hasSubscription = !!subscription;
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Billing & Subscription</h1>
           <p className="mt-2 text-muted-foreground">Manage your subscription, view usage, and payment history</p>
         </div>
 
-        {/* Current Plan – unchanged */}
         <section>
           {hasSubscription ? (
             <CurrentPlanCard
               subscription={subscription}
-              plan={subscription.plan}
               onUpgrade={handleUpgrade}
             />
           ) : (
@@ -120,15 +99,14 @@ export default function BillingPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-4">
-                  You are currently on the <strong>Free Trial</strong> plan. Upgrade to unlock more features and higher limits.
+                  You don't have a subscription yet. Choose a plan to get started.
                 </p>
-                <Button onClick={handleUpgrade}>Upgrade Now</Button>
+                <Button onClick={handleUpgrade}>Choose a Plan</Button>
               </CardContent>
             </Card>
           )}
         </section>
 
-        {/* Payment History – now a static placeholder */}
         <section>
           <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
             <p className="text-lg font-medium">Payment History</p>
@@ -136,7 +114,6 @@ export default function BillingPage() {
           </div>
         </section>
 
-        {/* Demo Modals – unchanged */}
         <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
           <h3 className="mb-4 text-lg font-semibold text-foreground">🎯 Demo: Paywall Scenarios</h3>
           <p className="mb-4 text-sm text-muted-foreground">
@@ -167,7 +144,6 @@ export default function BillingPage() {
           </div>
         </section>
 
-        {/* Modals – unchanged */}
         <PlanSelectionModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
