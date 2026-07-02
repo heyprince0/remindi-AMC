@@ -10,16 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
+import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
-import { BillingCycle, Plan } from '@/lib/billing-types';
+import { BillingCycle, Plan, PaymentTransaction } from '@/lib/billing-types';
 
 export default function BillingPage() {
   const { user, orgId } = useAuth();
   const [loading, setLoading] = useState(true);
 
   const [subscription, setSubscription] = useState<any>(null);
-  const [paymentHistory] = useState<any[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentTransaction[]>([]);
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -38,6 +39,30 @@ export default function BillingPage() {
 
       if (subError) throw subError;
       setSubscription(subData);
+
+      // Fetch payment history, joined with plan name so the table can
+      // show "Basic" / "Pro" instead of the raw plan_id ('basic', 'pro')
+      const { data: txData, error: txError } = await supabase
+        .from('payment_transactions')
+        .select('*, plan:plan_id(name)')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (txError) throw txError;
+
+      // Map raw Supabase rows to the shape PaymentHistoryTable expects
+      const mappedHistory: PaymentTransaction[] = (txData || []).map((row: any) => ({
+        id: row.id,
+        date: row.created_at,
+        plan: row.plan?.name || row.plan_id || '—',
+        billingCycle: row.billing_cycle || '—',
+        amount: row.amount, // stays in paise — formatCurrency divides for display
+        status: row.status,
+        invoiceUrl: row.invoice_url || null,
+      }));
+
+      setPaymentHistory(mappedHistory);
     } catch (error) {
       console.error('Error fetching billing data:', error);
       toast.error('Failed to load billing data');
@@ -108,10 +133,7 @@ export default function BillingPage() {
         </section>
 
         <section>
-          <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
-            <p className="text-lg font-medium">Payment History</p>
-            <p className="text-sm mt-1">Your transactions will appear here after your first payment.</p>
-          </div>
+          <PaymentHistoryTable transactions={paymentHistory} />
         </section>
 
         <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
