@@ -69,7 +69,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
 
       if (countError) throw countError;
 
-      // 3. Count contracts (for completeness)
+      // 3. Count contracts
       const { count: contractCount } = await supabase
         .from('contracts')
         .select('*', { count: 'exact', head: true })
