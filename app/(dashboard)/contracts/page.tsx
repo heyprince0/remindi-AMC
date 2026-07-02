@@ -4,8 +4,16 @@ import { useEffect, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +24,7 @@ import { supabase, type Contract, type Customer } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Eye, Edit, Calendar, User, FileText, Trash2, AlertCircle } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -29,12 +37,12 @@ export default function ContractsPage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   // Plan limits
-  const { maxContracts, currentContractCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId);
+  const { maxContracts, currentContractCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   // Limit modal state
-  const [showLimitModal, setShowLimitModal] = useState(false);
-  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired');
-  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({});
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -62,20 +70,20 @@ export default function ContractsPage() {
 
   // Check limits on page load
   useEffect(() => {
-    if (limitsLoading || !currentOrgId) return;
+    if (limitsLoading || !currentOrgId) return
     if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired');
-      setLimitModalCustom({});
-      setShowLimitModal(true);
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
     } else if (maxContracts > 0 && currentContractCount >= maxContracts) {
-      setLimitModalType('resource-limit');
+      setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your contract limit",
         description: `Your current plan allows a maximum of ${maxContracts} contracts. You have already created ${currentContractCount}. Upgrade to manage more contracts.`,
-      });
-      setShowLimitModal(true);
+      })
+      setShowLimitModal(true)
     }
-  }, [limitsLoading, status, maxContracts, currentContractCount]);
+  }, [limitsLoading, status, maxContracts, currentContractCount])
 
   const loadContracts = async () => {
     try {
@@ -97,7 +105,7 @@ export default function ContractsPage() {
           .select('id, name')
           .in('id', customerIds)
         if (customersData) {
-          customerMap = customersData.reduce((acc, c) => { acc[c.id] = c.name; return acc; }, {} as Record<string, string>)
+          customerMap = customersData.reduce((acc, c) => { acc[c.id] = c.name; return acc }, {} as Record<string, string>)
         }
       }
 
@@ -148,26 +156,35 @@ export default function ContractsPage() {
   const handleAddClick = () => {
     // Check limits before navigating to add form
     if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired');
-      setLimitModalCustom({});
-      setShowLimitModal(true);
-      return;
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return
     }
     if (maxContracts > 0 && currentContractCount >= maxContracts) {
-      setLimitModalType('resource-limit');
+      setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your contract limit",
         description: `Your current plan allows a maximum of ${maxContracts} contracts. You have already created ${currentContractCount}. Upgrade to manage more contracts.`,
-      });
-      setShowLimitModal(true);
-      return;
+      })
+      setShowLimitModal(true)
+      return
     }
     // Otherwise navigate to add contract page
-    window.location.href = '/contracts/new';
+    window.location.href = '/contracts/new'
   }
 
   const handleUpgrade = () => {
-    window.location.href = '/billing';
+    window.location.href = '/billing'
+  }
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—'
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
   }
 
   return (
@@ -201,74 +218,86 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* Contracts Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {loading ? (
-            <div className="text-center py-8 col-span-full text-muted-foreground">Loading contracts...</div>
-          ) : filteredContracts.length === 0 ? (
-            <div className="text-center py-8 col-span-full text-muted-foreground">
-              {searchTerm ? 'No contracts found matching your search' : 'No contracts yet'}
-            </div>
-          ) : (
-            filteredContracts.map((contract) => (
-              <Card key={contract.id} className="relative">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-base">{contract.contract_name}</CardTitle>
-                      {contract.customer_name && (
-                        <CardDescription className="text-xs flex items-center gap-1">
-                          <User className="size-3" />
-                          {contract.customer_name}
-                        </CardDescription>
-                      )}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
-                          <MoreHorizontal className="size-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/contracts/${contract.id}`}>
-                            <Eye className="mr-2 size-4" />
-                            View
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(contract.id)} className="text-red-600">
-                          <Trash2 className="mr-2 size-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="size-4" />
-                    <span>Every {contract.frequency_days} days</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileText className="size-4" />
-                    <span>Next service: {contract.next_service_date ? new Date(contract.next_service_date).toLocaleDateString() : '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
-                    <Badge variant={contract.status === 'active' ? 'default' : 'secondary'}>
-                      {contract.status || 'Active'}
-                    </Badge>
-                    {contract.contracts_price && (
-                      <span className="text-sm font-medium">
-                        ₹{Number(contract.contracts_price).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+        {/* Contracts Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>All Contracts</CardTitle>
+            <CardDescription>
+              You have {filteredContracts.length} contracts {searchTerm ? 'matching your search' : 'in total'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading contracts...</div>
+            ) : filteredContracts.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">
+                  {contracts.length === 0
+                    ? 'No contracts yet. Create your first contract!'
+                    : 'No contracts matching your filters'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Contract Name</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Frequency</TableHead>
+                      <TableHead>Next Service</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredContracts.map((contract) => (
+                      <TableRow key={contract.id}>
+                        <TableCell className="font-medium">{contract.contract_name}</TableCell>
+                        <TableCell>{contract.customer_name || '—'}</TableCell>
+                        <TableCell>Every {contract.frequency_days} days</TableCell>
+                        <TableCell>{formatDate(contract.next_service_date)}</TableCell>
+                        <TableCell>
+                          {contract.contracts_price ? `₹${Number(contract.contracts_price).toLocaleString()}` : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={contract.status === 'active' ? 'default' : 'secondary'}>
+                            {contract.status || 'Active'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="size-4" />
+                                  <span className="sr-only">Actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/contracts/${contract.id}`}>
+                                    <Eye className="mr-2 size-4" />
+                                    View
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDelete(contract.id)} className="text-red-600">
+                                  <Trash2 className="mr-2 size-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Limit Modal */}
         <LimitReachedModal
