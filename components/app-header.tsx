@@ -35,21 +35,14 @@ export function AppHeader() {
   // Plan limits for trial detection
   const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
 
-  // Real trial countdown — usePlanLimits doesn't expose trial_end_date, so
-  // we fetch it directly here (this component already talks to Supabase
-  // directly for notifications, so this follows the same pattern).
+  // Real trial countdown
   const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null)
   const [trialDateLoading, setTrialDateLoading] = useState(true)
 
   // Modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
-  // FIXED: tracks whether limits/trial data has loaded at least once.
-  // usePlanLimits' isLoading (and orgId itself) can flip briefly on every
-  // page navigation as auth/session state re-checks — previously this
-  // caused the trial banner to disappear and the skeleton to flash back
-  // in every time you moved to a new page. Once loaded once, we keep
-  // showing the last known banner state during any background refetch.
+  // Track if limits have loaded at least once (to avoid banner flicker)
   const hasLoadedLimitsOnce = useRef(false)
   if (!limitsLoading && orgId) {
     hasLoadedLimitsOnce.current = true
@@ -116,7 +109,7 @@ export function AppHeader() {
     }
   }
 
-  // Fetch the real trial_end_date so the countdown is accurate instead of hardcoded
+  // Fetch the real trial_end_date
   const loadTrialDate = async () => {
     if (!orgId) return
     setTrialDateLoading(true)
@@ -181,9 +174,7 @@ export function AppHeader() {
 
   const showTrialBanner = status === 'trial' && (!limitsLoading || hasLoadedLimitsOnce.current)
 
-  // Urgency-based styling — the banner escalates visually as the trial
-  // gets closer to ending, instead of staying the same calm blue the
-  // whole time (which undersells the urgency near the end).
+  // Urgency-based styling
   const getUrgencyStyles = () => {
     if (trialDaysRemaining === null) {
       return {
@@ -228,47 +219,44 @@ export function AppHeader() {
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
         <SidebarTrigger className="md:hidden" />
 
-        {/* Trial Banner — redesigned: gradient background, icon badge,
-            urgency-based color escalation, clearer visual hierarchy */}
+        {/* Trial Banner – mobile friendly */}
         {showTrialBanner && (
           <div
-            className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-4 py-2`}
+            className={`flex flex-1 items-center justify-between gap-2 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-3 py-1.5 sm:px-4 sm:py-2 flex-wrap`}
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${urgency.iconBg}`}>
-                <Sparkles className="size-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`flex size-7 shrink-0 items-center justify-center rounded-full ${urgency.iconBg} sm:size-8`}>
+                <Sparkles className="size-3.5 sm:size-4" />
               </div>
               <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-                <span className={`font-semibold text-sm ${urgency.text} truncate`}>
+                <span className={`font-semibold text-xs sm:text-sm ${urgency.text} truncate`}>
                   {trialDateLoading ? (
                     "You're on a free trial"
                   ) : trialDaysRemaining !== null ? (
                     <>
-                      {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left in your trial
+                      {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left
                     </>
                   ) : (
                     "You're on a free trial"
                   )}
                 </span>
-                <span className={`text-xs ${urgency.subtext} truncate`}>
+                <span className={`text-[10px] sm:text-xs ${urgency.subtext} truncate hidden sm:inline`}>
                   {planName || "Free Trial"} plan
                 </span>
               </div>
             </div>
             <Button
               size="sm"
-              className={`${urgency.button} text-white text-xs px-3 py-1 h-8 gap-1 shrink-0`}
+              className={`${urgency.button} text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 h-7 sm:h-8 gap-1 shrink-0`}
               onClick={handleUpgrade}
             >
               Upgrade
-              <ArrowRight className="size-3" />
+              <ArrowRight className="size-3 hidden sm:inline" />
             </Button>
           </div>
         )}
 
-        {/* Loading skeleton for the banner slot — only shown on the very
-            first load before we've ever had data, not on every
-            background revalidation during navigation */}
+        {/* Loading skeleton – only on first load */}
         {limitsLoading && !showTrialBanner && !hasLoadedLimitsOnce.current && orgId && (
           <div className="flex flex-1 items-center">
             <div className="h-9 w-64 rounded-xl bg-muted animate-pulse" />
