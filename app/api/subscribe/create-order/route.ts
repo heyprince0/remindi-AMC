@@ -16,30 +16,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(req: NextRequest) {
   try {
-    const rawBody = await req.text();
-    console.log('📥 Raw request body:', rawBody);
+    const body = await req.json();
 
-    let body;
-    try {
-      body = JSON.parse(rawBody);
-    } catch (parseError) {
-      console.error('❌ Failed to parse JSON:', parseError);
-      return NextResponse.json(
-        { error: 'Invalid JSON payload' },
-        { status: 400 }
-      );
-    }
-
-    // ✅ Match frontend field names (snake_case)
-    const planId = body.plan_id?.trim();
-    const billingCycle = body.billing_cycle?.trim();
-    const orgId = body.org_id?.trim();
-
-    console.log('📥 Parsed & trimmed:', { planId, billingCycle, orgId });
+    // ✅ Expect camelCase from frontend
+    const { planId, billingCycle, orgId } = body;
 
     if (!planId || !billingCycle || !orgId) {
       return NextResponse.json(
-        { error: 'Missing required fields: plan_id, billing_cycle, org_id' },
+        { error: 'Missing required fields: planId, billingCycle, orgId' },
         { status: 400 }
       );
     }
@@ -52,7 +36,6 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (orgError || !org) {
-      console.error('[Org check error]', orgError);
       return NextResponse.json(
         { error: `Organization not found: ${orgId}` },
         { status: 400 }
@@ -67,11 +50,9 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (planError || !plan) {
-      console.error('[Plan fetch error]', planError);
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    // Determine amount
     const amountMap: Record<string, number> = {
       monthly: plan.price_monthly,
       quarterly: plan.price_quarterly,
@@ -84,10 +65,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Free plan does not require payment' }, { status: 400 });
     }
 
-    // ✅ FIX: receipt must be <= 40 characters
+    // ✅ receipt must be <= 40 characters
     const shortReceipt = `ord_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
 
-    // Create Razorpay order
     const order = await razorpay.orders.create({
       amount,
       currency: 'INR',
@@ -113,13 +93,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Return success
-    const publicKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || keyId;
+    // ✅ Return snake_case keys to match frontend expectations
     return NextResponse.json({
-      orderId: order.id,
+      order_id: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: publicKey,
+      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || keyId,
+      plan_name: plan.name,
     });
   } catch (error: any) {
     console.error('[Create Order] Unexpected error:', error);
