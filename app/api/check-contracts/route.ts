@@ -29,13 +29,12 @@ export async function GET() {
     const in7DaysStr = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
-    // Fetch contracts with customer name and also join organizations to get owner_id
+    // Fetch contracts with customer name only – we'll fetch owner separately
     const { data: contracts, error: dbError } = await supabase
       .from('contracts')
       .select(`
         *,
-        customers(name),
-        organizations!inner(owner_id)
+        customers(name)
       `)
       .gte('next_service_date', ago30DaysStr)
       .lte('next_service_date', in7DaysStr)
@@ -50,13 +49,29 @@ export async function GET() {
       return NextResponse.json({ sent: 0, message: 'No contracts to process' })
     }
 
-    // Collect unique owner_ids
-    const ownerIds = [...new Set(contracts.map(c => c.organizations?.owner_id).filter(Boolean))]
+    // Get all unique org_ids
+    const orgIds = [...new Set(contracts.map(c => c.org_id).filter(Boolean))]
 
-    // Fetch owner emails from profiles (preferred) or fallback to auth.users
+    // Fetch owner_id for each org
+    const { data: orgs, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, owner_id')
+      .in('id', orgIds)
+
+    if (orgError) {
+      console.error('Error fetching organizations:', orgError)
+      return NextResponse.json({ error: 'Failed to fetch organizations' }, { status: 500 })
+    }
+
+    const orgOwnerMap: Record<string, string> = {}
+    for (const org of orgs || []) {
+      if (org.owner_id) orgOwnerMap[org.id] = org.owner_id
+    }
+
+    // Get owner emails from profiles
+    const ownerIds = Object.values(orgOwnerMap).filter(Boolean)
     const ownerEmailMap: Record<string, string> = {}
 
-    // 1. Try profiles
     if (ownerIds.length) {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -70,7 +85,7 @@ export async function GET() {
       }
     }
 
-    // 2. For owners missing email in profiles, fallback to auth.users (service role needed)
+    // Fallback to auth.users for missing emails
     const missingIds = ownerIds.filter(id => !ownerEmailMap[id])
     if (missingIds.length) {
       const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
@@ -102,7 +117,7 @@ export async function GET() {
       }
 
       const customerName = contract.customers?.name || 'Unknown'
-      const ownerId = contract.organizations?.owner_id
+      const ownerId = orgOwnerMap[contract.org_id]
 
       if (!ownerId) {
         skipped++
