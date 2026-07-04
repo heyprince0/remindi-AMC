@@ -58,7 +58,7 @@ export default function PlanSelectionModal({
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
   const [processing, setProcessing] = useState(false);
 
-  // Lock body scroll when payment modal is open
+  // Lock body scroll when processing
   useEffect(() => {
     if (processing) {
       document.body.style.overflow = 'hidden';
@@ -171,7 +171,7 @@ export default function PlanSelectionModal({
         },
         theme: { color: '#2563eb' },
         modal: {
-          backdropClose: false, // 👈 prevent closing on background click
+          backdropClose: false,
           ondismiss: function () {
             setProcessing(false);
           },
@@ -196,7 +196,6 @@ export default function PlanSelectionModal({
           if (verifyRes.ok && verifyData.success) {
             toast.success(`Upgraded to ${plan.name}!`);
             onSuccess?.();
-            onClose();
           } else {
             toast.error(
               `Payment verification failed. Contact support with payment ID: ${response.razorpay_payment_id}`
@@ -208,6 +207,7 @@ export default function PlanSelectionModal({
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
+      onClose(); // ✅ Close the plan selection modal – only Razorpay stays visible.
     } catch (err) {
       console.error('Payment error:', err);
       toast.error('Something went wrong starting the payment.');
