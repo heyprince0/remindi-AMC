@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const CYCLE_TO_DAYS: Record<string, number> = {
   monthly: 30,
@@ -18,25 +23,21 @@ export async function POST(req: NextRequest) {
       plan_id,
       billing_cycle,
       org_id,
-      amount, // in paise, echoed back from the create-order response
+      amount,
     } = await req.json()
 
-    // 1. Verify signature — proves this came from Razorpay, not a spoofed request
+    // 1. Verify signature
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex')
 
     if (expectedSignature !== razorpay_signature) {
+      console.error('Signature mismatch', { expected: expectedSignature, received: razorpay_signature })
       return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 })
     }
 
-    const supabase = createClient()
-
-    // 2. Idempotency check — if the webhook already processed this exact
-    // payment (it can fire before or after this browser callback), don't
-    // double-write. razorpay_payment_id has a unique constraint in
-    // payment_transactions, so this also protects against a race.
+    // 2. Idempotency check
     const { data: existingPayment } = await supabase
       .from('payment_transactions')
       .select('id')
@@ -51,9 +52,7 @@ export async function POST(req: NextRequest) {
     const now = new Date()
     const endDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
 
-    // 3. Upsert subscription — org_id has a unique constraint, so this
-    // updates the existing row for this org rather than creating a
-    // duplicate.
+    // 3. Upsert subscription
     const { error: subError } = await supabase
       .from('subscriptions')
       .upsert(
@@ -72,25 +71,36 @@ export async function POST(req: NextRequest) {
         { onConflict: 'org_id' }
       )
 
-    if (subError) throw subError
+    if (subError) {
+      console.error('Upsert subscription error:', subError)
+      return NextResponse.json({ error: `DB upsert failed: ${subError.message}` }, { status: 500 })
+    }
 
-    // 4. Record the payment
-    const { error: paymentError } = await supabase.from('payment_transactions').insert({
-      org_id,
-      amount,
-      currency: 'INR',
-      status: 'success',
-      razorpay_payment_id,
-      razorpay_order_id,
-      plan_id,
-      billing_cycle,
-    })
+    // 4. Insert payment transaction
+    const { error: paymentError } = await supabase
+      .from('payment_transactions')
+      .insert({
+        org_id,
+        amount,
+        currency: 'INR',
+        status: 'success',
+        razorpay_payment_id,
+        razorpay_order_id,
+        plan_id,
+        billing_cycle,
+      })
 
-    if (paymentError) throw paymentError
+    if (paymentError) {
+      console.error('Insert payment error:', paymentError)
+      return NextResponse.json({ error: `DB insert failed: ${paymentError.message}` }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
-  } catch (err) {
+  } catch (err: any) {
     console.error('Verify payment error:', err)
-    return NextResponse.json({ error: 'Payment verification failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: err.message || 'Unknown error' },
+      { status: 500 }
+    )
   }
 }
