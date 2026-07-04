@@ -33,7 +33,6 @@ interface PlanSelectionModalProps {
   orgId: string;
   userEmail?: string;
   userName?: string;
-  userPhone?: string; // <-- new: phone number to pre‑fill
   onSuccess?: () => void;
 }
 
@@ -50,31 +49,12 @@ export default function PlanSelectionModal({
   orgId,
   userEmail,
   userName,
-  userPhone,
   onSuccess,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
   const [processing, setProcessing] = useState(false);
-  const [fetchedPhone, setFetchedPhone] = useState<string | undefined>(userPhone);
-
-  // If userPhone is not provided, try to fetch it from company_profile
-  useEffect(() => {
-    if (!userPhone && isOpen && orgId) {
-      const fetchPhone = async () => {
-        const { data, error } = await supabase
-          .from('company_profile')
-          .select('phone')
-          .eq('org_id', orgId)
-          .maybeSingle();
-        if (!error && data?.phone) {
-          setFetchedPhone(data.phone);
-        }
-      };
-      fetchPhone();
-    }
-  }, [userPhone, isOpen, orgId]);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -131,6 +111,10 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
+  // FIXED: replaces the old Payment Page redirect entirely. This opens
+  // Razorpay's Checkout.js as a modal directly on your own page —
+  // customer never leaves remindi.online, so there's no more dependency
+  // on how the hosted rzp.io page behaves on a given device/browser.
   const handleSelect = async (plan: Plan) => {
     if (!orgId) {
       toast.error('Unable to identify your organization. Please refresh and try again.');
@@ -164,15 +148,8 @@ export default function PlanSelectionModal({
         description: `${data.plan_name} — ${CYCLE_LABELS[selectedCycle].label}`,
         order_id: data.order_id,
         prefill: {
-          email: userEmail || '',
-          name: userName || '',
-          contact: fetchedPhone || userPhone || '', // <-- pre‑fill with phone
-        },
-        // Make contact readonly if we have a phone number – prevents editing lag
-        readonly: {
-          contact: !!(fetchedPhone || userPhone),
-          email: false,
-          name: false,
+          email: userEmail,
+          name: userName,
         },
         theme: { color: '#2563eb' },
         handler: async function (response: any) {
