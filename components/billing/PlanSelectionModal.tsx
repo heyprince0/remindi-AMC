@@ -33,7 +33,7 @@ interface PlanSelectionModalProps {
   orgId: string;
   userEmail?: string;
   userName?: string;
-  userPhone?: string; // <-- new
+  userPhone?: string;
   onSuccess?: () => void;
 }
 
@@ -57,6 +57,21 @@ export default function PlanSelectionModal({
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
   const [processing, setProcessing] = useState(false);
+
+  // Lock body scroll when payment modal is open
+  useEffect(() => {
+    if (processing) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'relative';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+    };
+  }, [processing]);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -121,7 +136,6 @@ export default function PlanSelectionModal({
 
     setProcessing(true);
     try {
-      // ✅ Send camelCase to match API expectations
       const res = await fetch('/api/subscribe/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,13 +163,19 @@ export default function PlanSelectionModal({
         prefill: {
           email: userEmail,
           name: userName,
-          contact: userPhone, // <-- prefill phone
+          contact: userPhone,
         },
         readonly: {
-          contact: true, // <-- make phone read-only to avoid lag
-          email: true, // optionally make email read-only as well
+          contact: true,
+          email: true,
         },
         theme: { color: '#2563eb' },
+        modal: {
+          backdropClose: false, // 👈 prevent closing on background click
+          ondismiss: function () {
+            setProcessing(false);
+          },
+        },
         handler: async function (response: any) {
           const verifyRes = await fetch('/api/subscribe/verify-payment', {
             method: 'POST',
@@ -183,11 +203,6 @@ export default function PlanSelectionModal({
             );
           }
           setProcessing(false);
-        },
-        modal: {
-          ondismiss: function () {
-            setProcessing(false);
-          },
         },
       };
 
