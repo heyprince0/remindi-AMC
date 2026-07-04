@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { Bell, Sparkles, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -25,28 +25,46 @@ interface NotificationItem {
   type: "expired" | "today-servicing" | "expiring-soon"
 }
 
+// FIXED: module-level cache, not component state/refs. useRef and
+// useState both reset to their initial value whenever a component fully
+// unmounts and remounts — which is what's happening here since this
+// root layout.tsx doesn't render <AppHeader />, meaning it must live in
+// a nested per-route layout or per-page, and is very likely remounting
+// on every navigation. A module-level object lives outside any
+// component instance and survives remounts for the whole browser
+// session, so every fresh mount starts from the last known data instead
+// of blank — nothing to visibly flicker.
+const headerCache: {
+  trialDaysRemaining: number | null
+  notifications: NotificationItem[]
+  expiredCount: number
+  todayServicingCount: number
+  expiringSoonCount: number
+  hasLoadedOnce: boolean
+} = {
+  trialDaysRemaining: null,
+  notifications: [],
+  expiredCount: 0,
+  todayServicingCount: 0,
+  expiringSoonCount: 0,
+  hasLoadedOnce: false,
+}
+
 export function AppHeader() {
   const { user, role, orgId, orgName } = useAuth()
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [expiredCount, setExpiredCount] = useState(0)
-  const [todayServicingCount, setTodayServicingCount] = useState(0)
-  const [expiringSoonCount, setExpiringSoonCount] = useState(0)
+
+  // Seed state from the module cache instead of blank defaults
+  const [notifications, setNotifications] = useState<NotificationItem[]>(headerCache.notifications)
+  const [expiredCount, setExpiredCount] = useState(headerCache.expiredCount)
+  const [todayServicingCount, setTodayServicingCount] = useState(headerCache.todayServicingCount)
+  const [expiringSoonCount, setExpiringSoonCount] = useState(headerCache.expiringSoonCount)
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(headerCache.trialDaysRemaining)
 
   // Plan limits for trial detection
   const { status, planName, isLoading: limitsLoading, refetch: refetchLimits } = usePlanLimits(orgId)
 
-  // Real trial countdown
-  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null)
-  const [trialDateLoading, setTrialDateLoading] = useState(true)
-
-  // Modal state
+  const [trialDateLoading, setTrialDateLoading] = useState(!headerCache.hasLoadedOnce)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-
-  // Track if limits have loaded at least once (to avoid banner flicker)
-  const hasLoadedLimitsOnce = useRef(false)
-  if (!limitsLoading && orgId) {
-    hasLoadedLimitsOnce.current = true
-  }
 
   const loadAlerts = async () => {
     if (!user?.id || !orgId) return
@@ -104,12 +122,17 @@ export function AppHeader() {
       setTodayServicingCount(todayServicing)
       setExpiringSoonCount(expiringSoon)
       setNotifications(items.slice(0, 10))
+
+      // Write through to the module cache so the next mount starts here
+      headerCache.expiredCount = expired
+      headerCache.todayServicingCount = todayServicing
+      headerCache.expiringSoonCount = expiringSoon
+      headerCache.notifications = items.slice(0, 10)
     } catch (error) {
       console.error("Error loading notifications:", error)
     }
   }
 
-  // Fetch the real trial_end_date
   const loadTrialDate = async () => {
     if (!orgId) return
     setTrialDateLoading(true)
@@ -122,25 +145,27 @@ export function AppHeader() {
 
       if (error) throw error
 
+      let days: number | null = null
       if (data?.trial_end_date) {
         const end = new Date(data.trial_end_date)
         const today = new Date()
         end.setHours(0, 0, 0, 0)
         today.setHours(0, 0, 0, 0)
         const diffDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        setTrialDaysRemaining(Math.max(diffDays, 0))
-      } else {
-        setTrialDaysRemaining(null)
+        days = Math.max(diffDays, 0)
       }
+      setTrialDaysRemaining(days)
+      headerCache.trialDaysRemaining = days
     } catch (error) {
       console.error("Error loading trial date:", error)
       setTrialDaysRemaining(null)
+      headerCache.trialDaysRemaining = null
     } finally {
       setTrialDateLoading(false)
+      headerCache.hasLoadedOnce = true
     }
   }
 
-  // Load alerts and trial date whenever orgId is available
   useEffect(() => {
     if (orgId) {
       loadAlerts()
@@ -148,7 +173,6 @@ export function AppHeader() {
     }
   }, [orgId])
 
-  // Subscribe to contract changes
   useEffect(() => {
     if (!orgId) return
     const subscription = supabase
@@ -172,9 +196,11 @@ export function AppHeader() {
     loadTrialDate()
   }
 
-  const showTrialBanner = status === 'trial' && (!limitsLoading || hasLoadedLimitsOnce.current)
+  // No longer gated behind limitsLoading at all — the cache already
+  // gives us last-known data immediately on mount, so there's no reason
+  // to hide the banner while this mount's own fetch is still in flight.
+  const showTrialBanner = status === 'trial'
 
-  // Urgency-based styling
   const getUrgencyStyles = () => {
     if (trialDaysRemaining === null) {
       return {
@@ -219,7 +245,7 @@ export function AppHeader() {
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-card px-4 md:px-6">
         <SidebarTrigger className="md:hidden" />
 
-        {/* Trial Banner – mobile friendly */}
+        {/* Trial Banner – mobile friendly, no loading-gated flicker */}
         {showTrialBanner && (
           <div
             className={`flex flex-1 items-center justify-between gap-2 rounded-xl border bg-gradient-to-r ${urgency.wrapper} px-3 py-1.5 sm:px-4 sm:py-2 flex-wrap`}
@@ -230,14 +256,12 @@ export function AppHeader() {
               </div>
               <div className="min-w-0 flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
                 <span className={`font-semibold text-xs sm:text-sm ${urgency.text} truncate`}>
-                  {trialDateLoading ? (
-                    "You're on a free trial"
-                  ) : trialDaysRemaining !== null ? (
+                  {trialDaysRemaining !== null ? (
                     <>
                       {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left
                     </>
                   ) : (
-                    "You're on a free trial"
+                    "Free trial"
                   )}
                 </span>
                 <span className={`text-[10px] sm:text-xs ${urgency.subtext} truncate hidden sm:inline`}>
@@ -253,13 +277,6 @@ export function AppHeader() {
               Upgrade
               <ArrowRight className="size-3 hidden sm:inline" />
             </Button>
-          </div>
-        )}
-
-        {/* Loading skeleton – only on first load */}
-        {limitsLoading && !showTrialBanner && !hasLoadedLimitsOnce.current && orgId && (
-          <div className="flex flex-1 items-center">
-            <div className="h-9 w-64 rounded-xl bg-muted animate-pulse" />
           </div>
         )}
 
@@ -283,7 +300,7 @@ export function AppHeader() {
                 <span className="sr-only">Notifications</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-80 max-w-80">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {notifications.length === 0 ? (
