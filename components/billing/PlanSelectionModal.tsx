@@ -31,9 +31,6 @@ interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   orgId: string;
-  userEmail?: string;
-  userName?: string;
-  userPhone?: string; // 👈 prefill
   onSuccess?: () => void;
 }
 
@@ -44,19 +41,31 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
+// ✅ Static Razorpay payment links (replace with your actual links)
+const PAYMENT_LINKS: Record<string, Record<BillingCycle, string>> = {
+  basic: {
+    monthly: 'https://rzp.io/rzp/tYnvcz1',
+    quarterly: 'https://rzp.io/rzp/pTUiceQb',
+    'semi-annual': 'https://rzp.io/rzp/iqyaXDY',
+    annual: 'https://rzp.io/rzp/1P1G0fT',
+  },
+  pro: {
+    monthly: 'https://rzp.io/rzp/kCn0ski2',
+    quarterly: 'https://rzp.io/rzp/AkQvZYC1',
+    'semi-annual': 'https://rzp.io/rzp/fS9DVi4w',
+    annual: 'https://rzp.io/rzp/Qtp9IHuV',
+  },
+};
+
 export default function PlanSelectionModal({
   isOpen,
   onClose,
   orgId,
-  userEmail,
-  userName,
-  userPhone,
   onSuccess,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
-  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -113,92 +122,119 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
-  const handleSelect = async (plan: Plan) => {
+  const handleSelect = (plan: Plan) => {
     if (!orgId) {
       toast.error('Unable to identify your organization. Please refresh and try again.');
       return;
     }
 
-    setProcessing(true);
-    try {
-      const res = await fetch('/api/subscribe/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId: plan.id,
-          billingCycle: selectedCycle,
-          orgId: orgId,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to start payment');
-        setProcessing(false);
-        return;
-      }
-
-      const options = {
-        key: data.key_id,
-        amount: data.amount,
-        currency: data.currency,
-        name: 'Remindi',
-        description: `${data.plan_name} — ${CYCLE_LABELS[selectedCycle].label}`,
-        order_id: data.order_id,
-        prefill: {
-          email: userEmail,
-          name: userName,
-          contact: userPhone, // prefill
-        },
-        readonly: {
-          contact: true, // 👈 read-only => no lag
-          email: true,   // optional
-        },
-        theme: { color: '#2563eb' },
-        handler: async function (response: any) {
-          const verifyRes = await fetch('/api/subscribe/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              plan_id: plan.id,
-              billing_cycle: selectedCycle,
-              org_id: orgId,
-              amount: data.amount,
-            }),
-          });
-
-          const verifyData = await verifyRes.json();
-
-          if (verifyRes.ok && verifyData.success) {
-            toast.success(`Upgraded to ${plan.name}!`);
-            onSuccess?.();
-            onClose();
-          } else {
-            toast.error(
-              `Payment verification failed. Contact support with payment ID: ${response.razorpay_payment_id}`
-            );
-          }
-          setProcessing(false);
-        },
-        modal: {
-          ondismiss: function () {
-            setProcessing(false);
-          },
-        },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      console.error('Payment error:', err);
-      toast.error('Something went wrong starting the payment.');
-      setProcessing(false);
+    const linksForPlan = PAYMENT_LINKS[plan.id];
+    if (!linksForPlan) {
+      toast.error('Payment link not configured for this plan');
+      return;
     }
+
+    const link = linksForPlan[selectedCycle];
+    if (!link) {
+      toast.error('Payment link not available for this billing cycle');
+      return;
+    }
+
+    // ✅ Open payment link in a new tab
+    window.open(link, '_blank');
+    onClose();
+
+    // ✅ Notify parent that upgrade was initiated (optional)
+    toast.info('Redirecting to payment page...');
+    onSuccess?.(); // Will refresh the billing page
   };
 
-  // ... (rest of the component – loading, empty, and JSX) 
-  // Use the same JSX as before, just pass the props.
+  if (loading) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="!max-w-4xl w-[95vw]">
+          <div className="flex justify-center items-center py-20">
+            <Loader2 className="size-12 animate-spin text-muted-foreground" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  if (plans.length === 0) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="!max-w-lg w-[95vw]">
+          <div className="text-center py-12">
+            <p className="text-gray-500">No paid plans available at the moment.</p>
+            <Button onClick={onClose} className="mt-4">Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="!max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
+        <DialogHeader>
+          <DialogTitle className="text-2xl sm:text-3xl font-bold text-center">
+            Choose Your Plan
+          </DialogTitle>
+          <DialogDescription className="text-center text-sm sm:text-base">
+            Select the plan that fits your business needs. Upgrade anytime.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 my-6 sm:my-8">
+          {Object.entries(CYCLE_LABELS).map(([cycle, { label }]) => (
+            <button
+              key={cycle}
+              onClick={() => setSelectedCycle(cycle as BillingCycle)}
+              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                selectedCycle === cycle
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-6">
+          {plans.map((plan) => {
+            const price = getPrice(plan);
+            const isFree = price === 0;
+            const isPopular = plan.id === 'pro';
+            const discountPercent = getDiscountPercent(plan);
+            const savingsAmount = getSavingsAmount(plan);
+
+            return (
+              <PlanCard
+                key={plan.id}
+                plan={{
+                  id: plan.id,
+                  name: plan.name,
+                  description: plan.description,
+                  price,
+                  period: CYCLE_LABELS[selectedCycle].period,
+                  features: plan.features,
+                  isPopular,
+                  isFree,
+                  discountPercent,
+                  savingsAmount,
+                  onSelect: () => handleSelect(plan),
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <p className="text-center text-sm text-gray-500 mt-10 sm:mt-12">
+          All plans include free updates. Cancel anytime.
+        </p>
+      </DialogContent>
+    </Dialog>
+  );
 }
