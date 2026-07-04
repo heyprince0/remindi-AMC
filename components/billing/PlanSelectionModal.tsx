@@ -33,6 +33,7 @@ interface PlanSelectionModalProps {
   orgId: string;
   userEmail?: string;
   userName?: string;
+  userPhone?: string; // <-- new
   onSuccess?: () => void;
 }
 
@@ -49,6 +50,7 @@ export default function PlanSelectionModal({
   orgId,
   userEmail,
   userName,
+  userPhone,
   onSuccess,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -111,10 +113,6 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
-  // FIXED: replaces the old Payment Page redirect entirely. This opens
-  // Razorpay's Checkout.js as a modal directly on your own page —
-  // customer never leaves remindi.online, so there's no more dependency
-  // on how the hosted rzp.io page behaves on a given device/browser.
   const handleSelect = async (plan: Plan) => {
     if (!orgId) {
       toast.error('Unable to identify your organization. Please refresh and try again.');
@@ -123,13 +121,14 @@ export default function PlanSelectionModal({
 
     setProcessing(true);
     try {
+      // ✅ Send camelCase to match API expectations
       const res = await fetch('/api/subscribe/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plan_id: plan.id,
-          billing_cycle: selectedCycle,
-          org_id: orgId,
+          planId: plan.id,
+          billingCycle: selectedCycle,
+          orgId: orgId,
         }),
       });
       const data = await res.json();
@@ -150,6 +149,11 @@ export default function PlanSelectionModal({
         prefill: {
           email: userEmail,
           name: userName,
+          contact: userPhone, // <-- prefill phone
+        },
+        readonly: {
+          contact: true, // <-- make phone read-only to avoid lag
+          email: true, // optionally make email read-only as well
         },
         theme: { color: '#2563eb' },
         handler: async function (response: any) {
