@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js' // 👈 use the regular client
+
+// ✅ Use service role key (no auth context needed)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const CYCLE_TO_DAYS: Record<string, number> = {
   monthly: 30,
@@ -13,9 +19,7 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const signature = req.headers.get('x-razorpay-signature')
 
-  // Verify webhook signature using the separate webhook secret
-  // (set this in Razorpay Dashboard → Settings → Webhooks, and in
-  // RAZORPAY_WEBHOOK_SECRET — this is NOT the same as your API key secret)
+  // Verify webhook signature
   const expected = crypto
     .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!)
     .update(body)
@@ -27,9 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   const event = JSON.parse(body)
-  const supabase = createClient()
 
-  // Log every webhook event for debugging/audit, regardless of outcome
+  // Log the event (idempotency check)
   const { data: existingEvent } = await supabase
     .from('webhook_events')
     .select('id, processed')
@@ -37,8 +40,6 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
 
   if (existingEvent?.processed) {
-    // Already handled this exact event — Razorpay retries on any non-200,
-    // so this is expected to happen sometimes. Just confirm and exit.
     return NextResponse.json({ success: true, message: 'Already processed' })
   }
 
@@ -58,14 +59,11 @@ export async function POST(req: NextRequest) {
       const { org_id, plan_id, billing_cycle } = notes
 
       if (!org_id || !plan_id || !billing_cycle) {
-        console.error('Webhook payment missing expected notes:', notes)
-        // Still return 200 — this isn't a signature/auth problem, it's a
-        // data problem, and retrying won't fix missing notes.
+        console.error('Webhook payment missing notes:', notes)
         return NextResponse.json({ success: true, message: 'Missing notes, skipped' })
       }
 
-      // Idempotency check against payment_transactions directly too,
-      // in case the browser-side verify-payment call already handled this
+      // Check if already processed via verify-payment
       const { data: existingPayment } = await supabase
         .from('payment_transactions')
         .select('id')
@@ -77,6 +75,7 @@ export async function POST(req: NextRequest) {
         const now = new Date()
         const endDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
 
+        // Upsert subscription
         await supabase.from('subscriptions').upsert(
           {
             org_id,
@@ -93,6 +92,7 @@ export async function POST(req: NextRequest) {
           { onConflict: 'org_id' }
         )
 
+        // Record payment
         await supabase.from('payment_transactions').insert({
           org_id,
           amount: payment.amount,
@@ -119,10 +119,7 @@ export async function POST(req: NextRequest) {
       .update({ error_message: err instanceof Error ? err.message : 'Unknown error' })
       .eq('razorpay_event_id', event.id)
 
-    // Return 200 anyway once logged — returning an error causes Razorpay
-    // to keep retrying, which won't help if the error is a genuine bug
-    // rather than a transient failure. You can inspect webhook_events to
-    // find and fix failures manually.
+    // Return 200 to stop retries
     return NextResponse.json({ success: true, message: 'Logged with error' })
   }
 }
