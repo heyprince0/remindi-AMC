@@ -21,8 +21,6 @@ import { Spinner } from '@/components/ui/spinner'
 
 const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control', 'Generator', 'Fire Safety', 'UPS', 'Other']
 
-import { useEffect } from 'react'
-
 export default function ProfileSetupPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
