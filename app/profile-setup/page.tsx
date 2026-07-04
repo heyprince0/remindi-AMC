@@ -9,13 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -53,11 +46,10 @@ export default function ProfileSetupPage() {
           return
         }
 
-        // If no membership, but they have a profile, still allow setup
-        // but we need to create org/membership on submit
+        // If no membership, allow setup
         setCheckingProfile(false)
       } catch (error) {
-        console.log('No profile found, allowing setup')
+        console.log('Error checking profile:', error)
         setCheckingProfile(false)
       }
     }
@@ -94,36 +86,59 @@ export default function ProfileSetupPage() {
           company_name: companyName,
           phone: phone,
           city: city,
-          service_types: selectedServices.length > 0 
-            ? selectedServices : null,
-        }, {
-          onConflict: 'id'
-        })
+          service_types: selectedServices.length > 0 ? selectedServices : null,
+        }, { onConflict: 'id' })
 
-      if (profileError) throw profileError
+      if (profileError) {
+        console.error('Profile upsert error:', profileError)
+        throw new Error(`Profile error: ${profileError.message}`)
+      }
 
-      // 2. Create organization
-      const { data: org, error: orgError } = await supabase
+      // 2. Check if user already has an organization (avoid duplicates)
+      const { data: existingOrg } = await supabase
         .from('organizations')
-        .insert({
-          name: companyName,
-          owner_id: user.id,
-        })
-        .select()
-        .single()
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
 
-      if (orgError) throw orgError
+      let orgId: string
 
-      // 3. Create membership (admin)
-      const { error: membershipError } = await supabase
+      if (existingOrg) {
+        orgId = existingOrg.id
+      } else {
+        // Create organization
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .insert({ name: companyName, owner_id: user.id })
+          .select()
+          .single()
+
+        if (orgError) {
+          console.error('Org creation error:', orgError)
+          throw new Error(`Org error: ${orgError.message}`)
+        }
+        orgId = org.id
+      }
+
+      // 3. Check if user already has a membership for this org
+      const { data: existingMembership } = await supabase
         .from('memberships')
-        .insert({
-          org_id: org.id,
-          user_id: user.id,
-          role: 'admin',
-        })
+        .select('id')
+        .eq('org_id', orgId)
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-      if (membershipError) throw membershipError
+      if (!existingMembership) {
+        // Create membership
+        const { error: membershipError } = await supabase
+          .from('memberships')
+          .insert({ org_id: orgId, user_id: user.id, role: 'admin' })
+
+        if (membershipError) {
+          console.error('Membership creation error:', membershipError)
+          throw new Error(`Membership error: ${membershipError.message}`)
+        }
+      }
 
       // 4. (Optional) The trigger on organizations will create the trial subscription automatically.
       // If you don't have the trigger, you can insert the subscription here manually.
