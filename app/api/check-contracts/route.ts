@@ -29,9 +29,14 @@ export async function GET() {
     const in7DaysStr = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
+    // Fetch contracts with customer name and also join organizations to get owner_id
     const { data: contracts, error: dbError } = await supabase
       .from('contracts')
-      .select('*, customers(name)')
+      .select(`
+        *,
+        customers(name),
+        organizations!inner(owner_id)
+      `)
       .gte('next_service_date', ago30DaysStr)
       .lte('next_service_date', in7DaysStr)
       .eq('status', 'active')
@@ -45,31 +50,39 @@ export async function GET() {
       return NextResponse.json({ sent: 0, message: 'No contracts to process' })
     }
 
-    // ✅ FIX: Look for either 'admin' or 'owner'
-    const { data: memberships, error: membershipsError } = await supabase
-      .from('memberships')
-      .select('org_id, user_id, role')
-      .in('role', ['admin', 'owner'])
+    // Collect unique owner_ids
+    const ownerIds = [...new Set(contracts.map(c => c.organizations?.owner_id).filter(Boolean))]
 
-    if (membershipsError) {
-      console.error('Error fetching memberships:', membershipsError)
-      return NextResponse.json({ error: 'Failed to fetch admins' }, { status: 500 })
+    // Fetch owner emails from profiles (preferred) or fallback to auth.users
+    const ownerEmailMap: Record<string, string> = {}
+
+    // 1. Try profiles
+    if (ownerIds.length) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', ownerIds)
+
+      if (!profilesError && profiles) {
+        for (const p of profiles) {
+          if (p.email) ownerEmailMap[p.id] = p.email
+        }
+      }
     }
 
-    const orgAdminMap: Record<string, string> = {}
-    for (const m of memberships || []) {
-      orgAdminMap[m.org_id] = m.user_id
-    }
-
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
-    if (usersError) {
-      console.error('Error fetching users:', usersError)
-      return NextResponse.json({ error: 'Failed to fetch user emails' }, { status: 500 })
-    }
-
-    const userEmailMap: Record<string, string> = {}
-    for (const u of users || []) {
-      if (u.email) userEmailMap[u.id] = u.email
+    // 2. For owners missing email in profiles, fallback to auth.users (service role needed)
+    const missingIds = ownerIds.filter(id => !ownerEmailMap[id])
+    if (missingIds.length) {
+      const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+      if (!usersError && users) {
+        for (const u of users) {
+          if (missingIds.includes(u.id) && u.email) {
+            ownerEmailMap[u.id] = u.email
+          }
+        }
+      } else {
+        console.warn('Could not fetch auth users for missing emails:', usersError)
+      }
     }
 
     let sent = 0
@@ -89,18 +102,18 @@ export async function GET() {
       }
 
       const customerName = contract.customers?.name || 'Unknown'
+      const ownerId = contract.organizations?.owner_id
 
-      const adminUserId = orgAdminMap[contract.org_id]
-      if (!adminUserId) {
+      if (!ownerId) {
         skipped++
-        console.warn(`No admin/owner found for org ${contract.org_id}, contract ${contract.id}`)
+        console.warn(`No owner found for org ${contract.org_id}, contract ${contract.id}`)
         continue
       }
 
-      const userEmail = userEmailMap[adminUserId]
+      const userEmail = ownerEmailMap[ownerId]
       if (!userEmail) {
         skipped++
-        console.warn(`No email for admin ${adminUserId}, contract ${contract.id}`)
+        console.warn(`No email for owner ${ownerId}, contract ${contract.id}`)
         continue
       }
 
