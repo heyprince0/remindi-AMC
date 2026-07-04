@@ -14,10 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { supabase, type ServiceHistory, type Contract, type Technician, type Customer } from "@/lib/supabase"
+import { supabase, type ServiceHistory, type Contract, type Technician, type Customer, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Search, Download, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react"
+import { Search, Download, Calendar, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react"
 import { ExportModal } from "@/components/export-modal"
+import { toast } from "sonner"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface ServiceRecord extends ServiceHistory {
   customerName: string
@@ -54,6 +57,13 @@ function getStatusBadge(status: string) {
   }
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [24, 95, 165]
+}
+
 export default function ServiceHistoryPage() {
   const { user } = useAuth()
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([])
@@ -61,9 +71,11 @@ export default function ServiceHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
 
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [profile, setProfile] = useState<CompanyProfile | null>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -78,6 +90,15 @@ export default function ServiceHistoryPage() {
             toast.error("Could not determine your organization")
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+            // Also fetch company profile for PDF
+            supabase
+              .from("company_profile")
+              .select("*")
+              .eq("org_id", data.org_id)
+              .single()
+              .then(({ data: profileData }) => {
+                if (profileData) setProfile(profileData as CompanyProfile)
+              })
           }
         })
     }
@@ -131,6 +152,7 @@ export default function ServiceHistoryPage() {
       setFilteredRecords(records)
     } catch (error) {
       console.error('Error loading service history:', error)
+      toast.error('Failed to load service history')
     } finally {
       setLoading(false)
     }
@@ -152,6 +174,116 @@ export default function ServiceHistoryPage() {
     handleFilter()
   }, [searchTerm, serviceRecords])
 
+  // =============================================
+  // PDF GENERATION (same pattern as invoices)
+  // =============================================
+  const handleDownloadPdf = async () => {
+    if (filteredRecords.length === 0) {
+      toast.error("No records to export")
+      return
+    }
+
+    setGeneratingPdf(true)
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+      const pageW = 297
+      const margin = 15
+      const themeColor = profile?.theme_color ?? "#185FA5"
+      const [tr, tg, tb] = hexToRgb(themeColor)
+
+      let y = margin
+
+      // Company header (if logo)
+      if (profile?.logo_url) {
+        try {
+          const response = await fetch(profile.logo_url)
+          const blob = await response.blob()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
+          doc.addImage(base64, "PNG", margin, y, 22, 22)
+        } catch (e) { /* skip logo */ }
+        y += 10
+      }
+
+      // Title
+      doc.setFontSize(16)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("Service History Report", 148, y, { align: "center" })
+
+      y += 10
+      doc.setFontSize(10)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}`, 148, y, { align: "center" })
+
+      if (profile?.company_name) {
+        y += 6
+        doc.setTextColor(80, 80, 80)
+        doc.text(profile.company_name, 148, y, { align: "center" })
+      }
+
+      y += 12
+
+      // Table
+      const tableBody = filteredRecords.map((r) => [
+        r.customerName,
+        r.contractName,
+        r.technicianName,
+        r.service_date ? new Date(r.service_date).toLocaleDateString("en-IN") : "-",
+        r.contractPrice != null ? `₹${r.contractPrice.toLocaleString("en-IN")}` : "—",
+        r.status || "—",
+        r.notes || "—",
+      ])
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Customer", "Contract", "Technician", "Date", "Price", "Status", "Notes"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: {
+          fillColor: [tr, tg, tb],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 9,
+          halign: "center",
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [0, 0, 0],
+        },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 25, halign: "center" },
+          4: { cellWidth: 25, halign: "right" },
+          5: { cellWidth: 25, halign: "center" },
+          6: { cellWidth: "auto" },
+        },
+        margin: { left: margin, right: margin },
+      })
+
+      // Footer
+      const finalY = (doc as any).lastAutoTable.finalY + 10
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.setFont("helvetica", "italic")
+      doc.text("Generated by Remindi · remindi.online", 148, finalY, { align: "center" })
+
+      doc.save("service-history-report.pdf")
+      toast.success("PDF downloaded successfully")
+    } catch (error) {
+      console.error("PDF generation error:", error)
+      toast.error("Failed to generate PDF")
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -161,13 +293,27 @@ export default function ServiceHistoryPage() {
             <h1 className="text-2xl font-bold text-foreground">Service History</h1>
             <p className="text-muted-foreground">View completed services and maintenance records</p>
           </div>
-          <Button 
-            variant="outline"
-            onClick={() => setExportModalOpen(true)}
-          >
-            <Download className="mr-2 size-4" />
-            Export Report
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExportModalOpen(true)}
+            >
+              <Download className="mr-2 size-4" />
+              Export Report
+            </Button>
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf || filteredRecords.length === 0}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {generatingPdf ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 size-4" />
+              )}
+              Download PDF
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -193,7 +339,7 @@ export default function ServiceHistoryPage() {
           <CardHeader>
             <CardTitle>Service Records</CardTitle>
             <CardDescription>
-              Showing {filteredRecords.length} records total
+              Showing {filteredRecords.length} records {searchTerm ? 'matching your search' : 'in total'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -244,12 +390,12 @@ export default function ServiceHistoryPage() {
           </CardContent>
         </Card>
 
-        {/* Export Modal */}
+        {/* Export Modal (keeping for backward compatibility – you can remove if not needed) */}
         <ExportModal
           open={exportModalOpen}
           onOpenChange={setExportModalOpen}
           records={filteredRecords}
-          orgId={currentOrgId} // pass if needed
+          orgId={currentOrgId}
         />
       </div>
     </DashboardLayout>
