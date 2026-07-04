@@ -31,9 +31,6 @@ interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   orgId: string;
-  userEmail?: string;
-  userName?: string;
-  userPhone?: string; // <-- new
   onSuccess?: () => void;
 }
 
@@ -44,19 +41,31 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
+// ✅ Static Razorpay payment links (replace with your actual links)
+const PAYMENT_LINKS: Record<string, Record<BillingCycle, string>> = {
+  basic: {
+    monthly: 'https://rzp.io/rzp/tYnvcz1',
+    quarterly: 'https://rzp.io/rzp/pTUiceQb',
+    'semi-annual': 'https://rzp.io/rzp/iqyaXDY',
+    annual: 'https://rzp.io/rzp/1P1G0fT',
+  },
+  pro: {
+    monthly: 'https://rzp.io/rzp/kCn0ski2',
+    quarterly: 'https://rzp.io/rzp/AkQvZYC1',
+    'semi-annual': 'https://rzp.io/rzp/fS9DVi4w',
+    annual: 'https://rzp.io/rzp/Qtp9IHuV',
+  },
+};
+
 export default function PlanSelectionModal({
   isOpen,
   onClose,
   orgId,
-  userEmail,
-  userName,
-  userPhone,
   onSuccess,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
-  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -113,91 +122,31 @@ export default function PlanSelectionModal({
     return Math.max(equivalentMonthlyTotal - currentPrice, 0);
   };
 
-  const handleSelect = async (plan: Plan) => {
+  const handleSelect = (plan: Plan) => {
     if (!orgId) {
       toast.error('Unable to identify your organization. Please refresh and try again.');
       return;
     }
 
-    setProcessing(true);
-    try {
-      // ✅ Send camelCase to match API expectations
-      const res = await fetch('/api/subscribe/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId: plan.id,
-          billingCycle: selectedCycle,
-          orgId: orgId,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to start payment');
-        setProcessing(false);
-        return;
-      }
-
-      const options = {
-        key: data.key_id,
-        amount: data.amount,
-        currency: data.currency,
-        name: 'Remindi',
-        description: `${data.plan_name} — ${CYCLE_LABELS[selectedCycle].label}`,
-        order_id: data.order_id,
-        prefill: {
-          email: userEmail,
-          name: userName,
-          contact: userPhone, // <-- prefill phone
-        },
-        readonly: {
-          contact: true, // <-- make phone read-only to avoid lag
-          email: true, // optionally make email read-only as well
-        },
-        theme: { color: '#2563eb' },
-        handler: async function (response: any) {
-          const verifyRes = await fetch('/api/subscribe/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              plan_id: plan.id,
-              billing_cycle: selectedCycle,
-              org_id: orgId,
-              amount: data.amount,
-            }),
-          });
-
-          const verifyData = await verifyRes.json();
-
-          if (verifyRes.ok && verifyData.success) {
-            toast.success(`Upgraded to ${plan.name}!`);
-            onSuccess?.();
-            onClose();
-          } else {
-            toast.error(
-              `Payment verification failed. Contact support with payment ID: ${response.razorpay_payment_id}`
-            );
-          }
-          setProcessing(false);
-        },
-        modal: {
-          ondismiss: function () {
-            setProcessing(false);
-          },
-        },
-      };
-
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      console.error('Payment error:', err);
-      toast.error('Something went wrong starting the payment.');
-      setProcessing(false);
+    const linksForPlan = PAYMENT_LINKS[plan.id];
+    if (!linksForPlan) {
+      toast.error('Payment link not configured for this plan');
+      return;
     }
+
+    const link = linksForPlan[selectedCycle];
+    if (!link) {
+      toast.error('Payment link not available for this billing cycle');
+      return;
+    }
+
+    // ✅ Open payment link in a new tab
+    window.open(link, '_blank');
+    onClose();
+
+    // ✅ Notify parent that upgrade was initiated (optional)
+    toast.info('Redirecting to payment page...');
+    onSuccess?.(); // Will refresh the billing page
   };
 
   if (loading) {
@@ -242,8 +191,7 @@ export default function PlanSelectionModal({
             <button
               key={cycle}
               onClick={() => setSelectedCycle(cycle as BillingCycle)}
-              disabled={processing}
-              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
+              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 selectedCycle === cycle
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -276,20 +224,12 @@ export default function PlanSelectionModal({
                   isFree,
                   discountPercent,
                   savingsAmount,
-                  disabled: processing,
                   onSelect: () => handleSelect(plan),
                 }}
               />
             );
           })}
         </div>
-
-        {processing && (
-          <p className="text-center text-sm text-blue-600 mt-4 flex items-center justify-center gap-2">
-            <Loader2 className="size-4 animate-spin" />
-            Opening secure payment...
-          </p>
-        )}
 
         <p className="text-center text-sm text-gray-500 mt-10 sm:mt-12">
           All plans include free updates. Cancel anytime.
