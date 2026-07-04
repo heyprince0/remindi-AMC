@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
@@ -36,26 +36,30 @@ export default function ProfileSetupPage() {
   const [submitError, setSubmitError] = useState('')
   const [checkingProfile, setCheckingProfile] = useState(true)
 
-  // Check if user already has completed profile
+  // Check if user already has completed profile AND membership
   useEffect(() => {
     const checkProfile = async () => {
       if (!user?.id) return
       
       try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('company_name')
-          .eq('id', user.id)
-          .single()
+        // Check if they already have a membership (organization)
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle()
 
-        // If profile is complete, redirect to dashboard
-        if (profileData?.company_name) {
+        if (membership) {
+          // Already part of an org, redirect to dashboard
           router.push('/')
+          return
         }
+
+        // If no membership, but they have a profile, still allow setup
+        // but we need to create org/membership on submit
+        setCheckingProfile(false)
       } catch (error) {
-        // Profile doesn't exist yet, allow setup
         console.log('No profile found, allowing setup')
-      } finally {
         setCheckingProfile(false)
       }
     }
@@ -83,32 +87,59 @@ export default function ProfileSetupPage() {
 
     setSaving(true)
     try {
-      const { error } = await supabase
-  .from('profiles')
-  .upsert({
-    id: user.id,
-    full_name: fullName,
-    company_name: companyName,
-    phone: phone,
-    city: city,
-    service_types: selectedServices.length > 0 
-      ? selectedServices : null,
-  }, {
-    onConflict: 'id'
-  })
+      // 1. Upsert profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          full_name: fullName,
+          company_name: companyName,
+          phone: phone,
+          city: city,
+          service_types: selectedServices.length > 0 
+            ? selectedServices : null,
+        }, {
+          onConflict: 'id'
+        })
 
-      if (error) throw error
-      
-      // Send welcome email after profile is created (non-blocking)
+      if (profileError) throw profileError
+
+      // 2. Create organization
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .insert({
+          name: companyName,
+          owner_id: user.id,
+        })
+        .select()
+        .single()
+
+      if (orgError) throw orgError
+
+      // 3. Create membership (admin)
+      const { error: membershipError } = await supabase
+        .from('memberships')
+        .insert({
+          org_id: org.id,
+          user_id: user.id,
+          role: 'admin',
+        })
+
+      if (membershipError) throw membershipError
+
+      // 4. (Optional) The trigger on organizations will create the trial subscription automatically.
+      // If you don't have the trigger, you can insert the subscription here manually.
+
+      // Send welcome email (non-blocking)
       try {
         await triggerWelcomeEmail(user.email, fullName)
       } catch (emailError) {
         console.error('Welcome email failed:', emailError)
-        // Don't fail profile setup if email fails
       }
       
       toast.success('Profile setup completed!')
-      router.push('/')
+      // Force a hard refresh to reload auth context with new org
+      window.location.href = '/'
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to save profile'
       console.error('Error saving profile:', error)
