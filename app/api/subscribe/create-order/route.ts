@@ -30,15 +30,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planId = body.planId?.trim();
-    const billingCycle = body.billingCycle?.trim();
-    const orgId = body.orgId?.trim();
+    // ✅ Match frontend field names (snake_case)
+    const planId = body.plan_id?.trim();
+    const billingCycle = body.billing_cycle?.trim();
+    const orgId = body.org_id?.trim();
 
     console.log('📥 Parsed & trimmed:', { planId, billingCycle, orgId });
 
     if (!planId || !billingCycle || !orgId) {
       return NextResponse.json(
-        { error: 'Missing required fields: planId, billingCycle, orgId' },
+        { error: 'Missing required fields: plan_id, billing_cycle, org_id' },
         { status: 400 }
       );
     }
