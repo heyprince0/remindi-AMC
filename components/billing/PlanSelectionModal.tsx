@@ -30,8 +30,11 @@ interface Plan {
 interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  orgId?: string;
-  onSuccess?: () => void;   // 👈 added
+  orgId: string;
+  userEmail?: string;
+  userName?: string;
+  userPhone?: string; // <-- new: phone number to pre‑fill
+  onSuccess?: () => void;
 }
 
 const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months: number }> = {
@@ -41,82 +44,38 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
-let razorpayLoaded = false;
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    if (typeof window !== 'undefined' && (window as any).Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
-
 export default function PlanSelectionModal({
   isOpen,
   onClose,
-  orgId: propOrgId,
-  onSuccess,   // 👈 added
+  orgId,
+  userEmail,
+  userName,
+  userPhone,
+  onSuccess,
 }: PlanSelectionModalProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [orgId, setOrgId] = useState<string | undefined>(propOrgId);
-  const [isFetchingOrg, setIsFetchingOrg] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [fetchedPhone, setFetchedPhone] = useState<string | undefined>(userPhone);
 
-  // Fetch orgId from memberships if not provided
+  // If userPhone is not provided, try to fetch it from company_profile
   useEffect(() => {
-    const fetchOrgId = async () => {
-      if (propOrgId) {
-        setOrgId(propOrgId);
-        return;
-      }
-      if (!isOpen) return;
-
-      setIsFetchingOrg(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.error('No user logged in');
-          return;
-        }
-
-        const { data: membership, error } = await supabase
-          .from('memberships')
-          .select('org_id')
-          .eq('user_id', user.id)
+    if (!userPhone && isOpen && orgId) {
+      const fetchPhone = async () => {
+        const { data, error } = await supabase
+          .from('company_profile')
+          .select('phone')
+          .eq('org_id', orgId)
           .maybeSingle();
-
-        if (error) {
-          console.error('Error fetching membership:', error);
-          toast.error('Could not retrieve organization information.');
-          return;
+        if (!error && data?.phone) {
+          setFetchedPhone(data.phone);
         }
+      };
+      fetchPhone();
+    }
+  }, [userPhone, isOpen, orgId]);
 
-        if (membership?.org_id) {
-          setOrgId(membership.org_id);
-          console.log('✅ Fetched orgId:', membership.org_id);
-        } else {
-          console.error('No organization found for this user.');
-          toast.error('You are not assigned to any organization.');
-        }
-      } catch (err) {
-        console.error('Failed to fetch org id:', err);
-      } finally {
-        setIsFetchingOrg(false);
-      }
-    };
-
-    fetchOrgId();
-  }, [propOrgId, isOpen]);
-
-  // Fetch plans from Supabase
   useEffect(() => {
     const fetchPlans = async () => {
       try {
@@ -173,81 +132,94 @@ export default function PlanSelectionModal({
   };
 
   const handleSelect = async (plan: Plan) => {
-    if (isProcessing) return;
-
-    if (!orgId || orgId.trim() === '') {
-      toast.error('Organization ID not found. Please refresh and try again.');
+    if (!orgId) {
+      toast.error('Unable to identify your organization. Please refresh and try again.');
       return;
     }
 
-    setIsProcessing(true);
-
+    setProcessing(true);
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        toast.error('Payment system could not be loaded. Please try again.');
-        setIsProcessing(false);
-        return;
-      }
-
-      const amount = getPrice(plan);
-      if (amount === 0) {
-        toast.error('This plan is free – no payment required.');
-        setIsProcessing(false);
-        return;
-      }
-
-      const payload = {
-        planId: plan.id,
-        billingCycle: selectedCycle,
-        orgId: orgId.trim(),
-      };
-      console.log('📤 Sending to API:', payload);
-
-      const response = await fetch('/api/create-order', {
+      const res = await fetch('/api/subscribe/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          plan_id: plan.id,
+          billing_cycle: selectedCycle,
+          org_id: orgId,
+        }),
       });
+      const data = await res.json();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create order');
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to start payment');
+        setProcessing(false);
+        return;
       }
 
-      const { orderId, amount: orderAmount, currency, keyId } = await response.json();
-
       const options = {
-        key: keyId,
-        amount: orderAmount,
-        currency,
-        order_id: orderId,
-        name: 'Remindi AMC',
-        description: `${plan.name} Plan – ${CYCLE_LABELS[selectedCycle].label}`,
-        prefill: {},
-        handler: function (response: any) {
-          toast.success('Payment successful! Your subscription is being activated.');
-          onSuccess?.();   // 👈 call refresh callback
-          onClose();
+        key: data.key_id,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'Remindi',
+        description: `${data.plan_name} — ${CYCLE_LABELS[selectedCycle].label}`,
+        order_id: data.order_id,
+        prefill: {
+          email: userEmail || '',
+          name: userName || '',
+          contact: fetchedPhone || userPhone || '', // <-- pre‑fill with phone
+        },
+        // Make contact readonly if we have a phone number – prevents editing lag
+        readonly: {
+          contact: !!(fetchedPhone || userPhone),
+          email: false,
+          name: false,
+        },
+        theme: { color: '#2563eb' },
+        handler: async function (response: any) {
+          const verifyRes = await fetch('/api/subscribe/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              plan_id: plan.id,
+              billing_cycle: selectedCycle,
+              org_id: orgId,
+              amount: data.amount,
+            }),
+          });
+
+          const verifyData = await verifyRes.json();
+
+          if (verifyRes.ok && verifyData.success) {
+            toast.success(`Upgraded to ${plan.name}!`);
+            onSuccess?.();
+            onClose();
+          } else {
+            toast.error(
+              `Payment verification failed. Contact support with payment ID: ${response.razorpay_payment_id}`
+            );
+          }
+          setProcessing(false);
         },
         modal: {
           ondismiss: function () {
-            toast.info('Payment cancelled.');
+            setProcessing(false);
           },
         },
       };
 
-      const razorpay = new (window as any).Razorpay(options);
-      razorpay.open();
-    } catch (error: any) {
-      console.error('Payment initiation error:', error);
-      toast.error(error.message || 'Something went wrong. Please try again.');
-    } finally {
-      setIsProcessing(false);
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast.error('Something went wrong starting the payment.');
+      setProcessing(false);
     }
   };
 
-  if (loading || isFetchingOrg) {
+  if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="!max-w-4xl w-[95vw]">
@@ -289,7 +261,8 @@ export default function PlanSelectionModal({
             <button
               key={cycle}
               onClick={() => setSelectedCycle(cycle as BillingCycle)}
-              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              disabled={processing}
+              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
                 selectedCycle === cycle
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -322,13 +295,20 @@ export default function PlanSelectionModal({
                   isFree,
                   discountPercent,
                   savingsAmount,
+                  disabled: processing,
                   onSelect: () => handleSelect(plan),
-                  disabled: isProcessing || !orgId,
                 }}
               />
             );
           })}
         </div>
+
+        {processing && (
+          <p className="text-center text-sm text-blue-600 mt-4 flex items-center justify-center gap-2">
+            <Loader2 className="size-4 animate-spin" />
+            Opening secure payment...
+          </p>
+        )}
 
         <p className="text-center text-sm text-gray-500 mt-10 sm:mt-12">
           All plans include free updates. Cancel anytime.
