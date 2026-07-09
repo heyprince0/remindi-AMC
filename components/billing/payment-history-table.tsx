@@ -8,7 +8,6 @@ import {
   getPaymentStatusLabel,
 } from '@/lib/billing-helpers';
 import { Badge } from '@/components/ui/badge';
-import { Download } from 'lucide-react';
 
 interface PaymentHistoryTableProps {
   transactions: PaymentTransaction[];
@@ -57,7 +56,6 @@ export default function PaymentHistoryTable({
             <th className="text-left py-3 px-4 font-medium text-gray-700">Billing Cycle</th>
             <th className="text-right py-3 px-4 font-medium text-gray-700">Amount</th>
             <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-            <th className="text-center py-3 px-4 font-medium text-gray-700">Invoice</th>
           </tr>
         </thead>
         <tbody>
@@ -85,19 +83,6 @@ export default function PaymentHistoryTable({
                   </Badge>
                 ) : (
                   '—'
-                )}
-              </td>
-              <td className="py-4 px-4 text-center">
-                {txn.invoiceUrl ? (
-                  <a
-                    href={txn.invoiceUrl}
-                    className="inline-flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                    title="Download invoice"
-                  >
-                    <Download className="h-4 w-4" />
-                  </a>
-                ) : (
-                  <span className="text-gray-400">Sent in email</span>
                 )}
               </td>
             </tr>
