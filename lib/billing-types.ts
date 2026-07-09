@@ -66,7 +66,6 @@ export interface PaymentTransaction {
   billingCycle: BillingCycle;
   amount: number;
   status: PaymentStatus;
-  invoiceUrl?: string;
 }
 
 export interface OrderSummary {
