@@ -97,7 +97,7 @@ export default function PaymentHistoryTable({
                     <Download className="h-4 w-4" />
                   </a>
                 ) : (
-                  <span className="text-gray-400">—</span>
+                  <span className="text-gray-400">Sent in email</span>
                 )}
               </td>
             </tr>
