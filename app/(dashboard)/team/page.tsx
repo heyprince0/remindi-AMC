@@ -34,12 +34,15 @@ export default function TeamPage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   // Plan limits
-  const { maxTeamSeats, currentTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+  const { maxTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
+  // --- Use local members count for current seats ---
+  const currentTeamSeats = members.length
 
   useEffect(() => {
     if (user?.id) {
@@ -58,7 +61,7 @@ export default function TeamPage() {
     }
   }, [user?.id])
 
-  // Check limits on page load
+  // Check limits when members or plan data changes
   useEffect(() => {
     if (limitsLoading || !currentOrgId) return
     if (status === 'expired' || status === 'cancelled') {
@@ -72,6 +75,9 @@ export default function TeamPage() {
         description: `Your current plan allows a maximum of ${maxTeamSeats} team members. You currently have ${currentTeamSeats}. Upgrade to add more team members.`,
       })
       setShowLimitModal(true)
+    } else {
+      // Hide modal if conditions are resolved (e.g., after deletion)
+      setShowLimitModal(false)
     }
   }, [limitsLoading, status, maxTeamSeats, currentTeamSeats])
 
@@ -93,11 +99,9 @@ export default function TeamPage() {
         let fullName: string | undefined
         let email: string | undefined
 
-        // 1. Use display_name (set by admin)
         if (membership.display_name) {
           fullName = membership.display_name
         } else {
-          // 2. Try profiles.full_name
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name")
@@ -105,7 +109,6 @@ export default function TeamPage() {
             .maybeSingle()
           if (profile?.full_name) fullName = profile.full_name
 
-          // 3. Try company_profile.company_name
           if (!fullName) {
             const { data: cp } = await supabase
               .from("company_profile")
@@ -116,7 +119,6 @@ export default function TeamPage() {
           }
         }
 
-        // Get email from company_profile (or fallback)
         const { data: cpEmail } = await supabase
           .from("company_profile")
           .select("email")
@@ -124,7 +126,6 @@ export default function TeamPage() {
           .maybeSingle()
         if (cpEmail?.email) email = cpEmail.email
 
-        // ✅ FALLBACK: if still no name, use email or a short user ID
         if (!fullName) {
           fullName = email || `User ${membership.user_id.slice(0, 6)}`
         }
@@ -166,8 +167,6 @@ export default function TeamPage() {
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return
     try {
-      console.log("Deleting membership with ID:", memberId)
-
       const { data, error } = await supabase
         .from("memberships")
         .delete()
@@ -175,12 +174,10 @@ export default function TeamPage() {
         .select()
 
       if (error) throw error
-
       if (!data || data.length === 0) {
         toast.error("Member not found or you don't have permission to remove them")
         return
       }
-
       if (currentOrgId) loadTeamData(currentOrgId)
       toast.success("Member removed successfully")
     } catch (error) {
@@ -254,7 +251,7 @@ export default function TeamPage() {
   }
 
   const handleInviteMemberClick = () => {
-    // Check limits before opening modal
+    // Check limits using current member count
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
