@@ -396,7 +396,7 @@ export default function ContractsPage() {
           c.contract_name || '—',
           c.customerName || '—',
           `${c.frequency_days} days`,
-          c.contracts_price != null ? `₹${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
+          c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
           c.start_date || '—',
           c.next_service_date || '—',
           statusLabel
