@@ -256,6 +256,7 @@ export default function TeamPage() {
       setLimitModalType('expired')
       setLimitModalCustom({})
       setShowLimitModal(true)
+      toast.warning("Your subscription is expired. Please upgrade to invite members.")
       return
     }
     if (maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
@@ -265,6 +266,7 @@ export default function TeamPage() {
         description: `Your current plan allows a maximum of ${maxTeamSeats} team members. You currently have ${currentTeamSeats}. Upgrade to add more team members.`,
       })
       setShowLimitModal(true)
+      toast.warning("You've reached the maximum number of team members for your plan.")
       return
     }
     // Otherwise open the invite modal
