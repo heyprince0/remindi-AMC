@@ -33,16 +33,62 @@ export default function TeamPage() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
-  const { maxTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+  // Plan limits – but we also fetch directly to be safe
+  const { maxTeamSeats: hookMaxSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+
+  // Direct state for max seats (fallback)
+  const [directMaxSeats, setDirectMaxSeats] = useState<number | null>(null)
+
+  // Fetch plan directly to get max_team_seats
+  useEffect(() => {
+    const fetchPlan = async () => {
+      if (!currentOrgId) return
+      try {
+        // Get the subscription for this org
+        const { data: sub, error: subError } = await supabase
+          .from("subscriptions")
+          .select("plan_id")
+          .eq("org_id", currentOrgId)
+          .single()
+
+        if (subError || !sub) {
+          // If no subscription, assume free plan (or use default)
+          const { data: freePlan } = await supabase
+            .from("subscription_plans")
+            .select("max_team_seats")
+            .eq("id", "free")
+            .single()
+          setDirectMaxSeats(freePlan?.max_team_seats ?? 2) // default 2
+          return
+        }
+
+        // Get plan details
+        const { data: plan, error: planError } = await supabase
+          .from("subscription_plans")
+          .select("max_team_seats")
+          .eq("id", sub.plan_id)
+          .single()
+
+        if (planError) throw planError
+        setDirectMaxSeats(plan?.max_team_seats ?? null)
+      } catch (error) {
+        console.error("Failed to fetch plan max seats:", error)
+        setDirectMaxSeats(null)
+      }
+    }
+    fetchPlan()
+  }, [currentOrgId])
+
+  // Use the direct value if available, otherwise fallback to hook
+  const maxTeamSeats = directMaxSeats !== null ? directMaxSeats : hookMaxSeats
+
+  // Current team seats from members array
+  const currentTeamSeats = members.length
 
   // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
-
-  // --- Use local members count for current seats ---
-  const currentTeamSeats = members.length
 
   useEffect(() => {
     if (user?.id) {
@@ -68,7 +114,7 @@ export default function TeamPage() {
       setLimitModalType('expired')
       setLimitModalCustom({})
       setShowLimitModal(true)
-    } else if (maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
+    } else if (maxTeamSeats !== null && maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your team seat limit",
@@ -76,7 +122,6 @@ export default function TeamPage() {
       })
       setShowLimitModal(true)
     } else {
-      // Hide modal if conditions are resolved (e.g., after deletion)
       setShowLimitModal(false)
     }
   }, [limitsLoading, status, maxTeamSeats, currentTeamSeats])
@@ -251,7 +296,10 @@ export default function TeamPage() {
   }
 
   const handleInviteMemberClick = () => {
-    // Check limits using current member count
+    // Log current values for debugging
+    console.log("🔍 [Team] maxTeamSeats:", maxTeamSeats, "currentTeamSeats:", currentTeamSeats, "status:", status)
+
+    // Check if subscription expired
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
@@ -259,7 +307,9 @@ export default function TeamPage() {
       toast.warning("Your subscription is expired. Please upgrade to invite members.")
       return
     }
-    if (maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
+
+    // Check if the limit is reached (only if maxTeamSeats is a positive number)
+    if (maxTeamSeats !== null && maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your team seat limit",
@@ -269,6 +319,7 @@ export default function TeamPage() {
       toast.warning("You've reached the maximum number of team members for your plan.")
       return
     }
+
     // Otherwise open the invite modal
     setInviteModalOpen(true)
   }
