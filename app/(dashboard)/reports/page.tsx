@@ -364,7 +364,7 @@ export default function ReportsPage() {
         ["Total Contracts", stats.totalContracts],
         ["Completed Services", stats.completedServices],
         ["Active Contracts", stats.activeContracts],
-        ["Total Earnings", `₹${stats.totalEarnings.toLocaleString('en-IN')}`],
+        ["Total Earnings", `Rs. ${stats.totalEarnings.toLocaleString('en-IN')}`],
       ]
 
       autoTable(doc, {
@@ -393,7 +393,7 @@ export default function ReportsPage() {
         m.month,
         m.completed,
         m.scheduled,
-        `₹${m.earnings.toLocaleString('en-IN')}`,
+        `Rs. ${m.earnings.toLocaleString('en-IN')}`,
       ])
 
       autoTable(doc, {
