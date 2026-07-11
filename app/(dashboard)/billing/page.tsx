@@ -142,42 +142,12 @@ export default function BillingPage() {
           <PaymentHistoryTable transactions={paymentHistory} />
         </section>
 
-        <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">🎯 Demo: Paywall Scenarios</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Click any button below to see how paywall modals appear when users hit limits:
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={() => handleOpenLimitModal('expired')}
-              variant="outline"
-              className="border-orange-300 text-orange-700 hover:bg-orange-50"
-            >
-              Subscription Expired
-            </Button>
-            <Button
-              onClick={() => handleOpenLimitModal('monthly-limit')}
-              variant="outline"
-              className="border-blue-300 text-blue-700 hover:bg-blue-50"
-            >
-              Monthly Limit Reached
-            </Button>
-            <Button
-              onClick={() => handleOpenLimitModal('team-seats')}
-              variant="outline"
-              className="border-purple-300 text-purple-700 hover:bg-purple-50"
-            >
-              Team Seat Limit Reached
-            </Button>
-          </div>
-        </section>
-
         <PlanSelectionModal
           isOpen={showUpgradeModal}
           onClose={() => setShowUpgradeModal(false)}
-          orgId={orgId || undefined}      // 👈 pass orgId from auth
+          orgId={orgId || undefined}
           onSuccess={() => {
-            fetchData();                  // 👈 refresh after payment
+            fetchData();
           }}
         />
         <LimitReachedModal
