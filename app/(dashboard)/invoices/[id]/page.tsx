@@ -310,343 +310,353 @@ export default function ViewInvoicePage() {
 
     setGeneratingPdf(true)
     try {
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       const pageW = 210
-      const pageH = 297
       const margin = 15
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
+      const isPaid = invoice.payment_status?.toLowerCase() === 'paid'
 
-      if (invoice.payment_status?.toLowerCase() === 'paid') {
-        doc.saveGraphicsState()
-        doc.setFontSize(72)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(180, 230, 180)
-        doc.text('PAID', 105, 180, { align: 'center', angle: 35 })
-        doc.restoreGraphicsState()
-        doc.setTextColor(0, 0, 0)
-      }
-
-      let y = margin
+      // ===== PRE-FETCH ALL IMAGES ONCE =====
       const headerStyle = profile?.header_style ?? "single_logo"
-
+      let bannerBase64: string | null = null
+      let bannerH = 0
       if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         try {
           const response = await fetch(profile.header_thumbnail_url)
           const blob = await response.blob()
-          const base64 = await new Promise<string>((resolve) => {
+          bannerBase64 = await new Promise<string>((resolve) => {
             const reader = new FileReader()
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
           const bannerW = pageW - (margin * 2)
-          const bannerH = Math.round(bannerW / (1462 / 396))
-          doc.addImage(base64, "PNG", margin, y, bannerW, bannerH)
-          y += bannerH
+          bannerH = Math.round(bannerW / (1462 / 396))
         } catch (e) { /* skip banner silently */ }
-      } else {
-        let logoX = margin
-        let logoAdded = false
+      }
+
+      let logoBase64: string | null = null
+      if (headerStyle !== "thumbnail" && profile?.logo_url) {
         try {
-          if (profile?.logo_url) {
-            const response = await fetch(profile.logo_url)
-            const blob = await response.blob()
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader()
-              reader.onloadend = () => resolve(reader.result as string)
-              reader.readAsDataURL(blob)
-            })
-            doc.addImage(base64, "PNG", logoX, y, 22, 22)
-            logoAdded = true
-          }
+          const response = await fetch(profile.logo_url)
+          const blob = await response.blob()
+          logoBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+          })
         } catch (e) { /* skip logo silently */ }
-
-        const infoX = logoAdded ? logoX + 24 : logoX
-        doc.setFontSize(14)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
-        let infoY = y + 8
-
-        if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
-        if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
-        if (profile?.city || profile?.state || profile?.zip_code) {
-          const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
-          doc.text(locationStr, infoX, infoY); infoY += 4
-        }
-        if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
-        if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-        if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-
-        y += 31
       }
 
-      doc.setDrawColor(tr, tg, tb)
-      doc.setLineWidth(0.5)
-      doc.line(margin, y, pageW - margin, y)
-      y += 6
-
-      doc.setFontSize(16)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(tr, tg, tb)
-      doc.text('TAX INVOICE', pageW - margin, y, { align: 'right' })
-
-      y += 6
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
-      const formattedDate = invoice.invoice_date
-        ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
-
-      y += 5
-      doc.setFontSize(9)
-      doc.setTextColor(220, 38, 38)
-      doc.text('Valid Till:' + safeDate(invoice.due_date), pageW - margin, y, { align: 'right' })
-
-      y += 5
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(0, 0, 0)
-      if (invoice.order_no) {
-        doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
-        y += 5
-      }
-      if (invoice.order_date) {
-        const orderDateFormatted = new Date(invoice.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
-      }
-      doc.setTextColor(0, 0, 0)
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(150, 150, 150)
-      doc.text("BILL TO:", margin, y)
-      y += 5
-
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
-      y += 5
-
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(40, 40, 40)
-      if (invoice.client_address) {
-        doc.text(safeStr(invoice.client_address), margin, y)
-        y += 5
-      }
-
-      const cityStateZip = [
-        invoice.client_district,
-        invoice.client_state,
-        invoice.client_pin_code
-      ].filter(Boolean).join(', ')
-      if (cityStateZip) {
-        doc.text(cityStateZip, margin, y)
-        y += 5
-      }
-      y += 3
-
-      const items = invoice.items ?? []
-      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-
-      const tableBody = items.map((item, idx) => [
-        String(idx + 1),
-        safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
-        String(item.qty ?? item.quantity ?? 1),
-        `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
-        `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
-      ])
-
-      autoTable(doc, {
-        startY: y,
-        head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
-        body: tableBody,
-        theme: "grid",
-        headStyles: {
-          fillColor: [tr, tg, tb],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 9,
-          halign: "center",
-        },
-        bodyStyles: {
-          fontSize: 9,
-          textColor: [0, 0, 0],
-        },
-        columnStyles: {
-          0: { cellWidth: 15, halign: "center" },
-          1: { cellWidth: "auto" },
-          2: { cellWidth: 20, halign: "center" },
-          3: { cellWidth: 35, halign: "right" },
-          4: { cellWidth: 35, halign: "right" },
-        },
-        margin: { left: margin, right: margin },
-      })
-
-      y = (doc as any).lastAutoTable.finalY + 8
-
-      if (invoice.include_gst) {
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-
-        doc.text('Subtotal:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
-        y += 4
-        doc.text('SGST (9%):', 160, y, { align: 'right' })
-        doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
-        y += 4
-        doc.text('CGST (9%):', 160, y, { align: 'right' })
-        doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
-
-        y += 3
-        doc.setDrawColor(0, 0, 0)
-        doc.setLineWidth(0.3)
-        doc.line(140, y, 195, y)
-
-        y += 4
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('Total:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
-      } else {
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text('Total:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
-      }
-
-      y += 2
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(0, 0, 0)
-      const inWordsAmount = invoice.include_gst ? grandTotal : subtotal
-      doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
-      y += 20
-
-      if (y + 30 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
-      y += 10
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text("Payment Details:", margin, y)
-      y += 5
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(40, 40, 40)
-
-      if (profile?.bank_name) {
-        doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
-        y += 4
-      }
-      if (profile?.account_no) {
-        doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
-        y += 4
-      }
-      if (profile?.ifsc_code) {
-        doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
-        y += 4
-      }
-      if (profile?.upi_id) {
-        doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
-        y += 4
-      }
-      if (invoice.payment_terms) {
-        doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
-        y += 4
-      }
-
-      if (y + 25 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
-      y += 6
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text("Tax Information:", margin, y)
-      y += 5
-      doc.setFont("helvetica", "normal")
-      doc.setTextColor(40, 40, 40)
-
-      if (profile?.gstin) {
-        doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
-        y += 4
-      }
-      if (profile?.pan_number) {
-        doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
-        y += 4
-      }
-      doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
-      y += 6
-
-      if (y + 20 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
-      if (invoice.notes) {
-        y += 3
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text("Terms & Conditions:", margin, y)
-        y += 4
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(80, 80, 80)
-        const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
-        doc.text(noteLines, margin, y)
-        y += (noteLines.length * 4)
-      }
-
-      if (y + 40 > pageH - 10) {
-        doc.addPage()
-        y = margin
-      }
-      y += 10
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.setTextColor(0, 0, 0)
-      doc.text('Thanking you,', 195, y, { align: 'right' })
-      doc.text('Yours faithfully,', 195, y+6, { align: 'right' })
-      doc.setFont('helvetica', 'bold')
-      doc.text('For ' + safeStr(profile?.company_name), 195, y+12, { align: 'right' })
-
+      let stampBase64: string | null = null
+      let stampFormat: "JPEG" | "PNG" = "PNG"
       if (stampToggle && profile?.stamp_url) {
-        let stampY = y + 18
-
         try {
           const { data: publicUrlData } = supabase.storage
             .from('company-assets')
             .getPublicUrl(profile.stamp_url)
-
           const stampResponse = await fetch(publicUrlData.publicUrl)
           if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
-
           const stampBlob = await stampResponse.blob()
-          const stampBase64 = await new Promise<string>((resolve, reject) => {
+          stampBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
             reader.onloadend = () => resolve(reader.result as string)
             reader.onerror = reject
             reader.readAsDataURL(stampBlob)
           })
+          stampFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+        } catch (e) {
+          console.error('Error loading stamp for PDF:', e)
+        }
+      }
 
-          const imgFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
+      const items = invoice.items ?? []
+      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
 
+      // ===== SINGLE RENDER FUNCTION =====
+      const renderInvoice = (doc: jsPDF, pageH: number): number => {
+        if (isPaid) {
+          doc.saveGraphicsState()
+          doc.setFontSize(72)
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(180, 230, 180)
+          doc.text('PAID', 105, pageH / 2, { align: 'center', angle: 35 })
+          doc.restoreGraphicsState()
+          doc.setTextColor(0, 0, 0)
+        }
+
+        let y = margin
+
+        // ===== HEADER SECTION =====
+        if (headerStyle === "thumbnail" && bannerBase64) {
+          const bannerW = pageW - (margin * 2)
+          doc.addImage(bannerBase64, "PNG", margin, y, bannerW, bannerH)
+          y += bannerH
+        } else {
+          let logoX = margin
+          let logoAdded = false
+          if (logoBase64) {
+            doc.addImage(logoBase64, "PNG", logoX, y, 22, 22)
+            logoAdded = true
+          }
+
+          const infoX = logoAdded ? logoX + 24 : logoX
+          doc.setFontSize(14)
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
+          doc.text(safeStr(profile?.company_name), infoX, y + 2)
+
+          doc.setFontSize(9)
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(120, 120, 120)
+          let infoY = y + 8
+
+          if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
+          if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
+          if (profile?.city || profile?.state || profile?.zip_code) {
+            const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
+            doc.text(locationStr, infoX, infoY); infoY += 4
+          }
+          if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
+          if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
+          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
+
+          y += 31
+        }
+
+        doc.setDrawColor(tr, tg, tb)
+        doc.setLineWidth(0.5)
+        doc.line(margin, y, pageW - margin, y)
+        y += 6
+
+        doc.setFontSize(16)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(tr, tg, tb)
+        doc.text('TAX INVOICE', pageW - margin, y, { align: 'right' })
+
+        y += 6
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
+        const formattedDate = invoice.invoice_date
+          ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
+
+        y += 5
+        doc.setFontSize(9)
+        doc.setTextColor(220, 38, 38)
+        doc.text('Valid Till:' + safeDate(invoice.due_date), pageW - margin, y, { align: 'right' })
+
+        y += 5
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(0, 0, 0)
+        if (invoice.order_no) {
+          doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
+          y += 5
+        }
+        if (invoice.order_date) {
+          const orderDateFormatted = new Date(invoice.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
+        }
+        doc.setTextColor(0, 0, 0)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(150, 150, 150)
+        doc.text("BILL TO:", margin, y)
+        y += 5
+
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
+        y += 5
+
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(40, 40, 40)
+        if (invoice.client_address) {
+          doc.text(safeStr(invoice.client_address), margin, y)
+          y += 5
+        }
+
+        const cityStateZip = [
+          invoice.client_district,
+          invoice.client_state,
+          invoice.client_pin_code
+        ].filter(Boolean).join(', ')
+        if (cityStateZip) {
+          doc.text(cityStateZip, margin, y)
+          y += 5
+        }
+        y += 3
+
+        // ===== ITEMS TABLE =====
+        const tableBody = items.map((item, idx) => [
+          String(idx + 1),
+          safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
+          String(item.qty ?? item.quantity ?? 1),
+          `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
+          `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
+        ])
+
+        autoTable(doc, {
+          startY: y,
+          head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+          body: tableBody,
+          theme: "grid",
+          headStyles: {
+            fillColor: [tr, tg, tb],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "center",
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [0, 0, 0],
+          },
+          columnStyles: {
+            0: { cellWidth: 15, halign: "center" },
+            1: { cellWidth: "auto" },
+            2: { cellWidth: 20, halign: "center" },
+            3: { cellWidth: 35, halign: "right" },
+            4: { cellWidth: 35, halign: "right" },
+          },
+          margin: { left: margin, right: margin },
+          pageBreak: "avoid",
+          rowPageBreak: "avoid",
+        })
+
+        y = (doc as any).lastAutoTable.finalY + 8
+
+        if (invoice.include_gst) {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.setTextColor(0, 0, 0)
+
+          doc.text('Subtotal:', 160, y, { align: 'right' })
+          doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+          y += 4
+          doc.text('SGST (9%):', 160, y, { align: 'right' })
+          doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+          y += 4
+          doc.text('CGST (9%):', 160, y, { align: 'right' })
+          doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+
+          y += 3
+          doc.setDrawColor(0, 0, 0)
+          doc.setLineWidth(0.3)
+          doc.line(140, y, 195, y)
+
+          y += 4
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          doc.text('Total:', 160, y, { align: 'right' })
+          doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+        } else {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.text('Total:', 160, y, { align: 'right' })
+          doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+        }
+
+        y += 2
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+        const inWordsAmount = invoice.include_gst ? grandTotal : subtotal
+        doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
+        y += 20
+
+        // ===== PAYMENT DETAILS =====
+        y += 10
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Payment Details:", margin, y)
+        y += 5
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(40, 40, 40)
+
+        if (profile?.bank_name) {
+          doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
+          y += 4
+        }
+        if (profile?.account_no) {
+          doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
+          y += 4
+        }
+        if (profile?.ifsc_code) {
+          doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
+          y += 4
+        }
+        if (profile?.upi_id) {
+          doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
+          y += 4
+        }
+        if (invoice.payment_terms) {
+          doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
+          y += 4
+        }
+
+        // ===== TAX INFORMATION =====
+        y += 6
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Tax Information:", margin, y)
+        y += 5
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(40, 40, 40)
+
+        if (profile?.gstin) {
+          doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
+          y += 4
+        }
+        if (profile?.pan_number) {
+          doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
+          y += 4
+        }
+        doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+        y += 6
+
+        // ===== NOTES =====
+        if (invoice.notes) {
+          y += 3
+          doc.setFontSize(9)
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
+          doc.text("Terms & Conditions:", margin, y)
+          y += 4
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(80, 80, 80)
+          const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
+          doc.text(noteLines, margin, y)
+          y += (noteLines.length * 4)
+        }
+
+        // ===== FOOTER (signature block) =====
+        y += 10
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+        doc.text('Thanking you,', 195, y, { align: 'right' })
+        doc.text('Yours faithfully,', 195, y + 6, { align: 'right' })
+        doc.setFont('helvetica', 'bold')
+        doc.text('For ' + safeStr(profile?.company_name), 195, y + 12, { align: 'right' })
+
+        let contentBottom = y + 12
+
+        // ===== STAMP =====
+        if (stampToggle && stampBase64) {
+          let stampY = y + 18
           const stampW = 30
           const stampH = 30
           const stampX = pageW - margin - stampW
-          doc.addImage(stampBase64, imgFormat, stampX, stampY, stampW, stampH)
+          doc.addImage(stampBase64, stampFormat, stampX, stampY, stampW, stampH)
           stampY += stampH + 2
 
           doc.setDrawColor(200, 200, 200)
@@ -658,15 +668,28 @@ export default function ViewInvoicePage() {
           doc.setFontSize(8)
           doc.setTextColor(120, 120, 120)
           doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
-        } catch (e) {
-          console.error('Error adding stamp to PDF:', e)
+
+          contentBottom = Math.max(contentBottom, stampY)
         }
+
+        // ===== BOTTOM LINE =====
+        const footerY = contentBottom + 12
+        doc.setFontSize(8)
+        doc.setTextColor(150, 150, 150)
+        doc.setFont("helvetica", "normal")
+        doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
+
+        return footerY + 8
       }
 
-      doc.setFontSize(8)
-      doc.setTextColor(150, 150, 150)
-      doc.setFont("helvetica", "normal")
-      doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 8, { align: "center" })
+      // ===== PASS 1: measure =====
+      const scratchDoc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
+      const measuredHeight = renderInvoice(scratchDoc, 2000)
+
+      // ===== PASS 2: final =====
+      const finalPageHeight = Math.max(measuredHeight, 100)
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, finalPageHeight] })
+      renderInvoice(doc, finalPageHeight)
 
       const filename = `Invoice-${safeStr(invoice.invoice_no ?? invoice.id)}-${safeStr(invoice.client_name ?? "Client")}.pdf`
       doc.save(filename)
