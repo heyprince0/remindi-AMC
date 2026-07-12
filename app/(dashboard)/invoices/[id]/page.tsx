@@ -314,7 +314,6 @@ export default function ViewInvoicePage() {
       const margin = 15
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
-      const isPaid = invoice.payment_status?.toLowerCase() === 'paid'
 
       // ===== PRE-FETCH ALL IMAGES ONCE =====
       const headerStyle = profile?.header_style ?? "single_logo"
@@ -374,16 +373,6 @@ export default function ViewInvoicePage() {
 
       // ===== SINGLE RENDER FUNCTION =====
       const renderInvoice = (doc: jsPDF, pageH: number): number => {
-        if (isPaid) {
-          doc.saveGraphicsState()
-          doc.setFontSize(72)
-          doc.setFont('helvetica', 'bold')
-          doc.setTextColor(180, 230, 180)
-          doc.text('PAID', 105, pageH / 2, { align: 'center', angle: 35 })
-          doc.restoreGraphicsState()
-          doc.setTextColor(0, 0, 0)
-        }
-
         let y = margin
 
         // ===== HEADER SECTION =====
