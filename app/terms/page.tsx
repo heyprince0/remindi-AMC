@@ -58,9 +58,9 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-xl font-semibold text-foreground">6. Free Plan & Paid Plans</h2>
             <ul className="list-disc list-inside space-y-2 text-muted-foreground leading-relaxed">
-              <li>Remindi currently offers a free plan with full features.</li>
-              <li>We reserve the right to introduce paid plans in the future with advance notice to existing users.</li>
-              <li>Free plan availability may change at our discretion with 30 days notice.</li>
+              <li>Remindi offers both Free and Paid Plans with different features and usage limits.</li>
+              <li>Paid Plans require payment of the applicable subscription fees.</li>
+              <li>We may update our plans, pricing, or features from time to time. If significant changes are made, we will provide reasonable notice where required.</li>
             </ul>
           </section>
 
