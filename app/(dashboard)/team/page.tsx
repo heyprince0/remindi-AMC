@@ -33,11 +33,9 @@ export default function TeamPage() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
   const { maxTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
   const currentTeamSeats = members.length
 
-  // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
@@ -59,22 +57,17 @@ export default function TeamPage() {
     }
   }, [user?.id])
 
-  // Check limits only when user clicks "Invite Member" (not on page load)
+  // No auto-show on page load
   useEffect(() => {
-    // Only show if limit is reached AND there's a limit
     if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      // Don't auto-show – let the button handle it
-      return
-    }
-    // Don't auto-show on page load
+    // Don't auto-show
   }, [limitsLoading, status])
 
   const loadTeamData = async (orgId: string) => {
     try {
       if (!orgId) return
 
-      // Fetch memberships
+      // 1. Fetch memberships
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
@@ -85,74 +78,48 @@ export default function TeamPage() {
 
       const userIds = membershipsData.map((m) => m.user_id)
 
-      // Fetch profiles (full_name, company_name)
+      // 2. Fetch profiles (full_name, company_name)
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, company_name")
         .in("id", userIds)
 
       const profileMap = (profiles || []).reduce((acc, p) => {
-        // Use full_name if exists, else company_name
         const name = p.full_name || p.company_name || null
         if (name) acc[p.id] = name
         return acc
       }, {} as Record<string, string>)
 
-      // Fetch company_profile (email, company_name as fallback)
+      // 3. Fetch company_profile (email)
       const { data: companyProfiles } = await supabase
         .from("company_profile")
-        .select("user_id, email, company_name")
+        .select("user_id, email")
         .in("user_id", userIds)
 
-      const companyProfileMap = (companyProfiles || []).reduce((acc, cp) => {
-        acc[cp.user_id] = { email: cp.email, companyName: cp.company_name }
+      const emailMap = (companyProfiles || []).reduce((acc, cp) => {
+        if (cp.email) acc[cp.user_id] = cp.email
         return acc
-      }, {} as Record<string, { email: string; companyName: string }>)
+      }, {} as Record<string, string>)
 
+      // 4. Build members list
       const membersWithProfiles: MemberWithProfile[] = []
-
       for (const membership of membershipsData || []) {
-        let fullName: string | undefined
-        let email: string | undefined
-
-        // 1. Use display_name from membership (set by admin during invite)
-        if (membership.display_name) {
-          fullName = membership.display_name
-        } else {
-          // 2. Try profiles (full_name or company_name)
-          const profileName = profileMap[membership.user_id]
-          if (profileName) {
-            fullName = profileName
-          } else {
-            // 3. Try company_profile company_name as last resort
-            const cp = companyProfileMap[membership.user_id]
-            if (cp?.companyName) {
-              fullName = cp.companyName
-            }
-          }
-        }
-
-        // Get email from company_profile
-        const cp = companyProfileMap[membership.user_id]
-        if (cp?.email) {
-          email = cp.email
-        }
-
-        // Fallback: if still no name, use email or user ID
+        let fullName = membership.display_name || undefined
         if (!fullName) {
-          fullName = email || `User ${membership.user_id.slice(0, 6)}`
+          fullName = profileMap[membership.user_id]
         }
-
+        if (!fullName) {
+          fullName = `User ${membership.user_id.slice(0, 6)}`
+        }
         membersWithProfiles.push({
           ...membership,
           full_name: fullName,
-          email: email,
+          email: emailMap[membership.user_id],
         })
       }
-
       setMembers(membersWithProfiles)
 
-      // Fetch pending invites
+      // 5. Fetch pending invites (status = 'pending')
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -160,9 +127,17 @@ export default function TeamPage() {
         .eq("status", "pending")
         .order("created_at", { ascending: false })
 
-      if (!invitesError) {
-        setPendingInvites(invitesData || [])
-      }
+      if (invitesError) throw invitesError
+
+      // 6. Safeguard: exclude invites whose email already exists in members
+      //    (in case the invite status wasn't updated correctly)
+      const memberEmails = new Set(membersWithProfiles.map(m => m.email).filter(Boolean))
+      const filteredInvites = (invitesData || []).filter(invite => {
+        if (!invite.email) return true // keep invites without email (shouldn't happen)
+        return !memberEmails.has(invite.email)
+      })
+
+      setPendingInvites(filteredInvites)
     } catch (error) {
       console.error("[team] Error loading team data:", error)
       toast.error("Failed to load team data")
@@ -170,6 +145,8 @@ export default function TeamPage() {
       setLoading(false)
     }
   }
+
+  // Rest of the code (handlers, UI) remains the same as before...
 
   // Redirect non-admin users
   useEffect(() => {
@@ -265,7 +242,6 @@ export default function TeamPage() {
   }
 
   const handleInviteMemberClick = () => {
-    // Check if subscription expired
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
@@ -273,7 +249,6 @@ export default function TeamPage() {
       return
     }
 
-    // Check if the limit is reached
     if (maxTeamSeats !== null && maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
@@ -284,7 +259,6 @@ export default function TeamPage() {
       return
     }
 
-    // Otherwise open the invite modal
     setInviteModalOpen(true)
   }
 
@@ -490,7 +464,6 @@ export default function TeamPage() {
           }}
         />
 
-        {/* Limit Reached Modal */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
