@@ -43,6 +43,16 @@ import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface ContractDisplay extends Contract {
   customerName: string
+  endDate: string | null // computed from start_date + duration_years
+}
+
+// Helper to compute contract end date
+function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
+  if (!startDate || !durationYears || durationYears <= 0) return null
+  const start = new Date(startDate)
+  const end = new Date(start)
+  end.setFullYear(end.getFullYear() + durationYears)
+  return end.toISOString().split('T')[0]
 }
 
 function getStatusBadge(days: number, status: string) {
@@ -160,7 +170,6 @@ export default function ContractsPage() {
             .eq('id', 'free')
             .single()
           setPlan(freePlan)
-          // subscription stays null
         }
       } catch (error) {
         console.error('Error fetching subscription:', error)
@@ -198,7 +207,7 @@ export default function ContractsPage() {
     }
   }, [currentOrgId])
 
-  // --- Centralized check & show modal (FIXED: missing subscription is NOT expired) ---
+  // --- Centralized check & show modal ---
   const checkAndShowLimitModal = (showOnLoad = false) => {
     if (showOnLoad && autoShown) return
 
@@ -214,7 +223,6 @@ export default function ContractsPage() {
         }
       }
     }
-    // If subscription is null → treat as active (no expiration)
 
     if (isExpired) {
       setLimitModalType('expired')
@@ -334,9 +342,11 @@ export default function ContractsPage() {
 
       const displayed = (contractsData as Contract[]).map(contract => {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        const endDate = getContractEndDate(contract.start_date, contract.duration_years)
         return {
           ...contract,
-          customerName: customer?.name || 'Unknown'
+          customerName: customer?.name || 'Unknown',
+          endDate,
         }
       })
 
@@ -398,14 +408,15 @@ export default function ContractsPage() {
           `${c.frequency_days} days`,
           c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
           c.start_date || '—',
+          c.endDate || '—',   // contract end date
           c.next_service_date || '—',
-          statusLabel
+          statusLabel,
         ]
       })
 
       autoTable(doc, {
         startY: 28,
-        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Start Date", "End Date", "Status"]],
+        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Start Date", "Contract End Date", "Next Service", "Status"]],
         body: tableData,
         theme: "striped",
         headStyles: {
@@ -416,13 +427,14 @@ export default function ContractsPage() {
         },
         bodyStyles: { fontSize: 7 },
         columnStyles: {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 40 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 30 },
+          0: { cellWidth: 30 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 22 },
+          3: { cellWidth: 28 },
           4: { cellWidth: 25 },
-          5: { cellWidth: 25 },
+          5: { cellWidth: 28 },
           6: { cellWidth: 25 },
+          7: { cellWidth: 25 },
         },
         margin: { left: margin, right: margin },
       })
@@ -508,63 +520,65 @@ export default function ContractsPage() {
               <div className="text-center py-8 text-muted-foreground">No contracts found</div>
             ) : (
               <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Contract Name</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Frequency</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>End Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[70px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredContracts.map((contract) => {
-                    const days = getDaysUntilService(contract.next_service_date)
-                    return (
-                      <TableRow key={contract.id}>
-                        <TableCell className="font-medium">{contract.contract_name}</TableCell>
-                        <TableCell>{contract.customerName}</TableCell>
-                        <TableCell>{contract.frequency_days} days</TableCell>
-                        <TableCell>
-                          {contract.contracts_price != null
-                            ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>{contract.start_date}</TableCell>
-                        <TableCell>{contract.next_service_date}</TableCell>
-                        <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditClick(contract)}
-                              title="Edit Contract"
-                            >
-                              <Edit className="size-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete Contract"
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Contract Name</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Frequency</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Start Date</TableHead>
+                      <TableHead>Contract End Date</TableHead>
+                      <TableHead>Next Service</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[70px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredContracts.map((contract) => {
+                      const days = getDaysUntilService(contract.next_service_date)
+                      return (
+                        <TableRow key={contract.id}>
+                          <TableCell className="font-medium">{contract.contract_name}</TableCell>
+                          <TableCell>{contract.customerName}</TableCell>
+                          <TableCell>{contract.frequency_days} days</TableCell>
+                          <TableCell>
+                            {contract.contracts_price != null
+                              ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
+                              : '—'}
+                          </TableCell>
+                          <TableCell>{contract.start_date || '—'}</TableCell>
+                          <TableCell>{contract.endDate || '—'}</TableCell>
+                          <TableCell>{contract.next_service_date || '—'}</TableCell>
+                          <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(contract)}
+                                title="Edit Contract"
+                              >
+                                <Edit className="size-4" />
+                                <span className="sr-only">Edit</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Delete Contract"
+                              >
+                                <Trash2 className="size-4" />
+                                <span className="sr-only">Delete</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
