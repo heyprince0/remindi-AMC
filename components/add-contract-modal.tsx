@@ -50,7 +50,7 @@ export function AddContractModal({
   const [formData, setFormData] = useState({
     contractName: '',
     customerId: '',
-    frequencyDays: '',
+    frequencyMonths: '',
     startDate: '',
     durationYears: '',
     status: 'active',
@@ -64,9 +64,10 @@ export function AddContractModal({
 
   // Auto‑calculate next service date
   useEffect(() => {
-    if (formData.startDate && formData.frequencyDays) {
-      const days = parseInt(formData.frequencyDays)
-      if (days > 0) {
+    if (formData.startDate && formData.frequencyMonths) {
+      const months = parseInt(formData.frequencyMonths)
+      if (months > 0 && months <= 12) {
+        const days = months * 30
         const nextDate = calculateNextServiceDate(formData.startDate, days)
         setNextServiceDate(nextDate)
       } else {
@@ -75,7 +76,7 @@ export function AddContractModal({
     } else {
       setNextServiceDate('')
     }
-  }, [formData.startDate, formData.frequencyDays])
+  }, [formData.startDate, formData.frequencyMonths])
 
   // Auto‑calculate contract end date
   useEffect(() => {
@@ -97,10 +98,12 @@ export function AddContractModal({
   // Populate form when editing
   useEffect(() => {
     if (editingContract && open) {
+      // Convert stored days back to months (divide by 30)
+      const months = editingContract.frequency_days ? Math.round(editingContract.frequency_days / 30) : ''
       setFormData({
         contractName: editingContract.contract_name,
         customerId: editingContract.customer_id,
-        frequencyDays: editingContract.frequency_days?.toString() || '',
+        frequencyMonths: months.toString(),
         startDate: editingContract.start_date,
         durationYears: editingContract.duration_years?.toString() || '',
         status: editingContract.status,
@@ -121,7 +124,7 @@ export function AddContractModal({
       setFormData({
         contractName: '',
         customerId: '',
-        frequencyDays: '',
+        frequencyMonths: '',
         startDate: '',
         durationYears: '',
         status: 'active',
@@ -155,12 +158,12 @@ export function AddContractModal({
     const newErrors: Record<string, string> = {}
     if (!formData.contractName.trim()) newErrors.contractName = 'Contract Name is required'
     if (!formData.customerId) newErrors.customerId = 'Customer is required'
-    if (!formData.frequencyDays) {
-      newErrors.frequencyDays = 'Frequency is required'
+    if (!formData.frequencyMonths) {
+      newErrors.frequencyMonths = 'Frequency is required'
     } else {
-      const days = parseInt(formData.frequencyDays)
-      if (isNaN(days) || days <= 0) {
-        newErrors.frequencyDays = 'Frequency must be a positive number'
+      const months = parseInt(formData.frequencyMonths)
+      if (isNaN(months) || months < 1 || months > 12) {
+        newErrors.frequencyMonths = 'Frequency must be between 1 and 12 months'
       }
     }
     if (!formData.startDate) newErrors.startDate = 'Start Date is required'
@@ -182,11 +185,14 @@ export function AddContractModal({
 
     setLoading(true)
     try {
+      const months = parseInt(formData.frequencyMonths)
+      const frequencyDays = months * 30
+
       const contractData = {
         user_id: userId,
         customer_id: formData.customerId,
         contract_name: formData.contractName,
-        frequency_days: parseInt(formData.frequencyDays),
+        frequency_days: frequencyDays,
         start_date: formData.startDate,
         next_service_date: nextServiceDate,
         duration_years: parseInt(formData.durationYears),
@@ -262,20 +268,21 @@ export function AddContractModal({
             {errors.customerId && <p className="text-xs text-red-500">{errors.customerId}</p>}
           </div>
 
-          {/* Frequency - now a number input */}
+          {/* Frequency (months) – limited to 1–12 */}
           <div className="space-y-2">
-            <Label htmlFor="frequencyDays">Service Frequency (days) <span className="text-red-500">*</span></Label>
+            <Label htmlFor="frequencyMonths">Service Frequency (months) <span className="text-red-500">*</span></Label>
             <Input
-              id="frequencyDays"
+              id="frequencyMonths"
               type="number"
               min="1"
+              max="12"
               step="1"
-              placeholder="e.g., 30"
-              value={formData.frequencyDays}
-              onChange={(e) => setFormData({ ...formData, frequencyDays: e.target.value })}
-              className={errors.frequencyDays ? 'border-red-500' : ''}
+              placeholder="1–12 months (e.g., 1, 3, 6, 12)"
+              value={formData.frequencyMonths}
+              onChange={(e) => setFormData({ ...formData, frequencyMonths: e.target.value })}
+              className={errors.frequencyMonths ? 'border-red-500' : ''}
             />
-            {errors.frequencyDays && <p className="text-xs text-red-500">{errors.frequencyDays}</p>}
+            {errors.frequencyMonths && <p className="text-xs text-red-500">{errors.frequencyMonths}</p>}
           </div>
 
           {/* Start Date */}
@@ -328,7 +335,7 @@ export function AddContractModal({
               type="text"
               value={nextServiceDate}
               disabled
-              placeholder="Calculated from start date + frequency"
+              placeholder="Calculated from start date + frequency (months × 30 days)"
               className="bg-muted"
             />
           </div>
