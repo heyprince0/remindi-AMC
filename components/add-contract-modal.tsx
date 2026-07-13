@@ -30,6 +30,7 @@ const FREQUENCY_OPTIONS = [
   { value: '30', label: '30 days (Monthly)' },
   { value: '60', label: '60 days (Every 2 months)' },
   { value: '90', label: '90 days (Quarterly)' },
+  { value: '120', label: '120 days (Every 4 months)' },
   { value: '180', label: '180 days (Every 6 months)' },
   { value: '365', label: '365 days (Yearly)' }
 ]
