@@ -23,7 +23,7 @@ interface AddContractModalProps {
   onSuccess: () => void
   editingContract?: Contract | null
   userId: string
-  orgId: string
+  orgId: string   // <-- added
 }
 
 const FREQUENCY_OPTIONS = [
@@ -32,13 +32,13 @@ const FREQUENCY_OPTIONS = [
   { value: '90', label: '90 days (Quarterly)' },
   { value: '120', label: '120 days (Every 4 months)' },
   { value: '180', label: '180 days (Every 6 months)' },
-  { value: '365', label: '365 days (Yearly)' },
+  { value: '365', label: '365 days (Yearly)' }
 ]
 
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'expired', label: 'Expired' },
+  { value: 'expired', label: 'Expired' }
 ]
 
 export function AddContractModal({
@@ -47,58 +47,37 @@ export function AddContractModal({
   onSuccess,
   editingContract,
   userId,
-  orgId,
+  orgId
 }: AddContractModalProps) {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [nextServiceDate, setNextServiceDate] = useState('')
-  const [endDate, setEndDate] = useState('')
 
   const [formData, setFormData] = useState({
     contractName: '',
     customerId: '',
     frequency: '',
     startDate: '',
-    durationYears: '',
     status: 'active',
     notes: '',
-    contractPrice: '',
+    contractPrice: ''
   })
 
   useEffect(() => {
-    if (open) loadCustomers()
+    if (open) {
+      loadCustomers()
+    }
   }, [open])
 
-  // Auto‑calculate next service date
   useEffect(() => {
     if (formData.startDate && formData.frequency) {
       const nextDate = calculateNextServiceDate(formData.startDate, parseInt(formData.frequency))
       setNextServiceDate(nextDate)
-    } else {
-      setNextServiceDate('')
     }
   }, [formData.startDate, formData.frequency])
 
-  // Auto‑calculate contract end date
-  useEffect(() => {
-    if (formData.startDate && formData.durationYears) {
-      const years = parseInt(formData.durationYears)
-      if (years > 0) {
-        const start = new Date(formData.startDate)
-        const end = new Date(start)
-        end.setFullYear(end.getFullYear() + years)
-        setEndDate(end.toISOString().split('T')[0])
-      } else {
-        setEndDate('')
-      }
-    } else {
-      setEndDate('')
-    }
-  }, [formData.startDate, formData.durationYears])
-
-  // Populate form when editing
   useEffect(() => {
     if (editingContract && open) {
       setFormData({
@@ -106,34 +85,22 @@ export function AddContractModal({
         customerId: editingContract.customer_id,
         frequency: editingContract.frequency_days.toString(),
         startDate: editingContract.start_date,
-        durationYears: editingContract.duration_years?.toString() || '',
         status: editingContract.status,
         notes: editingContract.notes || '',
-        contractPrice: editingContract.contracts_price != null ? editingContract.contracts_price.toString() : '',
+        contractPrice: editingContract.contracts_price != null ? editingContract.contracts_price.toString() : ''
       })
       setNextServiceDate(editingContract.next_service_date)
-      // Compute end date from start_date + duration_years if present
-      if (editingContract.start_date && editingContract.duration_years) {
-        const start = new Date(editingContract.start_date)
-        const end = new Date(start)
-        end.setFullYear(end.getFullYear() + editingContract.duration_years)
-        setEndDate(end.toISOString().split('T')[0])
-      } else {
-        setEndDate('')
-      }
     } else if (open) {
       setFormData({
         contractName: '',
         customerId: '',
         frequency: '',
         startDate: '',
-        durationYears: '',
         status: 'active',
         notes: '',
-        contractPrice: '',
+        contractPrice: ''
       })
       setNextServiceDate('')
-      setEndDate('')
       setErrors({})
     }
   }, [editingContract, open])
@@ -144,7 +111,8 @@ export function AddContractModal({
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .eq('org_id', orgId)
+        .eq('org_id', orgId)   // <-- scope by org
+
       if (error) throw error
       setCustomers(data || [])
     } catch (error) {
@@ -161,14 +129,6 @@ export function AddContractModal({
     if (!formData.customerId) newErrors.customerId = 'Customer is required'
     if (!formData.frequency) newErrors.frequency = 'Frequency is required'
     if (!formData.startDate) newErrors.startDate = 'Start Date is required'
-    if (!formData.durationYears) {
-      newErrors.durationYears = 'Duration is required'
-    } else {
-      const years = parseInt(formData.durationYears)
-      if (isNaN(years) || years <= 0) {
-        newErrors.durationYears = 'Duration must be a positive number'
-      }
-    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -186,11 +146,10 @@ export function AddContractModal({
         frequency_days: parseInt(formData.frequency),
         start_date: formData.startDate,
         next_service_date: nextServiceDate,
-        duration_years: parseInt(formData.durationYears),
         status: formData.status,
         notes: formData.notes || null,
         contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
-        org_id: orgId,
+        org_id: orgId   // <-- include org_id
       }
 
       if (editingContract) {
@@ -202,7 +161,9 @@ export function AddContractModal({
         if (error) throw error
         toast.success('Contract updated successfully')
       } else {
-        const { error } = await supabase.from('contracts').insert([contractData])
+        const { error } = await supabase
+          .from('contracts')
+          .insert([contractData])
         if (error) throw error
         toast.success('Contract added successfully')
       }
@@ -224,7 +185,6 @@ export function AddContractModal({
           <DialogTitle>{editingContract ? 'Edit Contract' : 'Add New Contract'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Contract Name */}
           <div className="space-y-2">
             <Label htmlFor="contractName">Contract Name <span className="text-red-500">*</span></Label>
             <Input
@@ -237,7 +197,6 @@ export function AddContractModal({
             {errors.contractName && <p className="text-xs text-red-500">{errors.contractName}</p>}
           </div>
 
-          {/* Customer */}
           <div className="space-y-2">
             <Label htmlFor="customer">Customer <span className="text-red-500">*</span></Label>
             <Select value={formData.customerId} onValueChange={(value) => setFormData({ ...formData, customerId: value })}>
@@ -259,9 +218,8 @@ export function AddContractModal({
             {errors.customerId && <p className="text-xs text-red-500">{errors.customerId}</p>}
           </div>
 
-          {/* Frequency */}
           <div className="space-y-2">
-            <Label htmlFor="frequency">Service Frequency <span className="text-red-500">*</span></Label>
+            <Label htmlFor="frequency">Frequency <span className="text-red-500">*</span></Label>
             <Select value={formData.frequency} onValueChange={(value) => setFormData({ ...formData, frequency: value })}>
               <SelectTrigger className={errors.frequency ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select frequency" />
@@ -275,7 +233,6 @@ export function AddContractModal({
             {errors.frequency && <p className="text-xs text-red-500">{errors.frequency}</p>}
           </div>
 
-          {/* Start Date (unchanged) */}
           <div className="space-y-2">
             <Label htmlFor="startDate">Start Date <span className="text-red-500">*</span></Label>
             <Input
@@ -288,49 +245,18 @@ export function AddContractModal({
             {errors.startDate && <p className="text-xs text-red-500">{errors.startDate}</p>}
           </div>
 
-          {/* NEW: Duration in Years */}
           <div className="space-y-2">
-            <Label htmlFor="durationYears">Contract Duration (Years) <span className="text-red-500">*</span></Label>
-            <Input
-              id="durationYears"
-              type="number"
-              min="1"
-              step="1"
-              placeholder="e.g., 1"
-              value={formData.durationYears}
-              onChange={(e) => setFormData({ ...formData, durationYears: e.target.value })}
-              className={errors.durationYears ? 'border-red-500' : ''}
-            />
-            {errors.durationYears && <p className="text-xs text-red-500">{errors.durationYears}</p>}
-          </div>
-
-          {/* NEW: Auto‑calculated Contract End Date */}
-          <div className="space-y-2">
-            <Label htmlFor="endDate">Contract End Date (Auto‑calculated)</Label>
-            <Input
-              id="endDate"
-              type="text"
-              value={endDate}
-              disabled
-              placeholder="Calculated from start date + duration"
-              className="bg-muted"
-            />
-          </div>
-
-          {/* Next Service Date (unchanged) */}
-          <div className="space-y-2">
-            <Label htmlFor="nextServiceDate">Next Service Date (Auto‑calculated)</Label>
+            <Label htmlFor="nextServiceDate">Next Service Date (Auto-calculated)</Label>
             <Input
               id="nextServiceDate"
               type="text"
               value={nextServiceDate}
               disabled
-              placeholder="Calculated from start date + frequency"
+              placeholder="Will be calculated automatically"
               className="bg-muted"
             />
           </div>
 
-          {/* Status, Price, Notes – unchanged */}
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
             <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
@@ -352,7 +278,7 @@ export function AddContractModal({
               type="number"
               min="0"
               step="0.01"
-              placeholder="e.g., 5000"
+              placeholder="e.g. 5000"
               value={formData.contractPrice}
               onChange={(e) => setFormData({ ...formData, contractPrice: e.target.value })}
             />
@@ -362,7 +288,7 @@ export function AddContractModal({
             <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder="Add any additional notes..."
+              placeholder="Add any additional notes about this contract..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
