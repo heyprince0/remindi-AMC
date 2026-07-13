@@ -385,18 +385,19 @@ export default function ContractsPage() {
       doc.setFontSize(8)
       doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
 
-      // Column order: Name, Customer, Frequency, Price, Contract End Date, Start Date, Next Service, Status
+      // ✅ Display frequency in months (converted from stored days)
       const tableData = filteredContracts.map(c => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
+        const frequencyMonths = Math.round(c.frequency_days / 30)
         return [
           c.contract_name || '—',
           c.customerName || '—',
-          `${c.frequency_days} days`,
+          `${frequencyMonths} months`,
           c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
-          c.endDate || '—',             // Contract End Date
-          c.start_date || '—',          // Start Date
-          c.next_service_date || '—',   // Next Service
+          c.endDate || '—',
+          c.start_date || '—',
+          c.next_service_date || '—',
           statusLabel,
         ]
       })
@@ -514,7 +515,7 @@ export default function ContractsPage() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Frequency</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead>Contract End Date</TableHead>  {/* 👈 moved after Price */}
+                      <TableHead>Contract End Date</TableHead>
                       <TableHead>Start Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
@@ -524,17 +525,18 @@ export default function ContractsPage() {
                   <TableBody>
                     {filteredContracts.map((contract) => {
                       const days = getDaysUntilService(contract.next_service_date)
+                      const frequencyMonths = Math.round(contract.frequency_days / 30)
                       return (
                         <TableRow key={contract.id}>
                           <TableCell className="font-medium">{contract.contract_name}</TableCell>
                           <TableCell>{contract.customerName}</TableCell>
-                          <TableCell>{contract.frequency_days} days</TableCell>
+                          <TableCell>{frequencyMonths} months</TableCell>
                           <TableCell>
                             {contract.contracts_price != null
                               ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
                               : '—'}
                           </TableCell>
-                          <TableCell>{contract.endDate || '—'}</TableCell>  {/* Contract End Date */}
+                          <TableCell>{contract.endDate || '—'}</TableCell>
                           <TableCell>{contract.start_date || '—'}</TableCell>
                           <TableCell>{contract.next_service_date || '—'}</TableCell>
                           <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
@@ -571,7 +573,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* Add/Edit Contract Modal (already includes duration_years) */}
+        {/* Add/Edit Contract Modal */}
         {user && currentOrgId && (
           <AddContractModal
             open={modalOpen}
