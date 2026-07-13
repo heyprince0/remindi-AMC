@@ -108,13 +108,17 @@ export default function TeamPage() {
         if (!fullName) {
           fullName = profileMap[membership.user_id]
         }
+        // Fall back to the email stored on the membership (set at invite-acceptance time)
+        if (!fullName && membership.email) {
+          fullName = membership.email.split('@')[0]
+        }
         if (!fullName) {
           fullName = `User ${membership.user_id.slice(0, 6)}`
         }
         membersWithProfiles.push({
           ...membership,
           full_name: fullName,
-          email: emailMap[membership.user_id],
+          email: membership.email || emailMap[membership.user_id],
         })
       }
       setMembers(membersWithProfiles)
@@ -129,12 +133,14 @@ export default function TeamPage() {
 
       if (invitesError) throw invitesError
 
-      // 6. Safeguard: exclude invites whose email already exists in members
-      //    (in case the invite status wasn't updated correctly)
-      const memberEmails = new Set(membersWithProfiles.map(m => m.email).filter(Boolean))
+      // 6. Safeguard: exclude invites whose email already exists as a member
+      //    (covers cases where the invite's status update didn't stick)
+      const memberEmails = new Set(
+        membersWithProfiles.map(m => m.email?.toLowerCase()).filter(Boolean)
+      )
       const filteredInvites = (invitesData || []).filter(invite => {
         if (!invite.email) return true // keep invites without email (shouldn't happen)
-        return !memberEmails.has(invite.email)
+        return !memberEmails.has(invite.email.toLowerCase())
       })
 
       setPendingInvites(filteredInvites)
