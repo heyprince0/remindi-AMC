@@ -21,8 +21,8 @@ export default function AcceptInvitePage() {
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [mode, setMode] = useState<"signin" | "signup">("signin")
   const [resetting, setResetting] = useState(false)
+  const [isExistingUser, setIsExistingUser] = useState<boolean | null>(null)
 
   useEffect(() => {
     const fetchInvite = async () => {
@@ -54,6 +54,12 @@ export default function AcceptInvitePage() {
 
         setInvite(data)
         setEmail(data.email)
+
+        // ✅ Check if the email already has an account
+        const checkRes = await fetch(`/api/invites/check-email?email=${encodeURIComponent(data.email)}`)
+        const checkData = await checkRes.json()
+        setIsExistingUser(checkData.exists || false)
+
         setLoading(false)
       } catch (err) {
         setError("Failed to load invitation")
@@ -73,7 +79,9 @@ export default function AcceptInvitePage() {
     setAccepting(true)
     try {
       let authResponse
-      if (mode === "signin") {
+
+      // ✅ If existing user, sign in; otherwise sign up
+      if (isExistingUser) {
         authResponse = await supabase.auth.signInWithPassword({ email, password })
       } else {
         authResponse = await supabase.auth.signUp({ email, password })
@@ -135,8 +143,6 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("You've joined the team!")
-
-      // ✅ FIX: Redirect to root (dashboard) instead of /dashboard
       router.push("/")
     } catch (err) {
       console.error(err)
@@ -192,7 +198,6 @@ export default function AcceptInvitePage() {
     )
   }
 
-  // ✅ Guard against null invite
   if (!invite) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -208,6 +213,10 @@ export default function AcceptInvitePage() {
       </div>
     )
   }
+
+  // ✅ Determine which form to show based on isExistingUser
+  const showSignIn = isExistingUser === true
+  const showSignUp = isExistingUser === false
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/20">
@@ -229,7 +238,6 @@ export default function AcceptInvitePage() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 disabled
                 className="bg-muted"
               />
@@ -237,42 +245,38 @@ export default function AcceptInvitePage() {
 
             <div className="space-y-2">
               <Label htmlFor="password">
-                {mode === "signin" ? "Password" : "Create Password"}
+                {showSignIn ? "Password" : "Create Password"}
               </Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "signin" ? "Enter your password" : "Create a password (min 6 characters)"}
+                placeholder={showSignIn ? "Enter your password" : "Create a password (min 6 characters)"}
                 required
               />
             </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">
-                  {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-                  className="text-blue-600 hover:underline"
-                >
-                  {mode === "signin" ? "Sign up" : "Sign in"}
-                </button>
-              </div>
-              {mode === "signin" && (
+            {/* Show forgot password only for existing users */}
+            {showSignIn && (
+              <div className="flex justify-end">
                 <button
                   type="button"
                   onClick={handleForgotPassword}
                   disabled={resetting}
-                  className="text-blue-600 hover:underline disabled:opacity-50"
+                  className="text-sm text-blue-600 hover:underline disabled:opacity-50"
                 >
                   {resetting ? "Sending..." : "Forgot password?"}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Show a message for new users */}
+            {showSignUp && (
+              <p className="text-sm text-muted-foreground">
+                Create a password to set up your account and join the team.
+              </p>
+            )}
 
             <Button type="submit" className="w-full" disabled={accepting}>
               {accepting ? (
@@ -281,7 +285,7 @@ export default function AcceptInvitePage() {
                   Accepting...
                 </>
               ) : (
-                `Accept Invitation & ${mode === "signin" ? "Sign in" : "Sign up"}`
+                showSignIn ? "Accept & Sign In" : "Accept & Create Account"
               )}
             </Button>
           </form>
