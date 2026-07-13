@@ -19,6 +19,7 @@ import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, Search, MoreHorizontal, Eye, Edit, Phone, MapPin, FileText, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
+import Link from "next/link"
 
 export default function CustomersPage() {
   const { user } = useAuth()
@@ -271,6 +272,12 @@ export default function CustomersPage() {
                       <span className="text-foreground font-medium">{customer.contractCount}</span>
                       <span className="text-muted-foreground">contracts</span>
                     </div>
+                    <Link href={`/customers/${customer.id}`}>
+                      <Button variant="ghost" size="sm" className="gap-2">
+                        <Eye className="size-4" />
+                        View
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

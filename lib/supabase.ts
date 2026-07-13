@@ -69,8 +69,10 @@ export const calculateNextServiceDate = (
 export type Customer = {
   id: string
   user_id: string
+  org_id?: string
   name: string
   phone: string
+  email?: string
   address: string
   created_at: string
 }
@@ -103,6 +105,7 @@ export type ServiceHistory = {
   id: string
   contract_id: string
   technician_id: string
+  org_id?: string
   service_date: string
   status: string
   notes: string
