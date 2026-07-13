@@ -398,7 +398,7 @@ export default function ContractsPage() {
           `${c.frequency_days} days`,
           c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
           c.start_date || '—',
-          c.next_service_date || '—',
+          c.end_date || '—',
           statusLabel
         ]
       })
@@ -515,8 +515,8 @@ export default function ContractsPage() {
                     <TableHead>Customer</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Price</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>End Date</TableHead>
+                    <TableHead>Contract Start Date</TableHead>
+                    <TableHead>Contract End Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[70px]">Actions</TableHead>
                   </TableRow>
@@ -535,7 +535,7 @@ export default function ContractsPage() {
                             : '—'}
                         </TableCell>
                         <TableCell>{contract.start_date}</TableCell>
-                        <TableCell>{contract.next_service_date}</TableCell>
+                        <TableCell>{contract.end_date || '—'}</TableCell>
                         <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
