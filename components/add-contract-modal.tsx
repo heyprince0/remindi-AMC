@@ -35,12 +35,6 @@ const FREQUENCY_OPTIONS = [
   { value: '365', label: '365 days (Yearly)' }
 ]
 
-const DURATION_OPTIONS = [
-  { value: '1', label: '1 Year' },
-  { value: '2', label: '2 Years' },
-  { value: '3', label: '3 Years' }
-]
-
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
@@ -66,12 +60,10 @@ export function AddContractModal({
     customerId: '',
     frequency: '',
     startDate: '',
-    durationYears: '',
     status: 'active',
     notes: '',
     contractPrice: ''
   })
-  const [endDate, setEndDate] = useState('')
 
   useEffect(() => {
     if (open) {
@@ -87,43 +79,28 @@ export function AddContractModal({
   }, [formData.startDate, formData.frequency])
 
   useEffect(() => {
-    if (formData.startDate && formData.durationYears) {
-      const start = new Date(formData.startDate)
-      const end = new Date(start)
-      end.setFullYear(end.getFullYear() + parseInt(formData.durationYears))
-      setEndDate(end.toISOString().split('T')[0])
-    } else {
-      setEndDate('')
-    }
-  }, [formData.startDate, formData.durationYears])
-
-  useEffect(() => {
     if (editingContract && open) {
       setFormData({
         contractName: editingContract.contract_name,
         customerId: editingContract.customer_id,
         frequency: editingContract.frequency_days.toString(),
         startDate: editingContract.start_date,
-        durationYears: editingContract.duration_years ? editingContract.duration_years.toString() : '',
         status: editingContract.status,
         notes: editingContract.notes || '',
         contractPrice: editingContract.contracts_price != null ? editingContract.contracts_price.toString() : ''
       })
       setNextServiceDate(editingContract.next_service_date)
-      setEndDate(editingContract.end_date || '')
     } else if (open) {
       setFormData({
         contractName: '',
         customerId: '',
         frequency: '',
         startDate: '',
-        durationYears: '',
         status: 'active',
         notes: '',
         contractPrice: ''
       })
       setNextServiceDate('')
-      setEndDate('')
       setErrors({})
     }
   }, [editingContract, open])
@@ -152,7 +129,6 @@ export function AddContractModal({
     if (!formData.customerId) newErrors.customerId = 'Customer is required'
     if (!formData.frequency) newErrors.frequency = 'Frequency is required'
     if (!formData.startDate) newErrors.startDate = 'Start Date is required'
-    if (!formData.durationYears) newErrors.durationYears = 'Contract Duration is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -173,8 +149,6 @@ export function AddContractModal({
         status: formData.status,
         notes: formData.notes || null,
         contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
-        duration_years: parseInt(formData.durationYears),
-        end_date: endDate,
         org_id: orgId   // <-- include org_id
       }
 
@@ -277,33 +251,6 @@ export function AddContractModal({
               id="nextServiceDate"
               type="text"
               value={nextServiceDate}
-              disabled
-              placeholder="Will be calculated automatically"
-              className="bg-muted"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="durationYears">Contract Duration <span className="text-red-500">*</span></Label>
-            <Select value={formData.durationYears} onValueChange={(value) => setFormData({ ...formData, durationYears: value })}>
-              <SelectTrigger id="durationYears" className={errors.durationYears ? 'border-red-500' : ''}>
-                <SelectValue placeholder="Select duration" />
-              </SelectTrigger>
-              <SelectContent>
-                {DURATION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.durationYears && <p className="text-xs text-red-500">{errors.durationYears}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="endDate">Contract End Date (Auto-calculated)</Label>
-            <Input
-              id="endDate"
-              type="text"
-              value={endDate}
               disabled
               placeholder="Will be calculated automatically"
               className="bg-muted"
