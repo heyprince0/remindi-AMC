@@ -74,6 +74,7 @@ export default function TeamPage() {
     try {
       if (!orgId) return
 
+      // Fetch memberships
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
@@ -82,60 +83,60 @@ export default function TeamPage() {
 
       if (membershipsError) throw membershipsError
 
-      const membersWithProfiles: MemberWithProfile[] = []
+      const userIds = membershipsData.map((m) => m.user_id)
 
-      // Get all user IDs to fetch emails from auth (fallback)
-      const userIds = membershipsData.map(m => m.user_id)
-
-      // Fetch profile names
+      // Fetch profiles (full_name, company_name)
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, company_name")
         .in("id", userIds)
 
       const profileMap = (profiles || []).reduce((acc, p) => {
-        acc[p.id] = p.full_name
+        // Use full_name if exists, else company_name
+        const name = p.full_name || p.company_name || null
+        if (name) acc[p.id] = name
         return acc
       }, {} as Record<string, string>)
 
-      // Fetch company_profile names (fallback)
+      // Fetch company_profile (email, company_name as fallback)
       const { data: companyProfiles } = await supabase
         .from("company_profile")
-        .select("user_id, company_name, email")
+        .select("user_id, email, company_name")
         .in("user_id", userIds)
 
       const companyProfileMap = (companyProfiles || []).reduce((acc, cp) => {
-        acc[cp.user_id] = { companyName: cp.company_name, email: cp.email }
+        acc[cp.user_id] = { email: cp.email, companyName: cp.company_name }
         return acc
-      }, {} as Record<string, { companyName: string; email: string }>)
+      }, {} as Record<string, { email: string; companyName: string }>)
 
-      // Fetch auth users for emails (fallback)
-      const { data: { users } } = await supabase.auth.admin.listUsers()
-      const authEmailMap = (users || []).reduce((acc, u) => {
-        acc[u.id] = u.email
-        return acc
-      }, {} as Record<string, string>)
+      const membersWithProfiles: MemberWithProfile[] = []
 
       for (const membership of membershipsData || []) {
         let fullName: string | undefined
         let email: string | undefined
 
-        // 1. Use display_name from membership (set by admin)
+        // 1. Use display_name from membership (set by admin during invite)
         if (membership.display_name) {
           fullName = membership.display_name
         } else {
-          // 2. Try profiles.full_name
-          if (profileMap[membership.user_id]) {
-            fullName = profileMap[membership.user_id]
-          }
-          // 3. Try company_profile.company_name
-          else if (companyProfileMap[membership.user_id]?.companyName) {
-            fullName = companyProfileMap[membership.user_id].companyName
+          // 2. Try profiles (full_name or company_name)
+          const profileName = profileMap[membership.user_id]
+          if (profileName) {
+            fullName = profileName
+          } else {
+            // 3. Try company_profile company_name as last resort
+            const cp = companyProfileMap[membership.user_id]
+            if (cp?.companyName) {
+              fullName = cp.companyName
+            }
           }
         }
 
-        // Get email from company_profile or auth
-        email = companyProfileMap[membership.user_id]?.email || authEmailMap[membership.user_id]
+        // Get email from company_profile
+        const cp = companyProfileMap[membership.user_id]
+        if (cp?.email) {
+          email = cp.email
+        }
 
         // Fallback: if still no name, use email or user ID
         if (!fullName) {
@@ -151,6 +152,7 @@ export default function TeamPage() {
 
       setMembers(membersWithProfiles)
 
+      // Fetch pending invites
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
