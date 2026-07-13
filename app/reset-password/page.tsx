@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,23 +12,28 @@ import { Loader2 } from "lucide-react"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [validating, setValidating] = useState(true)
+
+  // If the user arrived here from an invite's "Forgot password" flow, this
+  // carries them back to that exact invite page instead of dropping them at /login.
+  const redirectTarget = searchParams.get("redirect")
 
   useEffect(() => {
     const checkSession = async () => {
       const { data, error } = await supabase.auth.getSession()
       if (error || !data.session) {
         toast.error("Invalid or expired reset link")
-        router.push("/login")
+        router.push(redirectTarget || "/login")
         setValidating(false)
         return
       }
       setValidating(false)
     }
     checkSession()
-  }, [router])
+  }, [router, redirectTarget])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,7 +48,7 @@ export default function ResetPasswordPage() {
     } else {
       toast.success("Password updated! Please sign in.")
       await supabase.auth.signOut()
-      router.push("/login")
+      router.push(redirectTarget || "/login")
     }
     setLoading(false)
   }
