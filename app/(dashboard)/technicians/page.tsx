@@ -63,7 +63,7 @@ export default function TechniciansPage() {
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
+  // Plan limits (used only when clicking Add Technician)
   const { maxTechnicians, currentTechnicianCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   // Limit modal state
@@ -95,22 +95,8 @@ export default function TechniciansPage() {
     }
   }, [currentOrgId])
 
-  // Check limits on page load
-  useEffect(() => {
-    if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-    } else if (maxTechnicians > 0 && currentTechnicianCount >= maxTechnicians) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your technician limit",
-        description: `Your current plan allows a maximum of ${maxTechnicians} technicians. You have already added ${currentTechnicianCount}. Upgrade to add more technicians.`,
-      })
-      setShowLimitModal(true)
-    }
-  }, [limitsLoading, status, maxTechnicians, currentTechnicianCount])
+  // ❌ REMOVED: auto-show limit modal on page load
+  // The modal now only appears when clicking "Add Technician"
 
   const loadTechnicians = async () => {
     try {
@@ -179,7 +165,7 @@ export default function TechniciansPage() {
   }
 
   const handleAddClick = () => {
-    // Check limits before opening modal
+    // ✅ Check limits only when the user clicks "Add Technician"
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
