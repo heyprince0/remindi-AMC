@@ -55,7 +55,7 @@ export default function AcceptInvitePage() {
         setInvite(data)
         setEmail(data.email)
 
-        // ✅ Check if the email already has an account
+        // Check if the email already has an account
         const checkRes = await fetch(`/api/invites/check-email?email=${encodeURIComponent(data.email)}`)
         const checkData = await checkRes.json()
         setIsExistingUser(checkData.exists || false)
@@ -80,7 +80,7 @@ export default function AcceptInvitePage() {
     try {
       let authResponse
 
-      // ✅ If existing user, sign in; otherwise sign up
+      // If existing user, sign in; otherwise sign up
       if (isExistingUser) {
         authResponse = await supabase.auth.signInWithPassword({ email, password })
       } else {
@@ -124,7 +124,8 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 2. Create membership
+      // 2. Create membership — includes email so the Team page can always
+      //    resolve a name/identity, even if display_name ends up missing.
       const { error: membershipError } = await supabase
         .from("memberships")
         .insert({
@@ -132,6 +133,7 @@ export default function AcceptInvitePage() {
           user_id: user.id,
           role: invite.role,
           display_name: invite.display_name,
+          email: invite.email,
           created_at: new Date().toISOString(),
         })
 
@@ -214,7 +216,7 @@ export default function AcceptInvitePage() {
     )
   }
 
-  // ✅ Determine which form to show based on isExistingUser
+  // Determine which form to show based on isExistingUser
   const showSignIn = isExistingUser === true
   const showSignUp = isExistingUser === false
 
