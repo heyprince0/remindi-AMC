@@ -36,7 +36,7 @@ export default function TeamPage() {
 
   const { maxTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
-  // Current team seats = members excluding the owner
+  // Current seats = all members EXCEPT the owner
   const currentTeamSeats = members.filter(m => m.user_id !== ownerId).length
 
   const [showLimitModal, setShowLimitModal] = useState(false)
@@ -77,9 +77,30 @@ export default function TeamPage() {
         .single()
 
       if (orgError) throw orgError
-      setOwnerId(orgData?.owner_id || null)
+      let owner = orgData?.owner_id
 
-      // 2. Fetch memberships
+      // 2. If owner_id is null, fallback to the oldest admin/owner membership
+      if (!owner) {
+        const { data: admins, error: adminsError } = await supabase
+          .from("memberships")
+          .select("user_id")
+          .eq("org_id", orgId)
+          .in("role", ["admin", "owner"])
+          .order("created_at", { ascending: true })
+          .limit(1)
+
+        if (!adminsError && admins && admins.length > 0) {
+          owner = admins[0].user_id
+          // Optionally update the organizations table with this owner
+          await supabase
+            .from("organizations")
+            .update({ owner_id: owner })
+            .eq("id", orgId)
+        }
+      }
+      setOwnerId(owner)
+
+      // 3. Fetch memberships
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
@@ -90,7 +111,7 @@ export default function TeamPage() {
 
       const userIds = membershipsData.map((m) => m.user_id)
 
-      // 3. Fetch profiles (full_name, company_name)
+      // 4. Fetch profiles (full_name, company_name)
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, company_name")
@@ -102,7 +123,7 @@ export default function TeamPage() {
         return acc
       }, {} as Record<string, string>)
 
-      // 4. Fetch company_profile (email)
+      // 5. Fetch company_profile (email)
       const { data: companyProfiles } = await supabase
         .from("company_profile")
         .select("user_id, email")
@@ -113,7 +134,7 @@ export default function TeamPage() {
         return acc
       }, {} as Record<string, string>)
 
-      // 5. Build members list
+      // 6. Build members list
       const membersWithProfiles: MemberWithProfile[] = []
       for (const membership of membershipsData || []) {
         let fullName = membership.display_name || undefined
@@ -134,7 +155,7 @@ export default function TeamPage() {
       }
       setMembers(membersWithProfiles)
 
-      // 6. Fetch pending invites (status = 'pending')
+      // 7. Fetch pending invites (status = 'pending')
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -144,7 +165,7 @@ export default function TeamPage() {
 
       if (invitesError) throw invitesError
 
-      // 7. Safeguard: exclude invites whose email already exists as a member
+      // 8. Safeguard: exclude invites whose email already exists as a member
       const memberEmails = new Set(
         membersWithProfiles.map(m => m.email?.toLowerCase()).filter(Boolean)
       )
@@ -263,7 +284,12 @@ export default function TeamPage() {
       return
     }
 
-    // Exclude the owner from the seat count (owner is already excluded in currentTeamSeats)
+    // Log current values for debugging
+    console.log("🔍 [Team] Owner ID:", ownerId)
+    console.log("🔍 [Team] Total members:", members.length)
+    console.log("🔍 [Team] Members excluding owner:", currentTeamSeats)
+    console.log("🔍 [Team] Max seats from plan:", maxTeamSeats)
+
     if (maxTeamSeats !== null && maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
