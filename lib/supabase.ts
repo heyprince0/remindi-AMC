@@ -88,8 +88,6 @@ export type Contract = {
   status: string
   notes: string
   contracts_price: number | null
-  duration_years: number | null
-  end_date: string | null
   created_at: string
 }
 
