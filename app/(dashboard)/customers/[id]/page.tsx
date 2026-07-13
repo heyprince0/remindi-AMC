@@ -25,6 +25,16 @@ interface ServiceRecord extends ServiceHistory {
 
 interface ContractDisplay extends Contract {
   daysUntilService: number
+  endDate: string | null
+}
+
+// Helper to compute contract end date
+function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
+  if (!startDate || !durationYears || durationYears <= 0) return null
+  const start = new Date(startDate)
+  const end = new Date(start)
+  end.setFullYear(end.getFullYear() + durationYears)
+  return end.toISOString().split('T')[0]
 }
 
 function getStatusBadge(days: number, status: string) {
@@ -119,12 +129,14 @@ export default function CustomerDetailPage() {
 
       if (contractsError) throw contractsError
 
-      const contractsWithDays = (contractsData as Contract[]).map(contract => ({
+      // Compute end date and days until service
+      const contractsWithExtra = (contractsData as Contract[]).map(contract => ({
         ...contract,
-        daysUntilService: getDaysUntilService(contract.next_service_date)
+        daysUntilService: getDaysUntilService(contract.next_service_date),
+        endDate: getContractEndDate(contract.start_date, contract.duration_years),
       }))
 
-      setContracts(contractsWithDays)
+      setContracts(contractsWithExtra)
 
       // Fetch service history for this customer's contracts
       if (contractsData && contractsData.length > 0) {
@@ -267,26 +279,31 @@ export default function CustomerDetailPage() {
                       <TableHead>Contract Name</TableHead>
                       <TableHead>Frequency</TableHead>
                       <TableHead>Price</TableHead>
+                      <TableHead>Contract End Date</TableHead> {/* ✅ Added */}
                       <TableHead>Start Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {contracts.map((contract) => (
-                      <TableRow key={contract.id}>
-                        <TableCell className="font-medium">{contract.contract_name}</TableCell>
-                        <TableCell>{contract.frequency_days} days</TableCell>
-                        <TableCell>
-                          {contract.contracts_price != null
-                            ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>{contract.start_date}</TableCell>
-                        <TableCell>{contract.next_service_date}</TableCell>
-                        <TableCell>{getStatusBadge(contract.daysUntilService, contract.status)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {contracts.map((contract) => {
+                      const frequencyMonths = Math.round(contract.frequency_days / 30)
+                      return (
+                        <TableRow key={contract.id}>
+                          <TableCell className="font-medium">{contract.contract_name}</TableCell>
+                          <TableCell>{frequencyMonths} months</TableCell>
+                          <TableCell>
+                            {contract.contracts_price != null
+                              ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
+                              : '—'}
+                          </TableCell>
+                          <TableCell>{contract.endDate || '—'}</TableCell>
+                          <TableCell>{contract.start_date}</TableCell>
+                          <TableCell>{contract.next_service_date}</TableCell>
+                          <TableCell>{getStatusBadge(contract.daysUntilService, contract.status)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -294,7 +311,7 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Service History Section */}
+        {/* Service History Section (unchanged) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
