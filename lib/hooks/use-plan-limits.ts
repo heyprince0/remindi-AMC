@@ -4,10 +4,11 @@ import { supabase } from '@/lib/supabase';
 interface PlanLimits {
   planId: string | null;
   planName: string;
-  status: string; // 'active' | 'trial' | 'expired' | 'cancelled'
+  status: string; // 'active' | 'trial' | 'expired' | 'cancelled' | 'inactive'
   maxContracts: number;
   maxCustomers: number;
   maxTechnicians: number;
+  maxTeamSeats: number;        // ✅ added
   maxQuotationsMonthly: number;
   maxInvoicesMonthly: number;
   currentContractCount: number;
@@ -27,6 +28,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
     maxContracts: 0,
     maxCustomers: 0,
     maxTechnicians: 0,
+    maxTeamSeats: 0,           // ✅ added
     maxQuotationsMonthly: 0,
     maxInvoicesMonthly: 0,
     currentContractCount: 0,
@@ -54,11 +56,13 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         max_contracts: 0,
         max_customers: 0,
         max_technicians: 0,
+        max_team_seats: 0,      // ✅ added default
         max_quotations_monthly: 0,
         max_invoices_monthly: 0,
         name: 'Free',
       };
       const planId = subData?.plan_id || null;
+      // If subscription exists, use its status; otherwise 'inactive'
       const status = subData?.status || 'inactive';
 
       // 2. Count customers
@@ -81,7 +85,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 5. Count quotations created this month
+      // 5. Count quotations this month
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -105,6 +109,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         maxContracts: plan.max_contracts || 0,
         maxCustomers: plan.max_customers || 0,
         maxTechnicians: plan.max_technicians || 0,
+        maxTeamSeats: plan.max_team_seats || 0,   // ✅ set from plan
         maxQuotationsMonthly: plan.max_quotations_monthly || 0,
         maxInvoicesMonthly: plan.max_invoices_monthly || 0,
         currentContractCount: contractCount || 0,
