@@ -43,10 +43,9 @@ import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface ContractDisplay extends Contract {
   customerName: string
-  endDate: string | null // computed from start_date + duration_years
+  endDate: string | null
 }
 
-// Helper to compute contract end date
 function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
   if (!startDate || !durationYears || durationYears <= 0) return null
   const start = new Date(startDate)
@@ -104,25 +103,18 @@ export default function ContractsPage() {
   const [contractToDelete, setContractToDelete] = useState<ContractDisplay | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- Billing & limit states ---
   const [subscription, setSubscription] = useState<any>(null)
   const [plan, setPlan] = useState<any>(null)
   const [contractCount, setContractCount] = useState(0)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
   const [limitValue, setLimitValue] = useState(0)
-
-  // --- Plan modal state ---
   const [showPlanModal, setShowPlanModal] = useState(false)
-
-  // --- Data ready flag for auto-show ---
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
-  // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -146,7 +138,6 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
-  // --- Fetch subscription and plan ---
   useEffect(() => {
     const fetchSubscription = async () => {
       if (!currentOrgId) return
@@ -163,7 +154,6 @@ export default function ContractsPage() {
           setSubscription(subData)
           setPlan(subData.plan)
         } else {
-          // No subscription record → fetch the free plan for limits
           const { data: freePlan } = await supabase
             .from('subscription_plans')
             .select('*')
@@ -178,7 +168,6 @@ export default function ContractsPage() {
     fetchSubscription()
   }, [currentOrgId])
 
-  // --- Fetch contract count ---
   const fetchContractCount = async () => {
     if (!currentOrgId) return
     try {
@@ -194,7 +183,6 @@ export default function ContractsPage() {
     }
   }
 
-  // --- Load contracts and count, then mark data ready ---
   useEffect(() => {
     if (currentOrgId) {
       const loadData = async () => {
@@ -207,7 +195,6 @@ export default function ContractsPage() {
     }
   }, [currentOrgId])
 
-  // --- Centralized check & show modal ---
   const checkAndShowLimitModal = (showOnLoad = false) => {
     if (showOnLoad && autoShown) return
 
@@ -243,7 +230,6 @@ export default function ContractsPage() {
     return false
   }
 
-  // --- Auto-show on load when data is ready ---
   useEffect(() => {
     if (dataReady && !autoShown) {
       checkAndShowLimitModal(true)
@@ -399,6 +385,7 @@ export default function ContractsPage() {
       doc.setFontSize(8)
       doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
 
+      // Column order: Name, Customer, Frequency, Price, Contract End Date, Start Date, Next Service, Status
       const tableData = filteredContracts.map(c => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
@@ -407,16 +394,16 @@ export default function ContractsPage() {
           c.customerName || '—',
           `${c.frequency_days} days`,
           c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString('en-IN')}` : '—',
-          c.start_date || '—',
-          c.endDate || '—',   // contract end date
-          c.next_service_date || '—',
+          c.endDate || '—',             // Contract End Date
+          c.start_date || '—',          // Start Date
+          c.next_service_date || '—',   // Next Service
           statusLabel,
         ]
       })
 
       autoTable(doc, {
         startY: 28,
-        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Start Date", "Contract End Date", "Next Service", "Status"]],
+        head: [["Contract Name", "Customer", "Frequency", "Price (Rs.)", "Contract End Date", "Start Date", "Next Service", "Status"]],
         body: tableData,
         theme: "striped",
         headStyles: {
@@ -431,8 +418,8 @@ export default function ContractsPage() {
           1: { cellWidth: 30 },
           2: { cellWidth: 22 },
           3: { cellWidth: 28 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 28 },
+          4: { cellWidth: 28 },
+          5: { cellWidth: 25 },
           6: { cellWidth: 25 },
           7: { cellWidth: 25 },
         },
@@ -527,8 +514,8 @@ export default function ContractsPage() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Frequency</TableHead>
                       <TableHead>Price</TableHead>
+                      <TableHead>Contract End Date</TableHead>  {/* 👈 moved after Price */}
                       <TableHead>Start Date</TableHead>
-                      <TableHead>Contract End Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-[70px]">Actions</TableHead>
@@ -547,8 +534,8 @@ export default function ContractsPage() {
                               ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
                               : '—'}
                           </TableCell>
+                          <TableCell>{contract.endDate || '—'}</TableCell>  {/* Contract End Date */}
                           <TableCell>{contract.start_date || '—'}</TableCell>
-                          <TableCell>{contract.endDate || '—'}</TableCell>
                           <TableCell>{contract.next_service_date || '—'}</TableCell>
                           <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
                           <TableCell>
@@ -584,7 +571,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* Add/Edit Contract Modal */}
+        {/* Add/Edit Contract Modal (already includes duration_years) */}
         {user && currentOrgId && (
           <AddContractModal
             open={modalOpen}
