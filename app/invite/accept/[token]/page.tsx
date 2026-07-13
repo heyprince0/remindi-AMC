@@ -55,10 +55,22 @@ export default function AcceptInvitePage() {
         setInvite(data)
         setEmail(data.email)
 
-        // Check if the email already has an account
-        const checkRes = await fetch(`/api/invites/check-email?email=${encodeURIComponent(data.email)}`)
-        const checkData = await checkRes.json()
-        setIsExistingUser(checkData.exists || false)
+        // Check if the email already has an account — isolated so that if
+        // this endpoint fails/doesn't exist, the invite still loads normally
+        // (falls back to sign-up mode).
+        try {
+          const checkRes = await fetch(`/api/invites/check-email?email=${encodeURIComponent(data.email)}`)
+          if (checkRes.ok) {
+            const checkData = await checkRes.json()
+            setIsExistingUser(checkData.exists || false)
+          } else {
+            console.error("check-email endpoint returned", checkRes.status)
+            setIsExistingUser(false)
+          }
+        } catch (checkErr) {
+          console.error("check-email request failed:", checkErr)
+          setIsExistingUser(false)
+        }
 
         setLoading(false)
       } catch (err) {
@@ -162,7 +174,7 @@ export default function AcceptInvitePage() {
     setResetting(true)
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/reset-password?redirect=${encodeURIComponent(`/invite/accept/${token}`)}`,
       })
       if (error) {
         toast.error(error.message)
