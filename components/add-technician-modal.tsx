@@ -97,6 +97,7 @@ export function AddTechnicianModal({
     if (!formData.name.trim()) newErrors.name = 'Name is required'
     if (!formData.phone.trim()) newErrors.phone = 'Phone is required'
     if (!formData.specialization.trim()) newErrors.specialization = 'Specialization is required'
+    if (!formData.status.trim()) newErrors.status = 'Status is required'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -191,12 +192,12 @@ export function AddTechnicianModal({
             {errors.specialization && <p className="text-sm text-red-500">{errors.specialization}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
+            <Label htmlFor="status">Status *</Label>
             <Select
               value={formData.status}
               onValueChange={(value) => setFormData({ ...formData, status: value })}
             >
-              <SelectTrigger id="status">
+              <SelectTrigger id="status" className={errors.status ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
@@ -205,6 +206,7 @@ export function AddTechnicianModal({
                 ))}
               </SelectContent>
             </Select>
+            {errors.status && <p className="text-sm text-red-500">{errors.status}</p>}
           </div>
           <div className="flex gap-3 justify-end pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
