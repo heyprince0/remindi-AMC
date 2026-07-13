@@ -32,9 +32,12 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [ownerId, setOwnerId] = useState<string | null>(null)
 
   const { maxTeamSeats, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
-  const currentTeamSeats = members.length
+
+  // Current team seats = members excluding the owner
+  const currentTeamSeats = members.filter(m => m.user_id !== ownerId).length
 
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
@@ -60,14 +63,23 @@ export default function TeamPage() {
   // No auto-show on page load
   useEffect(() => {
     if (limitsLoading || !currentOrgId) return
-    // Don't auto-show
   }, [limitsLoading, status])
 
   const loadTeamData = async (orgId: string) => {
     try {
       if (!orgId) return
 
-      // 1. Fetch memberships
+      // 1. Fetch the organization to get owner_id
+      const { data: orgData, error: orgError } = await supabase
+        .from("organizations")
+        .select("owner_id")
+        .eq("id", orgId)
+        .single()
+
+      if (orgError) throw orgError
+      setOwnerId(orgData?.owner_id || null)
+
+      // 2. Fetch memberships
       const { data: membershipsData, error: membershipsError } = await supabase
         .from("memberships")
         .select("*")
@@ -78,7 +90,7 @@ export default function TeamPage() {
 
       const userIds = membershipsData.map((m) => m.user_id)
 
-      // 2. Fetch profiles (full_name, company_name)
+      // 3. Fetch profiles (full_name, company_name)
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, company_name")
@@ -90,7 +102,7 @@ export default function TeamPage() {
         return acc
       }, {} as Record<string, string>)
 
-      // 3. Fetch company_profile (email)
+      // 4. Fetch company_profile (email)
       const { data: companyProfiles } = await supabase
         .from("company_profile")
         .select("user_id, email")
@@ -101,14 +113,13 @@ export default function TeamPage() {
         return acc
       }, {} as Record<string, string>)
 
-      // 4. Build members list
+      // 5. Build members list
       const membersWithProfiles: MemberWithProfile[] = []
       for (const membership of membershipsData || []) {
         let fullName = membership.display_name || undefined
         if (!fullName) {
           fullName = profileMap[membership.user_id]
         }
-        // Fall back to the email stored on the membership (set at invite-acceptance time)
         if (!fullName && membership.email) {
           fullName = membership.email.split('@')[0]
         }
@@ -123,7 +134,7 @@ export default function TeamPage() {
       }
       setMembers(membersWithProfiles)
 
-      // 5. Fetch pending invites (status = 'pending')
+      // 6. Fetch pending invites (status = 'pending')
       const { data: invitesData, error: invitesError } = await supabase
         .from("invites")
         .select("*")
@@ -133,13 +144,12 @@ export default function TeamPage() {
 
       if (invitesError) throw invitesError
 
-      // 6. Safeguard: exclude invites whose email already exists as a member
-      //    (covers cases where the invite's status update didn't stick)
+      // 7. Safeguard: exclude invites whose email already exists as a member
       const memberEmails = new Set(
         membersWithProfiles.map(m => m.email?.toLowerCase()).filter(Boolean)
       )
       const filteredInvites = (invitesData || []).filter(invite => {
-        if (!invite.email) return true // keep invites without email (shouldn't happen)
+        if (!invite.email) return true
         return !memberEmails.has(invite.email.toLowerCase())
       })
 
@@ -151,8 +161,6 @@ export default function TeamPage() {
       setLoading(false)
     }
   }
-
-  // Rest of the code (handlers, UI) remains the same as before...
 
   // Redirect non-admin users
   useEffect(() => {
@@ -255,11 +263,12 @@ export default function TeamPage() {
       return
     }
 
+    // Exclude the owner from the seat count (owner is already excluded in currentTeamSeats)
     if (maxTeamSeats !== null && maxTeamSeats > 0 && currentTeamSeats >= maxTeamSeats) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your team seat limit",
-        description: `Your current plan allows a maximum of ${maxTeamSeats} team members. You currently have ${currentTeamSeats}. Upgrade to add more team members.`,
+        description: `Your current plan allows a maximum of ${maxTeamSeats} team members (excluding the owner). You currently have ${currentTeamSeats} members. Upgrade to add more team members.`,
       })
       setShowLimitModal(true)
       return
