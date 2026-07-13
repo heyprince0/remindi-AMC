@@ -90,6 +90,23 @@ function hexToRgb(hex: string): [number, number, number] {
     : [22, 45, 60]
 }
 
+// Month options for filter
+const MONTHS = [
+  { value: 'all', label: 'All Months' },
+  { value: '0', label: 'Jan' },
+  { value: '1', label: 'Feb' },
+  { value: '2', label: 'Mar' },
+  { value: '3', label: 'Apr' },
+  { value: '4', label: 'May' },
+  { value: '5', label: 'Jun' },
+  { value: '6', label: 'Jul' },
+  { value: '7', label: 'Aug' },
+  { value: '8', label: 'Sep' },
+  { value: '9', label: 'Oct' },
+  { value: '10', label: 'Nov' },
+  { value: '11', label: 'Dec' },
+]
+
 export default function ContractsPage() {
   const { user } = useAuth()
   const [contracts, setContracts] = useState<ContractDisplay[]>([])
@@ -97,6 +114,7 @@ export default function ContractsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [filterMonth, setFilterMonth] = useState("all") // new month filter
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -238,12 +256,16 @@ export default function ContractsPage() {
 
   const handleFilter = () => {
     let filtered = contracts
+
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(c =>
         c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customerName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
+
+    // Status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter(c => {
         const days = getDaysUntilService(c.next_service_date)
@@ -251,12 +273,23 @@ export default function ContractsPage() {
         return statusLabel === filterStatus
       })
     }
+
+    // Month filter (by next_service_date)
+    if (filterMonth !== 'all') {
+      const monthNum = parseInt(filterMonth)
+      filtered = filtered.filter(c => {
+        if (!c.next_service_date) return false
+        const date = new Date(c.next_service_date)
+        return date.getMonth() === monthNum
+      })
+    }
+
     setFilteredContracts(filtered)
   }
 
   useEffect(() => {
     handleFilter()
-  }, [searchTerm, filterStatus, contracts])
+  }, [searchTerm, filterStatus, filterMonth, contracts])
 
   const handleDelete = async () => {
     if (!contractToDelete || !currentOrgId) return
@@ -385,7 +418,6 @@ export default function ContractsPage() {
       doc.setFontSize(8)
       doc.text(`Exported: ${dateStr}  |  Total: ${filteredContracts.length}  |  Active: ${counts.active}  |  Expired: ${counts.expired}  |  Today Servicing: ${counts.todayServicing}  |  Expiring Soon: ${counts.expiringSoon}`, margin, 22)
 
-      // ✅ Display frequency in months (converted from stored days)
       const tableData = filteredContracts.map(c => {
         const days = getDaysUntilService(c.next_service_date)
         const statusLabel = getStatusLabel(days, c.status)
@@ -464,8 +496,8 @@ export default function ContractsPage() {
         {/* Filters */}
         <Card>
           <CardContent className="p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="relative flex-1">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
+              <div className="relative flex-1 min-w-[150px]">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="search"
@@ -475,7 +507,7 @@ export default function ContractsPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Status" />
@@ -488,6 +520,20 @@ export default function ContractsPage() {
                     <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
                   </SelectContent>
                 </Select>
+
+                {/* Month Filter */}
+                <Select value={filterMonth} onValueChange={setFilterMonth}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -498,7 +544,7 @@ export default function ContractsPage() {
           <CardHeader>
             <CardTitle>All Contracts</CardTitle>
             <CardDescription>
-              You have {filteredContracts.length} contracts {filterStatus !== 'all' ? 'matching filters' : 'in total'}
+              You have {filteredContracts.length} contracts {filterStatus !== 'all' || filterMonth !== 'all' ? 'matching filters' : 'in total'}
             </CardDescription>
           </CardHeader>
           <CardContent>
