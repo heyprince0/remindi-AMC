@@ -51,6 +51,13 @@ const adminOnlyNavItems = [
   { title: "Billing", icon: CreditCard, href: "/billing" },
 ]
 
+// Technician-specific navigation
+const technicianNavItems = [
+  { title: "Contracts", icon: FileText, href: "/contracts" },
+  { title: "Service Alerts", icon: Bell, href: "/alerts" },
+  { title: "Service History", icon: History, href: "/history" },
+]
+
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -80,9 +87,14 @@ export function AppSidebar() {
   }, [user?.id])
 
   // Combine nav items based on role
-  const navItems = role === 'admin'
-    ? [...memberNavItems, ...adminOnlyNavItems]
-    : memberNavItems
+  let navItems
+  if (role === 'admin') {
+    navItems = [...memberNavItems, ...adminOnlyNavItems]
+  } else if (role === 'technician') {
+    navItems = technicianNavItems
+  } else {
+    navItems = memberNavItems // fallback for members or unknown
+  }
 
   const handleLogout = async () => {
     try {
@@ -149,13 +161,13 @@ export function AppSidebar() {
               {fullName || user?.email || 'User'}
             </span>
             <span className="text-xs text-sidebar-foreground/70">
-              {role === 'admin' ? 'Administrator' : 'Member'}
+              {role === 'admin' ? 'Administrator' : role === 'technician' ? 'Technician' : 'Member'}
             </span>
           </div>
         </div>
 
-        {/* Logout button – only for members */}
-        {role === 'member' && (
+        {/* Logout button – for members and technicians */}
+        {(role === 'member' || role === 'technician') && (
           <div className="group-data-[collapsible=icon]:hidden">
             <button
               onClick={handleLogout}
