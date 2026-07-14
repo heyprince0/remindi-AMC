@@ -28,11 +28,8 @@ export function renderSingleLogoHeader(
     doc.addImage(logoBase64, "PNG", logoX, logoY, logoSize, logoSize)
   }
 
-  // ----- VERTICAL DIVIDER -----
+  // ----- VERTICAL DIVIDER – will be drawn later after we know final height -----
   const dividerX = logoX + logoSize + 4
-  doc.setDrawColor(tr, tg, tb)
-  doc.setLineWidth(0.8)
-  doc.line(dividerX, y, dividerX, y + 38)
 
   // ----- RIGHT SECTION (single column) -----
   const contentX = dividerX + 6
@@ -59,7 +56,7 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 5 + 2
   }
 
-  // ----- Address block -----
+  // ----- Address -----
   doc.setFontSize(9.5)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
@@ -99,15 +96,21 @@ export function renderSingleLogoHeader(
     contentY += phoneLines.length * 5 + 2
   }
 
-  // ----- HORIZONTAL LINE -----
+  // ----- Determine final header height -----
   const minHeaderBottom = startY + 38
   const contentHeaderBottom = contentY + 2
   y = Math.max(minHeaderBottom, contentHeaderBottom)
 
+  // ----- VERTICAL DIVIDER – now drawn with full height -----
   doc.setDrawColor(tr, tg, tb)
-  doc.setLineWidth(0.5)
+  doc.setLineWidth(0.6)
+  doc.line(dividerX, startY, dividerX, y - 3)
+
+  // ----- BOTTOM ACCENT RULE (thicker, polished) -----
+  doc.setDrawColor(tr, tg, tb)
+  doc.setLineWidth(0.7)
   doc.line(margin, y, pageW - margin, y)
-  y += 4   // 🔽 reduced from 10 to 4 – less gap
+  y += 6 // breathing room before the next section
 
   return y
 }
