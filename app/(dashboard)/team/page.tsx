@@ -308,9 +308,14 @@ export default function TeamPage() {
   }
 
   const getRoleColor = (role: string) => {
-    return role === "admin"
-      ? "bg-blue-100 text-blue-800 border-blue-200"
-      : "bg-gray-100 text-gray-800 border-gray-200"
+    switch (role) {
+      case "admin":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      case "technician":
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
+    }
   }
 
   const getInitials = (name?: string, email?: string) => {
@@ -394,7 +399,7 @@ export default function TeamPage() {
                     <div className="flex items-center justify-between border-t border-border pt-3">
                       <span className="text-sm text-muted-foreground">Role:</span>
                       <Badge className={getRoleColor(member.role)}>
-                        {member.role === "admin" ? "Admin" : "Member"}
+                        {member.role === "admin" ? "Admin" : member.role === "technician" ? "Technician" : "Member"}
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -471,7 +476,7 @@ export default function TeamPage() {
                     <div className="flex items-center justify-between border-t border-border pt-3">
                       <span className="text-sm text-muted-foreground">Role:</span>
                       <Badge className={getRoleColor(invite.role)}>
-                        {invite.role === "admin" ? "Admin" : "Member"}
+                        {invite.role === "admin" ? "Admin" : invite.role === "technician" ? "Technician" : "Member"}
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">
