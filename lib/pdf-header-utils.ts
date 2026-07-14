@@ -4,7 +4,7 @@ import type { CompanyProfile } from "./supabase"
 /**
  * Renders the single logo header layout for PDFs
  * Layout: Logo on left, vertical divider, company info on right
- * Address + Email in left column, Phone in right column
+ * Address, Email, and Phone all stacked in a single left‑aligned column
  */
 export function renderSingleLogoHeader(
   doc: jsPDF,
@@ -34,7 +34,7 @@ export function renderSingleLogoHeader(
   doc.setLineWidth(0.8)
   doc.line(dividerX, y, dividerX, y + 38)
 
-  // ----- RIGHT SECTION -----
+  // ----- RIGHT SECTION (single column) -----
   const contentX = dividerX + 6
   const contentMaxW = pageW - contentX - margin
 
@@ -59,11 +59,7 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 5 + 2
   }
 
-  // ----- TWO-COLUMN LAYOUT -----
-  const col1Width = contentMaxW * 0.6
-  const col2X = contentX + col1Width + 4
-
-  // Left column: Address + Email
+  // ----- Address block (single column) -----
   doc.setFontSize(9.5)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
@@ -73,40 +69,36 @@ export function renderSingleLogoHeader(
     .filter(Boolean)
     .join(", ")
   const addrLines: string[] = []
-  if (addressLine) addrLines.push(...doc.splitTextToSize(addressLine, col1Width))
-  if (locationLine) addrLines.push(...doc.splitTextToSize(locationLine, col1Width))
+  if (addressLine) addrLines.push(...doc.splitTextToSize(addressLine, contentMaxW))
+  if (locationLine) addrLines.push(...doc.splitTextToSize(locationLine, contentMaxW))
   doc.text(addrLines, contentX, contentY)
 
-  // Email (just below the address)
-  let leftBottom = contentY + addrLines.length * 5
+  // Advance Y after address
+  contentY += addrLines.length * 5 + 2
+
+  // ----- Email -----
   if (companyProfile.email) {
-    leftBottom += 2 // small gap before email
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text("Email:", contentX, leftBottom)
+    doc.text("Email:", contentX, contentY)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(40, 40, 40)
-    const emailLines = doc.splitTextToSize(companyProfile.email, col1Width - 12) // 12mm indent for "Email:"
-    doc.text(emailLines, contentX + 12, leftBottom) // indent after label
-    leftBottom += emailLines.length * 5
+    const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - 14) // indent for label
+    doc.text(emailLines, contentX + 14, contentY)
+    contentY += emailLines.length * 5 + 2
   }
 
-  // Right column: Phone (only)
-  let col2Y = contentY
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(0, 0, 0)
+  // ----- Phone -----
   if (companyProfile.phone) {
-    doc.text("Phone:", col2X, col2Y)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    doc.text("Phone:", contentX, contentY)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(40, 40, 40)
-    const phoneLines = doc.splitTextToSize(companyProfile.phone, contentMaxW - (col2X - contentX) - 12)
-    doc.text(phoneLines, col2X + 12, col2Y)
-    col2Y += phoneLines.length * 5
+    const phoneLines = doc.splitTextToSize(companyProfile.phone, contentMaxW - 14)
+    doc.text(phoneLines, contentX + 14, contentY)
+    contentY += phoneLines.length * 5 + 2
   }
-
-  // Determine the bottom of the content (tallest column)
-  const rightBottom = col2Y
-  contentY = Math.max(leftBottom, rightBottom) + 4
 
   // ----- HORIZONTAL LINE -----
   const minHeaderBottom = startY + 38
@@ -116,7 +108,7 @@ export function renderSingleLogoHeader(
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 10   // 👈 gap after the line (changed from 6 to 10)
+  y += 10   // gap after the line
 
   return y
 }
