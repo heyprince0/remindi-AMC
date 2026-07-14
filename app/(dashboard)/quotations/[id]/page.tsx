@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
@@ -389,7 +390,11 @@ export default function ViewQuotationPage() {
           const bannerW = pageW - (margin * 2)
           doc.addImage(bannerBase64, "PNG", margin, y, bannerW, bannerH)
           y += bannerH
+        } else if (headerStyle === "single_logo") {
+          // Use new single logo header layout
+          y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
         } else {
+          // Default legacy header
           let logoX = margin
           let logoAdded = false
           if (logoBase64) {
@@ -417,12 +422,12 @@ export default function ViewQuotationPage() {
           if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
           if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
           y += 31
-        }
 
-        doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.5)
-        doc.line(margin, y, pageW - margin, y)
-        y += 6
+          doc.setDrawColor(tr, tg, tb)
+          doc.setLineWidth(0.5)
+          doc.line(margin, y, pageW - margin, y)
+          y += 6
+        }
 
         // ===== QUOTATION HEADER =====
         doc.setFontSize(16)
