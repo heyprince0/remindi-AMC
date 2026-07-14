@@ -28,7 +28,7 @@ interface MarkCompleteModalProps {
   onOpenChange: (open: boolean) => void
   contract: Contract | null
   userId: string
-  orgId: string   // <-- added
+  orgId: string
   customerId?: string
   onSuccess: () => void
 }
@@ -49,11 +49,9 @@ export function MarkCompleteModal({
   const [loading, setLoading] = useState(false)
   const [loadingTechs, setLoadingTechs] = useState(false)
 
-  // Load technicians when modal opens
   useEffect(() => {
     if (open) {
       loadTechnicians()
-      // Set default date to today
       const today = new Date().toISOString().split("T")[0]
       setServiceDate(today)
       setNotes("")
@@ -67,7 +65,7 @@ export function MarkCompleteModal({
       const { data, error } = await supabase
         .from("technicians")
         .select("*")
-        .eq("org_id", orgId)   // <-- changed from user_id
+        .eq("org_id", orgId)
 
       if (error) throw error
       setTechnicians(data || [])
@@ -88,7 +86,6 @@ export function MarkCompleteModal({
 
       setLoading(true)
 
-      // Step 1: Add to service_history table with org_id
       const { error: historyError } = await supabase
         .from("service_history")
         .insert({
@@ -97,12 +94,11 @@ export function MarkCompleteModal({
           service_date: serviceDate,
           status: "completed",
           notes: notes || null,
-          org_id: orgId,   // <-- added
+          org_id: orgId,
         })
 
       if (historyError) throw historyError
 
-      // Step 2: Update contracts table (scoped by org_id)
       const serviceDateObj = new Date(serviceDate)
       const nextServiceDate = new Date(serviceDateObj)
       nextServiceDate.setDate(nextServiceDate.getDate() + contract.frequency_days)
@@ -114,19 +110,18 @@ export function MarkCompleteModal({
           status: "active",
         })
         .eq("id", contract.id)
-        .eq("org_id", orgId)   // <-- added for safety
+        .eq("org_id", orgId)
 
       if (contractError) throw contractError
 
       // Step 3: Send WhatsApp notification (fire-and-forget)
       try {
-        // Fetch customer and technician data
         const [customerData, technicianData, companyData] = await Promise.all([
           supabase.from("customers").select("*").eq("id", contract.customer_id).single(),
           technicianId 
             ? supabase.from("technicians").select("*").eq("id", technicianId).single()
             : Promise.resolve({ data: null }),
-          supabase.from("company_profiles").select("*").eq("org_id", orgId).single(),
+          supabase.from("company_profile").select("*").eq("org_id", orgId).single(), // <-- FIXED: was "company_profiles"
         ])
 
         const customer = customerData.data
@@ -153,7 +148,6 @@ export function MarkCompleteModal({
         }
       } catch (error) {
         console.error("Error sending WhatsApp notification:", error)
-        // Don't throw - notification failure shouldn't block the workflow
       }
 
       toast.success("Service marked as complete!")
@@ -178,7 +172,6 @@ export function MarkCompleteModal({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-4">
-          {/* Service Date */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="service-date">Service Date *</Label>
             <Input
@@ -190,7 +183,6 @@ export function MarkCompleteModal({
             />
           </div>
 
-          {/* Technician Dropdown */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="technician">Technician</Label>
             <Select value={technicianId} onValueChange={setTechnicianId} disabled={loadingTechs}>
@@ -211,7 +203,6 @@ export function MarkCompleteModal({
             </Select>
           </div>
 
-          {/* Notes */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
