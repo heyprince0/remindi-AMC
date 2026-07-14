@@ -28,8 +28,11 @@ export function renderSingleLogoHeader(
     doc.addImage(logoBase64, "PNG", logoX, logoY, logoSize, logoSize)
   }
 
-  // ----- VERTICAL DIVIDER – will be drawn later after we know final height -----
+  // ----- VERTICAL DIVIDER -----
   const dividerX = logoX + logoSize + 4
+  doc.setDrawColor(tr, tg, tb)
+  doc.setLineWidth(0.8)
+  doc.line(dividerX, y, dividerX, y + 38)
 
   // ----- RIGHT SECTION (single column) -----
   const contentX = dividerX + 6
@@ -56,7 +59,7 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 5 + 2
   }
 
-  // ----- Address -----
+  // ----- Address block (single column) -----
   doc.setFontSize(9.5)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
@@ -70,6 +73,7 @@ export function renderSingleLogoHeader(
   if (locationLine) addrLines.push(...doc.splitTextToSize(locationLine, contentMaxW))
   doc.text(addrLines, contentX, contentY)
 
+  // Advance Y after address
   contentY += addrLines.length * 5 + 2
 
   // ----- Email -----
@@ -79,7 +83,7 @@ export function renderSingleLogoHeader(
     doc.text("Email:", contentX, contentY)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(40, 40, 40)
-    const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - 14)
+    const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - 14) // indent for label
     doc.text(emailLines, contentX + 14, contentY)
     contentY += emailLines.length * 5 + 2
   }
@@ -96,21 +100,15 @@ export function renderSingleLogoHeader(
     contentY += phoneLines.length * 5 + 2
   }
 
-  // ----- Determine final header height -----
+  // ----- HORIZONTAL LINE -----
   const minHeaderBottom = startY + 38
   const contentHeaderBottom = contentY + 2
   y = Math.max(minHeaderBottom, contentHeaderBottom)
 
-  // ----- VERTICAL DIVIDER – now drawn with full height -----
   doc.setDrawColor(tr, tg, tb)
-  doc.setLineWidth(0.6)
-  doc.line(dividerX, startY, dividerX, y - 3)
-
-  // ----- BOTTOM ACCENT RULE (thicker, polished) -----
-  doc.setDrawColor(tr, tg, tb)
-  doc.setLineWidth(0.7)
+  doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 6 // breathing room before the next section
+  y += 10   // gap after the line
 
   return y
 }
