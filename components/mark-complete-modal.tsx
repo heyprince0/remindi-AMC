@@ -29,6 +29,7 @@ interface MarkCompleteModalProps {
   contract: Contract | null
   userId: string
   orgId: string   // <-- added
+  customerId?: string
   onSuccess: () => void
 }
 
@@ -38,6 +39,7 @@ export function MarkCompleteModal({
   contract,
   userId,
   orgId,
+  customerId,
   onSuccess,
 }: MarkCompleteModalProps) {
   const [serviceDate, setServiceDate] = useState("")
@@ -115,6 +117,44 @@ export function MarkCompleteModal({
         .eq("org_id", orgId)   // <-- added for safety
 
       if (contractError) throw contractError
+
+      // Step 3: Send WhatsApp notification (fire-and-forget)
+      try {
+        // Fetch customer and technician data
+        const [customerData, technicianData, companyData] = await Promise.all([
+          supabase.from("customers").select("*").eq("id", contract.customer_id).single(),
+          technicianId 
+            ? supabase.from("technicians").select("*").eq("id", technicianId).single()
+            : Promise.resolve({ data: null }),
+          supabase.from("company_profiles").select("*").eq("org_id", orgId).single(),
+        ])
+
+        const customer = customerData.data
+        const technician = technicianData.data
+        const company = companyData.data
+
+        if (customer?.phone) {
+          const nextServiceDateStr = nextServiceDate.toISOString().split("T")[0]
+          
+          await fetch("/api/notify-service-complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyName: company?.company_name || "",
+              customerName: customer.name || "",
+              customerPhone: customer.phone,
+              technicianName: technician?.name || "",
+              serviceDate: serviceDate,
+              nextServiceDate: nextServiceDateStr,
+              companyPhone: company?.phone || "",
+              companyEmail: company?.email || "",
+            }),
+          })
+        }
+      } catch (error) {
+        console.error("Error sending WhatsApp notification:", error)
+        // Don't throw - notification failure shouldn't block the workflow
+      }
 
       toast.success("Service marked as complete!")
       onOpenChange(false)
