@@ -122,6 +122,7 @@ export default function ContractsPage() {
   const [deleting, setDeleting] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null) // NEW: current user's role
 
   const [subscription, setSubscription] = useState<any>(null)
   const [plan, setPlan] = useState<any>(null)
@@ -137,7 +138,7 @@ export default function ContractsPage() {
     if (user?.id) {
       supabase
         .from("memberships")
-        .select("org_id")
+        .select("org_id, role")
         .eq("user_id", user.id)
         .maybeSingle()
         .then(({ data, error }) => {
@@ -147,6 +148,7 @@ export default function ContractsPage() {
             setLoading(false)
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
+            setUserRole(data.role) // store role
           } else {
             setLoading(false)
           }
@@ -214,6 +216,9 @@ export default function ContractsPage() {
   }, [currentOrgId])
 
   const checkAndShowLimitModal = (showOnLoad = false) => {
+    // Technicians should not see the limit modal (they can't add anyway)
+    if (userRole === 'technician') return false
+
     if (showOnLoad && autoShown) return
 
     let isExpired = false
@@ -249,10 +254,10 @@ export default function ContractsPage() {
   }
 
   useEffect(() => {
-    if (dataReady && !autoShown) {
+    if (dataReady && !autoShown && userRole !== 'technician') {
       checkAndShowLimitModal(true)
     }
-  }, [dataReady, autoShown, subscription, plan, contractCount])
+  }, [dataReady, autoShown, subscription, plan, contractCount, userRole])
 
   const handleFilter = () => {
     let filtered = contracts
@@ -328,6 +333,7 @@ export default function ContractsPage() {
   }
 
   const handleAddClick = () => {
+    if (userRole === 'technician') return // safety
     const blocked = checkAndShowLimitModal(false)
     if (blocked) return
     setEditingContract(null)
@@ -472,6 +478,9 @@ export default function ContractsPage() {
     }
   }
 
+  // Determine if the user is a technician
+  const isTechnician = userRole === 'technician'
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -486,10 +495,13 @@ export default function ContractsPage() {
               <Download className="mr-2 size-4" />
               Export PDF
             </Button>
-            <Button onClick={handleAddClick}>
-              <Plus className="mr-2 size-4" />
-              Add Contract
-            </Button>
+            {/* Hide Add Contract button for technicians */}
+            {!isTechnician && (
+              <Button onClick={handleAddClick}>
+                <Plus className="mr-2 size-4" />
+                Add Contract
+              </Button>
+            )}
           </div>
         </div>
 
@@ -565,7 +577,8 @@ export default function ContractsPage() {
                       <TableHead>Start Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="w-[70px]">Actions</TableHead>
+                      {/* Hide Actions column for technicians */}
+                      {!isTechnician && <TableHead className="w-[70px]">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -586,29 +599,32 @@ export default function ContractsPage() {
                           <TableCell>{contract.start_date || '—'}</TableCell>
                           <TableCell>{contract.next_service_date || '—'}</TableCell>
                           <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditClick(contract)}
-                                title="Edit Contract"
-                              >
-                                <Edit className="size-4" />
-                                <span className="sr-only">Edit</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Delete Contract"
-                              >
-                                <Trash2 className="size-4" />
-                                <span className="sr-only">Delete</span>
-                              </Button>
-                            </div>
-                          </TableCell>
+                          {/* Hide Actions cell for technicians */}
+                          {!isTechnician && (
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditClick(contract)}
+                                  title="Edit Contract"
+                                >
+                                  <Edit className="size-4" />
+                                  <span className="sr-only">Edit</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Delete Contract"
+                                >
+                                  <Trash2 className="size-4" />
+                                  <span className="sr-only">Delete</span>
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })}
@@ -620,7 +636,7 @@ export default function ContractsPage() {
         </Card>
 
         {/* Add/Edit Contract Modal */}
-        {user && currentOrgId && (
+        {user && currentOrgId && !isTechnician && (
           <AddContractModal
             open={modalOpen}
             onOpenChange={setModalOpen}
