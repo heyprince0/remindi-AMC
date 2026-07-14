@@ -406,7 +406,7 @@ export default function ViewQuotationPage() {
         if (headerStyle === "thumbnail" && bannerBase64) {
           const bannerW = pageW - (margin * 2)
           doc.addImage(bannerBase64, "PNG", margin, y, bannerW, bannerH)
-          y += bannerH
+          y += bannerH +6
         } else if (headerStyle === "single_logo") {
           // Use new single logo header layout
           y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
