@@ -60,7 +60,7 @@ export function renderSingleLogoHeader(
   }
 
   // ----- Address block (single column) -----
-  doc.setFontSize(9.5)
+  doc.setFontSize(9.8)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
 
@@ -108,7 +108,7 @@ export function renderSingleLogoHeader(
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 10   // gap after the line
+  y += 7   // gap after the line
 
   return y
 }
