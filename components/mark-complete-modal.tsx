@@ -118,10 +118,10 @@ export function MarkCompleteModal({
       try {
         const [customerData, technicianData, companyData] = await Promise.all([
           supabase.from("customers").select("*").eq("id", contract.customer_id).single(),
-          technicianId 
+          technicianId
             ? supabase.from("technicians").select("*").eq("id", technicianId).single()
             : Promise.resolve({ data: null }),
-          supabase.from("company_profile").select("*").eq("org_id", orgId).single(), // <-- FIXED: was "company_profiles"
+          supabase.from("company_profile").select("*").eq("org_id", orgId).single(),
         ])
 
         const customer = customerData.data
@@ -130,7 +130,7 @@ export function MarkCompleteModal({
 
         if (customer?.phone) {
           const nextServiceDateStr = nextServiceDate.toISOString().split("T")[0]
-          
+
           await fetch("/api/notify-service-complete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -138,6 +138,7 @@ export function MarkCompleteModal({
               companyName: company?.company_name?.toUpperCase() || "",
               customerName: customer.name || "",
               customerPhone: customer.phone,
+              contractName: contract.contract_name || "",
               technicianName: technician?.name || "",
               serviceDate: serviceDate,
               nextServiceDate: nextServiceDateStr,
