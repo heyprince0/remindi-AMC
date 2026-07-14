@@ -157,7 +157,13 @@ export default function AcceptInvitePage() {
       }
 
       toast.success("You've joined the team!")
-      router.push("/")
+
+      // Redirect based on role
+      if (invite.role === 'technician') {
+        router.push('/contracts')
+      } else {
+        router.push('/')
+      }
     } catch (err) {
       console.error(err)
       toast.error("Something went wrong")
