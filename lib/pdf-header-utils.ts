@@ -61,31 +61,35 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 4 + 2
   }
 
-  // Specialization / services line (e.g. "Specialist in: ...")
-  const specialization = (companyProfile as any).specialization || (companyProfile as any).services
-  if (specialization) {
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(0, 0, 0)
-    const specText = `Specialist in: ${specialization}`
-    const specLines = doc.splitTextToSize(specText, contentMaxW)
-    doc.text(specLines, contentX, contentY)
-    contentY += specLines.length * 4 + 2
+  // BOX 1 (left, wider): company address
+  const addressLine = companyProfile.address || ""
+  const locationLine = [companyProfile.city, companyProfile.state, companyProfile.zip_code]
+    .filter(Boolean)
+    .join(", ")
+  const box1Width = contentMaxW * 0.62 // leaves room for box 2 on the right
+  if (addressLine || locationLine) {
+    doc.setFontSize(8.5)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(40, 40, 40)
+    const addrLines: string[] = []
+    if (addressLine) addrLines.push(...doc.splitTextToSize(addressLine, box1Width))
+    if (locationLine) addrLines.push(...doc.splitTextToSize(locationLine, box1Width))
+    doc.text(addrLines, contentX, contentY)
   }
 
-  // Certification / approval badge line (e.g. "GOVERNMENT APPROVED")
-  const certification = (companyProfile as any).certification || (companyProfile as any).approval_badge
-  if (certification) {
-    doc.setFontSize(9)
+  // BOX 2 (right, smaller): company contact number
+  if (companyProfile.phone) {
+    const box2X = contentX + box1Width + 4
+    doc.setFontSize(8.5)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    const certText = String(certification).toUpperCase()
-    const certWidth = doc.getTextWidth(certText)
-    // Center within the full header width, like the reference design
-    const certX = margin + (pageW - margin * 2 - certWidth) / 2
-    doc.text(certText, certX, contentY)
-    contentY += 6
+    doc.text("Contact:", box2X, contentY)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(40, 40, 40)
+    doc.text(companyProfile.phone, box2X, contentY + 4)
   }
+
+  contentY += 8
 
   // ===== HORIZONTAL RULE =====
   // Header height is dynamic: at least 36mm (to fit the logo), but grows if
@@ -145,14 +149,12 @@ export function renderSingleLogoHeader(
     footerRightY += 3
   }
 
-  // Website
-  if (companyProfile.email) {
-    // Try to extract domain or show a generic "Web" label
+  // Website (only if the company has actually provided a real website)
+  const website = (companyProfile as any).website
+  if (website) {
     doc.setTextColor(80, 80, 80)
-    const domain = companyProfile.email.split("@")[1] || ""
-    if (domain) {
-      doc.text(`Web: www.${domain.replace("gmail.com", "company.com")}`, footerRightX, footerRightY)
-    }
+    doc.setFont("helvetica", "normal")
+    doc.text(`Web: ${website}`, footerRightX, footerRightY)
   }
 
   // ===== RETURN NEW Y POSITION =====
