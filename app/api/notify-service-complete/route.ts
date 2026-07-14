@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
       companyName,
       customerName,
       customerPhone,
+      contractName,
       technicianName,
       serviceDate,
       nextServiceDate,
@@ -37,7 +38,12 @@ export async function POST(request: NextRequest) {
     const templateSid = process.env.TWILIO_TEMPLATE_SID
 
     if (!accountSid || !authToken || !whatsappNumber || !templateSid) {
-      console.error('Missing Twilio environment variables')
+      console.error('Missing Twilio environment variables', {
+        hasSid: !!accountSid,
+        hasToken: !!authToken,
+        hasNumber: !!whatsappNumber,
+        hasTemplate: !!templateSid,
+      })
       return NextResponse.json(
         { error: 'Twilio configuration missing' },
         { status: 500 }
@@ -47,21 +53,31 @@ export async function POST(request: NextRequest) {
     // Initialize Twilio client
     const client = twilio(accountSid, authToken)
 
-    // Map content variables to template placeholders (must be JSON string of an object)
+    // Map content variables to new 8-variable template
+    // 1=companyName, 2=customerName, 3=contractName, 4=technicianName,
+    // 5=serviceDate, 6=nextServiceDate, 7=companyPhone, 8=companyEmail
     const contentVariables = JSON.stringify({
       1: companyName || '',
       2: customerName || '',
-      3: technicianName || '',
-      4: serviceDate || '',
-      5: nextServiceDate || '',
-      6: companyPhone || '',
-      7: companyEmail || '',
+      3: contractName || '',
+      4: technicianName || '',
+      5: serviceDate || '',
+      6: nextServiceDate || '',
+      7: companyPhone || '',
+      8: companyEmail || '',
     })
 
     // Ensure "from" has whatsapp: prefix only once
     const fromNumber = whatsappNumber.startsWith('whatsapp:')
       ? whatsappNumber
       : `whatsapp:${whatsappNumber}`
+
+    console.log('Attempting to send WhatsApp message', {
+      from: fromNumber,
+      to: `whatsapp:${formattedPhone}`,
+      templateSid,
+      contentVariables,
+    })
 
     // Send WhatsApp message via Twilio Content API
     const message = await client.messages.create({
@@ -76,10 +92,21 @@ export async function POST(request: NextRequest) {
       { success: true, messageSid: message.sid },
       { status: 200 }
     )
-  } catch (error) {
-    console.error('Error sending WhatsApp notification:', error)
+  } catch (error: any) {
+    console.error('=== TWILIO ERROR DETAILS ===')
+    console.error('Message:', error?.message)
+    console.error('Code:', error?.code)
+    console.error('Status:', error?.status)
+    console.error('More info:', error?.moreInfo)
+    console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
+    console.error('=== END ERROR DETAILS ===')
+
     return NextResponse.json(
-      { error: 'Failed to send notification' },
+      {
+        error: error?.message || 'Failed to send notification',
+        code: error?.code,
+        moreInfo: error?.moreInfo,
+      },
       { status: 500 }
     )
   }
