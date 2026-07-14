@@ -185,6 +185,11 @@ export default function EditQuotationPage() {
     }
   }
 
+  // --- FIX: Compute subtotal, gstAmount, and total for display ---
+  const subtotal = items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0)
+  const gstAmount = includeGst ? subtotal * (gstRate / 100) : 0
+  const total = subtotal + gstAmount
+
   if (loading) {
     return (
       <DashboardLayout>
