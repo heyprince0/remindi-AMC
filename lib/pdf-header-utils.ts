@@ -64,7 +64,7 @@ export function renderSingleLogoHeader(
   const col2X = contentX + col1Width + 4
 
   // Left column: Address (normal weight, 9.5pt)
-  doc.setFontSize(9.5)
+  doc.setFontSize(13)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
 
@@ -87,7 +87,7 @@ export function renderSingleLogoHeader(
     doc.setFont("helvetica", "normal")
     doc.setTextColor(40, 40, 40)
     doc.text(companyProfile.phone, col2X + 18, col2Y) // indent after label
-    col2Y += 5
+    col2Y += 3.5
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
   }
@@ -99,7 +99,7 @@ export function renderSingleLogoHeader(
     // Split email if too long for the column width
     const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - (col2X - contentX))
     doc.text(emailLines, col2X + 18, col2Y)
-    col2Y += emailLines.length * 5
+    col2Y += emailLines.length * 3.5
   }
 
   // Update contentY to the maximum of left and right columns
@@ -116,7 +116,7 @@ export function renderSingleLogoHeader(
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 6  // space after the line
+  y += 10  // space after the line
 
   return y
 }
