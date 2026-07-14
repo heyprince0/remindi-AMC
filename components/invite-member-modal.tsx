@@ -34,7 +34,7 @@ export function InviteMemberModal({
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState("")
   const [displayName, setDisplayName] = useState("")
-  const [role, setRole] = useState<"admin" | "member">("member")
+  const [role, setRole] = useState<"admin" | "member" | "technician">("member")
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +76,7 @@ export function InviteMemberModal({
         body: JSON.stringify({
           email,
           role,
-          displayName: displayName.trim(),  // <-- send the name
+          displayName: displayName.trim(),
         }),
       })
 
@@ -123,7 +123,6 @@ export function InviteMemberModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* NEW: Name input */}
           <div className="space-y-2">
             <Label htmlFor="displayName">Full Name</Label>
             <Input
@@ -149,13 +148,18 @@ export function InviteMemberModal({
 
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(value: "admin" | "member") => setRole(value)} disabled={loading}>
+            <Select
+              value={role}
+              onValueChange={(value: "admin" | "member" | "technician") => setRole(value)}
+              disabled={loading}
+            >
               <SelectTrigger id="role">
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="member">Member</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="technician">Technician</SelectItem>
               </SelectContent>
             </Select>
           </div>
