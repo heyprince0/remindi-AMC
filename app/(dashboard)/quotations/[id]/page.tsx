@@ -336,8 +336,25 @@ export default function ViewQuotationPage() {
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
+
+          // Read the image's ACTUAL dimensions instead of assuming a fixed
+          // 1462x396 ratio — prevents distortion/stretching for any image
+          // that doesn't match that exact size.
+          const naturalSize = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+            img.onerror = reject
+            img.src = bannerBase64 as string
+          })
+
           const bannerW = pageW - (margin * 2)
-          bannerH = Math.round(bannerW / (1462 / 396))
+          bannerH = Math.round(bannerW / (naturalSize.w / naturalSize.h))
+
+          // Guard against unreasonably tall banners (e.g. a near-square or
+          // portrait image accidentally used here) eating the whole page —
+          // cap at a sensible max height.
+          const maxBannerH = 60
+          if (bannerH > maxBannerH) bannerH = maxBannerH
         } catch (e) { /* skip banner silently */ }
       }
 
