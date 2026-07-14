@@ -60,7 +60,7 @@ export function renderSingleLogoHeader(
   }
 
   // ----- Address block (single column) -----
-  doc.setFontSize(9.5)
+  doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
 
