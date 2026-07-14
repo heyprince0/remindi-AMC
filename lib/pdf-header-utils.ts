@@ -108,7 +108,7 @@ export function renderSingleLogoHeader(
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 7   // gap after the line
+  y += 5   // gap after the line
 
   return y
 }
