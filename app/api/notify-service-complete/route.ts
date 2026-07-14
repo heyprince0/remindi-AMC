@@ -47,20 +47,25 @@ export async function POST(request: NextRequest) {
     // Initialize Twilio client
     const client = twilio(accountSid, authToken)
 
-    // Map content variables to template placeholders
-    const contentVariables = [
-      companyName || '',
-      customerName || '',
-      technicianName || '',
-      serviceDate || '',
-      nextServiceDate || '',
-      companyPhone || '',
-      companyEmail || '',
-    ]
+    // Map content variables to template placeholders (must be JSON string of an object)
+    const contentVariables = JSON.stringify({
+      1: companyName || '',
+      2: customerName || '',
+      3: technicianName || '',
+      4: serviceDate || '',
+      5: nextServiceDate || '',
+      6: companyPhone || '',
+      7: companyEmail || '',
+    })
+
+    // Ensure "from" has whatsapp: prefix only once
+    const fromNumber = whatsappNumber.startsWith('whatsapp:')
+      ? whatsappNumber
+      : `whatsapp:${whatsappNumber}`
 
     // Send WhatsApp message via Twilio Content API
     const message = await client.messages.create({
-      from: `whatsapp:${whatsappNumber}`,
+      from: fromNumber,
       to: `whatsapp:${formattedPhone}`,
       contentSid: templateSid,
       contentVariables: contentVariables,
