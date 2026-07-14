@@ -1,63 +1,47 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { supabase, type Quotation, type CompanyProfile } from "@/lib/supabase"
+import { supabase, type Quotation, type QuotationItem } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { Plus, Trash2, Save, ArrowLeft, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { Loader2, Trash2, Plus } from "lucide-react"
-
-interface Item {
-  id?: string
-  description: string
-  quantity: number
-  rate: number
-  amount: number
-}
+import Link from "next/link"
 
 export default function EditQuotationPage() {
-  const router = useRouter()
   const params = useParams()
-  const id = params.id as string
+  const router = useRouter()
   const { user } = useAuth()
-
+  const id = params.id as string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [quotation, setQuotation] = useState<Quotation | null>(null)
-  const [profile, setProfile] = useState<CompanyProfile | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [items, setItems] = useState<Item[]>([])
-  const [formData, setFormData] = useState({
-    quoteNo: "",
-    clientName: "",
-    clientAddress: "",
-    clientCity: "",
-    clientState: "",
-    clientPinCode: "",
-    clientGstin: "",
-    clientDistrict: "",
-    subject: "",
-    notes: "",
-    validTill: "",
-    includeGst: true,
-    gstRate: 18,
-  })
 
-  // Fetch org_id
+  // Form state
+  const [customerName, setCustomerName] = useState("")
+  const [customerAddress, setCustomerAddress] = useState("")
+  const [customerDistrict, setCustomerDistrict] = useState("")
+  const [customerState, setCustomerState] = useState("")
+  const [customerPinCode, setCustomerPinCode] = useState("")
+  const [orderNo, setOrderNo] = useState("")
+  const [subject, setSubject] = useState("")
+  const [bodyText, setBodyText] = useState("")
+  const [items, setItems] = useState<QuotationItem[]>([])
+  const [includeGst, setIncludeGst] = useState(true)
+  const [gstRate, setGstRate] = useState(18)
+  const [notes, setNotes] = useState("")
+
+  // --- Organization ID ---
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+
+  // --- fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -65,197 +49,207 @@ export default function EditQuotationPage() {
         .select("org_id")
         .eq("user_id", user.id)
         .single()
-        .then(({ data }) => {
-          if (data?.org_id) {
-            setOrgId(data.org_id)
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
+            router.push("/quotations")
+          } else if (data?.org_id) {
+            setCurrentOrgId(data.org_id)
           }
         })
     }
   }, [user?.id])
 
-  // Load quotation and company profile
+  // Load quotation when org_id is available
   useEffect(() => {
-    if (orgId && id) {
-      loadData()
+    if (id && currentOrgId) {
+      loadQuotation()
     }
-  }, [orgId, id])
+  }, [id, currentOrgId])
 
-  const loadData = async () => {
+  const loadQuotation = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      // Fetch quotation
-      const { data: qData, error: qError } = await supabase
+      if (!user?.id || !id || !currentOrgId) return
+
+      const { data, error } = await supabase
         .from("quotations")
         .select("*")
         .eq("id", id)
-        .eq("org_id", orgId)
+        .eq("org_id", currentOrgId)
         .single()
 
-      if (qError) throw qError
-      if (!qData) {
-        toast.error("Quotation not found")
-        router.push("/quotations")
-        return
-      }
+      if (error) throw error
 
-      setQuotation(qData)
-      setFormData({
-        quoteNo: qData.quote_no || "",
-        clientName: qData.client_name || "",
-        clientAddress: qData.client_address || "",
-        clientCity: qData.client_city || "",
-        clientState: qData.client_state || "",
-        clientPinCode: qData.client_pin_code || "",
-        clientGstin: qData.client_gstin || "",
-        clientDistrict: qData.client_district || "",
-        subject: qData.subject || "",
-        notes: qData.notes || "",
-        validTill: qData.valid_till || "",
-        includeGst: qData.include_gst ?? true,
-        gstRate: qData.gst_rate || 18,
-      })
-
-      // Parse items
-      if (qData.items) {
-        const parsedItems = Array.isArray(qData.items)
-          ? qData.items
-          : typeof qData.items === "string"
-          ? JSON.parse(qData.items)
-          : []
-        setItems(parsedItems.map((item: any, index: number) => ({
-          id: item.id || `item-${index}`,
-          description: item.particulars || item.description || "",
-          quantity: Number(item.qty || item.quantity || 1),
-          rate: Number(item.rate || item.unit_price || 0),
-          amount: Number(item.amount || 0),
-        })))
-      } else {
-        setItems([])
-      }
-
-      // Fetch company profile
-      const { data: pData } = await supabase
-        .from("company_profile")
-        .select("*")
-        .eq("org_id", orgId)
-        .single()
-      if (pData) setProfile(pData)
-
+      const quotation = data as Quotation
+      setQuotation(quotation)
+      setCustomerName(quotation.client_name)
+      setCustomerAddress(quotation.client_address || "")
+      setCustomerDistrict(quotation.client_district || "")
+      setCustomerState(quotation.client_state || "")
+      setCustomerPinCode(quotation.client_pin_code || "")
+      setOrderNo(quotation.order_no || "")
+      setSubject(quotation.subject || "")
+      setBodyText(quotation.body_text || "")
+      setItems(quotation.items)
+      setIncludeGst(quotation.include_gst)
+      setGstRate(quotation.gst_rate || 18)
+      setNotes(quotation.notes || "")
     } catch (error) {
       console.error("Error loading quotation:", error)
       toast.error("Failed to load quotation")
+      router.push("/quotations")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleItemChange = (index: number, field: keyof Item, value: any) => {
-    const updated = [...items]
-    updated[index] = { ...updated[index], [field]: value }
-    // Recalculate amount
-    if (field === "quantity" || field === "rate") {
-      const qty = Number(updated[index].quantity) || 0
-      const rate = Number(updated[index].rate) || 0
-      updated[index].amount = qty * rate
-    }
-    setItems(updated)
+  // Item handlers
+  const handleAddItem = () => {
+    const newId = String(Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1)
+    setItems([...items, { id: newId, description: "", quantity: 1, unit_price: 0, amount: 0 }])
   }
 
-  const addItem = () => {
-    setItems([
-      ...items,
-      { id: `item-${Date.now()}`, description: "", quantity: 1, rate: 0, amount: 0 },
-    ])
-  }
-
-  const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index))
-  }
-
-  const calculateTotals = () => {
-    const subtotal = items.reduce((sum, i) => sum + (i.amount || 0), 0)
-    const gst = formData.includeGst ? (subtotal * (formData.gstRate / 100)) / 2 : 0
-    return {
-      subtotal,
-      sgst: gst,
-      cgst: gst,
-      grandTotal: subtotal + (formData.includeGst ? subtotal * (formData.gstRate / 100) : 0),
+  const handleRemoveItem = (id: string) => {
+    if (items.length > 1) {
+      setItems(items.filter(item => item.id !== id))
+    } else {
+      toast.error("You must have at least one item")
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!orgId || !user?.id) return
+  const handleItemChange = (id: string, field: keyof QuotationItem, value: any) => {
+    const updatedItems = items.map(item => {
+      if (item.id === id) {
+        const updated = { ...item, [field]: value }
+        if (field === "quantity" || field === "unit_price") {
+          updated.amount = (updated.quantity || 0) * (updated.unit_price || 0)
+        }
+        return updated
+      }
+      return item
+    })
+    setItems(updatedItems)
+  }
 
-    // Validate
-    if (!formData.clientName.trim()) {
-      toast.error("Client name is required")
+  // --- Compute totals safely ---
+  const subtotal = Array.isArray(items)
+    ? items.reduce((sum, item) => sum + (item.amount || 0), 0)
+    : 0
+
+  const gstRateNum = Number(gstRate) || 18
+  const gstAmount = includeGst ? Math.round(subtotal * (gstRateNum / 100)) : 0
+  const total = subtotal + gstAmount
+
+  const handleSave = async () => {
+    if (!user?.id || !id || !currentOrgId) return
+
+    if (!customerName.trim()) {
+      toast.error("Please enter customer name")
       return
     }
-    if (!formData.quoteNo.trim()) {
-      toast.error("Quote number is required")
-      return
-    }
-    if (items.length === 0) {
-      toast.error("Add at least one item")
+
+    if (items.some(item => !item.description.trim() || item.quantity <= 0 || item.unit_price <= 0)) {
+      toast.error("Please fill in all item details")
       return
     }
 
     setSaving(true)
     try {
-      const { subtotal, sgst, cgst, grandTotal } = calculateTotals()
-      const payload = {
-        quote_no: formData.quoteNo,
-        client_name: formData.clientName,
-        client_address: formData.clientAddress || null,
-        client_city: formData.clientCity || null,
-        client_state: formData.clientState || null,
-        client_pin_code: formData.clientPinCode || null,
-        client_gstin: formData.clientGstin || null,
-        client_district: formData.clientDistrict || null,
-        subject: formData.subject || null,
-        notes: formData.notes || null,
-        valid_till: formData.validTill || null,
-        include_gst: formData.includeGst,
-        gst_rate: formData.gstRate,
-        items: items.map(i => ({
-          particulars: i.description,
-          qty: i.quantity,
-          rate: i.rate,
-          amount: i.amount,
-        })),
-        subtotal,
-        sgst,
-        cgst,
-        grand_total: grandTotal,
-        updated_at: new Date().toISOString(),
-      }
+      const calculatedSubtotal = (items ?? []).reduce((sum, item) => {
+        return sum + (Number(item.quantity ?? 0) * Number(item.unit_price ?? 0))
+      }, 0)
+      const sgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
+      const cgst = includeGst ? Math.round(calculatedSubtotal * 0.09) : 0
+      const grandTotal = calculatedSubtotal + sgst + cgst
 
-      const { error } = await supabase
+      const { data: updatedQuotation, error } = await supabase
         .from("quotations")
-        .update(payload)
+        .update({
+          client_name: customerName,
+          client_address: customerAddress,
+          client_district: customerDistrict,
+          client_state: customerState,
+          client_pin_code: customerPinCode,
+          order_no: orderNo || null,
+          subject: subject,
+          body_text: bodyText,
+          items: items,
+          subtotal: calculatedSubtotal,
+          sgst: sgst,
+          cgst: cgst,
+          grand_total: grandTotal,
+          include_gst: includeGst,
+          gst_rate: includeGst ? 18 : 0,
+          notes: notes,
+        })
         .eq("id", id)
-        .eq("org_id", orgId)
+        .eq("org_id", currentOrgId)
+        .select() // get the updated record with invoice_id
 
       if (error) throw error
-
       toast.success("Quotation updated successfully")
+
+      // If this quotation has a linked invoice, sync it
+      if (updatedQuotation?.[0]?.invoice_id) {
+        const invoiceId = updatedQuotation[0].invoice_id
+        // Optional: only sync if invoice is not Paid
+        const { data: invoice } = await supabase
+          .from("invoices")
+          .select("payment_status")
+          .eq("id", invoiceId)
+          .single()
+
+        if (invoice && invoice.payment_status !== "Paid") {
+          const { error: invoiceError } = await supabase
+            .from("invoices")
+            .update({
+              client_name: updatedQuotation[0].client_name,
+              client_address: updatedQuotation[0].client_address,
+              client_district: updatedQuotation[0].client_district,
+              client_state: updatedQuotation[0].client_state,
+              client_pin_code: updatedQuotation[0].client_pin_code,
+              subject: updatedQuotation[0].subject,
+              body_text: updatedQuotation[0].body_text,
+              items: updatedQuotation[0].items,
+              subtotal: updatedQuotation[0].subtotal,
+              sgst: updatedQuotation[0].sgst,
+              cgst: updatedQuotation[0].cgst,
+              grand_total: updatedQuotation[0].grand_total,
+              include_gst: updatedQuotation[0].include_gst,
+              notes: updatedQuotation[0].notes,
+              payment_terms: updatedQuotation[0].payment_terms,
+              // Do NOT update invoice_no, order_no, order_date, invoice_date, due_date, payment_status
+            })
+            .eq("id", invoiceId)
+
+          if (invoiceError) {
+            console.error("Failed to sync invoice:", invoiceError)
+            toast.warning("Quotation updated, but linked invoice could not be synced")
+          } else {
+            toast.success("Linked invoice also updated")
+          }
+        } else {
+          toast.info("Linked invoice is Paid, not auto-updated")
+        }
+      }
+
+      // Redirect to view page
       router.push(`/quotations/${id}`)
     } catch (error) {
       console.error("Error updating quotation:", error)
-      toast.error("Failed to update quotation")
+      toast.error(error instanceof Error ? error.message : "Failed to update quotation")
     } finally {
       setSaving(false)
     }
   }
 
-  const totals = calculateTotals()
-
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">Loading quotation...</p>
         </div>
       </DashboardLayout>
     )
@@ -263,259 +257,300 @@ export default function EditQuotationPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <Link href={`/quotations/${id}`}>
+            <Button variant="outline" size="icon">
+              <ArrowLeft className="size-4" />
+            </Button>
+          </Link>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Edit Quotation</h1>
-            <p className="text-muted-foreground">{formData.quoteNo || "No number"}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/quotations/${id}`)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
+            <p className="text-muted-foreground">Update quotation details</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Quote Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quotation Details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="quoteNo">Quote Number *</Label>
-                <Input
-                  id="quoteNo"
-                  value={formData.quoteNo}
-                  onChange={(e) => setFormData({ ...formData, quoteNo: e.target.value })}
-                  placeholder="Q-2026-001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="validTill">Valid Till</Label>
-                <Input
-                  id="validTill"
-                  type="date"
-                  value={formData.validTill}
-                  onChange={(e) => setFormData({ ...formData, validTill: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  placeholder="AC Service Quotation"
-                />
-              </div>
-            </CardContent>
-          </Card>
+        {/* Customer Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+            <CardDescription>Update the customer details for this quotation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="customer-name">Customer Name*</Label>
+              <Input
+                id="customer-name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Enter customer name"
+              />
+            </div>
 
-          {/* Client Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Client Information</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="clientName">Client Name *</Label>
-                <Input
-                  id="clientName"
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                  placeholder="Client name"
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="clientAddress">Address</Label>
-                <Input
-                  id="clientAddress"
-                  value={formData.clientAddress}
-                  onChange={(e) => setFormData({ ...formData, clientAddress: e.target.value })}
-                  placeholder="Street address"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientCity">City</Label>
-                <Input
-                  id="clientCity"
-                  value={formData.clientCity}
-                  onChange={(e) => setFormData({ ...formData, clientCity: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientState">State</Label>
-                <Input
-                  id="clientState"
-                  value={formData.clientState}
-                  onChange={(e) => setFormData({ ...formData, clientState: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientPinCode">Pin Code</Label>
-                <Input
-                  id="clientPinCode"
-                  value={formData.clientPinCode}
-                  onChange={(e) => setFormData({ ...formData, clientPinCode: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientDistrict">District</Label>
-                <Input
-                  id="clientDistrict"
-                  value={formData.clientDistrict}
-                  onChange={(e) => setFormData({ ...formData, clientDistrict: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientGstin">GSTIN</Label>
-                <Input
-                  id="clientGstin"
-                  value={formData.clientGstin}
-                  onChange={(e) => setFormData({ ...formData, clientGstin: e.target.value })}
-                  placeholder="22AAAAA0000A1Z5"
-                />
-              </div>
-            </CardContent>
-          </Card>
+            <div className="space-y-2">
+              <Label htmlFor="order-no">
+                Order Number <span className="text-xs text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="order-no"
+                value={orderNo}
+                onChange={(e) => setOrderNo(e.target.value)}
+                placeholder="e.g. PO-2026-001"
+              />
+            </div>
 
-          {/* Items */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Items</CardTitle>
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="mr-2 size-4" />
-                Add Item
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {items.length === 0 ? (
-                <p className="text-center py-4 text-muted-foreground">No items added</p>
-              ) : (
-                <div className="space-y-3">
-                  {items.map((item, index) => (
-                    <div key={item.id || index} className="flex flex-wrap gap-3 items-end p-3 border rounded-lg">
-                      <div className="flex-1 min-w-[150px] space-y-1">
-                        <Label className="text-xs">Description</Label>
-                        <Input
-                          value={item.description}
-                          onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                          placeholder="Service description"
-                        />
-                      </div>
-                      <div className="w-20 space-y-1">
-                        <Label className="text-xs">Qty</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(index, "quantity", Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="w-28 space-y-1">
-                        <Label className="text-xs">Rate (₹)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.rate}
-                          onChange={(e) => handleItemChange(index, "rate", Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="w-32 space-y-1">
-                        <Label className="text-xs">Amount (₹)</Label>
-                        <Input
-                          type="text"
-                          value={item.amount.toFixed(2)}
-                          disabled
-                          className="bg-muted"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-600"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
+            <div className="space-y-2">
+              <Label htmlFor="customer-address">Address</Label>
+              <Textarea
+                id="customer-address"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                placeholder="Enter customer address"
+                rows={2}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="customer-district">District</Label>
+                <Input
+                  id="customer-district"
+                  value={customerDistrict}
+                  onChange={(e) => setCustomerDistrict(e.target.value)}
+                  placeholder="District"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customer-state">State</Label>
+                <Input
+                  id="customer-state"
+                  value={customerState}
+                  onChange={(e) => setCustomerState(e.target.value)}
+                  placeholder="State"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customer-pin-code">Pin Code</Label>
+                <Input
+                  id="customer-pin-code"
+                  value={customerPinCode}
+                  onChange={(e) => setCustomerPinCode(e.target.value)}
+                  placeholder="Pin Code"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Subject and Letter Body */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Letter Details</CardTitle>
+            <CardDescription>Update subject and letter body for this quotation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g. Regarding AC AMC works at above mention place"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="body-text">Letter Body</Label>
+              <Textarea
+                id="body-text"
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                placeholder="e.g. Respected Sir/Madam, As per discussion held with you, regarding following works..."
+                rows={4}
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "Respected Sir/Madam,")}
+                >
+                  "Respected Sir/Madam,"
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "As per discussion held with you, regarding following works at above mention place. Details are given as below;")}
+                >
+                  "As per discussion..."
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Items */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Items</CardTitle>
+            <CardDescription>Update services or products for this quotation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {items.map((item) => (
+              <div key={item.id} className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor={`desc-${item.id}`} className="text-xs">
+                    Description
+                  </Label>
+                  <Input
+                    id={`desc-${item.id}`}
+                    value={item.description}
+                    onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                    placeholder="Service or product description"
+                  />
+                </div>
+                <div className="w-20 space-y-2">
+                  <Label htmlFor={`qty-${item.id}`} className="text-xs">
+                    Qty
+                  </Label>
+                  <Input
+                    id={`qty-${item.id}`}
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onFocus={(e) => e.target.value = ''}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      handleItemChange(item.id, "quantity", isNaN(val) || val <= 0 ? 1 : val);
+                    }}
+                    onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="w-32 space-y-2">
+                  <Label htmlFor={`price-${item.id}`} className="text-xs">
+                    Unit Price (₹)
+                  </Label>
+                  <Input
+                    id={`price-${item.id}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.unit_price}
+                    onFocus={(e) => e.target.value = ''}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      handleItemChange(item.id, "unit_price", isNaN(val) ? 0 : val);
+                    }}
+                    onChange={(e) => handleItemChange(item.id, "unit_price", parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="w-32 space-y-2">
+                  <Label htmlFor={`amount-${item.id}`} className="text-xs">
+                    Amount (₹)
+                  </Label>
+                  <div className="h-10 flex items-center px-3 bg-secondary rounded-md text-sm font-medium">
+                    {item.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+                <div className="flex items-end sm:items-end justify-end sm:justify-start">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveItem(item.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              variant="outline"
+              onClick={handleAddItem}
+              className="w-full"
+            >
+              <Plus className="mr-2 size-4" />
+              Add Item
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Totals */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Totals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3 border-b border-border pb-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span className="font-medium">₹{subtotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="include-gst"
+                  checked={includeGst}
+                  onCheckedChange={(checked) => setIncludeGst(checked as boolean)}
+                />
+                <Label htmlFor="include-gst" className="text-sm cursor-pointer">
+                  Include GST ({gstRateNum}%)
+                </Label>
+              </div>
+
+              {includeGst && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">GST Amount:</span>
+                  <span className="font-medium">₹{gstAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* GST and Totals */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tax & Totals</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeGst"
-                  checked={formData.includeGst}
-                  onCheckedChange={(checked) => setFormData({ ...formData, includeGst: !!checked })}
-                />
-                <Label htmlFor="includeGst">Include GST (18%)</Label>
-              </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Subtotal</p>
-                  <p className="text-lg font-bold">₹{totals.subtotal.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">SGST (9%)</p>
-                  <p className="text-lg font-bold">₹{totals.sgst.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">CGST (9%)</p>
-                  <p className="text-lg font-bold">₹{totals.cgst.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Grand Total</p>
-                  <p className="text-lg font-bold text-blue-600">₹{totals.grandTotal.toFixed(2)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="flex justify-between items-center text-lg font-bold">
+              <span>Total:</span>
+              <span className="text-primary">₹{total.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes / Terms</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={4}
-                placeholder="Terms & conditions, delivery schedule, etc."
-              />
-            </CardContent>
-          </Card>
-        </form>
+        {/* Notes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Terms & Conditions</CardTitle>
+            <CardDescription>Update additional terms or conditions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Enter any additional notes or terms..."
+              rows={4}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Actions */}
+        <div className="flex gap-3 justify-end">
+          <Link href={`/quotations/${id}`}>
+            <Button variant="outline">Cancel</Button>
+          </Link>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 size-4" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </DashboardLayout>
   )
