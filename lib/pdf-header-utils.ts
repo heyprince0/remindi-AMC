@@ -59,8 +59,8 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 5 + 2
   }
 
-  // ----- Address block (single column) -----
-  doc.setFontSize(9.8)
+  // ----- Address block -----
+  doc.setFontSize(9.5)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(40, 40, 40)
 
@@ -73,7 +73,6 @@ export function renderSingleLogoHeader(
   if (locationLine) addrLines.push(...doc.splitTextToSize(locationLine, contentMaxW))
   doc.text(addrLines, contentX, contentY)
 
-  // Advance Y after address
   contentY += addrLines.length * 5 + 2
 
   // ----- Email -----
@@ -83,7 +82,7 @@ export function renderSingleLogoHeader(
     doc.text("Email:", contentX, contentY)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(40, 40, 40)
-    const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - 14) // indent for label
+    const emailLines = doc.splitTextToSize(companyProfile.email, contentMaxW - 14)
     doc.text(emailLines, contentX + 14, contentY)
     contentY += emailLines.length * 5 + 2
   }
@@ -108,7 +107,7 @@ export function renderSingleLogoHeader(
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
-  y += 5   // gap after the line
+  y += 4   // 🔽 reduced from 10 to 4 – less gap
 
   return y
 }
