@@ -61,8 +61,38 @@ export function renderSingleLogoHeader(
     contentY += taglineLines.length * 4 + 2
   }
 
+  // Specialization / services line (e.g. "Specialist in: ...")
+  const specialization = (companyProfile as any).specialization || (companyProfile as any).services
+  if (specialization) {
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    const specText = `Specialist in: ${specialization}`
+    const specLines = doc.splitTextToSize(specText, contentMaxW)
+    doc.text(specLines, contentX, contentY)
+    contentY += specLines.length * 4 + 2
+  }
+
+  // Certification / approval badge line (e.g. "GOVERNMENT APPROVED")
+  const certification = (companyProfile as any).certification || (companyProfile as any).approval_badge
+  if (certification) {
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    const certText = String(certification).toUpperCase()
+    const certWidth = doc.getTextWidth(certText)
+    // Center within the full header width, like the reference design
+    const certX = margin + (pageW - margin * 2 - certWidth) / 2
+    doc.text(certText, certX, contentY)
+    contentY += 6
+  }
+
   // ===== HORIZONTAL RULE =====
-  y += 36
+  // Header height is dynamic: at least 36mm (to fit the logo), but grows if
+  // extra content (specialization/certification lines) needs more room.
+  const minHeaderBottom = y + 36
+  const contentHeaderBottom = contentY + 2
+  y = Math.max(minHeaderBottom, contentHeaderBottom)
   doc.setDrawColor(tr, tg, tb)
   doc.setLineWidth(0.5)
   doc.line(margin, y, pageW - margin, y)
