@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!["admin", "member"].includes(role)) {
+    // ✅ FIX: Add 'technician' to allowed roles
+    if (!["admin", "member", "technician"].includes(role)) {
       return NextResponse.json(
         { message: "Invalid role" },
         { status: 400 }
