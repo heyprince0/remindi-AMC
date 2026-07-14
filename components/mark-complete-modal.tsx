@@ -135,7 +135,7 @@ export function MarkCompleteModal({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              companyName: company?.company_name || "",
+              companyName: company?.company_name?.toUpperCase() || "",
               customerName: customer.name || "",
               customerPhone: customer.phone,
               technicianName: technician?.name || "",
