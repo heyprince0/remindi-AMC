@@ -205,6 +205,7 @@ export type CompanyProfile = {
 export type Invoice = {
   id: string
   user_id: string
+  org_id: string
   quotation_id: string | null
   invoice_no: string
   order_no: string | null
@@ -227,6 +228,7 @@ export type Invoice = {
   cgst: number
   grand_total: number
   include_gst: boolean
+  gst_rate: number
   created_at: string
   updated_at: string
 }
