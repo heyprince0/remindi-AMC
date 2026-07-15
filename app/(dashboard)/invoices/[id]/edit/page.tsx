@@ -302,54 +302,6 @@ export default function EditInvoicePage() {
           </CardContent>
         </Card>
 
-        {/* Subject and Letter Body */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Letter Details</CardTitle>
-            <CardDescription>Update subject and letter body for this invoice</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
-              <Input
-                id="subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Regarding AC AMC works at above mention place"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="body-text">Letter Body</Label>
-              <Textarea
-                id="body-text"
-                value={bodyText}
-                onChange={(e) => setBodyText(e.target.value)}
-                placeholder="e.g. Respected Sir/Madam, As per discussion held with you, regarding following works..."
-                rows={4}
-              />
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "Respected Sir/Madam,")}
-                >
-                  "Respected Sir/Madam,"
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBodyText(bodyText + (bodyText ? "\n" : "") + "As per discussion held with you, regarding following works at above mention place. Details are given as below;")}
-                >
-                  "As per discussion..."
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Items */}
         <Card>
           <CardHeader>
