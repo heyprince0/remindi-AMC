@@ -48,16 +48,36 @@ export function MarkCompleteModal({
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingTechs, setLoadingTechs] = useState(false)
+  const [customerName, setCustomerName] = useState("")
+  const [customerHasPhone, setCustomerHasPhone] = useState(false)
 
   useEffect(() => {
     if (open) {
       loadTechnicians()
+      loadCustomerPreview()
       const today = new Date().toISOString().split("T")[0]
       setServiceDate(today)
       setNotes("")
       setTechnicianId("")
     }
   }, [open])
+
+  const loadCustomerPreview = async () => {
+    try {
+      if (!contract?.customer_id) return
+      const { data, error } = await supabase
+        .from("customers")
+        .select("name, phone")
+        .eq("id", contract.customer_id)
+        .single()
+
+      if (error) throw error
+      setCustomerName(data?.name || "")
+      setCustomerHasPhone(!!data?.phone)
+    } catch (error) {
+      console.error("Error loading customer preview:", error)
+    }
+  }
 
   const loadTechnicians = async () => {
     try {
@@ -171,6 +191,21 @@ export function MarkCompleteModal({
             Record the completion details for this service
           </DialogDescription>
         </DialogHeader>
+
+        {customerHasPhone && customerName && (
+          <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2">
+            <svg
+              viewBox="0 0 24 24"
+              className="size-4 shrink-0 fill-green-600"
+              aria-hidden="true"
+            >
+              <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.79 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1 .27-3.38-.7-2.86-1.18-4.68-4.06-4.82-4.25-.14-.19-1.15-1.53-1.15-2.92 0-1.39.73-2.07.99-2.35.26-.28.56-.35.75-.35.19 0 .38 0 .54.01.18.01.41-.07.64.49.24.58.81 2 .88 2.15.07.15.11.32.02.51-.09.19-.14.31-.28.47-.14.16-.29.36-.42.48-.14.14-.28.29-.12.57.16.28.71 1.17 1.52 1.9 1.05.94 1.93 1.23 2.21 1.37.28.14.44.12.61-.07.16-.19.68-.79.87-1.06.19-.28.37-.23.63-.14.26.1 1.65.78 1.94.92.28.14.47.21.54.33.07.12.07.66-.17 1.29Z" />
+            </svg>
+            <p className="text-xs text-green-800">
+              This update will be sent to <span className="font-medium">{customerName}</span> on WhatsApp
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-col gap-4 py-4">
           <div className="flex flex-col gap-2">
