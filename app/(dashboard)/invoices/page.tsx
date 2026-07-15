@@ -187,7 +187,7 @@ export default function InvoicesPage() {
   }
 
   const handleNewInvoiceClick = () => {
-    // Check limits before opening modal
+    // Check limits before navigating
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
@@ -203,8 +203,8 @@ export default function InvoicesPage() {
       setShowLimitModal(true)
       return
     }
-    // Otherwise open the new invoice modal
-    setShowNewInvoiceModal(true)
+    // Otherwise navigate to new invoice page
+    window.location.href = '/invoices/new'
   }
 
   const handleUpgrade = () => {

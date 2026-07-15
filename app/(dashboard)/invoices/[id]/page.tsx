@@ -805,14 +805,15 @@ export default function ViewInvoicePage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              onClick={handleOpenEditModal}
-              variant="outline"
-              size="sm"
-            >
-              <Edit className="mr-1.5 size-4" />
-              Edit
-            </Button>
+            <Link href={`/invoices/${id}/edit`}>
+              <Button
+                variant="outline"
+                size="sm"
+              >
+                <Edit className="mr-1.5 size-4" />
+                Edit
+              </Button>
+            </Link>
           </div>
         </div>
 
