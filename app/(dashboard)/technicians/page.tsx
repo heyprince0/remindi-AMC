@@ -251,10 +251,7 @@ export default function TechniciansPage() {
                         </span>
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-base">{tech.name}</CardTitle>
-                          {getStatusBadge(tech.status)}
-                        </div>
+                        <CardTitle className="text-base">{tech.name}</CardTitle>
                         <CardDescription className="text-xs">{parseSpecializations(tech.specialization)[0] || 'No specialization'}</CardDescription>
                       </div>
                     </div>
@@ -297,10 +294,13 @@ export default function TechniciansPage() {
                     )}
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-border">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Briefcase className="size-4 text-muted-foreground" />
-                      <span className="text-foreground font-medium">{tech.jobCount}</span>
-                      <span className="text-muted-foreground">assigned jobs</span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Briefcase className="size-4 text-muted-foreground" />
+                        <span className="text-foreground font-medium">{tech.jobCount}</span>
+                        <span className="text-muted-foreground">assigned jobs</span>
+                      </div>
+                      {getStatusBadge(tech.status)}
                     </div>
                     <Link href={`/technicians/${tech.id}`}>
                       <Button variant="ghost" size="sm" className="gap-2">
