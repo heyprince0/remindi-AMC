@@ -113,6 +113,22 @@ export type ServiceHistory = {
   created_at: string
 }
 
+export type TechnicianJob = {
+  id: string
+  org_id: string
+  technician_id: string
+  customer_id: string | null
+  contract_id: string | null
+  title: string
+  notes: string | null
+  assigned_date: string
+  due_date: string | null
+  status: 'pending' | 'completed'
+  source: 'manual' | 'service_alert'
+  completed_at: string | null
+  created_at: string
+}
+
 export type Profile = {
   id: string
   full_name: string | null
