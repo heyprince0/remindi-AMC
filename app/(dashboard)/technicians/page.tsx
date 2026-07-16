@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { supabase, type Technician, type TechnicianJob } from "@/lib/supabase"
+import { supabase, type Technician, type TechnicianJob, type ServiceHistory } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
@@ -108,8 +108,8 @@ export default function TechniciansPage() {
 
       if (techniciansError) throw techniciansError
 
-      // Fetch only COMPLETED technician_jobs for this org
-      const { data: jobsData, error: jobsError } = await supabase
+      // Fetch completed technician_jobs (all sources)
+      const { data: completedJobs, error: jobsError } = await supabase
         .from('technician_jobs')
         .select('technician_id')
         .eq('org_id', currentOrgId)
@@ -117,11 +117,26 @@ export default function TechniciansPage() {
 
       if (jobsError) throw jobsError
 
+      // Fetch service_history records
+      const { data: serviceHistory, error: historyError } = await supabase
+        .from('service_history')
+        .select('technician_id')
+        .eq('org_id', currentOrgId)
+
+      if (historyError) throw historyError
+
       // Count completed jobs per technician
       const jobCounts: Record<string, number> = {}
-      ;(jobsData as TechnicianJob[]).forEach(job => {
+      ;(completedJobs as TechnicianJob[]).forEach(job => {
         if (job.technician_id) {
           jobCounts[job.technician_id] = (jobCounts[job.technician_id] || 0) + 1
+        }
+      })
+
+      // Count service_history per technician
+      ;(serviceHistory as ServiceHistory[]).forEach(record => {
+        if (record.technician_id) {
+          jobCounts[record.technician_id] = (jobCounts[record.technician_id] || 0) + 1
         }
       })
 
