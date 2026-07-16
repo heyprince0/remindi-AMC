@@ -251,6 +251,7 @@ export type Invoice = {
   gst_rate: number
   created_at: string
   updated_at: string
+  client_gstin?: string
 }
 
 // Team Management Types
