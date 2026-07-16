@@ -397,6 +397,7 @@ export function AddContractModal({
     }
   }
 
+  // ========== FIX: Keep sub‑modal open after adding a service ==========
   const handleAddOldService = () => {
     const subErrors: Record<string, string> = {}
     if (!subModal.startDate) subErrors.startDate = 'Service Start Date is required'
@@ -422,14 +423,16 @@ export function AddContractModal({
       },
     ])
 
+    // Keep sub‑modal open, reset fields for next entry
     setSubModal({
-      open: false,
+      open: true,                // ← stay open
       startDate: '',
       endDate: '',
       technicianId: '',
       errors: {},
     })
   }
+  // =====================================================================
 
   const handleRemoveOldService = (index: number) => {
     setPendingOldServices((prev) => prev.filter((_, i) => i !== index))
