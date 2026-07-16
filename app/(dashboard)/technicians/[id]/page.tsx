@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { supabase, type Technician, type TechnicianJob, type Customer } from '@/lib/supabase'
+import { supabase, type Technician, type TechnicianJob, type Customer, type Contract, type ServiceHistory } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,6 +22,18 @@ import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
 
 interface JobWithCustomer extends TechnicianJob {
   customerName: string | null
+}
+
+// Unified shape for the Job History table — combines manual/service-alert
+// completed technician_jobs rows with existing service_history rows,
+// without duplicating data into technician_jobs.
+interface HistoryDisplayItem {
+  id: string
+  completedDate: string | null
+  title: string
+  customerName: string | null
+  source: 'manual' | 'service_alert' | 'service_history'
+  notes: string | null
 }
 
 export default function TechnicianDetailPage() {
@@ -32,7 +44,7 @@ export default function TechnicianDetailPage() {
 
   const [technician, setTechnician] = useState<Technician | null>(null)
   const [assignedJobs, setAssignedJobs] = useState<JobWithCustomer[]>([])
-  const [jobHistory, setJobHistory] = useState<JobWithCustomer[]>([])
+  const [jobHistory, setJobHistory] = useState<HistoryDisplayItem[]>([])
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -93,7 +105,7 @@ export default function TechnicianDetailPage() {
 
       if (assignedJobsError) throw assignedJobsError
 
-      // Fetch customers for assigned jobs
+      // Fetch customers (needed for both assigned jobs and history)
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
@@ -111,7 +123,7 @@ export default function TechnicianDetailPage() {
 
       setAssignedJobs(assignedJobsWithCustomer)
 
-      // Fetch job history (completed)
+      // Fetch job history — completed technician_jobs (manual + service_alert)
       const { data: historyJobsData, error: historyJobsError } = await supabase
         .from('technician_jobs')
         .select('*')
@@ -122,15 +134,71 @@ export default function TechnicianDetailPage() {
 
       if (historyJobsError) throw historyJobsError
 
-      const historyJobsWithCustomer = (historyJobsData as TechnicianJob[]).map((job) => {
+      const historyFromJobs: HistoryDisplayItem[] = (historyJobsData as TechnicianJob[]).map((job) => {
         const customer = (customersData as Customer[])?.find((c) => c.id === job.customer_id)
         return {
-          ...job,
+          id: `job-${job.id}`,
+          completedDate: job.completed_at ? job.completed_at.split('T')[0] : null,
+          title: job.title,
           customerName: customer?.name || null,
+          source: job.source === 'service_alert' ? 'service_alert' : 'manual',
+          notes: job.notes,
         }
       })
 
-      setJobHistory(historyJobsWithCustomer)
+      // Fetch job history — sync in existing service_history records for this
+      // technician (only ones where a technician was actually assigned;
+      // unassigned/unknown-technician records simply won't match here and
+      // stay untouched on the Service History page as before).
+      const { data: serviceHistoryData, error: serviceHistoryError } = await supabase
+        .from('service_history')
+        .select('*')
+        .eq('technician_id', technicianId)
+        .eq('org_id', currentOrgId)
+        .order('service_date', { ascending: false })
+
+      if (serviceHistoryError) throw serviceHistoryError
+
+      const contractIds = ((serviceHistoryData as ServiceHistory[]) || [])
+        .map((r) => r.contract_id)
+        .filter((id): id is string => !!id)
+
+      let contractsData: Contract[] = []
+      if (contractIds.length > 0) {
+        const { data: contractsResult, error: contractsError } = await supabase
+          .from('contracts')
+          .select('*')
+          .in('id', contractIds)
+          .eq('org_id', currentOrgId)
+
+        if (contractsError) throw contractsError
+        contractsData = (contractsResult as Contract[]) || []
+      }
+
+      const historyFromServiceHistory: HistoryDisplayItem[] = ((serviceHistoryData as ServiceHistory[]) || []).map((record) => {
+        const contract = contractsData.find((c) => c.id === record.contract_id)
+        const customer = contract
+          ? (customersData as Customer[])?.find((c) => c.id === contract.customer_id)
+          : undefined
+
+        return {
+          id: `sh-${record.id}`,
+          completedDate: record.service_date,
+          title: contract?.contract_name || 'Service Record',
+          customerName: customer?.name || null,
+          source: 'service_history',
+          notes: record.notes,
+        }
+      })
+
+      // Merge both sources, most recent first
+      const combinedHistory = [...historyFromJobs, ...historyFromServiceHistory].sort((a, b) => {
+        if (!a.completedDate) return 1
+        if (!b.completedDate) return -1
+        return b.completedDate.localeCompare(a.completedDate)
+      })
+
+      setJobHistory(combinedHistory)
     } catch (error) {
       console.error('Error loading technician details:', error)
       toast.error('Failed to load technician details')
@@ -183,6 +251,17 @@ export default function TechnicianDetailPage() {
 
   const handleModalSuccess = () => {
     loadTechnicianDetails()
+  }
+
+  const getSourceBadgeLabel = (source: HistoryDisplayItem['source']) => {
+    switch (source) {
+      case 'service_alert':
+        return 'From Service Alert'
+      case 'service_history':
+        return 'Service Record'
+      default:
+        return 'Manual'
+    }
   }
 
   if (loading) {
@@ -378,12 +457,12 @@ export default function TechnicianDetailPage() {
                   <TableBody>
                     {jobHistory.map((job) => (
                       <TableRow key={job.id}>
-                        <TableCell>{job.completed_at?.split('T')[0] || '—'}</TableCell>
+                        <TableCell>{job.completedDate || '—'}</TableCell>
                         <TableCell className="font-medium">{job.title}</TableCell>
                         <TableCell>{job.customerName || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs font-normal">
-                            {job.source === 'service_alert' ? 'From Service Alert' : 'Manual'}
+                            {getSourceBadgeLabel(job.source)}
                           </Badge>
                         </TableCell>
                         <TableCell>
