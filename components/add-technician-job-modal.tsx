@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { supabase } from '@/lib/supabase'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { supabase, type Customer } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
@@ -30,10 +37,14 @@ export function AddTechnicianJobModal({
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customersLoading, setCustomersLoading] = useState(false)
+
   const [formData, setFormData] = useState({
     title: '',
     notes: '',
     dueDate: '',
+    customerId: '', // optional — empty string means "no customer selected"
   })
 
   useEffect(() => {
@@ -42,10 +53,32 @@ export function AddTechnicianJobModal({
         title: '',
         notes: '',
         dueDate: '',
+        customerId: '',
       })
       setErrors({})
+      loadCustomers()
     }
   }, [open])
+
+  const loadCustomers = async () => {
+    if (!orgId) return
+    setCustomersLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('org_id', orgId)
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setCustomers((data as Customer[]) || [])
+    } catch (error) {
+      console.error('Error loading customers:', error)
+      // Non-blocking — the field is optional, so a failed fetch shouldn't stop job creation
+    } finally {
+      setCustomersLoading(false)
+    }
+  }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -67,7 +100,7 @@ export function AddTechnicianJobModal({
         .insert({
           org_id: orgId,
           technician_id: technicianId,
-          customer_id: null,
+          customer_id: formData.customerId || null,
           contract_id: null,
           title: formData.title.trim(),
           notes: formData.notes.trim() || null,
@@ -108,6 +141,27 @@ export function AddTechnicianJobModal({
             />
             {errors.title && <p className="text-xs text-red-500">{errors.title}</p>}
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="customer">Customer <span className="text-xs text-muted-foreground">(optional)</span></Label>
+            <Select
+              value={formData.customerId || undefined}
+              onValueChange={(value) => setFormData({ ...formData, customerId: value })}
+              disabled={customersLoading}
+            >
+              <SelectTrigger id="customer">
+                <SelectValue placeholder={customersLoading ? 'Loading customers...' : 'Select a customer (optional)'} />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.map((customer) => (
+                  <SelectItem key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="due-date">Due Date</Label>
             <Input
