@@ -102,6 +102,7 @@ export default function ViewInvoicePage() {
   const [editPaymentTerms, setEditPaymentTerms] = useState("")
   const [includeStamp, setIncludeStamp] = useState<boolean>(false)
   const [editNotes, setEditNotes] = useState("")
+  const [editClientGstin, setEditClientGstin] = useState("") // NEW
   const [quotationData, setQuotationData] = useState<{ quote_no: string } | null>(null)
   const id = params.id as string
 
@@ -154,7 +155,7 @@ export default function ViewInvoicePage() {
         .from("invoices")
         .select("*")
         .eq("id", id)
-        .eq("org_id", currentOrgId)   // <-- changed
+        .eq("org_id", currentOrgId)
         .single()
 
       if (iErr) throw iErr
@@ -163,7 +164,7 @@ export default function ViewInvoicePage() {
       const { data: pData } = await supabase
         .from("company_profile")
         .select("*")
-        .eq("org_id", currentOrgId)   // <-- changed
+        .eq("org_id", currentOrgId)
         .single()
 
       const invoiceData = iData as Invoice
@@ -195,7 +196,7 @@ export default function ViewInvoicePage() {
         .from("invoices")
         .update({ payment_status: newStatus })
         .eq("id", invoice.id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
       if (error) throw error
       setInvoice({ ...invoice, payment_status: newStatus as Invoice["payment_status"] })
       toast.success(`Payment status updated to ${newStatus}`)
@@ -216,6 +217,7 @@ export default function ViewInvoicePage() {
     setEditDueDate(invoice.due_date || "")
     setEditPaymentTerms(invoice.payment_terms || "")
     setEditNotes(invoice.notes || "")
+    setEditClientGstin(invoice.client_gstin || "") // NEW
     setShowEditModal(true)
   }
 
@@ -233,10 +235,11 @@ export default function ViewInvoicePage() {
           due_date: editDueDate,
           payment_terms: editPaymentTerms,
           notes: editNotes,
+          client_gstin: editClientGstin || null, // NEW
           updated_at: new Date().toISOString(),
         })
         .eq("id", invoice.id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
       
       if (error) throw error
       toast.success("Invoice updated successfully")
@@ -277,7 +280,7 @@ export default function ViewInvoicePage() {
     const includeGst = invoice.include_gst ?? true
     const gstTotal = sgst + cgst
     const msg =
-      `*Invoice - ${safeStr(profile?.company_name)}*\n` +
+      `*Invoice - ${safeStr(profile?.company_name)}\n` +
       `Invoice No: ${safeStr(invoice.invoice_no)}\n` +
       `Date: ${safeDate(invoice.invoice_date)}\n` +
       `Due Date: ${safeDate(invoice.due_date)}\n\n` +
@@ -483,6 +486,13 @@ export default function ViewInvoicePage() {
           doc.text(cityStateZip, margin, y)
           y += 5
         }
+
+        // NEW: Print client GSTIN if present
+        if (invoice.client_gstin) {
+          doc.text(`GSTIN: ${invoice.client_gstin}`, margin, y)
+          y += 5
+        }
+
         y += 3
 
         // ===== ITEMS TABLE =====
@@ -906,6 +916,11 @@ export default function ViewInvoicePage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
               <p className="font-medium">{invoice.client_address ?? "-"}</p>
             </div>
+            {/* NEW: Client GSTIN row */}
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client GSTIN</p>
+              <p className="font-medium">{invoice.client_gstin || "-"}</p>
+            </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client District</p>
               <p className="font-medium">{invoice.client_district ?? "-"}</p>
@@ -1102,6 +1117,17 @@ export default function ViewInvoicePage() {
                   <SelectItem value="On completion">On completion</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* NEW: Client GSTIN in edit modal */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-client-gstin">Client GSTIN (Optional)</Label>
+              <Input
+                id="edit-client-gstin"
+                value={editClientGstin}
+                onChange={(e) => setEditClientGstin(e.target.value)}
+                placeholder="GSTIN"
+              />
             </div>
 
             <div className="space-y-2">
