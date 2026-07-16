@@ -397,7 +397,7 @@ export function AddContractModal({
     }
   }
 
-  // ========== FIX: Keep sub‑modal open after adding a service ==========
+  // ========== FIX: Keep sub‑modal open and show toast ==========
   const handleAddOldService = () => {
     const subErrors: Record<string, string> = {}
     if (!subModal.startDate) subErrors.startDate = 'Service Start Date is required'
@@ -423,9 +423,12 @@ export function AddContractModal({
       },
     ])
 
+    // Show toast confirmation
+    toast.success('1 old service added')
+
     // Keep sub‑modal open, reset fields for next entry
     setSubModal({
-      open: true,                // ← stay open
+      open: true,
       startDate: '',
       endDate: '',
       technicianId: '',
@@ -710,7 +713,8 @@ export function AddContractModal({
 
     {/* Sub-Modal for Adding Old Service */}
     <Dialog open={subModal.open} onOpenChange={(isOpen) => setSubModal({ ...subModal, open: isOpen, errors: {} })}>
-      <DialogContent className="max-w-md">
+      {/* HIDE the default close (X) button */}
+      <DialogContent className="max-w-md [&>button]:hidden">
         <DialogHeader>
           <DialogTitle>Add Old Service</DialogTitle>
         </DialogHeader>
