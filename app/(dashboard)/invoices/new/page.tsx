@@ -441,7 +441,7 @@ export default function NewInvoicePage() {
             {/* NEW: Client GSTIN field */}
             <div className="space-y-2">
               <Label htmlFor="client-gstin">
-                Client GSTIN <span className="text-xs text-muted-foreground">(Optional)</span>
+                Company GSTIN <span className="text-xs text-muted-foreground">(Optional)</span>
               </Label>
               <Input
                 id="client-gstin"
