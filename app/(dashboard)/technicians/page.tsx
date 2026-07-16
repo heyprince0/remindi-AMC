@@ -251,7 +251,10 @@ export default function TechniciansPage() {
                         </span>
                       </div>
                       <div>
-                        <CardTitle className="text-base">{tech.name}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base">{tech.name}</CardTitle>
+                          {getStatusBadge(tech.status)}
+                        </div>
                         <CardDescription className="text-xs">{parseSpecializations(tech.specialization)[0] || 'No specialization'}</CardDescription>
                       </div>
                     </div>
@@ -293,16 +296,11 @@ export default function TechniciansPage() {
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <div className="flex flex-col gap-2 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Status:</span>
-                        {getStatusBadge(tech.status)}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Briefcase className="size-4" />
-                        <span>{tech.jobCount} assigned job{tech.jobCount !== 1 ? 's' : ''}</span>
-                      </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Briefcase className="size-4 text-muted-foreground" />
+                      <span className="text-foreground font-medium">{tech.jobCount}</span>
+                      <span className="text-muted-foreground">assigned jobs</span>
                     </div>
                     <Link href={`/technicians/${tech.id}`}>
                       <Button variant="ghost" size="sm" className="gap-2">
