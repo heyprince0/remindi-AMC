@@ -38,6 +38,7 @@ export default function NewInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [paymentTerms, setPaymentTerms] = useState("")
+  const [clientGstin, setClientGstin] = useState("") // NEW
 
   // --- organization ID ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
@@ -155,6 +156,7 @@ export default function NewInvoicePage() {
           client_district: customerDistrict,
           client_state: customerState,
           client_pin_code: customerPinCode,
+          client_gstin: clientGstin || null, // NEW
           subject: subject,
           body_text: bodyText,
           items: items,
@@ -435,6 +437,18 @@ export default function NewInvoicePage() {
                   placeholder="e.g. Net 15"
                 />
               </div>
+            </div>
+            {/* NEW: Client GSTIN field */}
+            <div className="space-y-2">
+              <Label htmlFor="client-gstin">
+                Client GSTIN <span className="text-xs text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="client-gstin"
+                value={clientGstin}
+                onChange={(e) => setClientGstin(e.target.value)}
+                placeholder="e.g. 22AAAAA0000A1Z5"
+              />
             </div>
           </CardContent>
         </Card>
