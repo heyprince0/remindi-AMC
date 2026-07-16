@@ -38,6 +38,7 @@ export default function EditInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [paymentTerms, setPaymentTerms] = useState("")
+  const [clientGstin, setClientGstin] = useState("") // NEW
 
   // --- organization ID ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
@@ -97,6 +98,7 @@ export default function EditInvoicePage() {
       setInvoiceDate(invoice.invoice_date || "")
       setDueDate(invoice.due_date || "")
       setPaymentTerms(invoice.payment_terms || "")
+      setClientGstin(invoice.client_gstin || "") // NEW
     } catch (error) {
       console.error("Error loading invoice:", error)
       toast.error("Failed to load invoice")
@@ -170,6 +172,7 @@ export default function EditInvoicePage() {
           client_district: customerDistrict,
           client_state: customerState,
           client_pin_code: customerPinCode,
+          client_gstin: clientGstin || null, // NEW
           order_no: orderNo || null,
           subject: subject,
           body_text: bodyText,
@@ -466,6 +469,18 @@ export default function EditInvoicePage() {
                   placeholder="e.g. Net 15"
                 />
               </div>
+            </div>
+            {/* NEW: Client GSTIN field */}
+            <div className="space-y-2">
+              <Label htmlFor="client-gstin">
+                Client GSTIN <span className="text-xs text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="client-gstin"
+                value={clientGstin}
+                onChange={(e) => setClientGstin(e.target.value)}
+                placeholder="e.g. 22AAAAA0000A1Z5"
+              />
             </div>
           </CardContent>
         </Card>
