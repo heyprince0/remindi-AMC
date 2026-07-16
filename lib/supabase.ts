@@ -88,6 +88,8 @@ export type Contract = {
   status: string
   notes: string
   contracts_price: number | null
+  duration_years?: number
+  contract_type?: 'new' | 'old'
   created_at: string
 }
 
@@ -107,9 +109,11 @@ export type ServiceHistory = {
   technician_id: string
   org_id?: string
   service_date: string
+  service_end_date?: string
   status: string
   notes: string
   price: number | null
+  source?: 'manual' | 'service_alert'
   created_at: string
 }
 
