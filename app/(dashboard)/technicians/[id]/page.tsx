@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table'
 import { supabase, type Technician, type TechnicianJob, type Customer } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
 
@@ -161,6 +161,26 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  const handleDeleteJob = async (jobId: string) => {
+    if (!currentOrgId) return
+    if (!confirm('Are you sure you want to delete this job?')) return
+
+    try {
+      const { error } = await supabase
+        .from('technician_jobs')
+        .delete()
+        .eq('id', jobId)
+        .eq('org_id', currentOrgId)
+
+      if (error) throw error
+      toast.success('Job deleted successfully')
+      setAssignedJobs(assignedJobs.filter((job) => job.id !== jobId))
+    } catch (error) {
+      console.error('Error deleting job:', error)
+      toast.error('Failed to delete job')
+    }
+  }
+
   const handleModalSuccess = () => {
     loadTechnicianDetails()
   }
@@ -298,15 +318,25 @@ export default function TechnicianDetailPage() {
                           <Badge className="bg-blue-100 text-blue-800 border-blue-200">Pending</Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => handleMarkComplete(job.id)}
-                          >
-                            <CheckCircle2 className="size-4" />
-                            Complete
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => handleMarkComplete(job.id)}
+                            >
+                              <CheckCircle2 className="size-4" />
+                              Complete
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2 text-red-600 hover:text-red-600"
+                              onClick={() => handleDeleteJob(job.id)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
