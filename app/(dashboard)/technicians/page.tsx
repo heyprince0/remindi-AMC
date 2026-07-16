@@ -64,7 +64,7 @@ export default function TechniciansPage() {
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits (used only when clicking Add Technician)
+  // Plan limits
   const { maxTechnicians, currentTechnicianCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   // Limit modal state
@@ -96,13 +96,11 @@ export default function TechniciansPage() {
     }
   }, [currentOrgId])
 
-  // ❌ REMOVED: auto-show limit modal on page load
-  // The modal now only appears when clicking "Add Technician"
-
   const loadTechnicians = async () => {
     try {
       if (!currentOrgId) return
 
+      // Fetch all technicians
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
@@ -110,18 +108,26 @@ export default function TechniciansPage() {
 
       if (techniciansError) throw techniciansError
 
-      const { data: jobsData } = await supabase
+      // Fetch all technician_jobs (all statuses) for this org
+      const { data: jobsData, error: jobsError } = await supabase
         .from('technician_jobs')
         .select('technician_id')
         .eq('org_id', currentOrgId)
 
-      const techniciansWithJobs = (techniciansData as Technician[]).map(tech => {
-        const jobCount = (jobsData as TechnicianJob[])?.filter(j => j.technician_id === tech.id).length || 0
-        return {
-          ...tech,
-          jobCount
+      if (jobsError) throw jobsError
+
+      // Count jobs per technician
+      const jobCounts: Record<string, number> = {}
+      ;(jobsData as TechnicianJob[]).forEach(job => {
+        if (job.technician_id) {
+          jobCounts[job.technician_id] = (jobCounts[job.technician_id] || 0) + 1
         }
       })
+
+      const techniciansWithJobs = (techniciansData as Technician[]).map(tech => ({
+        ...tech,
+        jobCount: jobCounts[tech.id] || 0
+      }))
 
       setTechnicians(techniciansWithJobs)
       setFilteredTechnicians(techniciansWithJobs)
@@ -166,7 +172,6 @@ export default function TechniciansPage() {
   }
 
   const handleAddClick = () => {
-    // ✅ Check limits only when the user clicks "Add Technician"
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
@@ -182,7 +187,6 @@ export default function TechniciansPage() {
       setShowLimitModal(true)
       return
     }
-    // Otherwise open the add modal
     setEditingTechnician(null)
     setModalOpen(true)
   }
