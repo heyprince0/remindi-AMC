@@ -119,6 +119,35 @@ export function MarkCompleteModal({
 
       if (historyError) throw historyError
 
+      // Insert into technician_jobs if technician is assigned
+      if (technicianId) {
+        try {
+          const { error: jobError } = await supabase
+            .from('technician_jobs')
+            .insert({
+              org_id: orgId,
+              technician_id: technicianId,
+              customer_id: contract.customer_id,
+              contract_id: contract.id,
+              title: contract.contract_name,
+              notes: notes || null,
+              assigned_date: serviceDate,
+              due_date: null,
+              status: 'completed',
+              source: 'service_alert',
+              completed_at: new Date().toISOString(),
+            })
+
+          if (jobError) {
+            console.error('Error inserting technician job:', jobError)
+            toast.warning('Service marked complete but job history record failed')
+          }
+        } catch (jobInsertError) {
+          console.error('Error creating technician job record:', jobInsertError)
+          toast.warning('Service marked complete but could not create technician job record')
+        }
+      }
+
       const serviceDateObj = new Date(serviceDate)
       const nextServiceDate = new Date(serviceDateObj)
       nextServiceDate.setDate(nextServiceDate.getDate() + contract.frequency_days)

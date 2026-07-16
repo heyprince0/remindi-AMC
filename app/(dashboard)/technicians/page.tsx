@@ -16,9 +16,10 @@ import { supabase, type Technician, type ServiceHistory } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2, Eye } from "lucide-react"
 import { toast } from "sonner"
 import { AddTechnicianModal } from "@/components/add-technician-modal"
+import Link from "next/link"
 
 function parseSpecializations(raw: unknown): string[] {
   let current: unknown = raw
@@ -303,6 +304,12 @@ export default function TechniciansPage() {
                         <span>{tech.jobCount} assigned job{tech.jobCount !== 1 ? 's' : ''}</span>
                       </div>
                     </div>
+                    <Link href={`/technicians/${tech.id}`}>
+                      <Button variant="ghost" size="sm" className="gap-2">
+                        <Eye className="size-4" />
+                        View
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
