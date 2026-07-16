@@ -108,15 +108,16 @@ export default function TechniciansPage() {
 
       if (techniciansError) throw techniciansError
 
-      // Fetch all technician_jobs (all statuses) for this org
+      // Fetch only COMPLETED technician_jobs for this org
       const { data: jobsData, error: jobsError } = await supabase
         .from('technician_jobs')
         .select('technician_id')
         .eq('org_id', currentOrgId)
+        .eq('status', 'completed')
 
       if (jobsError) throw jobsError
 
-      // Count jobs per technician
+      // Count completed jobs per technician
       const jobCounts: Record<string, number> = {}
       ;(jobsData as TechnicianJob[]).forEach(job => {
         if (job.technician_id) {
