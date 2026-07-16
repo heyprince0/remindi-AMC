@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { supabase, type Technician, type ServiceHistory } from "@/lib/supabase"
+import { supabase, type Technician, type TechnicianJob } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
@@ -110,13 +110,13 @@ export default function TechniciansPage() {
 
       if (techniciansError) throw techniciansError
 
-      const { data: historyData } = await supabase
-        .from('service_history')
+      const { data: jobsData } = await supabase
+        .from('technician_jobs')
         .select('technician_id')
         .eq('org_id', currentOrgId)
 
       const techniciansWithJobs = (techniciansData as Technician[]).map(tech => {
-        const jobCount = (historyData as ServiceHistory[])?.filter(h => h.technician_id === tech.id).length || 0
+        const jobCount = (jobsData as TechnicianJob[])?.filter(j => j.technician_id === tech.id).length || 0
         return {
           ...tech,
           jobCount
