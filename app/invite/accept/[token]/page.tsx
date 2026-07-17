@@ -1,26 +1,25 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 
 export default function AcceptInvitePage() {
   const params = useParams()
   const router = useRouter()
   const token = params.token as string
-
   const [loading, setLoading] = useState(true)
   const [accepting, setAccepting] = useState(false)
   const [invite, setInvite] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [resetting, setResetting] = useState(false)
   const [isExistingUser, setIsExistingUser] = useState<boolean | null>(null)
 
@@ -29,7 +28,6 @@ export default function AcceptInvitePage() {
       try {
         const res = await fetch(`/api/invites/token/${token}`)
         const data = await res.json()
-
         if (!res.ok) {
           if (res.status === 410) {
             const status = data.status
@@ -51,13 +49,9 @@ export default function AcceptInvitePage() {
           setLoading(false)
           return
         }
-
         setInvite(data)
         setEmail(data.email)
 
-        // Check if the email already has an account — isolated so that if
-        // this endpoint fails/doesn't exist, the invite still loads normally
-        // (falls back to sign-up mode).
         try {
           const checkRes = await fetch(`/api/invites/check-email?email=${encodeURIComponent(data.email)}`)
           if (checkRes.ok) {
@@ -71,7 +65,6 @@ export default function AcceptInvitePage() {
           console.error("check-email request failed:", checkErr)
           setIsExistingUser(false)
         }
-
         setLoading(false)
       } catch (err) {
         setError("Failed to load invitation")
@@ -87,12 +80,9 @@ export default function AcceptInvitePage() {
       toast.error("Please fill in all fields")
       return
     }
-
     setAccepting(true)
     try {
       let authResponse
-
-      // If existing user, sign in; otherwise sign up
       if (isExistingUser) {
         authResponse = await supabase.auth.signInWithPassword({ email, password })
       } else {
@@ -126,7 +116,10 @@ export default function AcceptInvitePage() {
       // 1. Mark invite as accepted
       const { error: updateError } = await supabase
         .from("invites")
-        .update({ status: "accepted", accepted_at: new Date().toISOString() })
+        .update({
+          status: "accepted",
+          accepted_at: new Date().toISOString(),
+        })
         .eq("token", token)
 
       if (updateError) {
@@ -136,8 +129,7 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 2. Create membership — includes email so the Team page can always
-      //    resolve a name/identity, even if display_name ends up missing.
+      // 2. Create membership
       const { error: membershipError } = await supabase
         .from("memberships")
         .insert({
@@ -156,11 +148,31 @@ export default function AcceptInvitePage() {
         return
       }
 
+      // 🔧 3. Link technician if this invite has a technician_id
+      if (invite.technician_id) {
+        const { error: linkError } = await supabase
+          .from("technicians")
+          .update({ linked_user_id: user.id })
+          .eq("id", invite.technician_id)
+          .is("linked_user_id", null) // only link if not already linked
+
+        if (linkError) {
+          console.error("Failed to link technician:", linkError)
+          // Not critical, we can still continue
+        } else {
+          console.log(`✅ Technician ${invite.technician_id} linked to user ${user.id}`)
+        }
+      }
+
       toast.success("You've joined the team!")
 
-      // Redirect based on role
-      if (invite.role === 'technician') {
-        router.push('/contracts')
+      // 🔧 4. Redirect based on role
+      if (invite.role === 'technician' && invite.technician_id) {
+        // Redirect to the technician's profile page
+        router.push(`/technicians/${invite.technician_id}`)
+      } else if (invite.role === 'technician') {
+        // Fallback if no technician_id (shouldn't happen)
+        router.push('/technicians')
       } else {
         router.push('/')
       }
@@ -196,22 +208,22 @@ export default function AcceptInvitePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
             <CardTitle>Invitation Error</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/")}>Go Home</Button>
+            <Button onClick={() => router.push('/')}>Go Home</Button>
           </CardContent>
         </Card>
       </div>
@@ -220,78 +232,65 @@ export default function AcceptInvitePage() {
 
   if (!invite) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
             <CardTitle>Invitation Not Found</CardTitle>
             <CardDescription>This invitation could not be found. It may have been removed.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/")}>Go Home</Button>
+            <Button onClick={() => router.push('/')}>Go Home</Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Determine which form to show based on isExistingUser
   const showSignIn = isExistingUser === true
   const showSignUp = isExistingUser === false
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/20">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle>You're Invited!</CardTitle>
           <CardDescription>
-            You've been invited to join <strong>{invite.businessName}</strong> as a{" "}
-            <strong>{invite.role}</strong>.
+            You've been invited to join {invite.businessName} as a {invite.role}.
             <br />
-            {invite.inviterName} has invited you.
+            <span className="text-sm text-muted-foreground">{invite.inviterName} has invited you.</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAccept} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                disabled
-                className="bg-muted"
-              />
+              <Input id="email" type="email" value={email} disabled className="bg-gray-100" />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">
-                {showSignIn ? "Password" : "Create Password"}
-              </Label>
+              <Label htmlFor="password">{showSignIn ? "Password" : "Create Password"}</Label>
               <Input
                 id="password"
                 type="password"
+                placeholder={showSignIn ? "Enter your password" : "Create a password (min 6 characters)"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={showSignIn ? "Enter your password" : "Create a password (min 6 characters)"}
                 required
               />
             </div>
 
-            {/* Show forgot password only for existing users */}
             {showSignIn && (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  disabled={resetting}
-                  className="text-sm text-blue-600 hover:underline disabled:opacity-50"
-                >
-                  {resetting ? "Sending..." : "Forgot password?"}
-                </button>
-              </div>
+              <Button
+                type="button"
+                variant="link"
+                className="px-0"
+                onClick={handleForgotPassword}
+                disabled={resetting}
+              >
+                {resetting ? "Sending..." : "Forgot password?"}
+              </Button>
             )}
 
-            {/* Show a message for new users */}
             {showSignUp && (
               <p className="text-sm text-muted-foreground">
                 Create a password to set up your account and join the team.
@@ -301,7 +300,7 @@ export default function AcceptInvitePage() {
             <Button type="submit" className="w-full" disabled={accepting}>
               {accepting ? (
                 <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Accepting...
                 </>
               ) : (
