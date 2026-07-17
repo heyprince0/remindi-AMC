@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"   // <-- add this
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -53,7 +54,8 @@ interface TechnicianWithJobs extends Technician {
 }
 
 export default function TechniciansPage() {
-  const { user } = useAuth()
+  const router = useRouter()   // <-- added
+  const { user, role, technicianId, loading: authLoading } = useAuth()   // <-- added role, technicianId, authLoading
   const [technicians, setTechnicians] = useState<TechnicianWithJobs[]>([])
   const [filteredTechnicians, setFilteredTechnicians] = useState<TechnicianWithJobs[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +73,13 @@ export default function TechniciansPage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
+  // --- Redirect technician to own profile ---
+  useEffect(() => {
+    if (!authLoading && role === 'technician' && technicianId) {
+      router.push(`/technicians/${technicianId}`)
+    }
+  }, [authLoading, role, technicianId, router])
 
   useEffect(() => {
     if (user?.id) {
