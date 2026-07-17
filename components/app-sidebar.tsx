@@ -30,7 +30,6 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { supabase, signOut } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -68,12 +67,10 @@ export function AppSidebar() {
   const [companySubtitle, setCompanySubtitle] = useState("")
   const [fullName, setFullName] = useState("")
 
-  // --- My Work linking state (technician role only) ---
   const [linkedTechnicianId, setLinkedTechnicianId] = useState<string | null>(null)
   const [linkedTechnicianName, setLinkedTechnicianName] = useState<string | null>(null)
   const [checkingLink, setCheckingLink] = useState(false)
 
-  // Load company profile for display
   useEffect(() => {
     const loadProfile = async () => {
       if (!user?.id) return
@@ -92,7 +89,6 @@ export function AppSidebar() {
     loadProfile()
   }, [user?.id])
 
-  // Look up whether this technician-role login is already linked to a technician record
   useEffect(() => {
     const checkLink = async () => {
       if (!user?.id || role !== 'technician') return
@@ -115,12 +111,11 @@ export function AppSidebar() {
     if (linkedTechnicianId) {
       router.push(`/technicians/${linkedTechnicianId}`)
     } else {
-      // No link: go to the technicians list page so they can find their own record
+      // No link: go to the technicians list page
       router.push('/technicians')
     }
   }
 
-  // Combine nav items based on role
   let navItems
   if (role === 'admin') {
     navItems = [...memberNavItems, ...adminOnlyNavItems]
@@ -163,7 +158,6 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* My Work — technician role only */}
               {role === 'technician' && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -215,7 +209,6 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Logout button – for members and technicians */}
         {(role === 'member' || role === 'technician') && (
           <div className="group-data-[collapsible=icon]:hidden">
             <button
