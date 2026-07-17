@@ -55,7 +55,7 @@ interface TechnicianWithJobs extends Technician {
 
 export default function TechniciansPage() {
   const router = useRouter()
-  const { user, role, loading: authLoading } = useAuth()   // removed technicianId
+  const { user, role, loading: authLoading } = useAuth()
   const [technicians, setTechnicians] = useState<TechnicianWithJobs[]>([])
   const [filteredTechnicians, setFilteredTechnicians] = useState<TechnicianWithJobs[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,6 +63,7 @@ export default function TechniciansPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [isChecking, setIsChecking] = useState(true) // <-- new loading state for redirect
 
   const { maxTechnicians, currentTechnicianCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
@@ -70,9 +71,10 @@ export default function TechniciansPage() {
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
-  // --- Direct redirect based on linked_user_id ---
+  // --- Redirect technician to own profile with loading ---
   useEffect(() => {
     if (!authLoading && user?.id && role === 'technician') {
+      setIsChecking(true) // show loading
       const checkLink = async () => {
         const { data, error } = await supabase
           .from('technicians')
@@ -82,10 +84,14 @@ export default function TechniciansPage() {
 
         if (!error && data?.id) {
           router.push(`/technicians/${data.id}`)
+          // component unmounts, no need to set isChecking false
+        } else {
+          setIsChecking(false) // no link, hide loading
         }
-        // If no link, stay on the list (page will render normally)
       }
       checkLink()
+    } else {
+      setIsChecking(false) // not a technician, hide loading
     }
   }, [authLoading, user?.id, role, router])
 
@@ -229,6 +235,20 @@ export default function TechniciansPage() {
 
   const handleUpgrade = () => {
     window.location.href = '/billing'
+  }
+
+  // Show loading screen while checking for link
+  if (isChecking) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-muted-foreground">Loading your profile...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
