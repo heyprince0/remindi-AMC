@@ -17,6 +17,7 @@ import {
   UsersRound,
   LogOut,
   CreditCard,
+  UserCircle,
 } from "lucide-react"
 import {
   Sidebar,
@@ -29,6 +30,14 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { supabase, type Profile, signOut } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -51,12 +60,18 @@ const adminOnlyNavItems = [
   { title: "Billing", icon: CreditCard, href: "/billing" },
 ]
 
-// Technician-specific navigation
+// Technician-specific navigation (My Work is handled separately below
+// since its destination depends on which technician record is linked)
 const technicianNavItems = [
   { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
 ]
+
+interface UnclaimedTechnician {
+  id: string
+  name: string
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -66,6 +81,14 @@ export function AppSidebar() {
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
   const [fullName, setFullName] = useState("")
+
+  // --- My Work linking state (technician role only) ---
+  const [linkedTechnicianId, setLinkedTechnicianId] = useState<string | null>(null)
+  const [checkingLink, setCheckingLink] = useState(false)
+  const [selectModalOpen, setSelectModalOpen] = useState(false)
+  const [unclaimed, setUnclaimed] = useState<UnclaimedTechnician[]>([])
+  const [loadingUnclaimed, setLoadingUnclaimed] = useState(false)
+  const [claiming, setClaiming] = useState<string | null>(null)
 
   // Load company profile for display
   useEffect(() => {
@@ -85,6 +108,88 @@ export function AppSidebar() {
     }
     loadProfile()
   }, [user?.id])
+
+  // Look up whether this technician-role login is already linked to a technician record
+  useEffect(() => {
+    const checkLink = async () => {
+      if (!user?.id || role !== 'technician') return
+      setCheckingLink(true)
+      const { data, error } = await supabase
+        .from('technicians')
+        .select('id')
+        .eq('linked_user_id', user.id)
+        .maybeSingle()
+      if (!error && data?.id) {
+        setLinkedTechnicianId(data.id)
+      }
+      setCheckingLink(false)
+    }
+    checkLink()
+  }, [user?.id, role])
+
+  const openSelectModal = async () => {
+    if (!user?.id) return
+    setLoadingUnclaimed(true)
+    setSelectModalOpen(true)
+    try {
+      const { data: membership } = await supabase
+        .from('memberships')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (!membership?.org_id) {
+        toast.error('Could not determine your organization')
+        setLoadingUnclaimed(false)
+        return
+      }
+
+      const { data: techs, error } = await supabase
+        .from('technicians')
+        .select('id, name')
+        .eq('org_id', membership.org_id)
+        .is('linked_user_id', null)
+
+      if (error) throw error
+      setUnclaimed((techs as UnclaimedTechnician[]) || [])
+    } catch (error) {
+      console.error('Failed to load technician list:', error)
+      toast.error('Failed to load technician list')
+    } finally {
+      setLoadingUnclaimed(false)
+    }
+  }
+
+  const handleClaim = async (techId: string) => {
+    if (!user?.id) return
+    setClaiming(techId)
+    try {
+      const { error } = await supabase
+        .from('technicians')
+        .update({ linked_user_id: user.id })
+        .eq('id', techId)
+        .is('linked_user_id', null)
+
+      if (error) throw error
+
+      setLinkedTechnicianId(techId)
+      setSelectModalOpen(false)
+      router.push(`/technicians/${techId}`)
+    } catch (error) {
+      console.error('Failed to link technician profile:', error)
+      toast.error('Failed to link your profile — it may have just been claimed by someone else')
+    } finally {
+      setClaiming(null)
+    }
+  }
+
+  const handleMyWorkClick = () => {
+    if (linkedTechnicianId) {
+      router.push(`/technicians/${linkedTechnicianId}`)
+    } else {
+      openSelectModal()
+    }
+  }
 
   // Combine nav items based on role
   let navItems
@@ -129,6 +234,21 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* My Work — technician role only, rendered first */}
+              {role === 'technician' && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={!!linkedTechnicianId && pathname === `/technicians/${linkedTechnicianId}`}
+                    tooltip="My Work"
+                    onClick={handleMyWorkClick}
+                    disabled={checkingLink}
+                  >
+                    <UserCircle className="size-4" />
+                    <span>My Work</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
@@ -179,6 +299,39 @@ export function AppSidebar() {
           </div>
         )}
       </SidebarFooter>
+
+      {/* First-time technician selection modal */}
+      <Dialog open={selectModalOpen} onOpenChange={setSelectModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select your name</DialogTitle>
+            <DialogDescription>
+              Choose your name from the technician list to link your account. You'll only need to do this once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+            {loadingUnclaimed ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
+            ) : unclaimed.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No technician profile found for you yet. Ask your admin to add you as a technician first.
+              </p>
+            ) : (
+              unclaimed.map((tech) => (
+                <Button
+                  key={tech.id}
+                  variant="outline"
+                  className="justify-start"
+                  disabled={claiming !== null}
+                  onClick={() => handleClaim(tech.id)}
+                >
+                  {claiming === tech.id ? 'Linking...' : tech.name}
+                </Button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   )
 }
