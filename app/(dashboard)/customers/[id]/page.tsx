@@ -251,6 +251,15 @@ export default function CustomerDetailPage() {
                   <p className="font-medium text-foreground">{customer.address}</p>
                 </div>
               </div>
+              {customer.notes && (
+                <div className="flex items-start gap-3 sm:col-span-2">
+                  <FileText className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Notes</p>
+                    <p className="font-medium text-foreground whitespace-pre-wrap">{customer.notes}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
