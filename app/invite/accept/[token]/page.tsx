@@ -129,26 +129,62 @@ export default function AcceptInvitePage() {
         return
       }
 
-      // 2. Create membership
-      const { error: membershipError } = await supabase
+      // 2. Handle membership – upsert to avoid duplicates and update role
+      const membershipData = {
+        org_id: invite.org_id,
+        user_id: user.id,
+        role: invite.role,
+        display_name: invite.display_name || null,
+        email: invite.email,
+        updated_at: new Date().toISOString(),
+      }
+
+      // Check if membership already exists
+      const { data: existingMembership, error: checkError } = await supabase
         .from("memberships")
-        .insert({
-          org_id: invite.org_id,
-          user_id: user.id,
-          role: invite.role,
-          display_name: invite.display_name,
-          email: invite.email,
-          created_at: new Date().toISOString(),
-        })
+        .select("id, role")
+        .eq("org_id", invite.org_id)
+        .eq("user_id", user.id)
+        .maybeSingle()
+
+      let membershipError = null
+      if (existingMembership) {
+        // Update existing membership (especially role)
+        const { error: updateMembershipError } = await supabase
+          .from("memberships")
+          .update({
+            role: invite.role,
+            display_name: invite.display_name || null,
+            email: invite.email,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingMembership.id)
+
+        membershipError = updateMembershipError
+      } else {
+        // Insert new membership
+        const { error: insertError } = await supabase
+          .from("memberships")
+          .insert({
+            org_id: invite.org_id,
+            user_id: user.id,
+            role: invite.role,
+            display_name: invite.display_name || null,
+            email: invite.email,
+            created_at: new Date().toISOString(),
+          })
+
+        membershipError = insertError
+      }
 
       if (membershipError) {
-        console.error("Failed to create membership:", membershipError)
+        console.error("Failed to create/update membership:", membershipError)
         toast.error("Failed to join organization")
         setAccepting(false)
         return
       }
 
-      // 🔧 3. Link technician if this invite has a technician_id
+      // 3. Link technician if this invite has a technician_id
       if (invite.technician_id) {
         const { error: linkError } = await supabase
           .from("technicians")
@@ -166,12 +202,10 @@ export default function AcceptInvitePage() {
 
       toast.success("You've joined the team!")
 
-      // 🔧 4. Redirect based on role
+      // 4. Redirect based on role
       if (invite.role === 'technician' && invite.technician_id) {
-        // Redirect to the technician's profile page
         router.push(`/technicians/${invite.technician_id}`)
       } else if (invite.role === 'technician') {
-        // Fallback if no technician_id (shouldn't happen)
         router.push('/technicians')
       } else {
         router.push('/')
