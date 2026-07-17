@@ -130,26 +130,16 @@ export default function AcceptInvitePage() {
       }
 
       // 2. Handle membership – upsert to avoid duplicates and update role
-      const membershipData = {
-        org_id: invite.org_id,
-        user_id: user.id,
-        role: invite.role,
-        display_name: invite.display_name || null,
-        email: invite.email,
-        updated_at: new Date().toISOString(),
-      }
-
-      // Check if membership already exists
-      const { data: existingMembership, error: checkError } = await supabase
+      let membershipError = null
+      const { data: existingMembership } = await supabase
         .from("memberships")
         .select("id, role")
         .eq("org_id", invite.org_id)
         .eq("user_id", user.id)
         .maybeSingle()
 
-      let membershipError = null
       if (existingMembership) {
-        // Update existing membership (especially role)
+        // Update existing membership (update role if needed)
         const { error: updateMembershipError } = await supabase
           .from("memberships")
           .update({
@@ -185,25 +175,34 @@ export default function AcceptInvitePage() {
       }
 
       // 3. Link technician if this invite has a technician_id
+      let technicianLinked = false
       if (invite.technician_id) {
         const { error: linkError } = await supabase
           .from("technicians")
           .update({ linked_user_id: user.id })
           .eq("id", invite.technician_id)
-          .is("linked_user_id", null) // only link if not already linked
+          .is("linked_user_id", null)
 
         if (linkError) {
           console.error("Failed to link technician:", linkError)
-          // Not critical, we can still continue
         } else {
+          technicianLinked = true
           console.log(`✅ Technician ${invite.technician_id} linked to user ${user.id}`)
         }
       }
 
+      // 4. Refresh session to update auth context with new role
+      const { error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError) {
+        console.warn("Failed to refresh session:", refreshError)
+        // Not critical; user can refresh manually
+      }
+
       toast.success("You've joined the team!")
 
-      // 4. Redirect based on role
+      // 5. Redirect based on role and technician linking
       if (invite.role === 'technician' && invite.technician_id) {
+        // Redirect to technician profile
         router.push(`/technicians/${invite.technician_id}`)
       } else if (invite.role === 'technician') {
         router.push('/technicians')
