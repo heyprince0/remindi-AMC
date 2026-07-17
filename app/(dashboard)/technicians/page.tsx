@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"   // <-- add this
+import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -54,32 +54,40 @@ interface TechnicianWithJobs extends Technician {
 }
 
 export default function TechniciansPage() {
-  const router = useRouter()   // <-- added
-  const { user, role, technicianId, loading: authLoading } = useAuth()   // <-- added role, technicianId, authLoading
+  const router = useRouter()
+  const { user, role, loading: authLoading } = useAuth()   // removed technicianId
   const [technicians, setTechnicians] = useState<TechnicianWithJobs[]>([])
   const [filteredTechnicians, setFilteredTechnicians] = useState<TechnicianWithJobs[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null)
-
-  // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
   const { maxTechnicians, currentTechnicianCount, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
-  // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
-  // --- Redirect technician to own profile ---
+  // --- Direct redirect based on linked_user_id ---
   useEffect(() => {
-    if (!authLoading && role === 'technician' && technicianId) {
-      router.push(`/technicians/${technicianId}`)
+    if (!authLoading && user?.id && role === 'technician') {
+      const checkLink = async () => {
+        const { data, error } = await supabase
+          .from('technicians')
+          .select('id')
+          .eq('linked_user_id', user.id)
+          .maybeSingle()
+
+        if (!error && data?.id) {
+          router.push(`/technicians/${data.id}`)
+        }
+        // If no link, stay on the list (page will render normally)
+      }
+      checkLink()
     }
-  }, [authLoading, role, technicianId, router])
+  }, [authLoading, user?.id, role, router])
 
   useEffect(() => {
     if (user?.id) {
@@ -109,7 +117,6 @@ export default function TechniciansPage() {
     try {
       if (!currentOrgId) return
 
-      // Fetch all technicians
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
@@ -117,7 +124,6 @@ export default function TechniciansPage() {
 
       if (techniciansError) throw techniciansError
 
-      // Fetch completed technician_jobs (all sources)
       const { data: completedJobs, error: jobsError } = await supabase
         .from('technician_jobs')
         .select('technician_id')
@@ -126,7 +132,6 @@ export default function TechniciansPage() {
 
       if (jobsError) throw jobsError
 
-      // Fetch service_history records
       const { data: serviceHistory, error: historyError } = await supabase
         .from('service_history')
         .select('technician_id')
@@ -134,15 +139,12 @@ export default function TechniciansPage() {
 
       if (historyError) throw historyError
 
-      // Count completed jobs per technician
       const jobCounts: Record<string, number> = {}
       ;(completedJobs as TechnicianJob[]).forEach(job => {
         if (job.technician_id) {
           jobCounts[job.technician_id] = (jobCounts[job.technician_id] || 0) + 1
         }
       })
-
-      // Count service_history per technician
       ;(serviceHistory as ServiceHistory[]).forEach(record => {
         if (record.technician_id) {
           jobCounts[record.technician_id] = (jobCounts[record.technician_id] || 0) + 1
