@@ -49,6 +49,25 @@ export default function AcceptInvitePage() {
           setLoading(false)
           return
         }
+        
+        // If technician_id is missing from the API response, fetch it directly from Supabase
+        if (!data.technician_id) {
+          console.warn('technician_id missing from token endpoint, fetching directly from Supabase...')
+          const { data: fullInvite, error: directError } = await supabase
+            .from('invites')
+            .select('technician_id, org_id, role, email, display_name')
+            .eq('token', token)
+            .single()
+          
+          if (!directError && fullInvite) {
+            data.technician_id = fullInvite.technician_id
+            data.org_id = fullInvite.org_id
+            data.role = fullInvite.role
+            data.email = fullInvite.email
+            data.display_name = fullInvite.display_name
+          }
+        }
+        
         setInvite(data)
         setEmail(data.email)
 
@@ -130,7 +149,6 @@ export default function AcceptInvitePage() {
       }
 
       // 2. Handle membership – upsert to avoid duplicates and update role
-      let membershipError = null
       const { data: existingMembership } = await supabase
         .from("memberships")
         .select("id, role")
@@ -150,7 +168,12 @@ export default function AcceptInvitePage() {
           })
           .eq("id", existingMembership.id)
 
-        membershipError = updateMembershipError
+        if (updateMembershipError) {
+          console.error("Failed to update membership:", updateMembershipError)
+          toast.error("Failed to update membership")
+          setAccepting(false)
+          return
+        }
       } else {
         // Insert new membership
         const { error: insertError } = await supabase
@@ -164,19 +187,17 @@ export default function AcceptInvitePage() {
             created_at: new Date().toISOString(),
           })
 
-        membershipError = insertError
-      }
-
-      if (membershipError) {
-        console.error("Failed to create/update membership:", membershipError)
-        toast.error("Failed to join organization")
-        setAccepting(false)
-        return
+        if (insertError) {
+          console.error("Failed to create membership:", insertError)
+          toast.error("Failed to join organization")
+          setAccepting(false)
+          return
+        }
       }
 
       // 3. Link technician if this invite has a technician_id
-      let technicianLinked = false
       if (invite.technician_id) {
+        console.log(`Linking technician ${invite.technician_id} to user ${user.id}`)
         const { error: linkError } = await supabase
           .from("technicians")
           .update({ linked_user_id: user.id })
@@ -185,16 +206,19 @@ export default function AcceptInvitePage() {
 
         if (linkError) {
           console.error("Failed to link technician:", linkError)
+          // Still continue, but log it
         } else {
-          technicianLinked = true
-          console.log(`✅ Technician ${invite.technician_id} linked to user ${user.id}`)
+          console.log(`✅ Technician ${invite.technician_id} linked successfully`)
         }
+      } else {
+        console.warn("No technician_id on this invite, skipping linking")
       }
 
       // 4. Refresh session to update auth context with new role
-      const { error: refreshError } = await supabase.auth.refreshSession()
-      if (refreshError) {
-        console.warn("Failed to refresh session:", refreshError)
+      try {
+        await supabase.auth.refreshSession()
+      } catch (refreshErr) {
+        console.warn("Failed to refresh session:", refreshErr)
         // Not critical; user can refresh manually
       }
 
@@ -202,7 +226,6 @@ export default function AcceptInvitePage() {
 
       // 5. Redirect based on role and technician linking
       if (invite.role === 'technician' && invite.technician_id) {
-        // Redirect to technician profile
         router.push(`/technicians/${invite.technician_id}`)
       } else if (invite.role === 'technician') {
         router.push('/technicians')
