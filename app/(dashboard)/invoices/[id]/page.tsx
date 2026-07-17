@@ -624,7 +624,12 @@ export default function ViewInvoicePage() {
           doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
           y += 4
         }
-        doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+
+        // Show GST note only if GST is included in this invoice
+        if (invoice.include_gst) {
+          doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+          y += 4
+        }
         y += 6
 
         // ===== NOTES =====
