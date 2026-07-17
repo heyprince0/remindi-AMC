@@ -3,9 +3,6 @@ import { createClient } from "@supabase/supabase-js"
 
 export async function POST(request: NextRequest) {
   try {
-    // Same auth pattern as the create route — read the Bearer token from the
-    // Authorization header since this app stores sessions in localStorage,
-    // not cookies, so server-side cookie-based clients can't read the session.
     const authHeader = request.headers.get("authorization")
     const accessToken = authHeader?.replace("Bearer ", "")
 
@@ -107,14 +104,27 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existingMembership) {
+      // 🔹 Even if membership exists, still link technician if needed
+      if (invite.technician_id) {
+        const { error: linkError } = await supabase
+          .from("technicians")
+          .update({ linked_user_id: user.id })
+          .eq("id", invite.technician_id)
+          .is("linked_user_id", null)  // avoid overwriting if already linked
+
+        if (linkError) {
+          console.error("[invites/accept] Error linking technician:", linkError)
+          // Not critical, we can still return success
+        }
+      }
+
       return NextResponse.json(
         { success: true, message: "You are already a member of this organization" },
         { status: 200 }
       )
     }
 
-    // Create membership — using created_at, not joined_at,
-    // which is the actual column name on the memberships table
+    // Create membership
     const { error: membershipError } = await supabase
       .from("memberships")
       .insert([
@@ -122,7 +132,6 @@ export async function POST(request: NextRequest) {
           org_id: invite.org_id,
           user_id: user.id,
           role: invite.role,
-          // created_at is auto-set by Supabase default, no need to pass it
         },
       ])
 
@@ -132,6 +141,20 @@ export async function POST(request: NextRequest) {
         { message: "Failed to create membership" },
         { status: 500 }
       )
+    }
+
+    // 🔹 Link technician if this invite had a technician_id
+    if (invite.technician_id) {
+      const { error: linkError } = await supabase
+        .from("technicians")
+        .update({ linked_user_id: user.id })
+        .eq("id", invite.technician_id)
+        .is("linked_user_id", null)  // ensure not already linked
+
+      if (linkError) {
+        console.error("[invites/accept] Error linking technician:", linkError)
+        // Not critical; we can still return success, but log it.
+      }
     }
 
     return NextResponse.json(
