@@ -81,7 +81,7 @@ export default function DashboardPage() {
   // --- Loading state for redirect check ---
   const [isRedirecting, setIsRedirecting] = useState(true)
 
-  // Fetch org_id
+  // Fetch org_id – but do NOT redirect to /profile-setup
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -96,12 +96,20 @@ export default function DashboardPage() {
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
           } else {
-            toast.error("You are not part of any organization. Please complete your profile.")
-            router.push("/profile-setup")
+            // ✅ No org: show message, don't redirect
+            toast.info("You are not part of any organization yet. Please complete your profile setup or contact your admin.", {
+              duration: 5000,
+            })
+            // Keep currentOrgId as null
+            // We'll show a placeholder in the UI
           }
         })
+        .finally(() => {
+          // Allow dashboard to render even without org
+          setIsRedirecting(false)
+        })
     }
-  }, [user?.id, router])
+  }, [user?.id])
 
   // Fetch subscription and plan
   useEffect(() => {
@@ -151,7 +159,11 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      if (!user?.id || !currentOrgId) return
+      if (!user?.id || !currentOrgId) {
+        // If no org, we still mark loading as done and set dataReady
+        setDataReady(true)
+        return
+      }
 
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
@@ -239,6 +251,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user?.id && currentOrgId) {
       loadData()
+    } else if (user?.id && !currentOrgId) {
+      // No org: mark as ready so the UI shows
+      setDataReady(true)
+      setLoading(false)
     }
   }, [user?.id, currentOrgId])
 
@@ -357,7 +373,8 @@ export default function DashboardPage() {
       }
       // The component will unmount, so we don't need to set isRedirecting false
     } else {
-      // Not a technician: show the dashboard
+      // Not a technician: show the dashboard (after org check, setIsRedirecting is handled in the org fetch)
+      // We already set isRedirecting false in the org fetch, but ensure it's false here as well.
       setIsRedirecting(false)
     }
   }, [authLoading, user, role, technicianId, router])
@@ -379,6 +396,25 @@ export default function DashboardPage() {
   }
 
   if (!user) return null
+
+  // If no org, show a placeholder message
+  if (!currentOrgId) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="max-w-md text-center">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to Remindi!</h2>
+            <p className="text-muted-foreground mb-6">
+              You are not yet part of any organization. Please complete your profile setup or contact your administrator to get started.
+            </p>
+            <Button onClick={() => router.push('/profile-setup')}>
+              Complete Profile Setup
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
