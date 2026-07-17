@@ -20,17 +20,10 @@ export default function SignupPage() {
   const router = useRouter()
   const { user, loading: authLoading, recovery } = useAuth()
 
+  // Only handle recovery – no redirect to profile-setup
   useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        // If it's a recovery session, redirect to reset password
-        if (recovery) {
-          router.replace('/reset-password')
-          return
-        }
-        // Normal user without membership → profile setup
-        router.replace('/profile-setup')
-      }
+    if (!authLoading && user && recovery) {
+      router.replace('/reset-password')
     }
   }, [user, authLoading, recovery, router])
 
@@ -57,7 +50,11 @@ export default function SignupPage() {
       await signUp(email, password)
       await signIn(email, password)
       toast.success('Account created! Welcome to Remindi.')
-      router.replace('/profile-setup')
+      // ✅ Instead of auto-redirect, stay on signup page with a message
+      toast.info('Please complete your profile setup to access the dashboard.', { duration: 5000 })
+      // Clear password for security
+      setPassword('')
+      // Optionally, show a link to /profile-setup
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Signup failed'
       if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('already been registered')) {
@@ -79,6 +76,7 @@ export default function SignupPage() {
     setLoading(true)
     try {
       await signInWithGoogle()
+      // Google sign-in redirects, so no need to handle further
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Google signup failed')
       setLoading(false)
