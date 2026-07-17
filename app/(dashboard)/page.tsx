@@ -78,6 +78,9 @@ export default function DashboardPage() {
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
+  // --- Loading state for redirect check ---
+  const [isRedirecting, setIsRedirecting] = useState(true)
+
   // Fetch org_id
   useEffect(() => {
     if (user?.id) {
@@ -341,20 +344,21 @@ export default function DashboardPage() {
     loadData()
   }
 
-  // --- Technician redirect logic (no modal) ---
+  // --- Technician redirect logic with loading ---
   useEffect(() => {
     if (authLoading || !user || !role) return
 
-    // If technician and already linked to a technician record, go to their profile
-    if (role === 'technician' && technicianId) {
-      router.push(`/technicians/${technicianId}`)
-      return
-    }
-
-    // If technician but not linked, go to the technicians list page
-    if (role === 'technician' && !technicianId) {
-      router.push('/technicians')
-      return
+    if (role === 'technician') {
+      // Technician: redirect immediately
+      if (technicianId) {
+        router.push(`/technicians/${technicianId}`)
+      } else {
+        router.push('/technicians')
+      }
+      // The component will unmount, so we don't need to set isRedirecting false
+    } else {
+      // Not a technician: show the dashboard
+      setIsRedirecting(false)
     }
   }, [authLoading, user, role, technicianId, router])
 
@@ -365,7 +369,8 @@ export default function DashboardPage() {
     }
   }, [user, authLoading])
 
-  if (authLoading) {
+  // Show loading spinner while checking role or redirecting
+  if (authLoading || isRedirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
@@ -374,18 +379,6 @@ export default function DashboardPage() {
   }
 
   if (!user) return null
-
-  // For technicians, we redirect, so they won't see the dashboard.
-  // But if they somehow land here (e.g., direct URL), show a loading state.
-  if (role === 'technician') {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center py-12">
-          <p className="text-muted-foreground">Redirecting to your profile...</p>
-        </div>
-      </DashboardLayout>
-    )
-  }
 
   return (
     <DashboardLayout>
