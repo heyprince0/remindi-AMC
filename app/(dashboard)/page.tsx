@@ -7,7 +7,7 @@ import { StatCard } from "@/components/stat-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { supabase, type Contract, type Customer, type Technician, getDaysUntilService, getAuthUser } from "@/lib/supabase"
+import { supabase, type Contract, type Customer, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import {
   FileText,
@@ -23,7 +23,6 @@ import {
 import { AddContractModal } from "@/components/add-contract-modal"
 import { subscribeToNotifications } from "@/lib/push-notifications"
 import { toast } from "sonner"
-// --- New imports for limit modal ---
 import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
 import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
@@ -65,12 +64,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
-  const [showSelectTechnicianModal, setShowSelectTechnicianModal] = useState(false)
 
-  // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // --- Billing & limit states ---
   const [subscription, setSubscription] = useState<any>(null)
   const [plan, setPlan] = useState<any>(null)
   const [contractCount, setContractCount] = useState(0)
@@ -78,14 +74,11 @@ export default function DashboardPage() {
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
   const [limitValue, setLimitValue] = useState(0)
 
-  // --- Plan modal state ---
   const [showPlanModal, setShowPlanModal] = useState(false)
-
-  // --- Data ready flag for auto-show ---
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
-  // --- Fetch org_id ---
+  // Fetch org_id
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -107,7 +100,7 @@ export default function DashboardPage() {
     }
   }, [user?.id, router])
 
-  // --- Fetch subscription and plan ---
+  // Fetch subscription and plan
   useEffect(() => {
     const fetchSubscription = async () => {
       if (!currentOrgId) return
@@ -124,14 +117,12 @@ export default function DashboardPage() {
           setSubscription(subData)
           setPlan(subData.plan)
         } else {
-          // No subscription → fetch free plan for limits
           const { data: freePlan } = await supabase
             .from('subscription_plans')
             .select('*')
             .eq('id', 'free')
             .single()
           setPlan(freePlan)
-          // subscription stays null
         }
       } catch (error) {
         console.error('Error fetching subscription:', error)
@@ -140,7 +131,6 @@ export default function DashboardPage() {
     fetchSubscription()
   }, [currentOrgId])
 
-  // --- Fetch contract count ---
   const fetchContractCount = async () => {
     if (!currentOrgId) return
     try {
@@ -156,26 +146,22 @@ export default function DashboardPage() {
     }
   }
 
-  // --- Load dashboard data and contract count, then mark ready ---
   const loadData = async () => {
     try {
       if (!user?.id || !currentOrgId) return
 
-      // Fetch contracts
       const { data: contractsData, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
         .eq('org_id', currentOrgId)
       if (contractsError) throw contractsError
 
-      // Fetch customers
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
         .eq('org_id', currentOrgId)
       if (customersError) throw customersError
 
-      // Fetch technicians
       const { data: techniciansData, error: techniciansError } = await supabase
         .from('technicians')
         .select('*')
@@ -238,11 +224,8 @@ export default function DashboardPage() {
       })
 
       setUpcomingServices(services.slice(0, 4))
-
-      // Also fetch contract count for limit check
       await fetchContractCount()
-
-      setDataReady(true) // all data loaded
+      setDataReady(true)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
     } finally {
@@ -250,14 +233,12 @@ export default function DashboardPage() {
     }
   }
 
-  // Load data when org_id is available
   useEffect(() => {
     if (user?.id && currentOrgId) {
       loadData()
     }
   }, [user?.id, currentOrgId])
 
-  // --- Centralized check & show modal (same as ContractsPage) ---
   const checkAndShowLimitModal = (showOnLoad = false) => {
     if (showOnLoad && autoShown) return
 
@@ -273,7 +254,6 @@ export default function DashboardPage() {
         }
       }
     }
-    // subscription null → treat as active (not expired)
 
     if (isExpired) {
       setLimitModalType('expired')
@@ -294,14 +274,13 @@ export default function DashboardPage() {
     return false
   }
 
-  // --- Auto-show on load when data is ready ---
   useEffect(() => {
     if (dataReady && !autoShown) {
       checkAndShowLimitModal(true)
     }
   }, [dataReady, autoShown, subscription, plan, contractCount])
 
-  // --- Real-time subscriptions (unchanged) ---
+  // Real-time subscriptions
   useEffect(() => {
     if (!user?.id || !currentOrgId) return
 
@@ -327,7 +306,6 @@ export default function DashboardPage() {
     }
   }, [user?.id, currentOrgId])
 
-  // --- Handlers ---
   const handleEnableNotifications = async () => {
     if (!user?.id) {
       toast.error('User not found')
@@ -360,24 +338,25 @@ export default function DashboardPage() {
   }
 
   const handleModalSuccess = () => {
-    loadData() // refresh dashboard data after contract add/edit
+    loadData()
   }
 
-  // Technician redirect and modal logic
+  // --- Technician redirect logic (no modal) ---
   useEffect(() => {
     if (authLoading || !user || !role) return
 
-    // If technician with linked technician_id, redirect to their profile
+    // If technician and already linked to a technician record, go to their profile
     if (role === 'technician' && technicianId) {
       router.push(`/technicians/${technicianId}`)
       return
     }
 
-    // If technician without linked technician_id, show modal
-    if (role === 'technician' && !technicianId && orgId) {
-      setShowSelectTechnicianModal(true)
+    // If technician but not linked, go to the technicians list page
+    if (role === 'technician' && !technicianId) {
+      router.push('/technicians')
+      return
     }
-  }, [authLoading, user, role, technicianId, orgId, router])
+  }, [authLoading, user, role, technicianId, router])
 
   // Auth redirect
   useEffect(() => {
@@ -396,25 +375,14 @@ export default function DashboardPage() {
 
   if (!user) return null
 
-  // Show modal for technicians without linked profile
-  if (role === 'technician' && !technicianId) {
+  // For technicians, we redirect, so they won't see the dashboard.
+  // But if they somehow land here (e.g., direct URL), show a loading state.
+  if (role === 'technician') {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <p className="text-muted-foreground">Loading your profile...</p>
-          </div>
+          <p className="text-muted-foreground">Redirecting to your profile...</p>
         </div>
-        {orgId && (
-          <SelectTechnicianModal
-            open={showSelectTechnicianModal}
-            onSuccess={(id) => {
-              router.push(`/technicians/${id}`)
-            }}
-            orgId={orgId}
-            userId={user.id}
-          />
-        )}
       </DashboardLayout>
     )
   }
@@ -532,7 +500,6 @@ export default function DashboardPage() {
           />
         )}
 
-        {/* Limit Reached Modal */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
@@ -541,7 +508,6 @@ export default function DashboardPage() {
           limitValue={limitValue}
         />
 
-        {/* Plan Selection Modal */}
         <PlanSelectionModal
           isOpen={showPlanModal}
           onClose={() => setShowPlanModal(false)}
