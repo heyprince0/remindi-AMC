@@ -314,8 +314,9 @@ export function AppSidebar() {
             {loadingUnclaimed ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
             ) : unclaimed.length === 0 ? (
+              // ✅ Changed message – removed long instruction
               <p className="text-sm text-muted-foreground py-4 text-center">
-                No technician profile found for you yet. Ask your admin to add you as a technician first.
+                No technicians available to claim.
               </p>
             ) : (
               unclaimed.map((tech) => (
