@@ -18,7 +18,7 @@ export default function LoginPage() {
   const router = useRouter()
   const { user, loading: authLoading, recovery } = useAuth()
 
-  // Immediate hash detection
+  // Immediate hash detection for password reset
   useEffect(() => {
     if (typeof window === 'undefined') return
     const hash = window.location.hash
@@ -26,28 +26,6 @@ export default function LoginPage() {
       router.replace('/reset-password')
     }
   }, [router])
-
-  // Secondary redirect based on recovery flag
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) return
-
-    if (recovery) {
-      router.replace('/reset-password')
-      return
-    }
-
-    // Double-check hash
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash
-      if (hash && hash.includes('access_token')) {
-        router.replace('/reset-password')
-        return
-      }
-    }
-
-    window.location.href = '/'
-  }, [user, authLoading, recovery, router])
 
   // Listen for hash changes
   useEffect(() => {
@@ -63,6 +41,10 @@ export default function LoginPage() {
     window.addEventListener('hashchange', checkHash)
     return () => window.removeEventListener('hashchange', checkHash)
   }, [recovery, router])
+
+  // ⚠️ REMOVED the auto-redirect to '/' or '/profile-setup'
+  // We only handle password reset hash detection. After login, the user stays on this page
+  // until they have a membership or profile, then they can navigate manually or we redirect.
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,6 +67,7 @@ export default function LoginPage() {
       if (data.session) {
         const userId = data.session.user.id
 
+        // Check membership
         const { data: membership } = await supabase
           .from('memberships')
           .select('id')
@@ -97,6 +80,7 @@ export default function LoginPage() {
           return
         }
 
+        // Check profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('company_name')
@@ -105,9 +89,19 @@ export default function LoginPage() {
 
         if (profile?.company_name) {
           window.location.href = '/'
-        } else {
-          router.replace('/profile-setup')
+          return
         }
+
+        // ✅ No membership and no profile → stay on login page with a message
+        toast.info('You need to complete your profile setup before accessing the dashboard.', {
+          duration: 5000,
+        })
+        // Clear password field for security
+        setPassword('')
+        // Keep user logged in but stay here
+        setLoading(false)
+        // Optionally, you can show a button to go to /profile-setup manually
+        // but we'll just keep them on this page.
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
@@ -146,7 +140,9 @@ export default function LoginPage() {
     )
   }
 
-  if (user) return null
+  // If user is logged in but no membership/profile, we still show the login page
+  // but they can see the toast message. We could also show a special message.
+  // We'll let the login form render for all users (except when loading).
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
