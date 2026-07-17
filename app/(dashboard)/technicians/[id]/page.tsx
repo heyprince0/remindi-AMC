@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,9 +16,10 @@ import {
 } from '@/components/ui/table'
 import { supabase, type Technician, type TechnicianJob, type Customer, type Contract, type ServiceHistory } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2, CalendarIcon, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
+import { Input } from '@/components/ui/input'
 
 interface JobWithCustomer extends TechnicianJob {
   customerName: string | null
@@ -51,6 +52,8 @@ export default function TechnicianDetailPage() {
   const [isOwnProfile, setIsOwnProfile] = useState(false)
   const [statusEditMode, setStatusEditMode] = useState(false)
   const [statusValue, setStatusValue] = useState('')
+  // Date filter for Job History
+  const [historyDateFilter, setHistoryDateFilter] = useState<string>('')
 
   useEffect(() => {
     if (user?.id) {
@@ -315,6 +318,16 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  // Filter job history by date
+  const filteredHistory = useMemo(() => {
+    if (!historyDateFilter) return jobHistory
+    return jobHistory.filter(item => item.completedDate === historyDateFilter)
+  }, [jobHistory, historyDateFilter])
+
+  const clearDateFilter = () => {
+    setHistoryDateFilter('')
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -335,20 +348,25 @@ export default function TechnicianDetailPage() {
     )
   }
 
+  // Determine if we should show the back button – hide it for technicians viewing their own profile
+  const showBackButton = !(role === 'technician' && isOwnProfile)
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Header with back button */}
+        {/* Header with back button – conditionally hidden for technicians */}
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/technicians')}
-            className="size-9"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="sr-only">Back to technicians</span>
-          </Button>
+          {showBackButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/technicians')}
+              className="size-9"
+            >
+              <ArrowLeft className="size-4" />
+              <span className="sr-only">Back to technicians</span>
+            </Button>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-foreground">{technician.name}</h1>
             <p className="text-muted-foreground">Technician Details</p>
@@ -500,14 +518,17 @@ export default function TechnicianDetailPage() {
                               <CheckCircle2 className="size-4" />
                               Complete
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2 text-red-600 hover:text-red-600"
-                              onClick={() => handleDeleteJob(job.id)}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
+                            {/* Delete button – only for non‑technicians */}
+                            {role !== 'technician' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2 text-red-600 hover:text-red-600"
+                                onClick={() => handleDeleteJob(job.id)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -519,7 +540,7 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Job History Section */}
+        {/* Job History Section with Date Filter */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -527,13 +548,40 @@ export default function TechnicianDetailPage() {
               Job History
             </CardTitle>
             <CardDescription>
-              {jobHistory.length} completed job{jobHistory.length !== 1 ? 's' : ''}
+              {filteredHistory.length} completed job{filteredHistory.length !== 1 ? 's' : ''}
+              {historyDateFilter && ` on ${historyDateFilter}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {jobHistory.length === 0 ? (
+            {/* Filter controls */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative">
+                <CalendarIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={historyDateFilter}
+                  onChange={(e) => setHistoryDateFilter(e.target.value)}
+                  className="pl-8 w-[200px]"
+                />
+              </div>
+              {historyDateFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearDateFilter}
+                  className="gap-1"
+                >
+                  <X className="size-3" />
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            {filteredHistory.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No completed jobs yet for this technician
+                {historyDateFilter
+                  ? 'No completed jobs on this date'
+                  : 'No completed jobs yet for this technician'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -548,7 +596,7 @@ export default function TechnicianDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {jobHistory.map((job) => (
+                    {filteredHistory.map((job) => (
                       <TableRow key={job.id}>
                         <TableCell>{job.completedDate || '—'}</TableCell>
                         <TableCell className="font-medium">{job.title}</TableCell>
