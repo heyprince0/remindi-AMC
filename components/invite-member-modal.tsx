@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,61 @@ export function InviteMemberModal({
   const [displayName, setDisplayName] = useState("")
   const [role, setRole] = useState<"admin" | "member" | "technician">("member")
   const [loading, setLoading] = useState(false)
+  const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>("")
+  const [loadingTechnicians, setLoadingTechnicians] = useState(false)
+
+  // Fetch unlinked technicians when role becomes 'technician'
+  useEffect(() => {
+    const fetchTechnicians = async () => {
+      if (role !== "technician") {
+        setTechnicians([])
+        setSelectedTechnicianId("")
+        return
+      }
+
+      setLoadingTechnicians(true)
+      try {
+        // Get current org_id from session (user must be logged in)
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) {
+          toast.error("You must be logged in to perform this action")
+          setLoadingTechnicians(false)
+          return
+        }
+
+        // Get org_id from memberships
+        const { data: membership, error: membershipError } = await supabase
+          .from("memberships")
+          .select("org_id")
+          .eq("user_id", session.user.id)
+          .maybeSingle()
+
+        if (membershipError || !membership?.org_id) {
+          toast.error("Could not determine your organization")
+          setLoadingTechnicians(false)
+          return
+        }
+
+        const { data, error } = await supabase
+          .from("technicians")
+          .select("id, name")
+          .eq("org_id", membership.org_id)
+          .is("linked_user_id", null)   // only unlinked technicians
+          .order("name", { ascending: true })
+
+        if (error) throw error
+        setTechnicians(data || [])
+      } catch (error) {
+        console.error("Failed to fetch technicians:", error)
+        toast.error("Could not load technician list")
+      } finally {
+        setLoadingTechnicians(false)
+      }
+    }
+
+    fetchTechnicians()
+  }, [role])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,6 +108,12 @@ export function InviteMemberModal({
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       toast.error("Please enter a valid email address")
+      return
+    }
+
+    // If role is technician, ensure a technician is selected
+    if (role === "technician" && !selectedTechnicianId) {
+      toast.error("Please select a technician profile for this user")
       return
     }
 
@@ -77,6 +138,7 @@ export function InviteMemberModal({
           email,
           role,
           displayName: displayName.trim(),
+          technicianId: role === "technician" ? selectedTechnicianId : undefined,
         }),
       })
 
@@ -102,6 +164,7 @@ export function InviteMemberModal({
       setEmail("")
       setDisplayName("")
       setRole("member")
+      setSelectedTechnicianId("")
       onOpenChange(false)
       onSuccess()
     } catch (error) {
@@ -163,6 +226,40 @@ export function InviteMemberModal({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Technician selection - only shown when role is technician */}
+          {role === "technician" && (
+            <div className="space-y-2">
+              <Label htmlFor="technician">Select Technician Profile</Label>
+              <Select
+                value={selectedTechnicianId}
+                onValueChange={setSelectedTechnicianId}
+                disabled={loading || loadingTechnicians}
+              >
+                <SelectTrigger id="technician">
+                  <SelectValue placeholder={
+                    loadingTechnicians
+                      ? "Loading technicians..."
+                      : technicians.length === 0
+                      ? "No unlinked technicians available"
+                      : "Select a technician"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {technicians.map((tech) => (
+                    <SelectItem key={tech.id} value={tech.id}>
+                      {tech.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {technicians.length === 0 && !loadingTechnicians && (
+                <p className="text-xs text-muted-foreground">
+                  No unlinked technicians available. Create a technician first.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button
