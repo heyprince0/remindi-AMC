@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Contract, type Customer, type Technician, getDaysUntilService, getAuthUser } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
+import { SelectTechnicianModal } from "@/components/select-technician-modal"
 import {
   FileText,
   Users,
@@ -51,7 +52,7 @@ function getStatusBadge(status: string) {
 }
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, role, orgId, technicianId } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState({ 
     contracts: 0, 
@@ -65,6 +66,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [notificationLoading, setNotificationLoading] = useState(false)
+  const [showSelectTechnicianModal, setShowSelectTechnicianModal] = useState(false)
 
   // --- Org state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
@@ -362,6 +364,22 @@ export default function DashboardPage() {
     loadData() // refresh dashboard data after contract add/edit
   }
 
+  // Technician redirect and modal logic
+  useEffect(() => {
+    if (authLoading || !user || !role) return
+
+    // If technician with linked technician_id, redirect to their profile
+    if (role === 'technician' && technicianId) {
+      router.push(`/technicians/${technicianId}`)
+      return
+    }
+
+    // If technician without linked technician_id, show modal
+    if (role === 'technician' && !technicianId && orgId) {
+      setShowSelectTechnicianModal(true)
+    }
+  }, [authLoading, user, role, technicianId, orgId, router])
+
   // Auth redirect
   useEffect(() => {
     if (!authLoading && !user) {
@@ -378,6 +396,29 @@ export default function DashboardPage() {
   }
 
   if (!user) return null
+
+  // Show modal for technicians without linked profile
+  if (role === 'technician' && !technicianId) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading your profile...</p>
+          </div>
+        </div>
+        {orgId && (
+          <SelectTechnicianModal
+            open={showSelectTechnicianModal}
+            onSuccess={(id) => {
+              router.push(`/technicians/${id}`)
+            }}
+            orgId={orgId}
+            userId={user.id}
+          />
+        )}
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

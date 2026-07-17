@@ -13,6 +13,7 @@ interface AuthContextType {
   orgId: string | null
   orgName: string | null
   recovery: boolean
+  technicianId: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState<string | null>(null)
   const [recovery, setRecovery] = useState(false)
+  const [technicianId, setTechnicianId] = useState<string | null>(null)
 
   useEffect(() => {
     const getInitialSession = async () => {
@@ -70,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchMembership = async () => {
       if (!user) {
-        setRole(null); setOrgId(null); setOrgName(null)
+        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null)
         return
       }
       const { data, error } = await supabase
@@ -89,16 +91,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle()
           if (!orgError && orgData?.name) setOrgName(orgData.name)
           else setOrgName(null)
+
+          // For technician role, fetch linked technician_id
+          if (data.role === 'technician') {
+            const { data: techData } = await supabase
+              .from('technicians')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('org_id', data.org_id)
+              .maybeSingle()
+            setTechnicianId(techData?.id || null)
+          } else {
+            setTechnicianId(null)
+          }
         } else setOrgName(null)
       } else {
-        setRole(null); setOrgId(null); setOrgName(null)
+        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null)
       }
     }
     fetchMembership()
   }, [user])
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, error, role, orgId, orgName, recovery }}>
+    <AuthContext.Provider value={{ user, session, loading, error, role, orgId, orgName, recovery, technicianId }}>
       {children}
     </AuthContext.Provider>
   )
