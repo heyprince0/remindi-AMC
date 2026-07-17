@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
-    const { email, role, displayName } = await request.json()
+    // 🔹 Accept technicianId in the request
+    const { email, role, displayName, technicianId } = await request.json()
 
     if (!email || !role || !displayName?.trim()) {
       return NextResponse.json(
@@ -47,10 +48,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ✅ FIX: Add 'technician' to allowed roles
     if (!["admin", "member", "technician"].includes(role)) {
       return NextResponse.json(
         { message: "Invalid role" },
+        { status: 400 }
+      )
+    }
+
+    // 🔹 If role is technician, technicianId is required
+    if (role === "technician" && !technicianId) {
+      return NextResponse.json(
+        { message: "Technician ID is required for technician role" },
         { status: 400 }
       )
     }
@@ -78,6 +86,24 @@ export async function POST(request: NextRequest) {
 
     const orgId = membership.org_id
 
+    // 🔹 If technicianId is provided, verify it belongs to this org and is unlinked
+    if (technicianId) {
+      const { data: tech, error: techError } = await supabase
+        .from("technicians")
+        .select("id")
+        .eq("id", technicianId)
+        .eq("org_id", orgId)
+        .is("linked_user_id", null)
+        .maybeSingle()
+
+      if (techError || !tech) {
+        return NextResponse.json(
+          { message: "Selected technician does not exist or is already linked" },
+          { status: 400 }
+        )
+      }
+    }
+
     // 2. Check for a valid pending invite (not expired)
     const now = new Date().toISOString()
     const { data: pendingInvite, error: pendingError } = await supabase
@@ -89,14 +115,12 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (pendingInvite) {
-      // If the invite is still valid (not expired), block
       if (new Date(pendingInvite.expires_at) > new Date()) {
         return NextResponse.json(
           { message: "This person already has a pending invitation" },
           { status: 409 }
         )
       } else {
-        // If the pending invite is expired, delete it so we can create a new one
         await supabase
           .from("invites")
           .delete()
@@ -105,7 +129,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Check if the email belongs to an existing user who is currently a member
-    // Use service role to list users by email
     const adminSupabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -115,12 +138,10 @@ export async function POST(request: NextRequest) {
 
     if (usersError) {
       console.error("Failed to list users:", usersError)
-      // Proceed with invite creation anyway (fallback)
     }
 
     const existingUser = users?.find((u) => u.email === email)
     if (existingUser) {
-      // Check if this user already has a membership in this org
       const { data: existingMembership, error: memCheckError } = await supabase
         .from("memberships")
         .select("id")
@@ -136,33 +157,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Delete any stale accepted/revoked invites for this email/org to keep clean
+    // 4. Delete any stale accepted/revoked invites
     await supabase
       .from("invites")
       .delete()
       .eq("org_id", orgId)
       .eq("email", email)
-      .neq("status", "pending") // delete any accepted or revoked invites
+      .neq("status", "pending")
 
-    // 5. Create the new invite
+    // 5. Create the new invite with technician_id if provided
     const token = crypto.randomBytes(32).toString("hex")
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
+    const inviteData: any = {
+      org_id: orgId,
+      email,
+      role,
+      token,
+      status: "pending",
+      invited_by: user.id,
+      expires_at: expiresAt.toISOString(),
+      display_name: displayName.trim(),
+    }
+
+    // 🔹 Store technician_id if provided
+    if (technicianId) {
+      inviteData.technician_id = technicianId
+    }
+
     const { data: invite, error: insertError } = await supabase
       .from("invites")
-      .insert([
-        {
-          org_id: orgId,
-          email,
-          role,
-          token,
-          status: "pending",
-          invited_by: user.id,
-          expires_at: expiresAt.toISOString(),
-          display_name: displayName.trim(),
-        },
-      ])
+      .insert([inviteData])
       .select()
       .single()
 
