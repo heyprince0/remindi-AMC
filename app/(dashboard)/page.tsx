@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { supabase, type Contract, type Customer, type Technician, getDaysUntilService, getAuthUser } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { SelectTechnicianModal } from "@/components/select-technician-modal"
 import {
   FileText,
   Users,
