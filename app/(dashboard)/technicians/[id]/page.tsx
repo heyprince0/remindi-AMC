@@ -39,7 +39,7 @@ interface HistoryDisplayItem {
 export default function TechnicianDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const technicianId = params.id as string
 
   const [technician, setTechnician] = useState<Technician | null>(null)
@@ -48,6 +48,9 @@ export default function TechnicianDetailPage() {
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [isOwnProfile, setIsOwnProfile] = useState(false)
+  const [statusEditMode, setStatusEditMode] = useState(false)
+  const [statusValue, setStatusValue] = useState('')
 
   useEffect(() => {
     if (user?.id) {
@@ -69,9 +72,31 @@ export default function TechnicianDetailPage() {
 
   useEffect(() => {
     if (currentOrgId && technicianId) {
-      loadTechnicianDetails()
+      // For technicians, redirect if trying to access another technician's profile
+      if (role === 'technician' && user?.id) {
+        supabase
+          .from('technicians')
+          .select('user_id')
+          .eq('id', technicianId)
+          .eq('org_id', currentOrgId)
+          .single()
+          .then(({ data, error }) => {
+            if (error || !data) {
+              router.push('/technicians')
+              return
+            }
+            if (data.user_id && data.user_id !== user.id) {
+              router.push(`/technicians/${data.user_id === user.id ? technicianId : ''}`)
+              return
+            }
+            setIsOwnProfile(data.user_id === user.id)
+            loadTechnicianDetails()
+          })
+      } else {
+        loadTechnicianDetails()
+      }
     }
-  }, [currentOrgId, technicianId])
+  }, [currentOrgId, technicianId, role, user?.id, router])
 
   const loadTechnicianDetails = async () => {
     try {
@@ -93,6 +118,7 @@ export default function TechnicianDetailPage() {
       }
 
       setTechnician(technicianData as Technician)
+      setStatusValue(technicianData.status)
 
       // Fetch assigned jobs (pending)
       const { data: assignedJobsData, error: assignedJobsError } = await supabase
@@ -253,6 +279,27 @@ export default function TechnicianDetailPage() {
     loadTechnicianDetails()
   }
 
+  const handleStatusSave = async () => {
+    try {
+      if (!currentOrgId || !technician) return
+
+      const { error } = await supabase
+        .from('technicians')
+        .update({ status: statusValue })
+        .eq('id', technicianId)
+        .eq('org_id', currentOrgId)
+
+      if (error) throw error
+      toast.success('Status updated successfully')
+      setStatusEditMode(false)
+      setTechnician({ ...technician, status: statusValue })
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toast.error('Failed to update status')
+      setStatusValue(technician?.status || '')
+    }
+  }
+
   const getSourceBadgeLabel = (source: HistoryDisplayItem['source']) => {
     switch (source) {
       case 'service_alert':
@@ -336,9 +383,49 @@ export default function TechnicianDetailPage() {
                 <div className="size-4 flex items-center justify-center">
                   <div className="size-2 rounded-full bg-green-500" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-xs text-muted-foreground">Status</p>
-                  <p className="font-medium text-foreground capitalize">{technician.status.replace('-', ' ')}</p>
+                  {role === 'technician' && isOwnProfile ? (
+                    statusEditMode ? (
+                      <div className="flex gap-2 items-center mt-1">
+                        <select
+                          value={statusValue}
+                          onChange={(e) => setStatusValue(e.target.value)}
+                          className="px-2 py-1 border border-input rounded text-sm"
+                        >
+                          <option value="available">Available</option>
+                          <option value="busy">Busy</option>
+                          <option value="on-leave">On Leave</option>
+                        </select>
+                        <Button size="sm" onClick={handleStatusSave} className="gap-1">
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setStatusEditMode(false)
+                            setStatusValue(technician.status)
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-center">
+                        <p className="font-medium text-foreground capitalize">{technician.status.replace('-', ' ')}</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStatusEditMode(true)}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    )
+                  ) : (
+                    <p className="font-medium text-foreground capitalize">{technician.status.replace('-', ' ')}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -357,10 +444,12 @@ export default function TechnicianDetailPage() {
                 {assignedJobs.length} job{assignedJobs.length !== 1 ? 's' : ''} assigned to this technician
               </CardDescription>
             </div>
-            <Button onClick={() => setModalOpen(true)} size="sm" className="gap-2">
-              <Plus className="size-4" />
-              Add Job
-            </Button>
+            {role !== 'technician' && (
+              <Button onClick={() => setModalOpen(true)} size="sm" className="gap-2">
+                <Plus className="size-4" />
+                Add Job
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {assignedJobs.length === 0 ? (
