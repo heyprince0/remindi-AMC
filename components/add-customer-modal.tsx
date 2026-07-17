@@ -33,7 +33,8 @@ export function AddCustomerModal({
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    address: ''
+    address: '',
+    notes: ''
   })
 
   useEffect(() => {
@@ -41,13 +42,15 @@ export function AddCustomerModal({
       setFormData({
         name: editingCustomer.name || '',
         phone: editingCustomer.phone || '',
-        address: editingCustomer.address || ''
+        address: editingCustomer.address || '',
+        notes: editingCustomer.notes || ''
       })
     } else {
       setFormData({
         name: '',
         phone: '',
-        address: ''
+        address: '',
+        notes: ''
       })
     }
     setErrors({})
@@ -72,6 +75,7 @@ export function AddCustomerModal({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
+        notes: formData.notes.trim() || null,
         org_id: orgId   // <-- include org_id
       }
 
@@ -144,6 +148,16 @@ export function AddCustomerModal({
               rows={3}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Textarea
+              id="notes"
+              placeholder="Any additional notes about this customer"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+            />
           </div>
           <div className="flex gap-2 justify-end pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
