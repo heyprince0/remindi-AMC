@@ -70,13 +70,14 @@ export default function TechnicianDetailPage() {
     }
   }, [user?.id])
 
+  // ✅ FIX: Use linked_user_id instead of user_id for ownership
   useEffect(() => {
     if (currentOrgId && technicianId) {
       // For technicians, redirect if trying to access another technician's profile
       if (role === 'technician' && user?.id) {
         supabase
           .from('technicians')
-          .select('user_id')
+          .select('linked_user_id')
           .eq('id', technicianId)
           .eq('org_id', currentOrgId)
           .single()
@@ -85,14 +86,17 @@ export default function TechnicianDetailPage() {
               router.push('/technicians')
               return
             }
-            if (data.user_id && data.user_id !== user.id) {
-              router.push(`/technicians/${data.user_id === user.id ? technicianId : ''}`)
+            // If the technician is linked to a different user, redirect to list
+            if (data.linked_user_id && data.linked_user_id !== user.id) {
+              router.push('/technicians')
               return
             }
-            setIsOwnProfile(data.user_id === user.id)
+            // Allow access if linked_user_id is null or matches current user
+            setIsOwnProfile(data.linked_user_id === user.id)
             loadTechnicianDetails()
           })
       } else {
+        // For non-technicians (admin, member), load details directly
         loadTechnicianDetails()
       }
     }
