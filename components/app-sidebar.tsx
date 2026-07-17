@@ -60,8 +60,6 @@ const adminOnlyNavItems = [
   { title: "Billing", icon: CreditCard, href: "/billing" },
 ]
 
-// Technician-specific navigation (My Work is handled separately below
-// since its destination depends on which technician record is linked)
 const technicianNavItems = [
   { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
@@ -84,6 +82,7 @@ export function AppSidebar() {
 
   // --- My Work linking state (technician role only) ---
   const [linkedTechnicianId, setLinkedTechnicianId] = useState<string | null>(null)
+  const [linkedTechnicianName, setLinkedTechnicianName] = useState<string | null>(null)
   const [checkingLink, setCheckingLink] = useState(false)
   const [selectModalOpen, setSelectModalOpen] = useState(false)
   const [unclaimed, setUnclaimed] = useState<UnclaimedTechnician[]>([])
@@ -116,11 +115,12 @@ export function AppSidebar() {
       setCheckingLink(true)
       const { data, error } = await supabase
         .from('technicians')
-        .select('id')
+        .select('id, name')
         .eq('linked_user_id', user.id)
         .maybeSingle()
       if (!error && data?.id) {
         setLinkedTechnicianId(data.id)
+        setLinkedTechnicianName(data.name)
       }
       setCheckingLink(false)
     }
@@ -160,7 +160,7 @@ export function AppSidebar() {
     }
   }
 
-  const handleClaim = async (techId: string) => {
+  const handleClaim = async (techId: string, techName: string) => {
     if (!user?.id) return
     setClaiming(techId)
     try {
@@ -173,6 +173,7 @@ export function AppSidebar() {
       if (error) throw error
 
       setLinkedTechnicianId(techId)
+      setLinkedTechnicianName(techName)
       setSelectModalOpen(false)
       router.push(`/technicians/${techId}`)
     } catch (error) {
@@ -244,7 +245,7 @@ export function AppSidebar() {
                     disabled={checkingLink}
                   >
                     <UserCircle className="size-4" />
-                    <span>My Work</span>
+                    <span>{linkedTechnicianName || 'My Work'}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
@@ -323,7 +324,7 @@ export function AppSidebar() {
                   variant="outline"
                   className="justify-start"
                   disabled={claiming !== null}
-                  onClick={() => handleClaim(tech.id)}
+                  onClick={() => handleClaim(tech.id, tech.name)}
                 >
                   {claiming === tech.id ? 'Linking...' : tech.name}
                 </Button>
