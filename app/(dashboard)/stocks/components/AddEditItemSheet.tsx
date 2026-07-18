@@ -74,10 +74,10 @@ export default function AddEditItemSheet({
     category_id: "",
     brand: "",
     unit: "piece",
-    purchase_price: 0,
-    selling_price: 0,
-    current_stock: 0,
-    min_stock_level: 0,
+    purchase_price: "",
+    selling_price: "",
+    current_stock: "",
+    min_stock_level: "",
     max_stock_level: "",
     storage_location: "",
     notes: "",
@@ -91,10 +91,10 @@ export default function AddEditItemSheet({
         category_id: editingItem.category_id || "",
         brand: editingItem.brand || "",
         unit: editingItem.unit,
-        purchase_price: editingItem.purchase_price,
-        selling_price: editingItem.selling_price,
-        current_stock: editingItem.current_stock,
-        min_stock_level: editingItem.min_stock_level,
+        purchase_price: editingItem.purchase_price ? editingItem.purchase_price.toString() : "",
+        selling_price: editingItem.selling_price ? editingItem.selling_price.toString() : "",
+        current_stock: editingItem.current_stock ? editingItem.current_stock.toString() : "",
+        min_stock_level: editingItem.min_stock_level ? editingItem.min_stock_level.toString() : "",
         max_stock_level: editingItem.max_stock_level?.toString() || "",
         storage_location: editingItem.storage_location || "",
         notes: editingItem.notes || "",
@@ -106,10 +106,10 @@ export default function AddEditItemSheet({
         category_id: "",
         brand: "",
         unit: "piece",
-        purchase_price: 0,
-        selling_price: 0,
-        current_stock: 0,
-        min_stock_level: 0,
+        purchase_price: "",
+        selling_price: "",
+        current_stock: "",
+        min_stock_level: "",
         max_stock_level: "",
         storage_location: "",
         notes: "",
@@ -134,10 +134,10 @@ export default function AddEditItemSheet({
         category_id: formData.category_id || null,
         brand: formData.brand.trim() || null,
         unit: formData.unit,
-        purchase_price: parseFloat(String(formData.purchase_price)) || 0,
-        selling_price: parseFloat(String(formData.selling_price)) || 0,
-        current_stock: parseFloat(String(formData.current_stock)) || 0,
-        min_stock_level: parseFloat(String(formData.min_stock_level)) || 0,
+        purchase_price: parseFloat(formData.purchase_price) || 0,
+        selling_price: parseFloat(formData.selling_price) || 0,
+        current_stock: parseFloat(formData.current_stock) || 0,
+        min_stock_level: parseFloat(formData.min_stock_level) || 0,
         max_stock_level: formData.max_stock_level ? parseFloat(formData.max_stock_level) : null,
         storage_location: formData.storage_location.trim() || null,
         notes: formData.notes.trim() || null,
@@ -274,7 +274,7 @@ export default function AddEditItemSheet({
                     placeholder="0"
                     className="rounded-lg"
                     value={formData.purchase_price}
-                    onChange={(e) => setFormData({ ...formData, purchase_price: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
                     min="0"
                     step="0.01"
                   />
@@ -287,7 +287,7 @@ export default function AddEditItemSheet({
                     placeholder="0"
                     className="rounded-lg"
                     value={formData.selling_price}
-                    onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
                     min="0"
                     step="0.01"
                   />
@@ -303,7 +303,7 @@ export default function AddEditItemSheet({
                     placeholder="0"
                     className="rounded-lg"
                     value={formData.current_stock}
-                    onChange={(e) => setFormData({ ...formData, current_stock: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, current_stock: e.target.value })}
                     min="0"
                     step="0.01"
                   />
@@ -316,7 +316,7 @@ export default function AddEditItemSheet({
                     placeholder="0"
                     className="rounded-lg"
                     value={formData.min_stock_level}
-                    onChange={(e) => setFormData({ ...formData, min_stock_level: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
                     min="0"
                     step="0.01"
                   />
