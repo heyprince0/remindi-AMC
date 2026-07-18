@@ -98,10 +98,20 @@ export default function StocksPage() {
 
       if (partsError) throw partsError
 
-      const partsUsedThisMonth = (partsData || []).reduce(
-        (sum, part) => sum + (part.quantity || 0),
-        0
-      )
+      const { data: usedMovementsData, error: usedMovementsError } = await supabase
+        .from("inventory_stock_movements")
+        .select("quantity")
+        .eq("org_id", currentOrgId)
+        .eq("movement_type", "out")
+        .eq("reason", "Used")
+        .gte("created_at", monthStart)
+        .lte("created_at", monthEnd)
+
+      if (usedMovementsError) throw usedMovementsError
+
+      const partsUsedThisMonth =
+        (partsData || []).reduce((sum, part) => sum + (part.quantity || 0), 0) +
+        (usedMovementsData || []).reduce((sum, movement) => sum + (movement.quantity || 0), 0)
 
       setMetrics({
         totalItems,
