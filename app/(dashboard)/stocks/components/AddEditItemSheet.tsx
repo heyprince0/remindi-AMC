@@ -174,181 +174,215 @@ export default function AddEditItemSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="max-h-screen overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{editingItem ? "Edit Item" : "Add New Item"}</SheetTitle>
+      <SheetContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-border px-6 py-5">
+          <SheetTitle className="text-xl">{editingItem ? "Edit Item" : "Add New Item"}</SheetTitle>
           <SheetDescription>
             {editingItem ? "Update item details" : "Create a new inventory item"}
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          {/* Name */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Item Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Sediment Filter"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
+        <form
+          id="item-form"
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto px-6 py-6"
+        >
+          <div className="flex flex-col gap-6">
+            {/* Basic Info */}
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+              <h3 className="text-sm font-semibold text-foreground">Basic Info</h3>
 
-          {/* SKU */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="sku">SKU</Label>
-            <Input
-              id="sku"
-              placeholder="e.g., SF-001"
-              value={formData.sku}
-              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-            />
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Item Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., Sediment Filter"
+                  className="rounded-lg"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
 
-          {/* Category */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="category">Category</Label>
-            <Select value={formData.category_id} onValueChange={(val) => setFormData({ ...formData, category_id: val })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="sku">SKU</Label>
+                  <Input
+                    id="sku"
+                    placeholder="e.g., SF-001"
+                    className="rounded-lg"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="brand">Brand</Label>
+                  <Input
+                    id="brand"
+                    placeholder="e.g., Kent"
+                    className="rounded-lg"
+                    value={formData.brand}
+                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  />
+                </div>
+              </div>
 
-          {/* Brand */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="brand">Brand</Label>
-            <Input
-              id="brand"
-              placeholder="e.g., Kent"
-              value={formData.brand}
-              onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select value={formData.category_id} onValueChange={(val) => setFormData({ ...formData, category_id: val })}>
+                    <SelectTrigger className="rounded-lg">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="unit">Unit</Label>
+                  <Select value={formData.unit} onValueChange={(val) => setFormData({ ...formData, unit: val })}>
+                    <SelectTrigger className="rounded-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
 
-          {/* Unit */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="unit">Unit</Label>
-            <Select value={formData.unit} onValueChange={(val) => setFormData({ ...formData, unit: val })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UNITS.map((u) => (
-                  <SelectItem key={u} value={u}>
-                    {u}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Pricing & Stock */}
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+              <h3 className="text-sm font-semibold text-foreground">Pricing &amp; Stock</h3>
 
-          {/* Purchase Price */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="purchase-price">Purchase Price (Rs.)</Label>
-            <Input
-              id="purchase-price"
-              type="number"
-              placeholder="0"
-              value={formData.purchase_price}
-              onChange={(e) => setFormData({ ...formData, purchase_price: parseFloat(e.target.value) || 0 })}
-              min="0"
-              step="0.01"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="purchase-price">Purchase Price (Rs.)</Label>
+                  <Input
+                    id="purchase-price"
+                    type="number"
+                    placeholder="0"
+                    className="rounded-lg"
+                    value={formData.purchase_price}
+                    onChange={(e) => setFormData({ ...formData, purchase_price: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="selling-price">Selling Price (Rs.)</Label>
+                  <Input
+                    id="selling-price"
+                    type="number"
+                    placeholder="0"
+                    className="rounded-lg"
+                    value={formData.selling_price}
+                    onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
 
-          {/* Selling Price */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="selling-price">Selling Price (Rs.)</Label>
-            <Input
-              id="selling-price"
-              type="number"
-              placeholder="0"
-              value={formData.selling_price}
-              onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
-              min="0"
-              step="0.01"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="current-stock">Current Stock</Label>
+                  <Input
+                    id="current-stock"
+                    type="number"
+                    placeholder="0"
+                    className="rounded-lg"
+                    value={formData.current_stock}
+                    onChange={(e) => setFormData({ ...formData, current_stock: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="min-stock">Minimum Stock Level</Label>
+                  <Input
+                    id="min-stock"
+                    type="number"
+                    placeholder="0"
+                    className="rounded-lg"
+                    value={formData.min_stock_level}
+                    onChange={(e) => setFormData({ ...formData, min_stock_level: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
 
-          {/* Current Stock */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="current-stock">Current Stock</Label>
-            <Input
-              id="current-stock"
-              type="number"
-              placeholder="0"
-              value={formData.current_stock}
-              onChange={(e) => setFormData({ ...formData, current_stock: parseFloat(e.target.value) || 0 })}
-              min="0"
-              step="0.01"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="max-stock">Max Stock Level</Label>
+                  <Input
+                    id="max-stock"
+                    type="number"
+                    placeholder="Optional"
+                    className="rounded-lg"
+                    value={formData.max_stock_level}
+                    onChange={(e) => setFormData({ ...formData, max_stock_level: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="location">Storage Location</Label>
+                  <Input
+                    id="location"
+                    placeholder="e.g., Shelf A-1"
+                    className="rounded-lg"
+                    value={formData.storage_location}
+                    onChange={(e) => setFormData({ ...formData, storage_location: e.target.value })}
+                  />
+                </div>
+              </div>
+            </section>
 
-          {/* Min Stock Level */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="min-stock">Minimum Stock Level</Label>
-            <Input
-              id="min-stock"
-              type="number"
-              placeholder="0"
-              value={formData.min_stock_level}
-              onChange={(e) => setFormData({ ...formData, min_stock_level: parseFloat(e.target.value) || 0 })}
-              min="0"
-              step="0.01"
-            />
-          </div>
+            {/* Additional Details */}
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+              <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
 
-          {/* Max Stock Level */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="max-stock">Maximum Stock Level (optional)</Label>
-            <Input
-              id="max-stock"
-              type="number"
-              placeholder="0"
-              value={formData.max_stock_level}
-              onChange={(e) => setFormData({ ...formData, max_stock_level: e.target.value })}
-              min="0"
-              step="0.01"
-            />
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Additional notes about this item..."
+                  className="rounded-lg"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </section>
           </div>
+        </form>
 
-          {/* Storage Location */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="location">Storage Location</Label>
-            <Input
-              id="location"
-              placeholder="e.g., Shelf A-1"
-              value={formData.storage_location}
-              onChange={(e) => setFormData({ ...formData, storage_location: e.target.value })}
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Additional notes about this item..."
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-            />
-          </div>
-
-          {/* Submit */}
-          <Button type="submit" disabled={loading} className="mt-4">
+        {/* Sticky footer actions */}
+        <div className="flex items-center justify-end gap-3 border-t border-border bg-background px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-lg"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="item-form" disabled={loading} className="rounded-lg">
             {loading ? "Saving..." : editingItem ? "Update Item" : "Create Item"}
           </Button>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   )
