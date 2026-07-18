@@ -367,7 +367,12 @@ export default function ContractsPage() {
 
       const displayed = (contractsData as Contract[]).map(contract => {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
-        const endDate = getContractEndDate(contract.start_date, contract.duration_years)
+        // Old-mode contracts have a manually-entered End Year saved directly in
+        // contract.end_date — show it as-is, don't recalculate it from start_date.
+        // New-mode contracts keep the existing auto-calculated behavior, unchanged.
+        const endDate = contract.contract_type === 'old'
+          ? (contract.end_date || null)
+          : getContractEndDate(contract.start_date, contract.duration_years)
         return {
           ...contract,
           customerName: customer?.name || 'Unknown',
