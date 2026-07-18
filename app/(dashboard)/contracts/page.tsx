@@ -115,6 +115,7 @@ export default function ContractsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [filterMonth, setFilterMonth] = useState("all") // new month filter
+  const [filterLocation, setFilterLocation] = useState("all") // new location filter
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -289,12 +290,27 @@ export default function ContractsPage() {
       })
     }
 
+    // Location filter
+    if (filterLocation !== 'all') {
+      filtered = filtered.filter(c => c.location === filterLocation)
+    }
+
     setFilteredContracts(filtered)
   }
 
   useEffect(() => {
     handleFilter()
-  }, [searchTerm, filterStatus, filterMonth, contracts])
+  }, [searchTerm, filterStatus, filterMonth, filterLocation, contracts])
+
+  // Distinct, non-empty locations pulled from existing contracts — the Location
+  // filter dropdown populates itself from whatever locations users have typed in.
+  const availableLocations = Array.from(
+    new Set(
+      contracts
+        .map(c => c.location?.trim())
+        .filter((loc): loc is string => !!loc)
+    )
+  ).sort()
 
   const handleDelete = async () => {
     if (!contractToDelete || !currentOrgId) return
@@ -551,6 +567,22 @@ export default function ContractsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+
+                {/* Location Filter — options populate automatically from whatever
+                    locations users have entered on their contracts */}
+                <Select value={filterLocation} onValueChange={setFilterLocation}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    {availableLocations.map((loc) => (
+                      <SelectItem key={loc} value={loc}>
+                        {loc}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -561,7 +593,7 @@ export default function ContractsPage() {
           <CardHeader>
             <CardTitle>All Contracts</CardTitle>
             <CardDescription>
-              You have {filteredContracts.length} contracts {filterStatus !== 'all' || filterMonth !== 'all' ? 'matching filters' : 'in total'}
+              You have {filteredContracts.length} contracts {filterStatus !== 'all' || filterMonth !== 'all' || filterLocation !== 'all' ? 'matching filters' : 'in total'}
             </CardDescription>
           </CardHeader>
           <CardContent>
