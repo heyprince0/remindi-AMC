@@ -42,7 +42,7 @@ interface StockInOutDialogProps {
   onSuccess: () => void
 }
 
-const OUT_REASONS = ["Returned", "Adjustment", "Damage", "Sample", "Other"]
+const OUT_REASONS = ["Used", "Returned", "Adjustment", "Damage", "Sample", "Other"]
 const IN_REASONS = ["Purchase", "Returned", "Adjustment", "Other"]
 
 export default function StockInOutDialog({
