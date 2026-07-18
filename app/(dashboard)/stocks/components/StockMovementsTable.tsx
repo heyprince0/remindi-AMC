@@ -44,6 +44,11 @@ interface InventoryItem {
   name: string
 }
 
+interface TechnicianOption {
+  id: string
+  name: string
+}
+
 interface StockMovementsTableProps {
   orgId: string
 }
@@ -51,6 +56,7 @@ interface StockMovementsTableProps {
 export default function StockMovementsTable({ orgId }: StockMovementsTableProps) {
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [technicians, setTechnicians] = useState<TechnicianOption[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
@@ -64,7 +70,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
     try {
       setLoading(true)
 
-      const [movementsRes, itemsRes] = await Promise.all([
+      const [movementsRes, itemsRes, techniciansRes] = await Promise.all([
         supabase
           .from("inventory_stock_movements")
           .select("*")
@@ -75,13 +81,19 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
           .from("inventory_items")
           .select("id, name")
           .eq("org_id", orgId),
+        supabase
+          .from("technicians")
+          .select("id, name")
+          .eq("org_id", orgId),
       ])
 
       if (movementsRes.error) throw movementsRes.error
       if (itemsRes.error) throw itemsRes.error
+      if (techniciansRes.error) throw techniciansRes.error
 
       setMovements(movementsRes.data || [])
       setItems(itemsRes.data || [])
+      setTechnicians(techniciansRes.data || [])
     } catch (error) {
       console.error("Error loading stock movements:", error)
       toast.error("Failed to load stock movements")
@@ -92,6 +104,11 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
 
   const getItemName = (itemId: string) => {
     return items.find((i) => i.id === itemId)?.name || "Unknown Item"
+  }
+
+  const getTechnicianName = (technicianId: string | null) => {
+    if (!technicianId) return "-"
+    return technicians.find((t) => t.id === technicianId)?.name || "-"
   }
 
   const filteredMovements = movements.filter((movement) => {
@@ -175,19 +192,20 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
                 <TableHead>Reason</TableHead>
+                <TableHead>Technician</TableHead>
                 <TableHead>Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Loading stock movements...
                   </TableCell>
                 </TableRow>
               ) : filteredMovements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     {searchTerm || filterType !== "all" || filterReason !== "all"
                       ? "No movements found matching filters"
                       : "No stock movements recorded"}
@@ -216,6 +234,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                       {movement.quantity}
                     </TableCell>
                     <TableCell className="text-sm">{movement.reason}</TableCell>
+                    <TableCell className="text-sm">{getTechnicianName(movement.technician_id)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                       {movement.notes || "—"}
                     </TableCell>
