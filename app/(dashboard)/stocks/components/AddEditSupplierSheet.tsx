@@ -124,90 +124,103 @@ export default function AddEditSupplierSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>{editingSupplier ? "Edit Supplier" : "Add New Supplier"}</SheetTitle>
+      <SheetContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-border px-6 py-5">
+          <SheetTitle className="text-xl">
+            {editingSupplier ? "Edit Supplier" : "Add New Supplier"}
+          </SheetTitle>
           <SheetDescription>
             {editingSupplier ? "Update supplier details" : "Create a new supplier"}
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          {/* Name */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Supplier Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., ABC Supplies"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="name">Supplier Name *</Label>
+              <Input
+                id="name"
+                placeholder="e.g., ABC Supplies"
+                className="rounded-lg"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
 
-          {/* Contact Person */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="contact">Contact Person</Label>
-            <Input
-              id="contact"
-              placeholder="e.g., John Doe"
-              value={formData.contact_person}
-              onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="contact">Contact Person</Label>
+              <Input
+                id="contact"
+                placeholder="e.g., John Doe"
+                className="rounded-lg"
+                value={formData.contact_person}
+                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+              />
+            </div>
 
-          {/* Phone */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              placeholder="e.g., +91 98765 43210"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="e.g., +91 98765 43210"
+                className="rounded-lg"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
+            </div>
 
-          {/* Email */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="e.g., supplier@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="e.g., supplier@example.com"
+                className="rounded-lg"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
 
-          {/* GSTIN */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="gstin">GSTIN</Label>
-            <Input
-              id="gstin"
-              placeholder="e.g., 27AABCB1234H1Z0"
-              value={formData.gstin}
-              onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="gstin">GSTIN</Label>
+              <Input
+                id="gstin"
+                placeholder="e.g., 27AABCB1234H1Z0"
+                className="rounded-lg"
+                value={formData.gstin}
+                onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+              />
+            </div>
 
-          {/* Address */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="address">Address</Label>
-            <Textarea
-              id="address"
-              placeholder="Supplier address..."
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              rows={3}
-            />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="address">Address</Label>
+              <Textarea
+                id="address"
+                placeholder="Supplier address..."
+                className="rounded-lg"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                rows={3}
+              />
+            </div>
           </div>
+        </form>
 
-          {/* Submit */}
-          <Button type="submit" disabled={loading} className="mt-4">
+        <div className="flex items-center justify-end gap-3 border-t border-border bg-background px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-lg"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="supplier-form" disabled={loading} className="rounded-lg">
             {loading ? "Saving..." : editingSupplier ? "Update Supplier" : "Create Supplier"}
           </Button>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   )
