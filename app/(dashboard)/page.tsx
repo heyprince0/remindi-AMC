@@ -397,19 +397,18 @@ export default function DashboardPage() {
 
   if (!user) return null
 
-  // If no org, show a placeholder message
+  // If no org, show a simple message – no welcome page, no button
   if (!currentOrgId) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center py-12">
           <div className="max-w-md text-center">
-            <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to Remindi!</h2>
-            <p className="text-muted-foreground mb-6">
-              You are not yet part of any organization. Please complete your profile setup or contact your administrator to get started.
+            <p className="text-muted-foreground">
+              You are not part of any organization yet.
             </p>
-            <Button onClick={() => router.push('/profile-setup')}>
-              Complete Profile Setup
-            </Button>
+            <p className="text-sm text-muted-foreground mt-2">
+              Please complete your profile setup or contact your administrator.
+            </p>
           </div>
         </div>
       </DashboardLayout>
