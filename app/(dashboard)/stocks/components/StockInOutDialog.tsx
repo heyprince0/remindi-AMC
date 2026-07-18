@@ -1,0 +1,246 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
+import { AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+interface InventoryItem {
+  id: string
+  org_id: string
+  name: string
+  current_stock: number
+  unit: string
+}
+
+interface StockInOutDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  item: InventoryItem | null
+  mode: "in" | "out"
+  orgId: string
+  onSuccess: () => void
+}
+
+const OUT_REASONS = ["Returned", "Adjustment", "Damage", "Sample", "Other"]
+const IN_REASONS = ["Purchase", "Returned", "Adjustment", "Other"]
+
+export default function StockInOutDialog({
+  open,
+  onOpenChange,
+  item,
+  mode,
+  orgId,
+  onSuccess,
+}: StockInOutDialogProps) {
+  const [quantity, setQuantity] = useState(0)
+  const [reason, setReason] = useState("")
+  const [notes, setNotes] = useState("")
+  const [supplierId, setSupplierId] = useState("")
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (open) {
+      setQuantity(0)
+      setReason("")
+      setNotes("")
+      setSupplierId("")
+      setError("")
+      loadSuppliers()
+    }
+  }, [open, orgId])
+
+  const loadSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("inventory_suppliers")
+        .select("id, name")
+        .eq("org_id", orgId)
+
+      if (error) throw error
+      setSuppliers(data || [])
+    } catch (error) {
+      console.error("Error loading suppliers:", error)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+
+    if (!item) return
+    if (!quantity || quantity <= 0) {
+      setError("Quantity must be greater than 0")
+      return
+    }
+    if (!reason) {
+      setError("Please select a reason")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const newStock = mode === "in" 
+        ? item.current_stock + quantity 
+        : item.current_stock - quantity
+
+      if (mode === "out" && newStock < 0) {
+        setError(`Cannot reduce stock below 0. Current stock: ${item.current_stock} ${item.unit}`)
+        return
+      }
+
+      // Update item stock
+      const { error: updateError } = await supabase
+        .from("inventory_items")
+        .update({ current_stock: newStock })
+        .eq("id", item.id)
+        .eq("org_id", orgId)
+
+      if (updateError) throw updateError
+
+      // Create stock movement record
+      const { error: movementError } = await supabase
+        .from("inventory_stock_movements")
+        .insert([{
+          org_id: orgId,
+          item_id: item.id,
+          movement_type: mode,
+          quantity: quantity,
+          reason: reason,
+          supplier_id: supplierId || null,
+          notes: notes || null,
+        }])
+
+      if (movementError) throw movementError
+
+      toast.success(`Stock ${mode === "in" ? "added" : "removed"} successfully`)
+      onOpenChange(false)
+      onSuccess()
+    } catch (error) {
+      console.error("Error updating stock:", error)
+      toast.error("Failed to update stock")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const reasons = mode === "out" ? OUT_REASONS : IN_REASONS
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {mode === "in" ? "Stock In" : "Stock Out"}: {item?.name}
+          </DialogTitle>
+          <DialogDescription>
+            Current Stock: {item?.current_stock} {item?.unit}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Quantity */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="quantity">Quantity {item?.unit && `(${item.unit})`} *</Label>
+            <Input
+              id="quantity"
+              type="number"
+              placeholder="0"
+              value={quantity}
+              onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+              min="0"
+              step="0.01"
+              required
+            />
+          </div>
+
+          {/* Reason */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="reason">Reason *</Label>
+            <Select value={reason} onValueChange={setReason}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {reasons.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Supplier (only for Stock In) */}
+          {mode === "in" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="supplier">Supplier (optional)</Label>
+              <Select value={supplierId} onValueChange={setSupplierId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select supplier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="notes">Notes (optional)</Label>
+            <Textarea
+              id="notes"
+              placeholder="Add any notes about this movement..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Processing..." : mode === "in" ? "Add Stock" : "Remove Stock"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}

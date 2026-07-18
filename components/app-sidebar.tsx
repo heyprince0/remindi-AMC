@@ -18,6 +18,7 @@ import {
   LogOut,
   CreditCard,
   UserCircle,
+  Package,
 } from "lucide-react"
 import {
   Sidebar,
@@ -41,6 +42,7 @@ const memberNavItems = [
   { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Customers", icon: Users, href: "/customers" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
+  { title: "Inventory", icon: Package, href: "/stocks" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
