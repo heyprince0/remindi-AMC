@@ -92,32 +92,45 @@ export default function AddEditCategorySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>{editingCategory ? "Edit Category" : "Add New Category"}</SheetTitle>
+      <SheetContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-border px-6 py-5">
+          <SheetTitle className="text-xl">
+            {editingCategory ? "Edit Category" : "Add New Category"}
+          </SheetTitle>
           <SheetDescription>
             {editingCategory ? "Update category name" : "Create a new inventory category"}
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          {/* Name */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Category Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Filters, Pumps, Membranes"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="name">Category Name *</Label>
+              <Input
+                id="name"
+                placeholder="e.g., Filters, Pumps, Membranes"
+                className="rounded-lg"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
           </div>
+        </form>
 
-          {/* Submit */}
-          <Button type="submit" disabled={loading} className="mt-4">
+        <div className="flex items-center justify-end gap-3 border-t border-border bg-background px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-lg"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" form="category-form" disabled={loading} className="rounded-lg">
             {loading ? "Saving..." : editingCategory ? "Update Category" : "Create Category"}
           </Button>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   )
