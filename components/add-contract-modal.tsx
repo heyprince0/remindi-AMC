@@ -84,6 +84,7 @@ export function AddContractModal({
     contractPrice: '',
     startYear: '',
     endYear: '',
+    location: '',
   })
 
   useEffect(() => {
@@ -152,6 +153,7 @@ export function AddContractModal({
           contractPrice: editingContract.contracts_price != null ? editingContract.contracts_price.toString() : '',
           startYear: startYear.toString(),
           endYear: endYear.toString(),
+          location: editingContract.location || '',
         })
       } else {
         setFormData({
@@ -165,6 +167,7 @@ export function AddContractModal({
           contractPrice: editingContract.contracts_price != null ? editingContract.contracts_price.toString() : '',
           startYear: '',
           endYear: '',
+          location: editingContract.location || '',
         })
       }
       setNextServiceDate(editingContract.next_service_date)
@@ -191,6 +194,7 @@ export function AddContractModal({
         contractPrice: '',
         startYear: '',
         endYear: '',
+        location: '',
       })
       setNextServiceDate('')
       setEndDate('')
@@ -304,6 +308,7 @@ export function AddContractModal({
           status: formData.status,
           notes: formData.notes || null,
           contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
+          location: formData.location.trim() || null,
           org_id: orgId,
           contract_type: 'new',
         }
@@ -343,6 +348,7 @@ export function AddContractModal({
           status: formData.status,
           notes: formData.notes || null,
           contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
+          location: formData.location.trim() || null,
           org_id: orgId,
           contract_type: 'old',
         }
@@ -490,6 +496,17 @@ export function AddContractModal({
               className={errors.contractName ? 'border-red-500' : ''}
             />
             {errors.contractName && <p className="text-xs text-red-500">{errors.contractName}</p>}
+          </div>
+
+          {/* Location (Optional) */}
+          <div className="space-y-2">
+            <Label htmlFor="location">Location (Optional)</Label>
+            <Input
+              id="location"
+              placeholder="e.g., Andheri West"
+              value={formData.location}
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            />
           </div>
 
           {/* Customer */}
