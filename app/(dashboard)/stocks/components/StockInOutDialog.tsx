@@ -58,6 +58,8 @@ export default function StockInOutDialog({
   const [notes, setNotes] = useState("")
   const [supplierId, setSupplierId] = useState("")
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([])
+  const [technicianId, setTechnicianId] = useState("")
+  const [technicians, setTechnicians] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -67,8 +69,10 @@ export default function StockInOutDialog({
       setReason("")
       setNotes("")
       setSupplierId("")
+      setTechnicianId("")
       setError("")
       loadSuppliers()
+      loadTechnicians()
     }
   }, [open, orgId])
 
@@ -83,6 +87,20 @@ export default function StockInOutDialog({
       setSuppliers(data || [])
     } catch (error) {
       console.error("Error loading suppliers:", error)
+    }
+  }
+
+  const loadTechnicians = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("technicians")
+        .select("id, name")
+        .eq("org_id", orgId)
+
+      if (error) throw error
+      setTechnicians(data || [])
+    } catch (error) {
+      console.error("Error loading technicians:", error)
     }
   }
 
@@ -130,6 +148,7 @@ export default function StockInOutDialog({
           quantity: quantity,
           reason: reason,
           supplier_id: supplierId || null,
+          technician_id: technicianId || null,
           notes: notes || null,
         }])
 
@@ -212,6 +231,25 @@ export default function StockInOutDialog({
                   {suppliers.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Technician (only for Stock Out) */}
+          {mode === "out" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="technician">Used By Technician (optional)</Label>
+              <Select value={technicianId} onValueChange={setTechnicianId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select technician" />
+                </SelectTrigger>
+                <SelectContent>
+                  {technicians.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
