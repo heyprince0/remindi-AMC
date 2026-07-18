@@ -134,9 +134,13 @@ export function AddContractModal({
       const mode = editingContract.contract_type || 'new'
       setContractMode(mode)
       
-      if (mode === 'old' && editingContract.start_date && editingContract.duration_years) {
-        const startYear = new Date(editingContract.start_date).getFullYear()
-        const endYear = startYear + editingContract.duration_years
+      if (mode === 'old' && editingContract.end_date && editingContract.duration_years != null) {
+        // Derive the exact years the user originally typed: end_date was saved as
+        // `${endYear}-12-31`, so its year IS endYear, and duration_years was saved as
+        // (endYear - startYear), so startYear = endYear - duration_years. This is an
+        // exact round‑trip with no recalculation drift.
+        const endYear = new Date(editingContract.end_date).getFullYear()
+        const startYear = endYear - editingContract.duration_years
         setFormData({
           contractName: editingContract.contract_name,
           customerId: editingContract.customer_id,
@@ -335,6 +339,7 @@ export function AddContractModal({
           start_date: formData.startDate,
           next_service_date: nextServiceDate,
           duration_years: durationYears,
+          end_date: computedEndDate,
           status: formData.status,
           notes: formData.notes || null,
           contracts_price: formData.contractPrice ? parseFloat(formData.contractPrice) : null,
