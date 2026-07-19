@@ -34,6 +34,8 @@ import {
 import { supabase, signOut } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
+import { Download } from "lucide-react"
+import { usePwaInstall } from "@/hooks/use-pwa-install"
 
 const memberNavItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
@@ -64,6 +66,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, role, loading } = useAuth()
+  const { isInstallable, isInstalled, installApp } = usePwaInstall()
 
   const [companyName, setCompanyName] = useState("Remindi")
   const [companySubtitle, setCompanySubtitle] = useState("")
@@ -210,6 +213,18 @@ export function AppSidebar() {
             </span>
           </div>
         </div>
+
+        {isInstallable && !isInstalled && (
+          <div className="group-data-[collapsible=icon]:hidden">
+            <button
+              onClick={installApp}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <Download className="size-4" />
+              <span>Install App</span>
+            </button>
+          </div>
+        )}
 
         {(role === 'member' || role === 'technician') && (
           <div className="group-data-[collapsible=icon]:hidden">
