@@ -100,22 +100,7 @@ export default function InvoicesPage() {
     }
   }, [currentOrgId])
 
-  // Check limits on page load
-  useEffect(() => {
-    if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-    } else if (maxInvoicesMonthly > 0 && currentInvoicesThisMonth >= maxInvoicesMonthly) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your monthly invoice limit",
-        description: `Your current plan allows a maximum of ${maxInvoicesMonthly} invoices per month. You have already created ${currentInvoicesThisMonth} this month. Upgrade to increase your limit.`,
-      })
-      setShowLimitModal(true)
-    }
-  }, [limitsLoading, status, maxInvoicesMonthly, currentInvoicesThisMonth])
+  // ❌ REMOVED: auto-show on page load – modal only from "New Invoice" button
 
   const handleFilter = () => {
     let filtered = invoices
@@ -186,13 +171,13 @@ export default function InvoicesPage() {
     }
   }
 
-  const handleNewInvoiceClick = () => {
-    // Check limits before navigating
+  // ✅ Check limits – only called from New Invoice button
+  const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
       setShowLimitModal(true)
-      return
+      return true
     }
     if (maxInvoicesMonthly > 0 && currentInvoicesThisMonth >= maxInvoicesMonthly) {
       setLimitModalType('resource-limit')
@@ -201,10 +186,15 @@ export default function InvoicesPage() {
         description: `Your current plan allows a maximum of ${maxInvoicesMonthly} invoices per month. You have already created ${currentInvoicesThisMonth} this month. Upgrade to increase your limit.`,
       })
       setShowLimitModal(true)
-      return
+      return true
     }
-    // Otherwise navigate to new invoice page
-    window.location.href = '/invoices/new'
+    return false
+  }
+
+  const handleNewInvoiceClick = () => {
+    if (checkAndShowLimitModal()) return
+    // Open the New Invoice Modal
+    setShowNewInvoiceModal(true)
   }
 
   const handleUpgrade = () => {
@@ -380,7 +370,7 @@ export default function InvoicesPage() {
           />
         )}
 
-        {/* Limit Reached Modal */}
+        {/* Limit Reached Modal – only from button */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
