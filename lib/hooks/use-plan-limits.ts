@@ -8,14 +8,16 @@ interface PlanLimits {
   maxContracts: number;
   maxCustomers: number;
   maxTechnicians: number;
-  maxTeamSeats: number;        // ✅ added
+  maxTeamSeats: number;
   maxQuotationsMonthly: number;
   maxInvoicesMonthly: number;
+  maxInventory: number;          // 👈 new
   currentContractCount: number;
   currentCustomerCount: number;
   currentTechnicianCount: number;
   currentQuotationsThisMonth: number;
   currentInvoicesThisMonth: number;
+  currentInventoryCount: number; // 👈 new
   isLoading: boolean;
   refetch: () => void;
 }
@@ -28,14 +30,16 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
     maxContracts: 0,
     maxCustomers: 0,
     maxTechnicians: 0,
-    maxTeamSeats: 0,           // ✅ added
+    maxTeamSeats: 0,
     maxQuotationsMonthly: 0,
     maxInvoicesMonthly: 0,
+    maxInventory: 0,             // 👈 new
     currentContractCount: 0,
     currentCustomerCount: 0,
     currentTechnicianCount: 0,
     currentQuotationsThisMonth: 0,
     currentInvoicesThisMonth: 0,
+    currentInventoryCount: 0,    // 👈 new
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,13 +60,13 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         max_contracts: 0,
         max_customers: 0,
         max_technicians: 0,
-        max_team_seats: 0,      // ✅ added default
+        max_team_seats: 0,
         max_quotations_monthly: 0,
         max_invoices_monthly: 0,
+        max_inventory: 0,        // 👈 new
         name: 'Free',
       };
       const planId = subData?.plan_id || null;
-      // If subscription exists, use its status; otherwise 'inactive'
       const status = subData?.status || 'inactive';
 
       // 2. Count customers
@@ -85,7 +89,14 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 5. Count quotations this month
+      // 5. Count inventory items
+      const { count: inventoryCount } = await supabase
+        .from('inventory_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId)
+        .eq('is_active', true);
+
+      // 6. Count quotations this month
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -95,7 +106,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         .eq('org_id', orgId)
         .gte('created_at', startOfMonth.toISOString());
 
-      // 6. Count invoices this month
+      // 7. Count invoices this month
       const { count: invoicesThisMonth } = await supabase
         .from('invoices')
         .select('*', { count: 'exact', head: true })
@@ -109,14 +120,16 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         maxContracts: plan.max_contracts || 0,
         maxCustomers: plan.max_customers || 0,
         maxTechnicians: plan.max_technicians || 0,
-        maxTeamSeats: plan.max_team_seats || 0,   // ✅ set from plan
+        maxTeamSeats: plan.max_team_seats || 0,
         maxQuotationsMonthly: plan.max_quotations_monthly || 0,
         maxInvoicesMonthly: plan.max_invoices_monthly || 0,
+        maxInventory: plan.max_inventory || 0,   // 👈 set from plan
         currentContractCount: contractCount || 0,
         currentCustomerCount: customerCount || 0,
         currentTechnicianCount: technicianCount || 0,
         currentQuotationsThisMonth: quotationsThisMonth || 0,
         currentInvoicesThisMonth: invoicesThisMonth || 0,
+        currentInventoryCount: inventoryCount || 0, // 👈 set from DB
       });
     } catch (err) {
       console.error('Error fetching plan limits:', err);
