@@ -1,306 +1,396 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth-context"
-import { Package, AlertTriangle, Minus, TrendingUp, Truck, Plus, Download } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, History, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "sonner"
-import jsPDF from "jspdf"
-import autoTable from "jspdf-autotable"
-import InventorySummaryStrip from "./components/InventorySummaryStrip"
-import ItemsTable from "./components/ItemsTable"
-import StockMovementsTable from "./components/StockMovementsTable"
-import SuppliersTab from "./components/SuppliersTab"
-import CategoriesTab from "./components/CategoriesTab"
-import AddEditItemSheet from "./components/AddEditItemSheet"
-import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
-import LimitReachedModal from "@/components/billing/limit-reached-modal"
+import StockInOutDialog from "./StockInOutDialog"
+import StockHistoryDialog from "./StockHistoryDialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
-interface InventoryMetrics {
-  totalItems: number
-  lowStockCount: number
-  outOfStockCount: number
-  totalInventoryValue: number
-  partsUsedThisMonth: number
+interface InventoryItem {
+  id: string
+  org_id: string
+  name: string
+  sku: string
+  category_id: string | null
+  brand: string | null
+  unit: string
+  purchase_price: number
+  selling_price: number
+  current_stock: number
+  min_stock_level: number
+  storage_location: string | null
+  notes: string | null
+  image_url: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
-export default function StocksPage() {
-  const { user } = useAuth()
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [metrics, setMetrics] = useState<InventoryMetrics | null>(null)
+interface Category {
+  id: string
+  name: string
+}
+
+interface ItemsTableProps {
+  orgId: string
+  onItemsChange: () => void
+  onAddItem: () => void
+  onEditItem: (item: InventoryItem) => void
+  categories: Category[]
+  refreshKey?: number // 👈 new
+}
+
+function getStockStatus(current: number, min: number) {
+  if (current <= 0) return { status: "Out of Stock", color: "bg-red-500/10 text-red-600 border-red-500/20" }
+  if (current <= min) return { status: "Low Stock", color: "bg-amber-500/10 text-amber-600 border-amber-500/20" }
+  return { status: "In Stock", color: "bg-green-500/10 text-green-600 border-green-500/20" }
+}
+
+export default function ItemsTable({
+  orgId,
+  onItemsChange,
+  onAddItem,
+  onEditItem,
+  categories,
+  refreshKey = 0,
+}: ItemsTableProps) {
+  const [items, setItems] = useState<InventoryItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("items")
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterCategory, setFilterCategory] = useState("all")
 
-  // Sheet state
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<any>(null)
-  const [categories, setCategories] = useState<any[]>([])
+  const [stockDialogOpen, setStockDialogOpen] = useState(false)
+  const [stockDialogMode, setStockDialogMode] = useState<"in" | "out">("in")
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
 
-  // Plan limits
-  const { maxInventory, currentInventoryCount, status } = usePlanLimits(currentOrgId)
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null)
 
-  // Limit modal state
-  const [showLimitModal, setShowLimitModal] = useState(false)
-  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
-  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
+  // 👇 Refresh when orgId or refreshKey changes
   useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Failed to fetch organization:", error)
-            toast.error("Could not determine your organization")
-          } else if (data?.org_id) {
-            setCurrentOrgId(data.org_id)
-          }
-        })
-    }
-  }, [user?.id])
+    loadData()
+  }, [orgId, refreshKey])
 
-  useEffect(() => {
-    if (currentOrgId) {
-      loadMetrics()
-      loadCategories()
-    }
-  }, [currentOrgId, refreshTrigger])
-
-  const loadMetrics = async () => {
-    if (!currentOrgId) return
-    setLoading(true)
+  const loadData = async () => {
     try {
-      const { data: itemsData, error: itemsError } = await supabase
+      setLoading(true)
+
+      const { data, error } = await supabase
         .from("inventory_items")
-        .select("id, current_stock, min_stock_level, purchase_price")
-        .eq("org_id", currentOrgId)
+        .select("*")
+        .eq("org_id", orgId)
         .eq("is_active", true)
 
-      if (itemsError) throw itemsError
-
-      const items = itemsData || []
-
-      const totalItems = items.length
-      const lowStockCount = items.filter(
-        (item) => item.current_stock <= item.min_stock_level && item.current_stock > 0
-      ).length
-      const outOfStockCount = items.filter((item) => item.current_stock <= 0).length
-      const totalInventoryValue = items.reduce((sum, item) => {
-        return sum + (item.current_stock * (item.purchase_price || 0))
-      }, 0)
-
-      const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        .toISOString()
-        .split("T")[0]
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-        .toISOString()
-        .split("T")[0]
-
-      const { data: partsData, error: partsError } = await supabase
-        .from("service_parts_used")
-        .select("quantity")
-        .eq("org_id", currentOrgId)
-        .gte("created_at", monthStart)
-        .lte("created_at", monthEnd)
-
-      if (partsError) throw partsError
-
-      const { data: usedMovementsData, error: usedMovementsError } = await supabase
-        .from("inventory_stock_movements")
-        .select("quantity")
-        .eq("org_id", currentOrgId)
-        .eq("movement_type", "out")
-        .eq("reason", "Used")
-        .gte("created_at", monthStart)
-        .lte("created_at", monthEnd)
-
-      if (usedMovementsError) throw usedMovementsError
-
-      const partsUsedThisMonth =
-        (partsData || []).reduce((sum, part) => sum + (part.quantity || 0), 0) +
-        (usedMovementsData || []).reduce((sum, movement) => sum + (movement.quantity || 0), 0)
-
-      setMetrics({
-        totalItems,
-        lowStockCount,
-        outOfStockCount,
-        totalInventoryValue,
-        partsUsedThisMonth,
-      })
+      if (error) throw error
+      setItems(data || [])
     } catch (error) {
-      console.error("Error loading metrics:", error)
-      toast.error("Failed to load inventory metrics")
+      console.error("Error loading items:", error)
+      toast.error("Failed to load inventory items")
     } finally {
       setLoading(false)
     }
   }
 
-  const loadCategories = async () => {
-    if (!currentOrgId) return
+  const applyFilters = () => {
+    let filtered = items
+
+    if (searchTerm) {
+      filtered = filtered.filter((item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
+
+    if (filterStatus !== "all") {
+      filtered = filtered.filter((item) => {
+        const status = getStockStatus(item.current_stock, item.min_stock_level).status
+        if (filterStatus === "in-stock") return status === "In Stock"
+        if (filterStatus === "low") return status === "Low Stock"
+        if (filterStatus === "out") return status === "Out of Stock"
+        return true
+      })
+    }
+
+    if (filterCategory !== "all") {
+      filtered = filtered.filter((item) => item.category_id === filterCategory)
+    }
+
+    setFilteredItems(filtered)
+  }
+
+  useEffect(() => {
+    applyFilters()
+  }, [searchTerm, filterStatus, filterCategory, items])
+
+  const handleDelete = async () => {
+    if (!itemToDelete) return
+    setDeleting(true)
     try {
-      const { data, error } = await supabase
-        .from("inventory_categories")
-        .select("*")
-        .eq("org_id", currentOrgId)
+      const { error } = await supabase
+        .from("inventory_items")
+        .delete()
+        .eq("id", itemToDelete.id)
+        .eq("org_id", orgId)
 
       if (error) throw error
-      setCategories(data || [])
+      setItems(items.filter((i) => i.id !== itemToDelete.id))
+      toast.success("Item deleted successfully")
+      setDeleteDialogOpen(false)
+      setItemToDelete(null)
+      onItemsChange()
     } catch (error) {
-      console.error("Error loading categories:", error)
+      console.error("Error deleting item:", error)
+      toast.error("Failed to delete item")
+    } finally {
+      setDeleting(false)
     }
   }
 
-  const checkAndShowLimitModal = () => {
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-      return true
-    }
-    if (maxInventory > 0 && currentInventoryCount >= maxInventory) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your inventory limit",
-        description: `Your current plan allows a maximum of ${maxInventory} inventory items. You currently have ${currentInventoryCount} items. Upgrade to add more items.`,
-      })
-      setShowLimitModal(true)
-      return true
-    }
-    return false
+  const handleStockClick = (item: InventoryItem, mode: "in" | "out") => {
+    setSelectedItem(item)
+    setStockDialogMode(mode)
+    setStockDialogOpen(true)
   }
 
-  const handleAddItem = () => {
-    if (checkAndShowLimitModal()) return
-    setEditingItem(null)
-    setSheetOpen(true)
+  const handleHistoryClick = (item: InventoryItem) => {
+    setHistoryItem(item)
+    setHistoryDialogOpen(true)
   }
 
-  const handleEditItem = (item: any) => {
-    setEditingItem(item)
-    setSheetOpen(true)
+  const handleStockSuccess = () => {
+    loadData()
+    onItemsChange()
   }
 
-  const handleSheetSuccess = () => {
-    setRefreshTrigger(prev => prev + 1)
-  }
-
-  const handleUpgrade = () => {
-    window.location.href = '/billing'
-  }
-
-  const handleRefresh = () => {
-    setRefreshTrigger(prev => prev + 1)
-  }
-
-  const exportInventoryPDF = () => {
-    if (!metrics) {
-      toast.error("No data to export")
-      return
-    }
-
-    // ... (PDF export logic – unchanged)
+  const formatINR = (amount: number) => {
+    return `₹${(amount || 0).toLocaleString("en-IN")}`
   }
 
   return (
-    <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        {/* Page Header */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
-            <p className="text-muted-foreground">Manage your stock, items, and parts inventory</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>Inventory Items</CardTitle>
+        <CardDescription>Manage your inventory and track stock levels</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {/* Filters */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
+          <div className="relative flex-1 min-w-[150px]">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search by name, SKU, or brand..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={exportInventoryPDF} disabled={loading || !metrics}>
-              <Download className="mr-2 size-4" />
-              Export PDF
-            </Button>
-            <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-              Refresh
+          <div className="flex gap-2 flex-wrap">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="in-stock">In Stock</SelectItem>
+                <SelectItem value="low">Low Stock</SelectItem>
+                <SelectItem value="out">Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button onClick={onAddItem}>
+              <Plus className="mr-2 size-4" />
+              Add Item
             </Button>
           </div>
         </div>
 
-        {/* Inventory Summary Strip */}
-        {currentOrgId && (
-          <InventorySummaryStrip
-            metrics={metrics}
-            loading={loading}
-            orgId={currentOrgId}
-          />
-        )}
+        {/* Table */}
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Stock</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Value</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Loading inventory items...
+                  </TableCell>
+                </TableRow>
+              ) : filteredItems.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    {searchTerm || filterStatus !== "all" || filterCategory !== "all"
+                      ? "No items found matching filters"
+                      : "No inventory items yet"}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredItems.map((item) => {
+                  const stockStatus = getStockStatus(item.current_stock, item.min_stock_level)
+                  const category = categories.find((c) => c.id === item.category_id)
+                  const itemValue = item.current_stock * item.purchase_price
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList>
-            <TabsTrigger value="items">
-              Items ({currentInventoryCount || 0})
-            </TabsTrigger>
-            <TabsTrigger value="movements">Stock Movements</TabsTrigger>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-          </TabsList>
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{item.sku || "—"}</TableCell>
+                      <TableCell className="text-sm">{category?.name || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        {item.current_stock} {item.unit}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`${stockStatus.color}`}>{stockStatus.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm">{formatINR(itemValue)}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="size-8">
+                              <MoreHorizontal className="size-4" />
+                              <span className="sr-only">Actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onEditItem(item)}>
+                              <Edit className="mr-2 size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStockClick(item, "in")}>
+                              <ArrowUp className="mr-2 size-4" />
+                              Stock In
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStockClick(item, "out")}>
+                              <ArrowDown className="mr-2 size-4" />
+                              Stock Out
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleHistoryClick(item)}>
+                              <History className="mr-2 size-4" />
+                              History
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setItemToDelete(item)
+                                setDeleteDialogOpen(true)
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 size-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
-          <TabsContent value="items" className="mt-4">
-            {currentOrgId && (
-              <ItemsTable
-                orgId={currentOrgId}
-                onItemsChange={handleSheetSuccess}
-                onAddItem={handleAddItem}
-                onEditItem={handleEditItem}
-                categories={categories}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="movements" className="mt-4">
-            {currentOrgId && (
-              <StockMovementsTable orgId={currentOrgId} />
-            )}
-          </TabsContent>
-
-          <TabsContent value="categories" className="mt-4">
-            {currentOrgId && (
-              <CategoriesTab orgId={currentOrgId} />
-            )}
-          </TabsContent>
-
-          <TabsContent value="suppliers" className="mt-4">
-            {currentOrgId && (
-              <SuppliersTab orgId={currentOrgId} />
-            )}
-          </TabsContent>
-        </Tabs>
-
-        {/* Add/Edit Item Sheet */}
-        <AddEditItemSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          editingItem={editingItem}
-          categories={categories}
-          orgId={currentOrgId || ''}
-          onSuccess={handleSheetSuccess}
+        {/* Stock In/Out Dialog */}
+        <StockInOutDialog
+          open={stockDialogOpen}
+          onOpenChange={setStockDialogOpen}
+          item={selectedItem}
+          mode={stockDialogMode}
+          orgId={orgId}
+          onSuccess={handleStockSuccess}
         />
 
-        {/* Limit Reached Modal */}
-        <LimitReachedModal
-          isOpen={showLimitModal}
-          onClose={() => setShowLimitModal(false)}
-          type={limitModalType}
-          onUpgrade={handleUpgrade}
-          customTitle={limitModalCustom.title}
-          customDescription={limitModalCustom.description}
+        {/* Stock History Dialog */}
+        <StockHistoryDialog
+          open={historyDialogOpen}
+          onOpenChange={setHistoryDialogOpen}
+          item={historyItem}
+          orgId={orgId}
         />
-      </div>
-    </DashboardLayout>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Item</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete &quot;{itemToDelete?.name}&quot;? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-red-600">
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   )
 }
