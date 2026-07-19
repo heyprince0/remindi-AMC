@@ -16,6 +16,8 @@ import ItemsTable from "./components/ItemsTable"
 import StockMovementsTable from "./components/StockMovementsTable"
 import SuppliersTab from "./components/SuppliersTab"
 import CategoriesTab from "./components/CategoriesTab"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 
 interface InventoryMetrics {
   totalItems: number
@@ -31,6 +33,15 @@ export default function StocksPage() {
   const [metrics, setMetrics] = useState<InventoryMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("items")
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  // Plan limits
+  const { maxInventory, currentInventoryCount, status } = usePlanLimits(currentOrgId)
+
+  // Limit modal state
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -54,7 +65,7 @@ export default function StocksPage() {
     if (currentOrgId) {
       loadMetrics()
     }
-  }, [currentOrgId])
+  }, [currentOrgId, refreshTrigger])
 
   const loadMetrics = async () => {
     if (!currentOrgId) return
@@ -128,8 +139,39 @@ export default function StocksPage() {
     }
   }
 
+  // ✅ Check limits – only called when clicking Add Item
+  const checkAndShowLimitModal = () => {
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({})
+      setShowLimitModal(true)
+      return true
+    }
+    if (maxInventory > 0 && currentInventoryCount >= maxInventory) {
+      setLimitModalType('resource-limit')
+      setLimitModalCustom({
+        title: "You've reached your inventory limit",
+        description: `Your current plan allows a maximum of ${maxInventory} inventory items. You currently have ${currentInventoryCount} items. Upgrade to add more items.`,
+      })
+      setShowLimitModal(true)
+      return true
+    }
+    return false
+  }
+
+  const handleAddItem = () => {
+    if (checkAndShowLimitModal()) return
+    // Trigger add item in ItemsTable via a ref or state
+    // We'll use a custom event or prop method
+    document.dispatchEvent(new CustomEvent('open-add-item-sheet'))
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
+  }
+
   const handleRefresh = () => {
-    loadMetrics()
+    setRefreshTrigger(prev => prev + 1)
   }
 
   function hexToRgb(hex: string): [number, number, number] {
@@ -247,7 +289,9 @@ export default function StocksPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList>
-            <TabsTrigger value="items">Items</TabsTrigger>
+            <TabsTrigger value="items">
+              Items ({currentInventoryCount || 0})
+            </TabsTrigger>
             <TabsTrigger value="movements">Stock Movements</TabsTrigger>
             <TabsTrigger value="categories">Categories</TabsTrigger>
             <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
@@ -258,6 +302,7 @@ export default function StocksPage() {
               <ItemsTable
                 orgId={currentOrgId}
                 onItemsChange={loadMetrics}
+                onAddItem={handleAddItem}
               />
             )}
           </TabsContent>
@@ -280,6 +325,16 @@ export default function StocksPage() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Limit Reached Modal */}
+        <LimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          type={limitModalType}
+          onUpgrade={handleUpgrade}
+          customTitle={limitModalCustom.title}
+          customDescription={limitModalCustom.description}
+        />
       </div>
     </DashboardLayout>
   )
