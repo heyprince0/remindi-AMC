@@ -12,6 +12,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
@@ -25,8 +32,10 @@ export default function CustomersPage() {
   const { user } = useAuth()
   const [customers, setCustomers] = useState<(Customer & { contractCount: number })[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<(Customer & { contractCount: number })[]>([])
+  const [allContracts, setAllContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterLocation, setFilterLocation] = useState("all") // location filter, same as Contracts page
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
@@ -91,6 +100,7 @@ export default function CustomersPage() {
         }
       })
 
+      setAllContracts((contractsData as Contract[]) || [])
       setCustomers(customersWithContracts)
       setFilteredCustomers(customersWithContracts)
     } catch (error) {
@@ -101,15 +111,45 @@ export default function CustomersPage() {
     }
   }
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term)
-    const filtered = customers.filter(c =>
-      c.name.toLowerCase().includes(term.toLowerCase()) ||
-      c.phone.includes(term) ||
-      (c.email && c.email.toLowerCase().includes(term.toLowerCase()))
+  // Distinct, non-empty locations pulled from existing contracts — the Location
+  // filter dropdown populates itself from whatever locations users have entered
+  // on their contracts, same as the Contracts page.
+  const availableLocations = Array.from(
+    new Set(
+      allContracts
+        .map(c => c.location?.trim())
+        .filter((loc): loc is string => !!loc)
     )
+  ).sort()
+
+  const handleFilter = (term: string, location: string) => {
+    let filtered = customers
+
+    if (term) {
+      filtered = filtered.filter(c =>
+        c.name.toLowerCase().includes(term.toLowerCase()) ||
+        c.phone.includes(term) ||
+        (c.email && c.email.toLowerCase().includes(term.toLowerCase()))
+      )
+    }
+
+    if (location !== 'all') {
+      filtered = filtered.filter(c =>
+        allContracts.some(contract => contract.customer_id === c.id && contract.location === location)
+      )
+    }
+
     setFilteredCustomers(filtered)
   }
+
+  const handleSearch = (term: string) => {
+    setSearchTerm(term)
+    handleFilter(term, filterLocation)
+  }
+
+  useEffect(() => {
+    handleFilter(searchTerm, filterLocation)
+  }, [filterLocation, customers, allContracts])
 
   const handleDelete = async (id: string) => {
     if (!currentOrgId) return
@@ -184,18 +224,36 @@ export default function CustomersPage() {
           </Button>
         </div>
 
-        {/* Search */}
+        {/* Search + Location Filter */}
         <Card>
           <CardContent className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search customers by name, email, or phone..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
+            <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
+              <div className="relative flex-1 min-w-[150px]">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search customers by name, email, or phone..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Location Filter — options populate automatically from whatever
+                  locations users have entered on their contracts */}
+              <Select value={filterLocation} onValueChange={setFilterLocation}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations</SelectItem>
+                  {availableLocations.map((loc) => (
+                    <SelectItem key={loc} value={loc}>
+                      {loc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
