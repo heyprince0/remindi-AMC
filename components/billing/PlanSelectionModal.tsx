@@ -44,7 +44,7 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
-// 👇 Define which plan should show the "Most Popular" badge
+// Which plan gets the "Most Popular" badge
 const POPULAR_PLAN_ID = 'pro-max';
 
 export default function PlanSelectionModal({
@@ -210,7 +210,7 @@ export default function PlanSelectionModal({
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-      onClose(); // Close the modal so only Razorpay stays visible
+      onClose();
     } catch (err) {
       console.error('Payment error:', err);
       toast.error('Something went wrong starting the payment.');
@@ -221,7 +221,7 @@ export default function PlanSelectionModal({
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="!max-w-4xl w-[95vw]">
+        <DialogContent className="!max-w-5xl w-[95vw]">
           <div className="flex justify-center items-center py-20">
             <Loader2 className="size-12 animate-spin text-muted-foreground" />
           </div>
@@ -245,7 +245,7 @@ export default function PlanSelectionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="!max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
+      <DialogContent className="!max-w-5xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
         <DialogHeader>
           <DialogTitle className="text-2xl sm:text-3xl font-bold text-center">
             Choose Your Plan
@@ -272,11 +272,11 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-6">
+        {/* ✅ Three columns on medium screens and up */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 lg:gap-8 mt-6">
           {plans.map((plan) => {
             const price = getPrice(plan);
             const isFree = price === 0;
-            // 👇 Make Pro Max the Most Popular plan
             const isPopular = plan.id === POPULAR_PLAN_ID;
             const discountPercent = getDiscountPercent(plan);
             const savingsAmount = getSavingsAmount(plan);
