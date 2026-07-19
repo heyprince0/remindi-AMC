@@ -221,7 +221,7 @@ export default function PlanSelectionModal({
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="!max-w-5xl w-[95vw]">
+        <DialogContent className="!max-w-6xl w-[95vw]">
           <div className="flex justify-center items-center py-20">
             <Loader2 className="size-12 animate-spin text-muted-foreground" />
           </div>
@@ -245,7 +245,7 @@ export default function PlanSelectionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="!max-w-5xl w-[95vw] max-h-[85vh] overflow-y-auto p-6 sm:p-8">
+      <DialogContent className="!max-w-6xl w-[95vw] max-h-[85vh] overflow-y-auto p-8 sm:p-10">
         <DialogHeader>
           <DialogTitle className="text-2xl sm:text-3xl font-bold text-center">
             Choose Your Plan
@@ -255,13 +255,14 @@ export default function PlanSelectionModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 my-6 sm:my-8">
+        {/* Billing cycle tabs */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 my-8 sm:my-10">
           {Object.entries(CYCLE_LABELS).map(([cycle, { label }]) => (
             <button
               key={cycle}
               onClick={() => setSelectedCycle(cycle as BillingCycle)}
               disabled={processing}
-              className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
+              className={`px-6 sm:px-8 py-2.5 sm:py-3 rounded-full text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
                 selectedCycle === cycle
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -272,8 +273,8 @@ export default function PlanSelectionModal({
           ))}
         </div>
 
-        {/* ✅ Three columns on medium screens and up */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 lg:gap-8 mt-6">
+        {/* Plan cards – 3 columns with larger gaps and padding */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 lg:gap-10 mt-8">
           {plans.map((plan) => {
             const price = getPrice(plan);
             const isFree = price === 0;
@@ -304,13 +305,13 @@ export default function PlanSelectionModal({
         </div>
 
         {processing && (
-          <p className="text-center text-sm text-blue-600 mt-4 flex items-center justify-center gap-2">
+          <p className="text-center text-sm text-blue-600 mt-6 flex items-center justify-center gap-2">
             <Loader2 className="size-4 animate-spin" />
             Opening secure payment...
           </p>
         )}
 
-        <p className="text-center text-sm text-gray-500 mt-10 sm:mt-12">
+        <p className="text-center text-sm text-gray-500 mt-12 sm:mt-16">
           All plans include free updates. Cancel anytime.
         </p>
       </DialogContent>
