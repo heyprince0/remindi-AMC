@@ -19,6 +19,10 @@ import {
   ArrowRight,
   Clock,
   Bell,
+  Package,
+  AlertTriangle,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react"
 import { AddContractModal } from "@/components/add-contract-modal"
 import { subscribeToNotifications } from "@/lib/push-notifications"
@@ -34,6 +38,14 @@ interface UpcomingService {
   time: string
   technician: string | null
   status: "expired" | "today-servicing" | "expiring-soon"
+}
+
+interface InventoryMetrics {
+  totalItems: number
+  lowStockCount: number
+  outOfStockCount: number
+  totalInventoryValue: number
+  partsUsedThisMonth: number
 }
 
 function getStatusBadge(status: string) {
@@ -78,6 +90,10 @@ export default function DashboardPage() {
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
+  // --- Inventory metrics state ---
+  const [inventoryMetrics, setInventoryMetrics] = useState<InventoryMetrics | null>(null)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
+
   // --- Loading state for redirect check ---
   const [isRedirecting, setIsRedirecting] = useState(true)
 
@@ -96,16 +112,12 @@ export default function DashboardPage() {
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
           } else {
-            // ✅ No org: show message, don't redirect
             toast.info("You are not part of any organization yet. Please complete your profile setup or contact your admin.", {
               duration: 5000,
             })
-            // Keep currentOrgId as null
-            // We'll show a placeholder in the UI
           }
         })
         .finally(() => {
-          // Allow dashboard to render even without org
           setIsRedirecting(false)
         })
     }
@@ -157,10 +169,81 @@ export default function DashboardPage() {
     }
   }
 
+  // Load inventory metrics
+  const loadInventoryMetrics = async () => {
+    if (!currentOrgId) return
+    setInventoryLoading(true)
+    try {
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("inventory_items")
+        .select("id, current_stock, min_stock_level, purchase_price")
+        .eq("org_id", currentOrgId)
+        .eq("is_active", true)
+
+      if (itemsError) throw itemsError
+
+      const items = itemsData || []
+
+      const totalItems = items.length
+      const lowStockCount = items.filter(
+        (item) => item.current_stock <= item.min_stock_level && item.current_stock > 0
+      ).length
+      const outOfStockCount = items.filter((item) => item.current_stock <= 0).length
+      const totalInventoryValue = items.reduce((sum, item) => {
+        return sum + (item.current_stock * (item.purchase_price || 0))
+      }, 0)
+
+      // Parts used this month (from service_parts_used + stock movements with reason 'Used')
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        .toISOString()
+        .split("T")[0]
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        .toISOString()
+        .split("T")[0]
+
+      const { data: partsData, error: partsError } = await supabase
+        .from("service_parts_used")
+        .select("quantity")
+        .eq("org_id", currentOrgId)
+        .gte("created_at", monthStart)
+        .lte("created_at", monthEnd)
+
+      if (partsError) throw partsError
+
+      const { data: usedMovementsData, error: usedMovementsError } = await supabase
+        .from("inventory_stock_movements")
+        .select("quantity")
+        .eq("org_id", currentOrgId)
+        .eq("movement_type", "out")
+        .eq("reason", "Used")
+        .gte("created_at", monthStart)
+        .lte("created_at", monthEnd)
+
+      if (usedMovementsError) throw usedMovementsError
+
+      const partsUsedThisMonth =
+        (partsData || []).reduce((sum, part) => sum + (part.quantity || 0), 0) +
+        (usedMovementsData || []).reduce((sum, movement) => sum + (movement.quantity || 0), 0)
+
+      setInventoryMetrics({
+        totalItems,
+        lowStockCount,
+        outOfStockCount,
+        totalInventoryValue,
+        partsUsedThisMonth,
+      })
+    } catch (error) {
+      console.error("Error loading inventory metrics:", error)
+      toast.error("Failed to load inventory metrics")
+    } finally {
+      setInventoryLoading(false)
+    }
+  }
+
   const loadData = async () => {
     try {
       if (!user?.id || !currentOrgId) {
-        // If no org, we still mark loading as done and set dataReady
         setDataReady(true)
         return
       }
@@ -240,6 +323,7 @@ export default function DashboardPage() {
 
       setUpcomingServices(services.slice(0, 4))
       await fetchContractCount()
+      await loadInventoryMetrics() // load inventory data
       setDataReady(true)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
@@ -252,7 +336,6 @@ export default function DashboardPage() {
     if (user?.id && currentOrgId) {
       loadData()
     } else if (user?.id && !currentOrgId) {
-      // No org: mark as ready so the UI shows
       setDataReady(true)
       setLoading(false)
     }
@@ -365,16 +448,12 @@ export default function DashboardPage() {
     if (authLoading || !user || !role) return
 
     if (role === 'technician') {
-      // Technician: redirect immediately
       if (technicianId) {
         router.push(`/technicians/${technicianId}`)
       } else {
         router.push('/technicians')
       }
-      // The component will unmount, so we don't need to set isRedirecting false
     } else {
-      // Not a technician: show the dashboard (after org check, setIsRedirecting is handled in the org fetch)
-      // We already set isRedirecting false in the org fetch, but ensure it's false here as well.
       setIsRedirecting(false)
     }
   }, [authLoading, user, role, technicianId, router])
@@ -397,7 +476,7 @@ export default function DashboardPage() {
 
   if (!user) return null
 
-  // If no org, show a simple message – no welcome page, no button
+  // If no org, show a simple message
   if (!currentOrgId) {
     return (
       <DashboardLayout>
@@ -493,26 +572,71 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Inventory Overview Card - replaces Quick Access */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quick Access</CardTitle>
-              <CardDescription>Navigate to manage data</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-lg">Inventory Overview</CardTitle>
+                <CardDescription>Current stock and usage summary</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="text-primary" onClick={() => window.location.href = '/stocks'}>
+                View All <ArrowRight className="ml-2 size-4" />
+              </Button>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col gap-3">
-                <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/contracts'}>
-                  <FileText className="mr-2 size-4" /> Manage Contracts <ArrowRight className="ml-auto size-4" />
-                </Button>
-                <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/customers'}>
-                  <Users className="mr-2 size-4" /> Manage Customers <ArrowRight className="ml-auto size-4" />
-                </Button>
-                <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/technicians'}>
-                  <Wrench className="mr-2 size-4" /> Manage Technicians <ArrowRight className="ml-auto size-4" />
-                </Button>
-                <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/history'}>
-                  <Clock className="mr-2 size-4" /> View Service History <ArrowRight className="ml-auto size-4" />
-                </Button>
-              </div>
+              {inventoryLoading ? (
+                <div className="text-center py-4 text-muted-foreground">Loading inventory data...</div>
+              ) : inventoryMetrics ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Package className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Items</p>
+                      <p className="text-xl font-semibold">{inventoryMetrics.totalItems}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-600">
+                      <AlertTriangle className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Low Stock</p>
+                      <p className="text-xl font-semibold">{inventoryMetrics.lowStockCount}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-600">
+                      <AlertTriangle className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Out of Stock</p>
+                      <p className="text-xl font-semibold">{inventoryMetrics.outOfStockCount}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-green-500/10 text-green-600">
+                      <DollarSign className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Value</p>
+                      <p className="text-xl font-semibold">₹{inventoryMetrics.totalInventoryValue.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="col-span-2 flex items-center gap-3 pt-2 border-t border-border">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-blue-500/10 text-blue-600">
+                      <TrendingUp className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Parts Used This Month</p>
+                      <p className="text-xl font-semibold">{inventoryMetrics.partsUsedThisMonth}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">No inventory data available</div>
+              )}
             </CardContent>
           </Card>
         </div>
