@@ -76,8 +76,38 @@ export const PLANS: Record<string, Plan> = {
       invoices: 300,
     },
   },
+  // 👇 New Pro Max plan
+  'pro-max': {
+    id: 'pro-max',
+    name: 'Pro Max',
+    description: 'For large enterprises with unlimited everything',
+    basePrice: 1499,
+    currency: '₹',
+    features: [
+      'Unlimited contracts',
+      'Unlimited customers',
+      'Unlimited technicians',
+      'Unlimited team seats',
+      'Unlimited quotations',
+      'Unlimited invoices',
+      'Advanced reports',
+      'Data export',
+      'Priority support',
+      'Role permissions',
+    ],
+    limits: {
+      contracts: 999999,
+      customers: 999999,
+      teamSeats: 999999,
+      quotations: 999999,
+      invoices: 999999,
+    },
+    badge: 'Best value',
+    recommended: true,
+  },
 };
 
+// Updated discounts to match your actual pricing
 export const BILLING_CYCLES: BillingCycleOption[] = [
   {
     cycle: 'monthly',
@@ -88,24 +118,24 @@ export const BILLING_CYCLES: BillingCycleOption[] = [
   {
     cycle: 'quarterly',
     months: 3,
-    discount: 5,
-    label: 'Quarterly (5% off)',
+    discount: 8,   // 8% off
+    label: 'Quarterly (8% off)',
   },
   {
     cycle: 'semi-annual',
     months: 6,
-    discount: 10,
-    label: 'Semi-Annual (10% off)',
+    discount: 17,  // 17% off
+    label: 'Semi-Annual (17% off)',
   },
   {
     cycle: 'yearly',
     months: 12,
-    discount: 15,
-    label: 'Yearly (15% off)',
+    discount: 24,  // 24% off
+    label: 'Yearly (24% off)',
   },
 ];
 
-// Mock subscription state for demo
+// Mock subscription state for demo (unchanged)
 export const MOCK_SUBSCRIPTION: Subscription = {
   id: 'sub_123',
   userId: 'user_123',
@@ -113,12 +143,12 @@ export const MOCK_SUBSCRIPTION: Subscription = {
   status: 'trial',
   billingCycle: 'monthly',
   currentPrice: 499,
-  startDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), // 6 days ago
-  endDate: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000), // 9 days from now
+  startDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+  endDate: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),
   trialDaysRemaining: 9,
 };
 
-// Mock usage data for demo
+// Mock usage data for demo (unchanged)
 export const MOCK_USAGE: UsageData = {
   quotations: {
     used: 32,
@@ -134,7 +164,7 @@ export const MOCK_USAGE: UsageData = {
   },
 };
 
-// Mock payment history for demo
+// Mock payment history for demo (unchanged)
 export const MOCK_PAYMENT_HISTORY: PaymentTransaction[] = [
   {
     id: 'txn_001',
