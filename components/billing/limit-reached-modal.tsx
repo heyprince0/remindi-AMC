@@ -14,21 +14,27 @@ import {
   TrendingUp,
   Users,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 
-export type LimitModalType = 'expired' | 'monthly-limit' | 'team-seats' | 'resource-limit';
+export type LimitModalType =
+  | 'expired'
+  | 'monthly-limit'
+  | 'team-seats'
+  | 'resource-limit'
+  | 'contracts-limit';  // 👈 added
 
 interface LimitReachedModalProps {
   isOpen: boolean;
   onClose: () => void;
   type: LimitModalType;
   onUpgrade?: () => void;
-  // Custom overrides
   customTitle?: string;
   customDescription?: string;
   customIcon?: React.ReactNode;
   primaryLabel?: string;
   secondaryLabel?: string;
+  limitValue?: number; // not used but accepted
 }
 
 const MODAL_CONFIG: Record<LimitModalType, { icon: React.ElementType; title: string; description: string; primaryLabel: string; secondaryLabel: string }> = {
@@ -61,6 +67,14 @@ const MODAL_CONFIG: Record<LimitModalType, { icon: React.ElementType; title: str
     title: "You've reached your limit",
     description:
       'You have reached the maximum allowed for this resource on your current plan.',
+    primaryLabel: 'Upgrade Plan',
+    secondaryLabel: 'Maybe Later',
+  },
+  'contracts-limit': {
+    icon: FileText,
+    title: "You've reached your contract limit",
+    description:
+      'You have created the maximum number of contracts allowed on your current plan.',
     primaryLabel: 'Upgrade Plan',
     secondaryLabel: 'Maybe Later',
   },
