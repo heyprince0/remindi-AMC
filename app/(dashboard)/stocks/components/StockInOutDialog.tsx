@@ -42,7 +42,7 @@ interface StockInOutDialogProps {
   onSuccess: () => void
 }
 
-const OUT_REASONS = ["Used", "Returned", "Adjustment", "Damage", "Sample", "Other"]
+const OUT_REASONS = ["Used", "Sold", "Returned", "Adjustment", "Damage", "Sample", "Other"]
 const IN_REASONS = ["Purchase", "Returned", "Adjustment", "Other"]
 
 export default function StockInOutDialog({
@@ -194,8 +194,8 @@ export default function StockInOutDialog({
               id="quantity"
               type="number"
               placeholder="0"
-              value={quantity}
-              onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+              value={quantity === 0 ? "" : quantity}
+              onChange={(e) => setQuantity(e.target.value === "" ? 0 : parseFloat(e.target.value) || 0)}
               min="0"
               step="0.01"
               required
