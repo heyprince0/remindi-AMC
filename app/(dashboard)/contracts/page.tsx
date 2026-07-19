@@ -132,7 +132,6 @@ export default function ContractsPage() {
   const [limitValue, setLimitValue] = useState(0)
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [dataReady, setDataReady] = useState(false)
-  const [autoShown, setAutoShown] = useState(false)
 
   // Fetch org and role
   useEffect(() => {
@@ -215,9 +214,9 @@ export default function ContractsPage() {
     }
   }, [currentOrgId])
 
-  const checkAndShowLimitModal = (showOnLoad = false) => {
+  // ✅ Only check limit on Add button click – no auto-show
+  const checkAndShowLimitModal = () => {
     if (userRole === 'technician') return false
-    if (showOnLoad && autoShown) return
 
     let isExpired = false
     if (subscription) {
@@ -235,7 +234,6 @@ export default function ContractsPage() {
     if (isExpired) {
       setLimitModalType('expired')
       setShowLimitModal(true)
-      if (showOnLoad) setAutoShown(true)
       return true
     }
 
@@ -244,18 +242,11 @@ export default function ContractsPage() {
       setLimitModalType('contracts-limit')
       setLimitValue(maxContracts)
       setShowLimitModal(true)
-      if (showOnLoad) setAutoShown(true)
       return true
     }
 
     return false
   }
-
-  useEffect(() => {
-    if (dataReady && !autoShown && userRole !== 'technician') {
-      checkAndShowLimitModal(true)
-    }
-  }, [dataReady, autoShown, subscription, plan, contractCount, userRole])
 
   // Handlers
   const handleFilter = () => {
@@ -337,7 +328,7 @@ export default function ContractsPage() {
 
   const handleAddClick = () => {
     if (userRole === 'technician') return
-    const blocked = checkAndShowLimitModal(false)
+    const blocked = checkAndShowLimitModal()
     if (blocked) return
     setEditingContract(null)
     setModalOpen(true)
@@ -388,7 +379,6 @@ export default function ContractsPage() {
     }
   }
 
-  // PDF export (unchanged)
   const getStatusCounts = (data: ContractDisplay[]) => {
     let active = 0, expired = 0, todayServicing = 0, expiringSoon = 0
     data.forEach(c => {
@@ -684,7 +674,7 @@ export default function ContractsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Limit Reached Modal */}
+        {/* Limit Reached Modal – only shows when button triggers it */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
@@ -693,7 +683,7 @@ export default function ContractsPage() {
           limitValue={limitValue}
         />
 
-        {/* ✅ Plan Selection Modal – only render when orgId is available */}
+        {/* Plan Selection Modal */}
         {currentOrgId && (
           <PlanSelectionModal
             isOpen={showPlanModal}
