@@ -192,29 +192,21 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
-              {/* Always visible install button – hides once installed */}
-              {!isInstalled && (
+              {/* Only visible when installable, hides once installed */}
+              {isInstallable && !isInstalled && (
                 <SidebarMenuItem>
                   <button
-                    onClick={isInstallable ? installApp : undefined}
+                    onClick={installApp}
                     className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 group-data-[collapsible=icon]:px-0 mt-1"
                     style={{
-                      background: isInstallable ? '#29ABE2' : '#a0a0a0',
-                      boxShadow: isInstallable ? '0 4px 14px rgba(41,171,226,.35)' : 'none',
-                      cursor: isInstallable ? 'pointer' : 'default',
+                      background: '#29ABE2',
+                      boxShadow: '0 4px 14px rgba(41,171,226,.35)',
                     }}
-                    onMouseEnter={(e) => {
-                      if (isInstallable) e.currentTarget.style.background = '#1e96cc';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (isInstallable) e.currentTarget.style.background = '#29ABE2';
-                    }}
-                    disabled={!isInstallable}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#1e96cc')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#29ABE2')}
                   >
                     <Download className="size-4" />
-                    <span className="group-data-[collapsible=icon]:hidden">
-                      {isInstallable ? 'Install App' : 'Not Available'}
-                    </span>
+                    <span className="group-data-[collapsible=icon]:hidden">Install App</span>
                   </button>
                 </SidebarMenuItem>
               )}
