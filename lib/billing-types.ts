@@ -1,7 +1,7 @@
 // Billing Types and Interfaces
 
 export type BillingCycle = 'monthly' | 'quarterly' | 'semi-annual' | 'yearly';
-export type PlanType = 'free' | 'starter' | 'growth';
+export type PlanType = 'free' | 'starter' | 'growth' | 'pro-max';  // 👈 added
 export type SubscriptionStatus = 'active' | 'trial' | 'expired' | 'cancelled';
 export type PaymentStatus = 'success' | 'failed' | 'refunded' | 'pending';
 
