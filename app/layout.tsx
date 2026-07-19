@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   title: 'Remindi - AMC Management',
   description: 'Manage your Annual Maintenance Contracts, customers, technicians, and service schedules efficiently',
   generator: 'v0.app',
+  manifest: '/manifest.json',
   icons: {
     icon: '/remindi-logo.png',
     apple: '/remindi-logo.png',
