@@ -1542,36 +1542,35 @@
   </div>
 </section>
 
-<!-- APK DOWNLOAD -->
+<!-- PWA INSTALL -->
 <section class="install-section" id="install-app">
   <div class="container">
     <div class="install-card">
       <div class="install-icon-wrap">📲</div>
-      <div class="section-badge">Android App</div>
-      <h2>Download the Remindi App</h2>
-      <p>Install Remindi on your Android phone by downloading the APK file directly.</p>
+      <div class="section-badge">Install App</div>
+      <h2>Get the Remindi App</h2>
+      <p>Install Remindi on your phone or desktop in one click. No app store, no APK file.</p>
       <div class="install-badges">
         <span class="install-badge">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-          Android App
+          One-Click Install
         </span>
         <span class="install-badge">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-          Direct Download
-        </span>
-        <span class="install-badge">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-          Mobile App
+          Works on Android & Desktop
         </span>
         <span class="install-badge">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
           No App Store Needed
         </span>
       </div>
-      <a class="btn-install" id="apk-download-btn" href="/remindi.apk" download="Remindi.apk" type="application/vnd.android.package-archive">
+      <button class="btn-install" id="pwa-install-btn">
         <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v4h5.66V9h3.84L12 2z"/></svg>
-        Download APK
-      </a>
+        Install App
+      </button>
+      <p id="install-fallback" style="display:none; margin-top:12px; font-size:.85rem; color:var(--gray-500);">
+        Already installed, or use your browser menu → "Install App" / "Add to Home Screen".
+      </p>
     </div>
   </div>
 </section>
@@ -1781,6 +1780,32 @@
         closeMobileMenu();
       }
     });
+  });
+
+  // PWA install prompt
+  let deferredPrompt;
+  const installBtn = document.getElementById('pwa-install-btn');
+  const fallbackText = document.getElementById('install-fallback');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        fallbackText.style.display = 'block';
+        return;
+      }
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    });
+  }
+
+  window.addEventListener('appinstalled', () => {
+    if (installBtn) installBtn.style.display = 'none';
   });
 
   // Pricing duration selector
