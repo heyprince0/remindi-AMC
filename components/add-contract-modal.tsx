@@ -790,15 +790,8 @@ export function AddContractModal({
           </div>
         </div>
 
-        <div className="flex gap-3 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setSubModal({ open: false, startDate: '', endDate: '', technicianId: '', errors: {} })}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleAddOldService} className="flex-1">
+        <div className="flex pt-4">
+          <Button type="button" onClick={handleAddOldService} className="w-full">
             Add to List
           </Button>
         </div>
