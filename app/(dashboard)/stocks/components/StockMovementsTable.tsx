@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -49,6 +50,11 @@ interface TechnicianOption {
   name: string
 }
 
+interface SupplierOption {
+  id: string
+  name: string
+}
+
 interface StockMovementsTableProps {
   orgId: string
 }
@@ -57,10 +63,12 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [items, setItems] = useState<InventoryItem[]>([])
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterReason, setFilterReason] = useState("all")
+  const [filterDate, setFilterDate] = useState("")
 
   useEffect(() => {
     loadData()
@@ -70,7 +78,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
     try {
       setLoading(true)
 
-      const [movementsRes, itemsRes, techniciansRes] = await Promise.all([
+      const [movementsRes, itemsRes, techniciansRes, suppliersRes] = await Promise.all([
         supabase
           .from("inventory_stock_movements")
           .select("*")
@@ -85,15 +93,21 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
           .from("technicians")
           .select("id, name")
           .eq("org_id", orgId),
+        supabase
+          .from("inventory_suppliers")
+          .select("id, name")
+          .eq("org_id", orgId),
       ])
 
       if (movementsRes.error) throw movementsRes.error
       if (itemsRes.error) throw itemsRes.error
       if (techniciansRes.error) throw techniciansRes.error
+      if (suppliersRes.error) throw suppliersRes.error
 
       setMovements(movementsRes.data || [])
       setItems(itemsRes.data || [])
       setTechnicians(techniciansRes.data || [])
+      setSuppliers(suppliersRes.data || [])
     } catch (error) {
       console.error("Error loading stock movements:", error)
       toast.error("Failed to load stock movements")
@@ -111,13 +125,19 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
     return technicians.find((t) => t.id === technicianId)?.name || "-"
   }
 
+  const getSupplierName = (supplierId: string | null) => {
+    if (!supplierId) return "-"
+    return suppliers.find((s) => s.id === supplierId)?.name || "-"
+  }
+
   const filteredMovements = movements.filter((movement) => {
     const itemName = getItemName(movement.item_id).toLowerCase()
     const matchesSearch = itemName.includes(searchTerm.toLowerCase())
     const matchesType = filterType === "all" || movement.movement_type === filterType
     const matchesReason = filterReason === "all" || movement.reason === filterReason
+    const matchesDate = !filterDate || movement.created_at.split("T")[0] === filterDate
 
-    return matchesSearch && matchesType && matchesReason
+    return matchesSearch && matchesType && matchesReason && matchesDate
   })
 
   const uniqueReasons = Array.from(
@@ -179,6 +199,18 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                 ))}
               </SelectContent>
             </Select>
+
+            <Input
+              type="date"
+              className="w-[160px]"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+            {filterDate && (
+              <Button variant="ghost" size="sm" onClick={() => setFilterDate("")}>
+                Clear Date
+              </Button>
+            )}
           </div>
         </div>
 
@@ -193,19 +225,20 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                 <TableHead className="text-right">Quantity</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>Technician</TableHead>
+                <TableHead>Supplier</TableHead>
                 <TableHead>Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Loading stock movements...
                   </TableCell>
                 </TableRow>
               ) : filteredMovements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {searchTerm || filterType !== "all" || filterReason !== "all"
                       ? "No movements found matching filters"
                       : "No stock movements recorded"}
@@ -235,6 +268,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                     </TableCell>
                     <TableCell className="text-sm">{movement.reason}</TableCell>
                     <TableCell className="text-sm">{getTechnicianName(movement.technician_id)}</TableCell>
+                    <TableCell className="text-sm">{getSupplierName(movement.supplier_id)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                       {movement.notes || "—"}
                     </TableCell>
