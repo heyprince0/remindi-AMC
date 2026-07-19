@@ -114,8 +114,8 @@ export default function ContractsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-  const [filterMonth, setFilterMonth] = useState("all") // new month filter
-  const [filterLocation, setFilterLocation] = useState("all") // new location filter
+  const [filterMonth, setFilterMonth] = useState("all")
+  const [filterLocation, setFilterLocation] = useState("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -123,7 +123,7 @@ export default function ContractsPage() {
   const [deleting, setDeleting] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null) // NEW: current user's role
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   const [subscription, setSubscription] = useState<any>(null)
   const [plan, setPlan] = useState<any>(null)
@@ -135,6 +135,7 @@ export default function ContractsPage() {
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
+  // Fetch org and role
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -149,7 +150,7 @@ export default function ContractsPage() {
             setLoading(false)
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
-            setUserRole(data.role) // store role
+            setUserRole(data.role)
           } else {
             setLoading(false)
           }
@@ -159,35 +160,33 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      if (!currentOrgId) return
-      try {
-        const { data: subData, error } = await supabase
-          .from('subscriptions')
-          .select('*, plan:plan_id(*)')
-          .eq('org_id', currentOrgId)
-          .maybeSingle()
+  // Named function to fetch subscription (so we can call it from onSuccess)
+  const fetchSubscription = async () => {
+    if (!currentOrgId) return
+    try {
+      const { data: subData, error } = await supabase
+        .from('subscriptions')
+        .select('*, plan:plan_id(*)')
+        .eq('org_id', currentOrgId)
+        .maybeSingle()
 
-        if (error) throw error
+      if (error) throw error
 
-        if (subData) {
-          setSubscription(subData)
-          setPlan(subData.plan)
-        } else {
-          const { data: freePlan } = await supabase
-            .from('subscription_plans')
-            .select('*')
-            .eq('id', 'free')
-            .single()
-          setPlan(freePlan)
-        }
-      } catch (error) {
-        console.error('Error fetching subscription:', error)
+      if (subData) {
+        setSubscription(subData)
+        setPlan(subData.plan)
+      } else {
+        const { data: freePlan } = await supabase
+          .from('subscription_plans')
+          .select('*')
+          .eq('id', 'free')
+          .single()
+        setPlan(freePlan)
       }
+    } catch (error) {
+      console.error('Error fetching subscription:', error)
     }
-    fetchSubscription()
-  }, [currentOrgId])
+  }
 
   const fetchContractCount = async () => {
     if (!currentOrgId) return
@@ -208,7 +207,7 @@ export default function ContractsPage() {
     if (currentOrgId) {
       const loadData = async () => {
         setLoading(true)
-        await Promise.all([loadContracts(), fetchContractCount()])
+        await Promise.all([loadContracts(), fetchContractCount(), fetchSubscription()])
         setLoading(false)
         setDataReady(true)
       }
@@ -217,9 +216,7 @@ export default function ContractsPage() {
   }, [currentOrgId])
 
   const checkAndShowLimitModal = (showOnLoad = false) => {
-    // Technicians should not see the limit modal (they can't add anyway)
     if (userRole === 'technician') return false
-
     if (showOnLoad && autoShown) return
 
     let isExpired = false
@@ -260,10 +257,12 @@ export default function ContractsPage() {
     }
   }, [dataReady, autoShown, subscription, plan, contractCount, userRole])
 
+  // Handlers (filter, delete, edit, etc.) remain unchanged...
+  // ...
+
   const handleFilter = () => {
     let filtered = contracts
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(c =>
         c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -271,7 +270,6 @@ export default function ContractsPage() {
       )
     }
 
-    // Status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter(c => {
         const days = getDaysUntilService(c.next_service_date)
@@ -280,7 +278,6 @@ export default function ContractsPage() {
       })
     }
 
-    // Month filter (by next_service_date)
     if (filterMonth !== 'all') {
       const monthNum = parseInt(filterMonth)
       filtered = filtered.filter(c => {
@@ -290,7 +287,6 @@ export default function ContractsPage() {
       })
     }
 
-    // Location filter
     if (filterLocation !== 'all') {
       filtered = filtered.filter(c => c.location === filterLocation)
     }
@@ -302,8 +298,6 @@ export default function ContractsPage() {
     handleFilter()
   }, [searchTerm, filterStatus, filterMonth, filterLocation, contracts])
 
-  // Distinct, non-empty locations pulled from existing contracts — the Location
-  // filter dropdown populates itself from whatever locations users have typed in.
   const availableLocations = Array.from(
     new Set(
       contracts
@@ -343,13 +337,8 @@ export default function ContractsPage() {
     setShowPlanModal(true)
   }
 
-  const handleSelectPlan = (plan: any, billingCycle: any) => {
-    alert(`Selected plan: ${plan.name} (${billingCycle})`)
-    setShowPlanModal(false)
-  }
-
   const handleAddClick = () => {
-    if (userRole === 'technician') return // safety
+    if (userRole === 'technician') return
     const blocked = checkAndShowLimitModal(false)
     if (blocked) return
     setEditingContract(null)
@@ -359,7 +348,7 @@ export default function ContractsPage() {
   const handleModalSuccess = () => {
     const refresh = async () => {
       setLoading(true)
-      await Promise.all([loadContracts(), fetchContractCount()])
+      await Promise.all([loadContracts(), fetchContractCount(), fetchSubscription()])
       setLoading(false)
     }
     refresh()
@@ -383,9 +372,6 @@ export default function ContractsPage() {
 
       const displayed = (contractsData as Contract[]).map(contract => {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
-        // Old-mode contracts have a manually-entered End Year saved directly in
-        // contract.end_date — show it as-is, don't recalculate it from start_date.
-        // New-mode contracts keep the existing auto-calculated behavior, unchanged.
         const endDate = contract.contract_type === 'old'
           ? (contract.end_date || null)
           : getContractEndDate(contract.start_date, contract.duration_years)
@@ -499,7 +485,6 @@ export default function ContractsPage() {
     }
   }
 
-  // Determine if the user is a technician
   const isTechnician = userRole === 'technician'
 
   return (
@@ -516,7 +501,6 @@ export default function ContractsPage() {
               <Download className="mr-2 size-4" />
               Export PDF
             </Button>
-            {/* Hide Add Contract button for technicians */}
             {!isTechnician && (
               <Button onClick={handleAddClick}>
                 <Plus className="mr-2 size-4" />
@@ -554,7 +538,6 @@ export default function ContractsPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Month Filter */}
                 <Select value={filterMonth} onValueChange={setFilterMonth}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Month" />
@@ -568,8 +551,6 @@ export default function ContractsPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Location Filter — options populate automatically from whatever
-                    locations users have entered on their contracts */}
                 <Select value={filterLocation} onValueChange={setFilterLocation}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Location" />
@@ -614,7 +595,6 @@ export default function ContractsPage() {
                       <TableHead>Start Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
-                      {/* Hide Actions column for technicians */}
                       {!isTechnician && <TableHead className="w-[70px]">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -636,7 +616,6 @@ export default function ContractsPage() {
                           <TableCell>{contract.start_date || '—'}</TableCell>
                           <TableCell>{contract.next_service_date || '—'}</TableCell>
                           <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
-                          {/* Hide Actions cell for technicians */}
                           {!isTechnician && (
                             <TableCell>
                               <div className="flex gap-2">
@@ -715,11 +694,21 @@ export default function ContractsPage() {
           limitValue={limitValue}
         />
 
-        {/* Plan Selection Modal */}
+        {/* ✅ Plan Selection Modal – fixed props */}
         <PlanSelectionModal
           isOpen={showPlanModal}
           onClose={() => setShowPlanModal(false)}
-          onSelectPlan={handleSelectPlan}
+          orgId={currentOrgId || ''}
+          userEmail={user?.email}
+          userName={user?.user_metadata?.full_name}
+          onSuccess={() => {
+            // Refresh all data after successful upgrade
+            if (currentOrgId) {
+              fetchSubscription();
+              fetchContractCount();
+              loadContracts();
+            }
+          }}
         />
       </div>
     </DashboardLayout>
