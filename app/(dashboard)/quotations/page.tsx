@@ -53,18 +53,14 @@ export default function QuotationsPage() {
   const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
   const [checkingProfile, setCheckingProfile] = useState(false)
 
-  // Organization ID
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
   const { maxQuotationsMonthly, currentQuotationsThisMonth, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
-  // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
-  // Fetch org_id
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -83,29 +79,13 @@ export default function QuotationsPage() {
     }
   }, [user?.id])
 
-  // Load quotations when org ID is available
   useEffect(() => {
     if (currentOrgId) {
       loadQuotations()
     }
   }, [currentOrgId])
 
-  // Check limits on page load
-  useEffect(() => {
-    if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-    } else if (maxQuotationsMonthly > 0 && currentQuotationsThisMonth >= maxQuotationsMonthly) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your monthly quotation limit",
-        description: `Your current plan allows a maximum of ${maxQuotationsMonthly} quotations per month. You have already created ${currentQuotationsThisMonth} this month. Upgrade to increase your limit.`,
-      })
-      setShowLimitModal(true)
-    }
-  }, [limitsLoading, status, maxQuotationsMonthly, currentQuotationsThisMonth])
+  // ✅ REMOVED auto-show on page load – modal only from button
 
   const handleFilter = () => {
     let filtered = quotations
@@ -167,15 +147,13 @@ export default function QuotationsPage() {
     }
   }
 
-  const handleNewQuotationClick = async () => {
-    if (!user?.id || !currentOrgId) return
-
-    // Check limits before proceeding
+  // ✅ Check limits – only called from New Quotation button
+  const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
       setShowLimitModal(true)
-      return
+      return true
     }
     if (maxQuotationsMonthly > 0 && currentQuotationsThisMonth >= maxQuotationsMonthly) {
       setLimitModalType('resource-limit')
@@ -184,8 +162,16 @@ export default function QuotationsPage() {
         description: `Your current plan allows a maximum of ${maxQuotationsMonthly} quotations per month. You have already created ${currentQuotationsThisMonth} this month. Upgrade to increase your limit.`,
       })
       setShowLimitModal(true)
-      return
+      return true
     }
+    return false
+  }
+
+  const handleNewQuotationClick = async () => {
+    if (!user?.id || !currentOrgId) return
+
+    // ✅ Check limits before anything else
+    if (checkAndShowLimitModal()) return
 
     // Then check company profile
     setCheckingProfile(true)
@@ -377,7 +363,7 @@ export default function QuotationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Limit Reached Modal */}
+      {/* Limit Reached Modal – only from button */}
       <LimitReachedModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
