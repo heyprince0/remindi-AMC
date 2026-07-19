@@ -477,12 +477,56 @@ export default function DashboardPage() {
     }
   }, [user, authLoading])
 
-  // Show loading spinner while checking role, redirecting, or waiting on org check
+  // Show skeleton loading while checking role, redirecting, or waiting on org check
   if (authLoading || isRedirecting || !orgCheckDone) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
-      </div>
+      <DashboardLayout>
+        <div className="flex flex-col gap-6 animate-pulse">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="h-7 w-40 rounded-md bg-muted" />
+              <div className="mt-2 h-4 w-64 rounded-md bg-muted" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="h-9 w-32 rounded-md bg-muted" />
+              <div className="h-9 w-32 rounded-md bg-muted" />
+              <div className="h-9 w-32 rounded-md bg-muted" />
+              <div className="h-9 w-32 rounded-md bg-muted" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-border p-4">
+                <div className="h-4 w-20 rounded-md bg-muted" />
+                <div className="mt-3 h-7 w-12 rounded-md bg-muted" />
+                <div className="mt-2 h-3 w-16 rounded-md bg-muted" />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-lg border border-border p-4">
+              <div className="h-5 w-40 rounded-md bg-muted" />
+              <div className="mt-1 h-3 w-56 rounded-md bg-muted" />
+              <div className="mt-4 flex flex-col gap-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-16 rounded-lg bg-muted" />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <div className="h-5 w-40 rounded-md bg-muted" />
+              <div className="mt-1 h-3 w-56 rounded-md bg-muted" />
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-10 rounded-md bg-muted" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
     )
   }
 
