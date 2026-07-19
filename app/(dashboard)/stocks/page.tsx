@@ -7,10 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Package, AlertTriangle, Minus, TrendingUp, Truck, Plus, Download } from "lucide-react"
+import { Package, AlertTriangle, Minus, TrendingUp, Truck, Plus } from "lucide-react"
 import { toast } from "sonner"
-import jsPDF from "jspdf"
-import autoTable from "jspdf-autotable"
 import InventorySummaryStrip from "./components/InventorySummaryStrip"
 import ItemsTable from "./components/ItemsTable"
 import StockMovementsTable from "./components/StockMovementsTable"
@@ -201,15 +199,6 @@ export default function StocksPage() {
     setRefreshTrigger(prev => prev + 1)
   }
 
-  const exportInventoryPDF = () => {
-    if (!metrics) {
-      toast.error("No data to export")
-      return
-    }
-
-    // ... (PDF export logic – unchanged)
-  }
-
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -220,10 +209,6 @@ export default function StocksPage() {
             <p className="text-muted-foreground">Manage your stock, items, and parts inventory</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportInventoryPDF} disabled={loading || !metrics}>
-              <Download className="mr-2 size-4" />
-              Export PDF
-            </Button>
             <Button variant="outline" onClick={handleRefresh} disabled={loading}>
               Refresh
             </Button>
