@@ -29,7 +29,6 @@ import {
 import { supabase } from "@/lib/supabase"
 import { Plus, Search, MoreHorizontal, Edit, Trash2, History, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "sonner"
-import AddEditItemSheet from "./AddEditItemSheet"
 import StockInOutDialog from "./StockInOutDialog"
 import StockHistoryDialog from "./StockHistoryDialog"
 import {
@@ -71,6 +70,9 @@ interface Category {
 interface ItemsTableProps {
   orgId: string
   onItemsChange: () => void
+  onAddItem: () => void
+  onEditItem: (item: InventoryItem) => void
+  categories: Category[]
 }
 
 function getStockStatus(current: number, min: number) {
@@ -79,25 +81,27 @@ function getStockStatus(current: number, min: number) {
   return { status: "In Stock", color: "bg-green-500/10 text-green-600 border-green-500/20" }
 }
 
-export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
+export default function ItemsTable({
+  orgId,
+  onItemsChange,
+  onAddItem,
+  onEditItem,
+  categories,
+}: ItemsTableProps) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [filterCategory, setFilterCategory] = useState("all")
-  
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
-  
+
   const [stockDialogOpen, setStockDialogOpen] = useState(false)
   const [stockDialogMode, setStockDialogMode] = useState<"in" | "out">("in")
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-  
+
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null)
-  
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -110,23 +114,14 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
     try {
       setLoading(true)
 
-      const [itemsRes, categoriesRes] = await Promise.all([
-        supabase
-          .from("inventory_items")
-          .select("*")
-          .eq("org_id", orgId)
-          .eq("is_active", true),
-        supabase
-          .from("inventory_categories")
-          .select("*")
-          .eq("org_id", orgId),
-      ])
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*")
+        .eq("org_id", orgId)
+        .eq("is_active", true)
 
-      if (itemsRes.error) throw itemsRes.error
-      if (categoriesRes.error) throw categoriesRes.error
-
-      setItems(itemsRes.data || [])
-      setCategories(categoriesRes.data || [])
+      if (error) throw error
+      setItems(data || [])
     } catch (error) {
       console.error("Error loading items:", error)
       toast.error("Failed to load inventory items")
@@ -191,16 +186,6 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
     }
   }
 
-  const handleAddItem = () => {
-    setEditingItem(null)
-    setSheetOpen(true)
-  }
-
-  const handleEditItem = (item: InventoryItem) => {
-    setEditingItem(item)
-    setSheetOpen(true)
-  }
-
   const handleStockClick = (item: InventoryItem, mode: "in" | "out") => {
     setSelectedItem(item)
     setStockDialogMode(mode)
@@ -210,11 +195,6 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
   const handleHistoryClick = (item: InventoryItem) => {
     setHistoryItem(item)
     setHistoryDialogOpen(true)
-  }
-
-  const handleSheetSuccess = () => {
-    loadData()
-    onItemsChange()
   }
 
   const handleStockSuccess = () => {
@@ -272,7 +252,7 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
               </SelectContent>
             </Select>
 
-            <Button onClick={handleAddItem}>
+            <Button onClick={onAddItem}>
               <Plus className="mr-2 size-4" />
               Add Item
             </Button>
@@ -335,7 +315,7 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditItem(item)}>
+                            <DropdownMenuItem onClick={() => onEditItem(item)}>
                               <Edit className="mr-2 size-4" />
                               Edit
                             </DropdownMenuItem>
@@ -371,16 +351,6 @@ export default function ItemsTable({ orgId, onItemsChange }: ItemsTableProps) {
             </TableBody>
           </Table>
         </div>
-
-        {/* Add/Edit Item Sheet */}
-        <AddEditItemSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          editingItem={editingItem}
-          categories={categories}
-          orgId={orgId}
-          onSuccess={handleSheetSuccess}
-        />
 
         {/* Stock In/Out Dialog */}
         <StockInOutDialog
