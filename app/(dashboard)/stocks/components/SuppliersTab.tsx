@@ -165,7 +165,7 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
                 <TableHead>Name</TableHead>
                 <TableHead>Contact Person</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>GSTIN</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -189,7 +189,7 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
                     <TableCell className="font-medium">{supplier.name}</TableCell>
                     <TableCell className="text-sm">{supplier.contact_person || "—"}</TableCell>
                     <TableCell className="text-sm">{supplier.phone || "—"}</TableCell>
-                    <TableCell className="text-sm">{supplier.email || "—"}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{supplier.address || "—"}</TableCell>
                     <TableCell className="text-sm">{supplier.gstin || "—"}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
