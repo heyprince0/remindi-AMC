@@ -44,6 +44,9 @@ const CYCLE_LABELS: Record<BillingCycle, { label: string; period: string; months
   annual: { label: 'Yearly', period: 'year', months: 12 },
 };
 
+// 👇 Define which plan should show the "Most Popular" badge
+const POPULAR_PLAN_ID = 'pro-max';
+
 export default function PlanSelectionModal({
   isOpen,
   onClose,
@@ -207,7 +210,7 @@ export default function PlanSelectionModal({
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-      onClose(); // ✅ Close the plan selection modal – only Razorpay stays visible.
+      onClose(); // Close the modal so only Razorpay stays visible
     } catch (err) {
       console.error('Payment error:', err);
       toast.error('Something went wrong starting the payment.');
@@ -273,7 +276,8 @@ export default function PlanSelectionModal({
           {plans.map((plan) => {
             const price = getPrice(plan);
             const isFree = price === 0;
-            const isPopular = plan.id === 'pro';
+            // 👇 Make Pro Max the Most Popular plan
+            const isPopular = plan.id === POPULAR_PLAN_ID;
             const discountPercent = getDiscountPercent(plan);
             const savingsAmount = getSavingsAmount(plan);
 
