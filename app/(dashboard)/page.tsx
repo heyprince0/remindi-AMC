@@ -97,6 +97,7 @@ export default function DashboardPage() {
 
   // --- Loading state for redirect check ---
   const [isRedirecting, setIsRedirecting] = useState(true)
+  const [orgCheckDone, setOrgCheckDone] = useState(false)
 
   // Fetch org_id – but do NOT redirect to /profile-setup
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function DashboardPage() {
           }
         })
         .finally(() => {
-          setIsRedirecting(false)
+          setOrgCheckDone(true)
         })
     }
   }, [user?.id])
@@ -476,8 +477,8 @@ export default function DashboardPage() {
     }
   }, [user, authLoading])
 
-  // Show loading spinner while checking role or redirecting
-  if (authLoading || isRedirecting) {
+  // Show loading spinner while checking role, redirecting, or waiting on org check
+  if (authLoading || isRedirecting || !orgCheckDone) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
