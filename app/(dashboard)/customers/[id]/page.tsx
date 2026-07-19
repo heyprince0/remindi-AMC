@@ -28,7 +28,7 @@ interface ContractDisplay extends Contract {
   endDate: string | null
 }
 
-// Helper to compute contract end date
+// Helper to compute contract end date (same as Contracts page)
 function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
   if (!startDate || !durationYears || durationYears <= 0) return null
   const start = new Date(startDate)
@@ -129,11 +129,15 @@ export default function CustomerDetailPage() {
 
       if (contractsError) throw contractsError
 
-      // Compute end date and days until service
+      // Compute endDate exactly like the Contracts page:
+      // - Old contracts: use stored end_date directly
+      // - New contracts: compute from start_date + duration_years
       const contractsWithExtra = (contractsData as Contract[]).map(contract => ({
         ...contract,
         daysUntilService: getDaysUntilService(contract.next_service_date),
-        endDate: getContractEndDate(contract.start_date, contract.duration_years),
+        endDate: contract.contract_type === 'old'
+          ? (contract.end_date || null)
+          : getContractEndDate(contract.start_date, contract.duration_years),
       }))
 
       setContracts(contractsWithExtra)
@@ -264,7 +268,7 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Contracts Section */}
+        {/* Contracts Section - Updated to match Contracts page */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -288,7 +292,7 @@ export default function CustomerDetailPage() {
                       <TableHead>Contract Name</TableHead>
                       <TableHead>Frequency</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead>Contract End Date</TableHead> {/* ✅ Added */}
+                      <TableHead>Contract End Date</TableHead>
                       <TableHead>Start Date</TableHead>
                       <TableHead>Next Service</TableHead>
                       <TableHead>Status</TableHead>
