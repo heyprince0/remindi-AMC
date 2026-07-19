@@ -40,13 +40,17 @@ interface Category {
   created_at: string
 }
 
+interface CategoryWithCount extends Category {
+  itemCount: number
+}
+
 interface CategoriesTabProps {
   orgId: string
 }
 
 export default function CategoriesTab({ orgId }: CategoriesTabProps) {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [filteredCategories, setFilteredCategories] = useState<Category[]>([])
+  const [categories, setCategories] = useState<CategoryWithCount[]>([])
+  const [filteredCategories, setFilteredCategories] = useState<CategoryWithCount[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   
@@ -71,8 +75,31 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
         .order("created_at", { ascending: false })
 
       if (error) throw error
-      setCategories(data || [])
-      setFilteredCategories(data || [])
+
+      // Fetch item counts per category so users can see how many items
+      // were created under each category.
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("inventory_items")
+        .select("category_id")
+        .eq("org_id", orgId)
+        .eq("is_active", true)
+
+      if (itemsError) throw itemsError
+
+      const countsByCategory = (itemsData || []).reduce((acc: Record<string, number>, item) => {
+        if (item.category_id) {
+          acc[item.category_id] = (acc[item.category_id] || 0) + 1
+        }
+        return acc
+      }, {})
+
+      const categoriesWithCount: CategoryWithCount[] = (data || []).map((category) => ({
+        ...category,
+        itemCount: countsByCategory[category.id] || 0,
+      }))
+
+      setCategories(categoriesWithCount)
+      setFilteredCategories(categoriesWithCount)
     } catch (error) {
       console.error("Error loading categories:", error)
       toast.error("Failed to load categories")
@@ -156,6 +183,7 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Category Name</TableHead>
+                <TableHead>Items</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -163,13 +191,13 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                     Loading categories...
                   </TableCell>
                 </TableRow>
               ) : filteredCategories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No categories found matching your search" : "No categories yet"}
                   </TableCell>
                 </TableRow>
@@ -177,6 +205,7 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
                 filteredCategories.map((category) => (
                   <TableRow key={category.id}>
                     <TableCell className="font-medium">{category.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{category.itemCount}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(category.created_at).toLocaleDateString("en-IN")}
                     </TableCell>
