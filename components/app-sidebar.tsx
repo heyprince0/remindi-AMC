@@ -196,6 +196,22 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-4 space-y-3">
+        {isInstallable && !isInstalled && (
+          <button
+            onClick={installApp}
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 group-data-[collapsible=icon]:px-0"
+            style={{
+              background: '#29ABE2',
+              boxShadow: '0 4px 14px rgba(41,171,226,.35)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#1e96cc')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#29ABE2')}
+          >
+            <Download className="size-4" />
+            <span className="group-data-[collapsible=icon]:hidden">Install App</span>
+          </button>
+        )}
+
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
             <span className="text-xs font-medium">
@@ -213,18 +229,6 @@ export function AppSidebar() {
             </span>
           </div>
         </div>
-
-        {isInstallable && !isInstalled && (
-          <div className="group-data-[collapsible=icon]:hidden">
-            <button
-              onClick={installApp}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            >
-              <Download className="size-4" />
-              <span>Install App</span>
-            </button>
-          </div>
-        )}
 
         {(role === 'member' || role === 'technician') && (
           <div className="group-data-[collapsible=icon]:hidden">
