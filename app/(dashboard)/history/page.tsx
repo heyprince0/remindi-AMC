@@ -14,11 +14,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { supabase, type ServiceHistory, type Contract, type Technician, type Customer, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { Search, Download, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react"
 import { ExportModal } from "@/components/export-modal"
 import { toast } from "sonner"
+
+// Month options for the date filter
+const MONTHS = [
+  { value: 'all', label: 'All Months' },
+  { value: '0', label: 'Jan' },
+  { value: '1', label: 'Feb' },
+  { value: '2', label: 'Mar' },
+  { value: '3', label: 'Apr' },
+  { value: '4', label: 'May' },
+  { value: '5', label: 'Jun' },
+  { value: '6', label: 'Jul' },
+  { value: '7', label: 'Aug' },
+  { value: '8', label: 'Sep' },
+  { value: '9', label: 'Oct' },
+  { value: '10', label: 'Nov' },
+  { value: '11', label: 'Dec' },
+]
 
 interface ServiceRecord extends ServiceHistory {
   customerName: string
@@ -61,6 +85,7 @@ export default function ServiceHistoryPage() {
   const [filteredRecords, setFilteredRecords] = useState<ServiceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterMonth, setFilterMonth] = useState("all")
   const [exportModalOpen, setExportModalOpen] = useState(false)
 
   // --- Org state ---
@@ -157,12 +182,20 @@ export default function ServiceHistoryPage() {
         r.technicianName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
+    if (filterMonth !== 'all') {
+      const monthNum = parseInt(filterMonth)
+      filtered = filtered.filter(r => {
+        if (!r.service_date) return false
+        const date = new Date(r.service_date)
+        return date.getMonth() === monthNum
+      })
+    }
     setFilteredRecords(filtered)
   }
 
   useEffect(() => {
     handleFilter()
-  }, [searchTerm, serviceRecords])
+  }, [searchTerm, filterMonth, serviceRecords])
 
   return (
     <DashboardLayout>
@@ -187,8 +220,8 @@ export default function ServiceHistoryPage() {
         {/* Filters */}
         <Card>
           <CardContent className="p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="relative flex-1">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
+              <div className="relative flex-1 min-w-[150px]">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="search"
@@ -198,6 +231,20 @@ export default function ServiceHistoryPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
+
+              {/* Month Filter */}
+              <Select value={filterMonth} onValueChange={setFilterMonth}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -207,7 +254,7 @@ export default function ServiceHistoryPage() {
           <CardHeader>
             <CardTitle>Service Records</CardTitle>
             <CardDescription>
-              Showing {filteredRecords.length} records {searchTerm ? 'matching your search' : 'in total'}
+              Showing {filteredRecords.length} records {searchTerm || filterMonth !== 'all' ? 'matching filters' : 'in total'}
             </CardDescription>
           </CardHeader>
           <CardContent>
