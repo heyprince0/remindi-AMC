@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ 
     contracts: 0, 
     todayServicing: 0, 
+    monthServicing: 0,
     expiringSoon: 0, 
     expired: 0,
     customers: 0, 
@@ -268,13 +269,22 @@ export default function DashboardPage() {
 
       const activeContracts = (contractsData as Contract[]).filter(c => c.status === 'active').length
       let todayServicing = 0
+      let monthServicing = 0
       let expiringSoon = 0
       let expired = 0
       const services: UpcomingService[] = []
+      const now = new Date()
 
       for (const contract of (contractsData as Contract[]) || []) {
         const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
         const days = getDaysUntilService(contract.next_service_date)
+
+        if (contract.next_service_date) {
+          const svcDate = new Date(contract.next_service_date)
+          if (svcDate.getFullYear() === now.getFullYear() && svcDate.getMonth() === now.getMonth()) {
+            monthServicing++
+          }
+        }
 
         if (days < 0) {
           expired++
@@ -315,6 +325,7 @@ export default function DashboardPage() {
       setStats({
         contracts: activeContracts,
         todayServicing,
+        monthServicing,
         expiringSoon,
         expired,
         customers: (customersData as Customer[])?.length || 0,
@@ -529,7 +540,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard title="Active Contracts" value={stats.contracts} icon={FileText} description="Total" />
-          <StatCard title="Today Servicing" value={stats.todayServicing} icon={CalendarClock} description="Needs attention" iconClassName="bg-alert-due-today/10" />
+          <StatCard title="This Month Servicing" value={stats.monthServicing} icon={CalendarClock} description="This month" iconClassName="bg-alert-due-today/10" />
           <StatCard title="Expiring Soon" value={stats.expiringSoon} icon={CalendarCheck} description="In next 3 days" />
           <StatCard title="Expired" value={stats.expired} icon={Clock} description="Overdue contracts" iconClassName="bg-alert-overdue/10" />
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
