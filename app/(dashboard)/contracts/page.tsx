@@ -90,7 +90,6 @@ function hexToRgb(hex: string): [number, number, number] {
     : [22, 45, 60]
 }
 
-// Month options for filter
 const MONTHS = [
   { value: 'all', label: 'All Months' },
   { value: '0', label: 'Jan' },
@@ -135,7 +134,7 @@ export default function ContractsPage() {
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
 
-  // Fetch org and role
+  // --- Org and role ---
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -160,7 +159,7 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
-  // Named function to fetch subscription (so we can call it from onSuccess)
+  // --- Named fetchSubscription (so we can call it on upgrade) ---
   const fetchSubscription = async () => {
     if (!currentOrgId) return
     try {
@@ -203,6 +202,7 @@ export default function ContractsPage() {
     }
   }
 
+  // --- Initial data load ---
   useEffect(() => {
     if (currentOrgId) {
       const loadData = async () => {
@@ -215,6 +215,7 @@ export default function ContractsPage() {
     }
   }, [currentOrgId])
 
+  // --- Limit modal logic ---
   const checkAndShowLimitModal = (showOnLoad = false) => {
     if (userRole === 'technician') return false
     if (showOnLoad && autoShown) return
@@ -257,19 +258,15 @@ export default function ContractsPage() {
     }
   }, [dataReady, autoShown, subscription, plan, contractCount, userRole])
 
-  // Handlers (filter, delete, edit, etc.) remain unchanged...
-  // ...
-
+  // --- Handlers (filter, delete, edit, add) ---
   const handleFilter = () => {
     let filtered = contracts
-
     if (searchTerm) {
       filtered = filtered.filter(c =>
         c.contract_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customerName.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-
     if (filterStatus !== 'all') {
       filtered = filtered.filter(c => {
         const days = getDaysUntilService(c.next_service_date)
@@ -277,7 +274,6 @@ export default function ContractsPage() {
         return statusLabel === filterStatus
       })
     }
-
     if (filterMonth !== 'all') {
       const monthNum = parseInt(filterMonth)
       filtered = filtered.filter(c => {
@@ -286,11 +282,9 @@ export default function ContractsPage() {
         return date.getMonth() === monthNum
       })
     }
-
     if (filterLocation !== 'all') {
       filtered = filtered.filter(c => c.location === filterLocation)
     }
-
     setFilteredContracts(filtered)
   }
 
@@ -390,6 +384,7 @@ export default function ContractsPage() {
     }
   }
 
+  // --- PDF export (unchanged) ---
   const getStatusCounts = (data: ContractDisplay[]) => {
     let active = 0, expired = 0, todayServicing = 0, expiringSoon = 0
     data.forEach(c => {
@@ -694,22 +689,23 @@ export default function ContractsPage() {
           limitValue={limitValue}
         />
 
-        {/* ✅ Plan Selection Modal – fixed props */}
-        <PlanSelectionModal
-          isOpen={showPlanModal}
-          onClose={() => setShowPlanModal(false)}
-          orgId={currentOrgId || ''}
-          userEmail={user?.email}
-          userName={user?.user_metadata?.full_name}
-          onSuccess={() => {
-            // Refresh all data after successful upgrade
-            if (currentOrgId) {
-              fetchSubscription();
-              fetchContractCount();
-              loadContracts();
-            }
-          }}
-        />
+        {/* ✅ Plan Selection Modal – only render when orgId is available */}
+        {currentOrgId && (
+          <PlanSelectionModal
+            isOpen={showPlanModal}
+            onClose={() => setShowPlanModal(false)}
+            orgId={currentOrgId}
+            userEmail={user?.email}
+            userName={user?.user_metadata?.full_name}
+            onSuccess={() => {
+              if (currentOrgId) {
+                fetchSubscription();
+                fetchContractCount();
+                loadContracts();
+              }
+            }}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
