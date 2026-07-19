@@ -408,7 +408,7 @@ export function AddContractModal({
     }
   }
 
-  // ========== FIX: Keep sub‑modal open and show toast ==========
+  // ========== FIX: Close sub‑modal after adding, keep main modal open ==========
   const handleAddOldService = () => {
     const subErrors: Record<string, string> = {}
     if (!subModal.startDate) subErrors.startDate = 'Service Start Date is required'
@@ -434,12 +434,11 @@ export function AddContractModal({
       },
     ])
 
-    // Show toast confirmation
     toast.success('1 old service added')
 
-    // Keep sub‑modal open, reset fields for next entry
+    // CLOSE the sub‑modal after adding (main modal stays open)
     setSubModal({
-      open: true,
+      open: false,          // <-- now closes the sub‑dialog
       startDate: '',
       endDate: '',
       technicianId: '',
@@ -736,7 +735,12 @@ export function AddContractModal({
     {/* Sub-Modal for Adding Old Service */}
     <Dialog open={subModal.open} onOpenChange={(isOpen) => setSubModal({ ...subModal, open: isOpen, errors: {} })}>
       {/* HIDE the default close (X) button */}
-      <DialogContent className="max-w-md [&>button]:hidden">
+      {/* Prevent closing on outside click or Escape – only buttons can close it */}
+      <DialogContent
+        className="max-w-md [&>button]:hidden"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Add Old Service</DialogTitle>
         </DialogHeader>
