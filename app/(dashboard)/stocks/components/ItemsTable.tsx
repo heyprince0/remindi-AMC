@@ -73,6 +73,7 @@ interface ItemsTableProps {
   onAddItem: () => void
   onEditItem: (item: InventoryItem) => void
   categories: Category[]
+  refreshTrigger?: number
 }
 
 function getStockStatus(current: number, min: number) {
@@ -87,6 +88,7 @@ export default function ItemsTable({
   onAddItem,
   onEditItem,
   categories,
+  refreshTrigger,
 }: ItemsTableProps) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
@@ -108,7 +110,7 @@ export default function ItemsTable({
 
   useEffect(() => {
     loadData()
-  }, [orgId])
+  }, [orgId, refreshTrigger])
 
   const loadData = async () => {
     try {
