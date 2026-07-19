@@ -258,6 +258,7 @@ export default function StocksPage() {
                 onAddItem={handleAddItem}
                 onEditItem={handleEditItem}
                 categories={categories}
+                refreshTrigger={refreshTrigger}
               />
             )}
           </TabsContent>
