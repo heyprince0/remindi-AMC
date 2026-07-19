@@ -91,47 +91,47 @@ export default function StockHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Stock History: {item?.name}</DialogTitle>
+      <DialogContent className="w-[95vw] sm:w-full sm:max-w-5xl max-h-[85vh] overflow-y-auto p-6">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-xl">Stock History: {item?.name}</DialogTitle>
           <DialogDescription>
             Chronological record of all stock movements
           </DialogDescription>
         </DialogHeader>
 
-        <div className="border rounded-lg overflow-hidden">
+        <div className="mt-4 border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>Notes</TableHead>
+                <TableHead className="py-3 px-4 whitespace-nowrap">Date &amp; Time</TableHead>
+                <TableHead className="py-3 px-4">Type</TableHead>
+                <TableHead className="py-3 px-4 text-right">Quantity</TableHead>
+                <TableHead className="py-3 px-4">Reason</TableHead>
+                <TableHead className="py-3 px-4">Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell className="py-3 px-4"><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell className="py-3 px-4"><Skeleton className="h-4 w-12" /></TableCell>
+                    <TableCell className="py-3 px-4"><Skeleton className="h-4 w-12" /></TableCell>
+                    <TableCell className="py-3 px-4"><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell className="py-3 px-4"><Skeleton className="h-4 w-24" /></TableCell>
                   </TableRow>
                 ))
               ) : movements.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                     No stock movements recorded
                   </TableCell>
                 </TableRow>
               ) : (
                 movements.map((movement) => (
                   <TableRow key={movement.id}>
-                    <TableCell className="text-sm">{formatDate(movement.created_at)}</TableCell>
-                    <TableCell>
+                    <TableCell className="py-3 px-4 text-sm whitespace-nowrap">{formatDate(movement.created_at)}</TableCell>
+                    <TableCell className="py-3 px-4">
                       <Badge
                         className={movement.movement_type === "in" 
                           ? "bg-green-500/10 text-green-600 border-green-500/20" 
@@ -141,11 +141,11 @@ export default function StockHistoryDialog({
                         {movement.movement_type === "in" ? "In" : "Out"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium">
+                    <TableCell className="py-3 px-4 text-right font-medium whitespace-nowrap">
                       {movement.movement_type === "in" ? "+" : "-"}{movement.quantity}
                     </TableCell>
-                    <TableCell className="text-sm">{movement.reason}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="py-3 px-4 text-sm">{movement.reason}</TableCell>
+                    <TableCell className="py-3 px-4 text-sm text-muted-foreground">
                       {movement.notes || "—"}
                     </TableCell>
                   </TableRow>
