@@ -268,6 +268,7 @@ export default function ItemsTable({
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>SKU</TableHead>
+                <TableHead>Brand</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
                 <TableHead>Status</TableHead>
@@ -278,13 +279,13 @@ export default function ItemsTable({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Loading inventory items...
                   </TableCell>
                 </TableRow>
               ) : filteredItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {searchTerm || filterStatus !== "all" || filterCategory !== "all"
                       ? "No items found matching filters"
                       : "No inventory items yet"}
@@ -300,6 +301,7 @@ export default function ItemsTable({
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">{item.sku || "—"}</TableCell>
+                      <TableCell className="text-sm">{item.brand || "—"}</TableCell>
                       <TableCell className="text-sm">{category?.name || "—"}</TableCell>
                       <TableCell className="text-right">
                         {item.current_stock} {item.unit}
