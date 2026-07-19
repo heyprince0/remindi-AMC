@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { Toaster } from 'sonner'
-import { InstallCacheCleanup } from '@/components/install-cache-cleanup'
 import Script from 'next/script'   // ✅ added
 import './globals.css'
 
@@ -42,7 +41,6 @@ export default function RootLayout({
           <Toaster />
         </AuthProvider>
         <Analytics />
-        <InstallCacheCleanup />
       </body>
     </html>
   )
