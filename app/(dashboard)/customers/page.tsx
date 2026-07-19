@@ -65,22 +65,7 @@ export default function CustomersPage() {
     }
   }, [currentOrgId])
 
-  // Check limits on page load
-  useEffect(() => {
-    if (limitsLoading || !currentOrgId) return
-    if (status === 'expired' || status === 'cancelled') {
-      setLimitModalType('expired')
-      setLimitModalCustom({})
-      setShowLimitModal(true)
-    } else if (maxCustomers > 0 && currentCustomerCount >= maxCustomers) {
-      setLimitModalType('resource-limit')
-      setLimitModalCustom({
-        title: "You've reached your customer limit",
-        description: `Your current plan allows a maximum of ${maxCustomers} customers. You have already created ${currentCustomerCount}. Upgrade to manage more customers.`,
-      })
-      setShowLimitModal(true)
-    }
-  }, [limitsLoading, status, maxCustomers, currentCustomerCount])
+  // ✅ REMOVED: auto-show on page load – modal only triggers from button
 
   const loadCustomers = async () => {
     try {
@@ -145,13 +130,13 @@ export default function CustomersPage() {
     }
   }
 
-  const handleAddClick = () => {
-    // Check limits before opening modal
+  // ✅ Check limits – only called from Add button
+  const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({})
       setShowLimitModal(true)
-      return
+      return true
     }
     if (maxCustomers > 0 && currentCustomerCount >= maxCustomers) {
       setLimitModalType('resource-limit')
@@ -160,9 +145,13 @@ export default function CustomersPage() {
         description: `Your current plan allows a maximum of ${maxCustomers} customers. You have already created ${currentCustomerCount}. Upgrade to manage more customers.`,
       })
       setShowLimitModal(true)
-      return
+      return true
     }
-    // Otherwise open the add modal
+    return false
+  }
+
+  const handleAddClick = () => {
+    if (checkAndShowLimitModal()) return
     setEditingCustomer(null)
     setModalOpen(true)
   }
@@ -297,7 +286,7 @@ export default function CustomersPage() {
           />
         )}
 
-        {/* Limit Reached Modal */}
+        {/* Limit Reached Modal – only shows when triggered by Add button */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
