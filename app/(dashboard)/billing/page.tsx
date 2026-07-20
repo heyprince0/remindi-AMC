@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
@@ -121,9 +122,14 @@ export default function BillingPage() {
     ? getBillingMonthStart(subscription.start_date)
     : null;
 
-  const resetLabel = billingMonthStart
-    ? `Resets on the ${billingMonthStart.getDate()}th of every month`
-    : 'Resets on the 1st of every month';
+  // Check if user is on a free trial
+  const isTrial = subscription?.status === 'trial';
+
+  const resetLabel = isTrial
+    ? 'Unlimited during trial'
+    : billingMonthStart
+      ? `Resets on the ${billingMonthStart.getDate()}th of every month`
+      : 'Resets on the 1st of every month';
 
   if (loading) {
     return (
@@ -166,12 +172,19 @@ export default function BillingPage() {
           )}
         </section>
 
-        {/* NEW: Usage & Limits Section */}
+        {/* Usage & Limits Section */}
         {hasSubscription && (
           <section>
             <Card>
               <CardHeader>
-                <CardTitle>Usage & Limits</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Usage & Limits</CardTitle>
+                  {isTrial && (
+                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                      Free Trial
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {resetLabel}
                 </p>
@@ -271,7 +284,9 @@ export default function BillingPage() {
                   {/* Quotations (monthly) */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="font-medium">Quotations (this month)</span>
+                      <span className="font-medium">
+                        {isTrial ? 'Quotations (trial – unlimited)' : 'Quotations (this month)'}
+                      </span>
                       <span className="text-muted-foreground">
                         {limits.currentQuotationsThisMonth} / {limits.maxQuotationsMonthly === 999999 ? '∞' : limits.maxQuotationsMonthly}
                       </span>
@@ -289,7 +304,9 @@ export default function BillingPage() {
                   {/* Invoices (monthly) */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="font-medium">Invoices (this month)</span>
+                      <span className="font-medium">
+                        {isTrial ? 'Invoices (trial – unlimited)' : 'Invoices (this month)'}
+                      </span>
                       <span className="text-muted-foreground">
                         {limits.currentInvoicesThisMonth} / {limits.maxInvoicesMonthly === 999999 ? '∞' : limits.maxInvoicesMonthly}
                       </span>
