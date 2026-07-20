@@ -66,7 +66,7 @@ function getServiceStatusBadge(status: string) {
 export default function CustomerDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const customerId = params.id as string
 
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -201,17 +201,21 @@ export default function CustomerDetailPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Header with back button */}
+        {/* Header with back button — hidden for technicians opening this via
+            the "View" button on their assigned job (they shouldn't navigate
+            back into the customers list) */}
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/customers')}
-            className="size-9"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="sr-only">Back to customers</span>
-          </Button>
+          {role !== 'technician' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/customers')}
+              className="size-9"
+            >
+              <ArrowLeft className="size-4" />
+              <span className="sr-only">Back to customers</span>
+            </Button>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-foreground">{customer.name}</h1>
             <p className="text-muted-foreground">Customer Details</p>
