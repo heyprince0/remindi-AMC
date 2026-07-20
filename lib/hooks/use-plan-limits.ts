@@ -15,6 +15,8 @@ interface PlanLimits {
   currentContractCount: number;
   currentCustomerCount: number;
   currentTechnicianCount: number;
+  // team seats – excluding the owner
+  currentTeamSeats: number;
   currentQuotationsThisMonth: number;
   currentInvoicesThisMonth: number;
   currentInventoryCount: number;
@@ -37,6 +39,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
     currentContractCount: 0,
     currentCustomerCount: 0,
     currentTechnicianCount: 0,
+    currentTeamSeats: 0,
     currentQuotationsThisMonth: 0,
     currentInvoicesThisMonth: 0,
     currentInventoryCount: 0,
@@ -47,7 +50,7 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
     if (!orgId) return;
     setIsLoading(true);
     try {
-      // 1. Get subscription and plan
+      // 1. Get subscription, plan, and organization owner
       const { data: subData, error: subError } = await supabase
         .from('subscriptions')
         .select('plan_id, status, start_date, plan:subscription_plans!fk_subscriptions_plan(*)')
@@ -69,63 +72,90 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
       const planId = subData?.plan_id || null;
       const status = subData?.status || 'inactive';
 
-      // Compute billing month start based on subscription start date
+      // 2. Compute billing month start from subscription start_date
       let billingMonthStart: Date;
       if (subData?.start_date) {
         const startDay = new Date(subData.start_date).getDate();
         const now = new Date();
-        // Set to startDay of the current month
         billingMonthStart = new Date(now.getFullYear(), now.getMonth(), startDay);
-        // If today is before the startDay, move back one month
         if (now.getDate() < startDay) {
           billingMonthStart.setMonth(billingMonthStart.getMonth() - 1);
         }
       } else {
-        // Fallback: 1st of current month
         billingMonthStart = new Date();
         billingMonthStart.setDate(1);
         billingMonthStart.setHours(0, 0, 0, 0);
       }
-      // Ensure time is at start of day
       billingMonthStart.setHours(0, 0, 0, 0);
       const billingMonthStartStr = billingMonthStart.toISOString();
 
-      // 2. Count customers
-      const { count: customerCount, error: countError } = await supabase
+      // 3. Fetch the organization owner
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('owner_id')
+        .eq('id', orgId)
+        .single();
+      if (orgError) throw orgError;
+      const ownerId = orgData?.owner_id;
+
+      // 4. Count customers
+      const { count: customerCount } = await supabase
         .from('customers')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      if (countError) throw countError;
-
-      // 3. Count contracts
+      // 5. Count contracts
       const { count: contractCount } = await supabase
         .from('contracts')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 4. Count technicians
+      // 6. Count technicians
       const { count: technicianCount } = await supabase
         .from('technicians')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 5. Count inventory items
+      // 7. Count inventory items
       const { count: inventoryCount } = await supabase
         .from('inventory_items')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .eq('is_active', true);
 
-      // 6. Count quotations from the billing month start
-      const { count: quotationsThisMonth } = await supabase
+      // 8. Count team members (excluding owner)
+      let teamCount = 0;
+      if (ownerId) {
+        const { count: allMembers } = await supabase
+          .from('memberships')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId);
+        // Since we can't subtract in the query, we'll fetch the list and filter
+        const { data: membersData } = await supabase
+          .from('memberships')
+          .select('user_id')
+          .eq('org_id', orgId);
+        if (membersData) {
+          teamCount = membersData.filter(m => m.user_id !== ownerId).length;
+        }
+      } else {
+        // If no owner, count all memberships
+        const { count } = await supabase
+          .from('memberships')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId);
+        teamCount = count || 0;
+      }
+
+      // 9. Count quotations this billing month
+      const { count: quotationsCount } = await supabase
         .from('quotations')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .gte('created_at', billingMonthStartStr);
 
-      // 7. Count invoices from the billing month start
-      const { count: invoicesThisMonth } = await supabase
+      // 10. Count invoices this billing month
+      const { count: invoicesCount } = await supabase
         .from('invoices')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId)
@@ -145,8 +175,9 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         currentContractCount: contractCount || 0,
         currentCustomerCount: customerCount || 0,
         currentTechnicianCount: technicianCount || 0,
-        currentQuotationsThisMonth: quotationsThisMonth || 0,
-        currentInvoicesThisMonth: invoicesThisMonth || 0,
+        currentTeamSeats: teamCount,
+        currentQuotationsThisMonth: quotationsCount || 0,
+        currentInvoicesThisMonth: invoicesCount || 0,
         currentInventoryCount: inventoryCount || 0,
       });
     } catch (err) {
