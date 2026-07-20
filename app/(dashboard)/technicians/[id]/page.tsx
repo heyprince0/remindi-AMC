@@ -6,6 +6,8 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -54,6 +56,10 @@ export default function TechnicianDetailPage() {
   const [statusValue, setStatusValue] = useState('')
   // Date filter for Job History
   const [historyDateFilter, setHistoryDateFilter] = useState<string>('')
+  // Feedback dialog shown when marking a job complete — its text updates the job's notes
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
+  const [jobToComplete, setJobToComplete] = useState<JobWithCustomer | null>(null)
+  const [feedbackNotes, setFeedbackNotes] = useState('')
 
   useEffect(() => {
     if (user?.id) {
@@ -240,21 +246,33 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  const handleMarkComplete = async (jobId: string) => {
-    try {
-      if (!currentOrgId) return
+  // Opens the feedback popup for a job before marking it complete
+  const openCompleteDialog = (job: JobWithCustomer) => {
+    setJobToComplete(job)
+    setFeedbackNotes(job.notes || '')
+    setCompleteDialogOpen(true)
+  }
 
+  // Same update/toast/reload flow as before — just also writes the feedback
+  // text (if any) into the job's notes before marking it completed.
+  const handleConfirmComplete = async () => {
+    if (!currentOrgId || !jobToComplete) return
+    try {
       const { error } = await supabase
         .from('technician_jobs')
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
+          notes: feedbackNotes.trim() || null,
         })
-        .eq('id', jobId)
+        .eq('id', jobToComplete.id)
         .eq('org_id', currentOrgId)
 
       if (error) throw error
       toast.success('Job marked as complete!')
+      setCompleteDialogOpen(false)
+      setJobToComplete(null)
+      setFeedbackNotes('')
       loadTechnicianDetails()
     } catch (error) {
       console.error('Error marking job complete:', error)
@@ -513,11 +531,22 @@ export default function TechnicianDetailPage() {
                               size="sm"
                               variant="outline"
                               className="gap-2"
-                              onClick={() => handleMarkComplete(job.id)}
+                              onClick={() => openCompleteDialog(job)}
                             >
                               <CheckCircle2 className="size-4" />
                               Complete
                             </Button>
+                            {/* View button — only when a customer is attached to this job */}
+                            {job.customer_id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => router.push(`/customers/${job.customer_id}`)}
+                              >
+                                View
+                              </Button>
+                            )}
                             {/* Delete button – only for non‑technicians */}
                             {role !== 'technician' && (
                               <Button
@@ -631,6 +660,43 @@ export default function TechnicianDetailPage() {
             userId={user.id}
           />
         )}
+
+        {/* Complete Job — Feedback Dialog */}
+        <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Feedback</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Add feedback about this completed work..."
+                  value={feedbackNotes}
+                  onChange={(e) => setFeedbackNotes(e.target.value)}
+                  className="min-h-24 resize-none"
+                  rows={4}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setCompleteDialogOpen(false)
+                    setJobToComplete(null)
+                    setFeedbackNotes('')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleConfirmComplete} className="gap-2">
+                  <CheckCircle2 className="size-4" />
+                  Complete
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )
