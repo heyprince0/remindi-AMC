@@ -249,7 +249,7 @@ export default function TechnicianDetailPage() {
   // Opens the feedback popup for a job before marking it complete
   const openCompleteDialog = (job: JobWithCustomer) => {
     setJobToComplete(job)
-    setFeedbackNotes(job.notes || '')
+    setFeedbackNotes('')
     setCompleteDialogOpen(true)
   }
 
@@ -263,7 +263,7 @@ export default function TechnicianDetailPage() {
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
-          notes: feedbackNotes.trim() || null,
+          notes: feedbackNotes.trim() || jobToComplete.notes,
         })
         .eq('id', jobToComplete.id)
         .eq('org_id', currentOrgId)
