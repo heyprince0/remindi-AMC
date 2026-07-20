@@ -8,12 +8,28 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
 import { BillingCycle, Plan, PaymentTransaction } from '@/lib/billing-types';
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits';
+
+// Helper to compute billing month start from subscription start date
+function getBillingMonthStart(startDate: string | null): Date | null {
+  if (!startDate) return null;
+  const start = new Date(startDate);
+  const startDay = start.getDate();
+  const now = new Date();
+  const billingStart = new Date(now.getFullYear(), now.getMonth(), startDay);
+  if (now.getDate() < startDay) {
+    billingStart.setMonth(billingStart.getMonth() - 1);
+  }
+  billingStart.setHours(0, 0, 0, 0);
+  return billingStart;
+}
 
 export default function BillingPage() {
   const { user, orgId } = useAuth();
@@ -25,6 +41,9 @@ export default function BillingPage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired');
+
+  // Get all limits and usage
+  const limits = usePlanLimits(orgId);
 
   const fetchData = async () => {
     if (!orgId) return;
@@ -97,6 +116,15 @@ export default function BillingPage() {
     setShowLimitModal(true);
   };
 
+  // Determine billing month start for display
+  const billingMonthStart = subscription?.start_date
+    ? getBillingMonthStart(subscription.start_date)
+    : null;
+
+  const resetLabel = billingMonthStart
+    ? `Resets on the ${billingMonthStart.getDate()}th of every month`
+    : 'Resets on the 1st of every month';
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -137,6 +165,149 @@ export default function BillingPage() {
             </Card>
           )}
         </section>
+
+        {/* NEW: Usage & Limits Section */}
+        {hasSubscription && (
+          <section>
+            <Card>
+              <CardHeader>
+                <CardTitle>Usage & Limits</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {resetLabel}
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Contracts */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Contracts</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentContractCount} / {limits.maxContracts === 999999 ? '∞' : limits.maxContracts}
+                      </span>
+                    </div>
+                    {limits.maxContracts !== 999999 && limits.maxContracts > 0 ? (
+                      <Progress
+                        value={(limits.currentContractCount / limits.maxContracts) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Customers */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Customers</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentCustomerCount} / {limits.maxCustomers === 999999 ? '∞' : limits.maxCustomers}
+                      </span>
+                    </div>
+                    {limits.maxCustomers !== 999999 && limits.maxCustomers > 0 ? (
+                      <Progress
+                        value={(limits.currentCustomerCount / limits.maxCustomers) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Technicians */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Technicians</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentTechnicianCount} / {limits.maxTechnicians === 999999 ? '∞' : limits.maxTechnicians}
+                      </span>
+                    </div>
+                    {limits.maxTechnicians !== 999999 && limits.maxTechnicians > 0 ? (
+                      <Progress
+                        value={(limits.currentTechnicianCount / limits.maxTechnicians) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Team Seats */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Team Seats</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentTeamSeats} / {limits.maxTeamSeats === 999999 ? '∞' : limits.maxTeamSeats}
+                      </span>
+                    </div>
+                    {limits.maxTeamSeats !== 999999 && limits.maxTeamSeats > 0 ? (
+                      <Progress
+                        value={(limits.currentTeamSeats / limits.maxTeamSeats) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Inventory */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Inventory Items</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentInventoryCount} / {limits.maxInventory === 999999 ? '∞' : limits.maxInventory}
+                      </span>
+                    </div>
+                    {limits.maxInventory !== 999999 && limits.maxInventory > 0 ? (
+                      <Progress
+                        value={(limits.currentInventoryCount / limits.maxInventory) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Quotations (monthly) */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Quotations (this month)</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentQuotationsThisMonth} / {limits.maxQuotationsMonthly === 999999 ? '∞' : limits.maxQuotationsMonthly}
+                      </span>
+                    </div>
+                    {limits.maxQuotationsMonthly !== 999999 && limits.maxQuotationsMonthly > 0 ? (
+                      <Progress
+                        value={(limits.currentQuotationsThisMonth / limits.maxQuotationsMonthly) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+
+                  {/* Invoices (monthly) */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Invoices (this month)</span>
+                      <span className="text-muted-foreground">
+                        {limits.currentInvoicesThisMonth} / {limits.maxInvoicesMonthly === 999999 ? '∞' : limits.maxInvoicesMonthly}
+                      </span>
+                    </div>
+                    {limits.maxInvoicesMonthly !== 999999 && limits.maxInvoicesMonthly > 0 ? (
+                      <Progress
+                        value={(limits.currentInvoicesThisMonth / limits.maxInvoicesMonthly) * 100}
+                        className="h-2"
+                      />
+                    ) : (
+                      <div className="h-2 rounded-full bg-muted/20" />
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         <section>
           <PaymentHistoryTable transactions={paymentHistory} />
