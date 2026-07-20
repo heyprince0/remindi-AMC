@@ -325,6 +325,20 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  // Dot color for the technician's current status
+  const getStatusDotColor = (status: string) => {
+    switch (status) {
+      case 'available':
+        return 'bg-green-500'
+      case 'busy':
+        return 'bg-yellow-500'
+      case 'on-leave':
+        return 'bg-red-500'
+      default:
+        return 'bg-gray-400'
+    }
+  }
+
   const getSourceBadgeLabel = (source: HistoryDisplayItem['source']) => {
     switch (source) {
       case 'service_alert':
@@ -421,7 +435,7 @@ export default function TechnicianDetailPage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="size-4 flex items-center justify-center">
-                  <div className="size-2 rounded-full bg-green-500" />
+                  <div className={`size-2 rounded-full ${getStatusDotColor(technician.status)}`} />
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-muted-foreground">Status</p>
