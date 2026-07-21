@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation" // 👈 added
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,6 @@ import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { Plus, Search, Eye, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { NewInvoiceModal } from "@/components/new-invoice-modal"
 
 function getPaymentStatusBadge(status: string) {
   const statusLower = (status || "").toLowerCase()
@@ -53,6 +53,7 @@ function getPaymentStatusBadge(status: string) {
 
 export default function InvoicesPage() {
   const { user } = useAuth()
+  const router = useRouter() // 👈 added
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,20 +62,15 @@ export default function InvoicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [showNewInvoiceModal, setShowNewInvoiceModal] = useState(false)
 
-  // --- Organization state ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
-  // Plan limits
   const { maxInvoicesMonthly, currentInvoicesThisMonth, status, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
-  // Limit modal state
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
-  // --- Fetch org_id ---
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -93,29 +89,23 @@ export default function InvoicesPage() {
     }
   }, [user?.id])
 
-  // Load invoices when org ID is available
   useEffect(() => {
     if (currentOrgId) {
       loadInvoices()
     }
   }, [currentOrgId])
 
-  // ❌ REMOVED: auto-show on page load – modal only from "New Invoice" button
-
   const handleFilter = () => {
     let filtered = invoices
-
     if (searchTerm) {
       filtered = filtered.filter(inv =>
         (inv.client_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (inv.invoice_no || "").toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-
     if (filterStatus !== "all") {
       filtered = filtered.filter(inv => (inv.payment_status || "").toLowerCase() === filterStatus.toLowerCase())
     }
-
     setFilteredInvoices(filtered)
   }
 
@@ -126,15 +116,12 @@ export default function InvoicesPage() {
   const loadInvoices = async () => {
     try {
       if (!currentOrgId) return
-
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
         .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false })
-
       if (error) throw error
-
       setInvoices((data as Invoice[]) || [])
       setFilteredInvoices((data as Invoice[]) || [])
     } catch (error) {
@@ -147,7 +134,6 @@ export default function InvoicesPage() {
 
   const handleDeleteInvoice = async () => {
     if (!invoiceToDelete || !currentOrgId) return
-
     setDeleting(true)
     try {
       const { error } = await supabase
@@ -155,9 +141,7 @@ export default function InvoicesPage() {
         .delete()
         .eq("id", invoiceToDelete.id)
         .eq("org_id", currentOrgId)
-
       if (error) throw error
-
       setInvoices(invoices.filter(inv => inv.id !== invoiceToDelete.id))
       setFilteredInvoices(filteredInvoices.filter(inv => inv.id !== invoiceToDelete.id))
       toast.success("Invoice deleted successfully")
@@ -171,7 +155,6 @@ export default function InvoicesPage() {
     }
   }
 
-  // ✅ Check limits – only called from New Invoice button
   const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
@@ -191,10 +174,10 @@ export default function InvoicesPage() {
     return false
   }
 
+  // ✅ Navigate to the dedicated new invoice page
   const handleNewInvoiceClick = () => {
     if (checkAndShowLimitModal()) return
-    // Open the New Invoice Modal
-    setShowNewInvoiceModal(true)
+    router.push("/invoices/new")
   }
 
   const handleUpgrade = () => {
@@ -217,7 +200,6 @@ export default function InvoicesPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
@@ -338,7 +320,7 @@ export default function InvoicesPage() {
           </CardContent>
         </Card>
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -360,17 +342,7 @@ export default function InvoicesPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* New Invoice Modal */}
-        {user?.id && currentOrgId && (
-          <NewInvoiceModal
-            open={showNewInvoiceModal}
-            onOpenChange={setShowNewInvoiceModal}
-            userId={user.id}
-            orgId={currentOrgId}
-          />
-        )}
-
-        {/* Limit Reached Modal – only from button */}
+        {/* Limit Modal */}
         <LimitReachedModal
           isOpen={showLimitModal}
           onClose={() => setShowLimitModal(false)}
