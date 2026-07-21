@@ -96,7 +96,8 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         quotaStartDate.setHours(0, 0, 0, 0);
       }
 
-      const quotaStartStr = quotaStartDate?.toISOString();
+      // Convert to ISO date string (YYYY-MM-DD) for Supabase query
+      const quotaStartStr = quotaStartDate?.toISOString().split('T')[0];
 
       // 3. Count customers (lifetime)
       const { count: customerCount } = await supabase
@@ -149,36 +150,29 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
       // 8. Count quotations (filtered)
       let quotationsCount = 0;
       if (quotaStartStr) {
-        const query = supabase
+        const { count } = await supabase
           .from('quotations')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId);
-        if (useTotalForTrial) {
-          // For trial: count all quotations from trial start (no month limit)
-          query.gte('created_at', quotaStartStr);
-        } else {
-          // For paid: count only those in the billing month
-          query.gte('created_at', quotaStartStr);
-        }
-        const { count } = await query;
+          .eq('org_id', orgId)
+          .gte('created_at', quotaStartStr); // compare as string YYYY-MM-DD
         quotationsCount = count || 0;
       }
 
       // 9. Count invoices (filtered)
       let invoicesCount = 0;
       if (quotaStartStr) {
-        const query = supabase
+        const { count } = await supabase
           .from('invoices')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId);
-        if (useTotalForTrial) {
-          query.gte('created_at', quotaStartStr);
-        } else {
-          query.gte('created_at', quotaStartStr);
-        }
-        const { count } = await query;
+          .eq('org_id', orgId)
+          .gte('created_at', quotaStartStr);
         invoicesCount = count || 0;
       }
+
+      // 10. Debug logs (remove after verification)
+      console.log('🔍 [usePlanLimits] quotaStartStr:', quotaStartStr);
+      console.log('🔍 [usePlanLimits] quotationsCount:', quotationsCount);
+      console.log('🔍 [usePlanLimits] invoicesCount:', invoicesCount);
 
       setLimits({
         planId,
