@@ -15,7 +15,6 @@ interface PlanLimits {
   currentContractCount: number;
   currentCustomerCount: number;
   currentTechnicianCount: number;
-  // team seats – excluding the owner
   currentTeamSeats: number;
   currentQuotationsThisMonth: number;
   currentInvoicesThisMonth: number;
@@ -72,74 +71,74 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
       const planId = subData?.plan_id || null;
       const status = subData?.status || 'inactive';
 
-      // 2. Compute billing month start from subscription start_date
-      let billingMonthStart: Date;
-      if (subData?.start_date) {
+      // 2. Determine date filter for quotations and invoices
+      let quotaStartDate: Date | null = null;
+      let useTotalForTrial = false;
+
+      if (status === 'trial' && subData?.start_date) {
+        // For trial users: count all quotations/invoices created since trial start
+        useTotalForTrial = true;
+        quotaStartDate = new Date(subData.start_date);
+        quotaStartDate.setHours(0, 0, 0, 0);
+      } else if (subData?.start_date) {
+        // For paid users: billing month reset based on start day
         const startDay = new Date(subData.start_date).getDate();
         const now = new Date();
-        billingMonthStart = new Date(now.getFullYear(), now.getMonth(), startDay);
+        quotaStartDate = new Date(now.getFullYear(), now.getMonth(), startDay);
         if (now.getDate() < startDay) {
-          billingMonthStart.setMonth(billingMonthStart.getMonth() - 1);
+          quotaStartDate.setMonth(quotaStartDate.getMonth() - 1);
         }
+        quotaStartDate.setHours(0, 0, 0, 0);
       } else {
-        billingMonthStart = new Date();
-        billingMonthStart.setDate(1);
-        billingMonthStart.setHours(0, 0, 0, 0);
+        // Fallback: 1st of current month
+        quotaStartDate = new Date();
+        quotaStartDate.setDate(1);
+        quotaStartDate.setHours(0, 0, 0, 0);
       }
-      billingMonthStart.setHours(0, 0, 0, 0);
-      const billingMonthStartStr = billingMonthStart.toISOString();
 
-      // 3. Fetch the organization owner
-      const { data: orgData, error: orgError } = await supabase
-        .from('organizations')
-        .select('owner_id')
-        .eq('id', orgId)
-        .single();
-      if (orgError) throw orgError;
-      const ownerId = orgData?.owner_id;
+      const quotaStartStr = quotaStartDate?.toISOString();
 
-      // 4. Count customers
+      // 3. Count customers (lifetime)
       const { count: customerCount } = await supabase
         .from('customers')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 5. Count contracts
+      // 4. Count contracts (lifetime)
       const { count: contractCount } = await supabase
         .from('contracts')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 6. Count technicians
+      // 5. Count technicians (lifetime)
       const { count: technicianCount } = await supabase
         .from('technicians')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId);
 
-      // 7. Count inventory items
+      // 6. Count inventory items (lifetime)
       const { count: inventoryCount } = await supabase
         .from('inventory_items')
         .select('*', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .eq('is_active', true);
 
-      // 8. Count team members (excluding owner)
+      // 7. Count team members (excluding owner)
       let teamCount = 0;
-      if (ownerId) {
-        const { count: allMembers } = await supabase
-          .from('memberships')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId);
-        // Since we can't subtract in the query, we'll fetch the list and filter
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('owner_id')
+        .eq('id', orgId)
+        .single();
+      if (!orgError && orgData?.owner_id) {
         const { data: membersData } = await supabase
           .from('memberships')
           .select('user_id')
           .eq('org_id', orgId);
         if (membersData) {
-          teamCount = membersData.filter(m => m.user_id !== ownerId).length;
+          teamCount = membersData.filter(m => m.user_id !== orgData.owner_id).length;
         }
       } else {
-        // If no owner, count all memberships
         const { count } = await supabase
           .from('memberships')
           .select('*', { count: 'exact', head: true })
@@ -147,19 +146,39 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         teamCount = count || 0;
       }
 
-      // 9. Count quotations this billing month
-      const { count: quotationsCount } = await supabase
-        .from('quotations')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .gte('created_at', billingMonthStartStr);
+      // 8. Count quotations (filtered)
+      let quotationsCount = 0;
+      if (quotaStartStr) {
+        const query = supabase
+          .from('quotations')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId);
+        if (useTotalForTrial) {
+          // For trial: count all quotations from trial start (no month limit)
+          query.gte('created_at', quotaStartStr);
+        } else {
+          // For paid: count only those in the billing month
+          query.gte('created_at', quotaStartStr);
+        }
+        const { count } = await query;
+        quotationsCount = count || 0;
+      }
 
-      // 10. Count invoices this billing month
-      const { count: invoicesCount } = await supabase
-        .from('invoices')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', orgId)
-        .gte('created_at', billingMonthStartStr);
+      // 9. Count invoices (filtered)
+      let invoicesCount = 0;
+      if (quotaStartStr) {
+        const query = supabase
+          .from('invoices')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId);
+        if (useTotalForTrial) {
+          query.gte('created_at', quotaStartStr);
+        } else {
+          query.gte('created_at', quotaStartStr);
+        }
+        const { count } = await query;
+        invoicesCount = count || 0;
+      }
 
       setLimits({
         planId,
@@ -176,8 +195,8 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         currentCustomerCount: customerCount || 0,
         currentTechnicianCount: technicianCount || 0,
         currentTeamSeats: teamCount,
-        currentQuotationsThisMonth: quotationsCount || 0,
-        currentInvoicesThisMonth: invoicesCount || 0,
+        currentQuotationsThisMonth: quotationsCount,
+        currentInvoicesThisMonth: invoicesCount,
         currentInventoryCount: inventoryCount || 0,
       });
     } catch (err) {
