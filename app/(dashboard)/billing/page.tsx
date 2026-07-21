@@ -281,11 +281,11 @@ export default function BillingPage() {
                     )}
                   </div>
 
-                  {/* Quotations (monthly) */}
+                  {/* Quotations */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">
-                        {isTrial ? 'Quotations (trial – unlimited)' : 'Quotations (this month)'}
+                        {isTrial ? 'Quotations (trial – total)' : 'Quotations (this month)'}
                       </span>
                       <span className="text-muted-foreground">
                         {limits.currentQuotationsThisMonth} / {limits.maxQuotationsMonthly === 999999 ? '∞' : limits.maxQuotationsMonthly}
@@ -301,11 +301,11 @@ export default function BillingPage() {
                     )}
                   </div>
 
-                  {/* Invoices (monthly) */}
+                  {/* Invoices */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">
-                        {isTrial ? 'Invoices (trial – unlimited)' : 'Invoices (this month)'}
+                        {isTrial ? 'Invoices (trial – total)' : 'Invoices (this month)'}
                       </span>
                       <span className="text-muted-foreground">
                         {limits.currentInvoicesThisMonth} / {limits.maxInvoicesMonthly === 999999 ? '∞' : limits.maxInvoicesMonthly}
