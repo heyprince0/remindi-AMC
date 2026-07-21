@@ -126,7 +126,7 @@ export default function BillingPage() {
   const isTrial = subscription?.status === 'trial';
 
   const resetLabel = isTrial
-    ? 'Unlimited during trial'
+    ? 'Free Trial usage'
     : billingMonthStart
       ? `Resets on the ${billingMonthStart.getDate()}th of every month`
       : 'Resets on the 1st of every month';
