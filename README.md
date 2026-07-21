@@ -49,9 +49,9 @@ Remindi uses Supabase with the following key tables:
 
 ---
 
-## Part of Anthora
+## Part of Cosmos
 
-Remindi is built and maintained by [Anthora](https://anthora.in) — a product studio building practical software for Indian SMBs.
+Remindi is built and maintained by Cosmos — a product studio building practical software for Indian SMBs.
 
 Sister product: **Gain.ai** — AI fitness platform for gym owners.
 
