@@ -147,25 +147,32 @@ export function usePlanLimits(orgId: string | null): PlanLimits {
         teamCount = count || 0;
       }
 
-      // 8. Count quotations (filtered)
+      // 8. Count quotations — trial orgs get a lifetime total (no date filter,
+      // matching the "trial – total" label); paid orgs get this billing month's count
       let quotationsCount = 0;
-      if (quotaStartStr) {
-        const { count } = await supabase
+      {
+        let query = supabase
           .from('quotations')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId)
-          .gte('created_at', quotaStartStr); // compare as string YYYY-MM-DD
+          .eq('org_id', orgId);
+        if (!useTotalForTrial && quotaStartStr) {
+          query = query.gte('created_at', quotaStartStr);
+        }
+        const { count } = await query;
         quotationsCount = count || 0;
       }
 
-      // 9. Count invoices (filtered)
+      // 9. Count invoices — same rule as quotations above
       let invoicesCount = 0;
-      if (quotaStartStr) {
-        const { count } = await supabase
+      {
+        let query = supabase
           .from('invoices')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId)
-          .gte('created_at', quotaStartStr);
+          .eq('org_id', orgId);
+        if (!useTotalForTrial && quotaStartStr) {
+          query = query.gte('created_at', quotaStartStr);
+        }
+        const { count } = await query;
         invoicesCount = count || 0;
       }
 
