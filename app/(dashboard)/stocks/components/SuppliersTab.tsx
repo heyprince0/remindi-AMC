@@ -42,6 +42,7 @@ interface Supplier {
   email: string | null
   gstin: string | null
   address: string | null
+  is_active: boolean          // added
   created_at: string
 }
 
@@ -73,6 +74,7 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
         .from("inventory_suppliers")
         .select("*")
         .eq("org_id", orgId)
+        .eq("is_active", true)          // only active
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -99,28 +101,10 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
     if (!supplierToDelete) return
     setDeleting(true)
     try {
-      // Check if any stock movements reference this supplier
-      const { count, error: countError } = await supabase
-        .from("inventory_stock_movements")
-        .select("*", { count: "exact", head: true })
-        .eq("supplier_id", supplierToDelete.id)
-        .eq("org_id", orgId)
-
-      if (countError) throw countError
-
-      if (count && count > 0) {
-        toast.error(
-          `Cannot delete "${supplierToDelete.name}" – it is referenced in ${count} stock movement(s). Remove those references first.`
-        )
-        setDeleteDialogOpen(false)
-        setSupplierToDelete(null)
-        return
-      }
-
-      // Hard delete if no references
+      // Soft delete: set is_active = false
       const { error } = await supabase
         .from("inventory_suppliers")
-        .delete()
+        .update({ is_active: false })
         .eq("id", supplierToDelete.id)
         .eq("org_id", orgId)
 
