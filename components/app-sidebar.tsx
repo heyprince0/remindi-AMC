@@ -61,15 +61,47 @@ const technicianNavItems = [
   { title: "Service History", icon: History, href: "/history" },
 ]
 
+type CachedProfile = {
+  companyName: string
+  companySubtitle: string
+  fullName: string
+}
+
+function getCachedProfile(userId: string | undefined): CachedProfile | null {
+  if (!userId || typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(`profile_cache_${userId}`)
+    if (!raw) return null
+    return JSON.parse(raw) as CachedProfile
+  } catch {
+    return null
+  }
+}
+
+function setCachedProfile(userId: string | undefined, profile: CachedProfile) {
+  if (!userId || typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(`profile_cache_${userId}`, JSON.stringify(profile))
+  } catch {
+    // ignore quota / privacy-mode errors, caching is best-effort only
+  }
+}
+
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, role, loading } = useAuth()
   const { isInstallable, isInstalled, installApp } = usePwaInstall()
 
-  const [companyName, setCompanyName] = useState("Remindi")
-  const [companySubtitle, setCompanySubtitle] = useState("")
-  const [fullName, setFullName] = useState("")
+  const [companyName, setCompanyName] = useState(
+    () => getCachedProfile(user?.id)?.companyName || "Remindi"
+  )
+  const [companySubtitle, setCompanySubtitle] = useState(
+    () => getCachedProfile(user?.id)?.companySubtitle || ""
+  )
+  const [fullName, setFullName] = useState(
+    () => getCachedProfile(user?.id)?.fullName || ""
+  )
 
   const [linkedTechnicianId, setLinkedTechnicianId] = useState<string | null>(null)
   const [linkedTechnicianName, setLinkedTechnicianName] = useState<string | null>(null)
@@ -83,12 +115,27 @@ export function AppSidebar() {
         .select('company_name, full_name')
         .eq('id', user.id)
         .single()
+      let nextCompanyName = "Remindi"
+      let nextCompanySubtitle = ""
+      let nextFullName = ""
+
       if (data?.company_name) {
         const names = data.company_name.split(' ')
-        setCompanyName(names[0] || "Remindi")
-        setCompanySubtitle(names.slice(1).join(' ') || "")
+        nextCompanyName = names[0] || "Remindi"
+        nextCompanySubtitle = names.slice(1).join(' ') || ""
+        setCompanyName(nextCompanyName)
+        setCompanySubtitle(nextCompanySubtitle)
       }
-      if (data?.full_name) setFullName(data.full_name)
+      if (data?.full_name) {
+        nextFullName = data.full_name
+        setFullName(nextFullName)
+      }
+
+      setCachedProfile(user.id, {
+        companyName: nextCompanyName,
+        companySubtitle: nextCompanySubtitle,
+        fullName: nextFullName,
+      })
     }
     loadProfile()
   }, [user?.id])
