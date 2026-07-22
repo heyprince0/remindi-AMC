@@ -32,11 +32,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Eye, Trash2 } from "lucide-react"
+import { Plus, Search, Eye, Trash2, Settings } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -62,6 +70,8 @@ export default function InvoicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
+  const [checkingProfile, setCheckingProfile] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
@@ -175,9 +185,41 @@ export default function InvoicesPage() {
   }
 
   // ✅ Navigate to the dedicated new invoice page
-  const handleNewInvoiceClick = () => {
+  const handleNewInvoiceClick = async () => {
+    if (!user?.id || !currentOrgId) return
+
+    // ✅ Check limits before anything else
     if (checkAndShowLimitModal()) return
-    router.push("/invoices/new")
+
+    // Then check company profile
+    setCheckingProfile(true)
+    try {
+      const { data, error } = await supabase
+        .from("company_profile")
+        .select("company_name, address, phone")
+        .eq("org_id", currentOrgId)
+        .maybeSingle()
+
+      if (error && error.code !== "PGRST116") throw error
+
+      const isComplete = !!(
+        data?.company_name?.trim() &&
+        data?.address?.trim() &&
+        data?.phone?.trim()
+      )
+
+      if (isComplete) {
+        router.push("/invoices/new")
+      } else {
+        setProfileSetupDialogOpen(true)
+      }
+    } catch (error) {
+      console.error("Error checking company profile:", error)
+      // Fail open — don't block invoice creation if the check itself fails
+      router.push("/invoices/new")
+    } finally {
+      setCheckingProfile(false)
+    }
   }
 
   const handleUpgrade = () => {
@@ -207,6 +249,7 @@ export default function InvoicesPage() {
           </div>
           <Button
             onClick={handleNewInvoiceClick}
+            disabled={checkingProfile}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="mr-2 size-4" />
@@ -352,6 +395,27 @@ export default function InvoicesPage() {
           customDescription={limitModalCustom.description}
         />
       </div>
+
+      <Dialog open={profileSetupDialogOpen} onOpenChange={setProfileSetupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Your Company Profile</DialogTitle>
+            <DialogDescription>
+              Before creating an invoice, please add your company name, address, and contact
+              details in Settings. This information appears on your invoice PDF header.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileSetupDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => router.push("/settings")}>
+              <Settings className="mr-2 size-4" />
+              Go to Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
