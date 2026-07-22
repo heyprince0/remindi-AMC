@@ -37,6 +37,7 @@ interface Category {
   id: string
   org_id: string
   name: string
+  is_active: boolean          // added for soft delete
   created_at: string
 }
 
@@ -72,12 +73,12 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
         .from("inventory_categories")
         .select("*")
         .eq("org_id", orgId)
+        .eq("is_active", true)   // only active categories
         .order("created_at", { ascending: false })
 
       if (error) throw error
 
-      // Fetch item counts per category so users can see how many items
-      // were created under each category.
+      // Fetch item counts per category (only active items)
       const { data: itemsData, error: itemsError } = await supabase
         .from("inventory_items")
         .select("category_id")
@@ -119,13 +120,15 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
     if (!categoryToDelete) return
     setDeleting(true)
     try {
+      // Soft delete: set is_active = false
       const { error } = await supabase
         .from("inventory_categories")
-        .delete()
+        .update({ is_active: false })
         .eq("id", categoryToDelete.id)
         .eq("org_id", orgId)
 
       if (error) throw error
+
       setCategories(categories.filter((c) => c.id !== categoryToDelete.id))
       toast.success("Category deleted successfully")
       setDeleteDialogOpen(false)
