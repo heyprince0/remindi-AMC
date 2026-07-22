@@ -568,14 +568,6 @@ export default function DashboardPage() {
               <Bell className="mr-2 size-4" />
               {notificationLoading ? 'Enabling...' : 'Enable Notifications'}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => window.location.href = '/customers'}>
-              <Plus className="mr-2 size-4" />
-              Add Customer
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.location.href = '/technicians'}>
-              <Plus className="mr-2 size-4" />
-              Add Technician
-            </Button>
             <Button size="sm" onClick={handleAddClick}>
               <Plus className="mr-2 size-4" />
               Add Contract
