@@ -168,21 +168,24 @@ export default function ItemsTable({
     if (!itemToDelete) return
     setDeleting(true)
     try {
+      // Soft delete: set is_active = false
       const { error } = await supabase
         .from("inventory_items")
-        .delete()
+        .update({ is_active: false })
         .eq("id", itemToDelete.id)
         .eq("org_id", orgId)
 
       if (error) throw error
+
+      // Remove from local list (since we filter active items)
       setItems(items.filter((i) => i.id !== itemToDelete.id))
-      toast.success("Item deleted successfully")
+      toast.success("Item archived successfully")
       setDeleteDialogOpen(false)
       setItemToDelete(null)
       onItemsChange()
     } catch (error) {
-      console.error("Error deleting item:", error)
-      toast.error("Failed to delete item")
+      console.error("Error archiving item:", error)
+      toast.error("Failed to archive item")
     } finally {
       setDeleting(false)
     }
@@ -374,19 +377,20 @@ export default function ItemsTable({
           orgId={orgId}
         />
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Confirmation Dialog - now for archiving */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Item</AlertDialogTitle>
+              <AlertDialogTitle>Archive Item</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete &quot;{itemToDelete?.name}&quot;? This action cannot be undone.
+                Are you sure you want to archive &quot;{itemToDelete?.name}&quot;? 
+                It will be hidden from the inventory list, but all stock movement history will be preserved.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-red-600">
-                {deleting ? "Deleting..." : "Delete"}
+                {deleting ? "Archiving..." : "Archive"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
