@@ -42,6 +42,7 @@ interface Supplier {
   email: string | null
   gstin: string | null
   address: string | null
+  is_active: boolean          // added for soft delete
   created_at: string
 }
 
@@ -73,6 +74,7 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
         .from("inventory_suppliers")
         .select("*")
         .eq("org_id", orgId)
+        .eq("is_active", true)   // only active suppliers
         .order("created_at", { ascending: false })
 
       if (error) throw error
@@ -99,13 +101,16 @@ export default function SuppliersTab({ orgId }: SuppliersTabProps) {
     if (!supplierToDelete) return
     setDeleting(true)
     try {
+      // Soft delete: set is_active = false
       const { error } = await supabase
         .from("inventory_suppliers")
-        .delete()
+        .update({ is_active: false })
         .eq("id", supplierToDelete.id)
         .eq("org_id", orgId)
 
       if (error) throw error
+
+      // Remove from local list (active only)
       setSuppliers(suppliers.filter((s) => s.id !== supplierToDelete.id))
       toast.success("Supplier deleted successfully")
       setDeleteDialogOpen(false)
