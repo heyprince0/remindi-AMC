@@ -37,7 +37,6 @@ interface Category {
   id: string
   org_id: string
   name: string
-  is_active: boolean          // added for soft delete
   created_at: string
 }
 
@@ -73,12 +72,11 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
         .from("inventory_categories")
         .select("*")
         .eq("org_id", orgId)
-        .eq("is_active", true)   // only active categories
         .order("created_at", { ascending: false })
 
       if (error) throw error
 
-      // Fetch item counts per category (only active items)
+      // Get item counts per category (only active items)
       const { data: itemsData, error: itemsError } = await supabase
         .from("inventory_items")
         .select("category_id")
@@ -120,10 +118,29 @@ export default function CategoriesTab({ orgId }: CategoriesTabProps) {
     if (!categoryToDelete) return
     setDeleting(true)
     try {
-      // Soft delete: set is_active = false
+      // Check if any active items reference this category
+      const { count, error: countError } = await supabase
+        .from("inventory_items")
+        .select("*", { count: "exact", head: true })
+        .eq("category_id", categoryToDelete.id)
+        .eq("org_id", orgId)
+        .eq("is_active", true)
+
+      if (countError) throw countError
+
+      if (count && count > 0) {
+        toast.error(
+          `Cannot delete "${categoryToDelete.name}" – it is used by ${count} active item(s). Remove or reassign them first.`
+        )
+        setDeleteDialogOpen(false)
+        setCategoryToDelete(null)
+        return
+      }
+
+      // Hard delete if no references
       const { error } = await supabase
         .from("inventory_categories")
-        .update({ is_active: false })
+        .delete()
         .eq("id", categoryToDelete.id)
         .eq("org_id", orgId)
 
