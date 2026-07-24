@@ -102,7 +102,7 @@ export default function AddEditCategorySheet({
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
+        <form id="category-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6">
           <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="name">Category Name *</Label>
