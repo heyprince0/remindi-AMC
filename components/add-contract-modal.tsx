@@ -34,7 +34,6 @@ const STATUS_OPTIONS = [
 
 interface PendingOldService {
   startDate: string
-  endDate: string
   technicianId: string
   technicianName: string
 }
@@ -42,7 +41,6 @@ interface PendingOldService {
 interface SubModalState {
   open: boolean
   startDate: string
-  endDate: string
   technicianId: string
   errors: Record<string, string>
 }
@@ -68,7 +66,6 @@ export function AddContractModal({
   const [subModal, setSubModal] = useState<SubModalState>({
     open: false,
     startDate: '',
-    endDate: '',
     technicianId: '',
     errors: {},
   })
@@ -378,7 +375,7 @@ export function AddContractModal({
             contract_id: contractId,
             technician_id: service.technicianId,
             service_date: service.startDate,
-            service_end_date: service.endDate,
+            service_end_date: service.startDate,
             status: 'completed',
             source: 'manual',
             org_id: orgId,
@@ -411,11 +408,7 @@ export function AddContractModal({
   // ========== FIX: Keep sub‑modal open and show toast ==========
   const handleAddOldService = () => {
     const subErrors: Record<string, string> = {}
-    if (!subModal.startDate) subErrors.startDate = 'Service Start Date is required'
-    if (!subModal.endDate) subErrors.endDate = 'Service End Date is required'
-    if (subModal.startDate && subModal.endDate && subModal.endDate < subModal.startDate) {
-      subErrors.endDate = 'Service End Date must be >= Service Start Date'
-    }
+    if (!subModal.startDate) subErrors.startDate = 'Service Done Date is required'
     if (!subModal.technicianId) subErrors.technicianId = 'Technician is required'
 
     if (Object.keys(subErrors).length > 0) {
@@ -428,7 +421,6 @@ export function AddContractModal({
       ...prev,
       {
         startDate: subModal.startDate,
-        endDate: subModal.endDate,
         technicianId: subModal.technicianId,
         technicianName,
       },
@@ -441,7 +433,6 @@ export function AddContractModal({
     setSubModal({
       open: true,
       startDate: '',
-      endDate: '',
       technicianId: '',
       errors: {},
     })
@@ -695,7 +686,7 @@ export function AddContractModal({
                   {pendingOldServices.map((service, index) => (
                     <div key={index} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
                       <span>
-                        {service.technicianName} • {service.startDate} to {service.endDate}
+                        {service.technicianName} • {service.startDate}
                       </span>
                       <button
                         type="button"
@@ -741,9 +732,9 @@ export function AddContractModal({
           <DialogTitle>Add Old Service</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          {/* Service Start Date */}
+          {/* Service Done Date */}
           <div className="space-y-2">
-            <Label htmlFor="serviceStartDate">Service Start Date <span className="text-red-500">*</span></Label>
+            <Label htmlFor="serviceStartDate">Service Done Date <span className="text-red-500">*</span></Label>
             <Input
               id="serviceStartDate"
               type="date"
@@ -752,19 +743,6 @@ export function AddContractModal({
               className={subModal.errors.startDate ? 'border-red-500' : ''}
             />
             {subModal.errors.startDate && <p className="text-xs text-red-500">{subModal.errors.startDate}</p>}
-          </div>
-
-          {/* Service End Date */}
-          <div className="space-y-2">
-            <Label htmlFor="serviceEndDate">Service End Date <span className="text-red-500">*</span></Label>
-            <Input
-              id="serviceEndDate"
-              type="date"
-              value={subModal.endDate}
-              onChange={(e) => setSubModal({ ...subModal, endDate: e.target.value })}
-              className={subModal.errors.endDate ? 'border-red-500' : ''}
-            />
-            {subModal.errors.endDate && <p className="text-xs text-red-500">{subModal.errors.endDate}</p>}
           </div>
 
           {/* Technician */}
