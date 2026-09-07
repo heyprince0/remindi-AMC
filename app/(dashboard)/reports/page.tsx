@@ -1,621 +1,85 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { supabase, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, ComposedChart, Line
-} from "recharts"
-import {
-  TrendingUp, TrendingDown, FileText, CheckCircle2, IndianRupee,
-  Activity, Minus, Download
-} from "lucide-react"
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Activity, AlertTriangle, CheckCircle2, Download, FileText, IndianRupee, Package, ShoppingCart, TrendingDown, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 
-type DateRange = "week" | "month" | "last_month" | "year"
+type DateRange = "today" | "week" | "seven_days" | "thirty_days" | "month" | "last_month" | "year"
+const RANGE_LABELS: Record<DateRange, string> = { today: "Today", week: "This Week", seven_days: "7 Days", thirty_days: "30 Days", month: "This Month", last_month: "Last Month", year: "This Year" }
 
-interface Stats {
-  totalServices: number
-  completedServices: number
-  activeContracts: number
-  totalContracts: number
-  totalEarnings: number
-  prevTotalServices: number
-  prevCompletedServices: number
-  prevTotalEarnings: number
+type ContractRow = { id: string; status: string; contracts_price: number | null; customer_id: string; next_service_date: string }
+type HistoryRow = { id: string; contract_id: string; status: string; service_date: string }
+type Movement = { id: string; item_id: string; movement_type: string; reason: string; quantity: number; selling_price: number | null; purchase_price: number | null; technician_id: string | null; created_at: string }
+type Item = { id: string; name: string; current_stock: number; min_stock_level: number; purchase_price: number | null; selling_price: number | null; category_id?: string | null }
+type ProductSale = { name: string; quantity: number; revenue: number; profit: number }
+type SalesPoint = { date: string; sales: number; profit: number }
+type MonthlyData = { month: string; completed: number; scheduled: number; earnings: number }
+
+type Stats = { totalServices: number; completedServices: number; activeContracts: number; totalContracts: number; totalEarnings: number; prevTotalServices: number; prevCompletedServices: number; prevTotalEarnings: number }
+type InventoryStats = { sales: number; sold: number; profit: number; lowStock: number; inventoryValue: number; stockIn: number; stockOut: number }
+
+function toDateStr(d: Date) { return d.toISOString().split("T")[0] }
+function getDateRange(range: DateRange) {
+  const now = new Date(); const today = new Date(now); today.setHours(23, 59, 59, 999)
+  if (range === "today") { const start = new Date(now); start.setHours(0, 0, 0, 0); return { start, end: today } }
+  if (range === "seven_days" || range === "week") { const start = new Date(now); start.setDate(now.getDate() - (range === "week" ? now.getDay() : 6)); start.setHours(0, 0, 0, 0); return { start, end: today } }
+  if (range === "thirty_days") { const start = new Date(now); start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0); return { start, end: today } }
+  if (range === "month") return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: today }
+  if (range === "last_month") { const start = new Date(now.getFullYear(), now.getMonth() - 1, 1); const end = new Date(now.getFullYear(), now.getMonth(), 0); end.setHours(23, 59, 59, 999); return { start, end } }
+  return { start: new Date(now.getFullYear(), 0, 1), end: today }
 }
+function getPreviousRange(range: DateRange) { const current = getDateRange(range); const days = Math.max(1, Math.ceil((current.end.getTime() - current.start.getTime()) / 86400000)); const end = new Date(current.start); end.setDate(end.getDate() - 1); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); end.setHours(23, 59, 59, 999); return { start, end } }
+function formatINR(value: number) { return `₹${Math.round(value).toLocaleString("en-IN")}` }
+function trend(current: number, previous: number) { return previous === 0 ? (current ? 100 : null) : Math.round(((current - previous) / previous) * 100) }
+function TrendBadge({ current, previous }: { current: number; previous: number }) { const value = trend(current, previous); if (value === null) return <span className="text-xs text-muted-foreground">No previous data</span>; return <span className={`flex items-center gap-1 text-xs font-medium ${value >= 0 ? "text-green-600" : "text-red-500"}`}>{value >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}{value >= 0 ? "+" : ""}{value}% vs previous</span> }
+function getContractStats(history: HistoryRow[], contracts: ContractRow[]) { const map = new Map(contracts.map((c) => [c.id, c])); const completed = history.filter((h) => h.status === "completed"); const earned = new Set(completed.map((h) => h.contract_id)); return { services: history.length, completed: completed.length, earnings: [...earned].reduce((sum, id) => sum + (map.get(id)?.contracts_price || 0), 0) } }
+function getMonthlyData(history: HistoryRow[], contracts: ContractRow[]): MonthlyData[] { const map = new Map(contracts.map((c) => [c.id, c])); const now = new Date(); return Array.from({ length: 6 }, (_, index) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1); const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); const records = history.filter((h) => h.service_date >= toDateStr(d) && h.service_date <= toDateStr(end)); const stats = getContractStats(records, contracts); return { month: d.toLocaleString("default", { month: "short" }), completed: stats.completed, scheduled: records.filter((h) => h.status !== "completed" && h.status !== "cancelled").length, earnings: stats.earnings } }) }
 
-interface MonthlyData {
-  month: string
-  completed: number
-  scheduled: number
-  earnings: number
-}
-
-interface HistoryRow {
-  id: string
-  contract_id: string
-  status: string
-  service_date: string
-}
-
-interface ContractRow {
-  id: string
-  status: string
-  contracts_price: number | null
-  customer_id: string
-  next_service_date: string 
-}
-
-const RANGE_LABELS: Record<DateRange, string> = {
-  week: "This Week",
-  month: "This Month",
-  last_month: "Last Month",
-  year: "This Year"
-}
-
-function toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0]
-}
-
-function getDateRange(range: DateRange): { start: Date; end: Date } {
-  const now = new Date()
-  switch (range) {
-    case "week": {
-      const start = new Date(now)
-      start.setDate(now.getDate() - now.getDay())
-      start.setHours(0, 0, 0, 0)
-      const end = new Date(now)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
-      const end = new Date(now)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "last_month": {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const end = new Date(now.getFullYear(), now.getMonth(), 0)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "year": {
-      const start = new Date(now.getFullYear(), 0, 1)
-      const end = new Date(now)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-  }
-}
-
-function getPrevDateRange(range: DateRange): { start: Date; end: Date } {
-  const now = new Date()
-  switch (range) {
-    case "week": {
-      const start = new Date(now)
-      start.setDate(now.getDate() - now.getDay() - 7)
-      start.setHours(0, 0, 0, 0)
-      const end = new Date(start)
-      end.setDate(start.getDate() + 6)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "month": {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const end = new Date(now.getFullYear(), now.getMonth(), 0)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "last_month": {
-      const start = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-      const end = new Date(now.getFullYear(), now.getMonth() - 1, 0)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case "year": {
-      const start = new Date(now.getFullYear() - 1, 0, 1)
-      const end = new Date(now.getFullYear() - 1, 11, 31)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-  }
-}
-
-function calcTrend(current: number, prev: number): number | null {
-  if (prev === 0) return current > 0 ? 100 : null
-  return Math.round(((current - prev) / prev) * 100)
-}
-
-function formatINR(amount: number): string {
-  return `₹${amount.toLocaleString("en-IN")}`
-}
-
-function TrendBadge({ current, prev }: { current: number; prev: number }) {
-  const trend = calcTrend(current, prev)
-  if (trend === null) return <span className="text-xs text-muted-foreground">No prev data</span>
-  if (trend > 0) return (
-    <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-      <TrendingUp className="size-3" />+{trend}% vs prev
-    </span>
-  )
-  if (trend < 0) return (
-    <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
-      <TrendingDown className="size-3" />{trend}% vs prev
-    </span>
-  )
-  return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-      <Minus className="size-3" />0% vs prev
-    </span>
-  )
-}
-
-function StatCardSkeleton() {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-2 flex-1">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-8 w-24" />
-            <Skeleton className="h-3 w-28" />
-          </div>
-          <Skeleton className="size-12 rounded-lg" />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function getTotalServices(history: HistoryRow[]): number {
-  return history.length
-}
-
-function getCompletedServices(history: HistoryRow[]): number {
-  return history.filter(h => h.status === "completed").length
-}
-
-function getTotalEarnings(history: HistoryRow[], contractMap: Map<string, ContractRow>): number {
-  const earnedIds = new Set(
-    history.filter(h => h.status === "completed").map(h => h.contract_id)
-  )
-  return [...earnedIds].reduce((sum, id) => {
-    return sum + (contractMap.get(id)?.contracts_price || 0)
-  }, 0)
-}
-
-function getMonthlyData(allHistory: HistoryRow[], contractMap: Map<string, ContractRow>): MonthlyData[] {
-  const now = new Date()
-  const months: MonthlyData[] = []
-
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, "0")
-    const monthStart = `${year}-${month}-01`
-    const lastDay = new Date(year, d.getMonth() + 1, 0).getDate()
-    const monthEnd = `${year}-${month}-${String(lastDay).padStart(2, "0")}`
-    const label = d.toLocaleString("default", { month: "short" })
-
-    const records = allHistory.filter(
-      h => h.service_date >= monthStart && h.service_date <= monthEnd
-    )
-    const completed = records.filter(h => h.status === "completed").length
-    const scheduled = records.filter(h => h.status !== "completed" && h.status !== "cancelled").length
-    const earnings = getTotalEarnings(records, contractMap)
-
-    months.push({ month: label, completed, scheduled, earnings })
-  }
-  return months
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [22, 45, 60] // default dark blue
-}
+function StatCard({ title, value, detail, icon: Icon, tone = "primary", previous, current }: { title: string; value: string | number; detail: string; icon: typeof Activity; tone?: "primary" | "amber"; previous?: number; current?: number }) { const toneClasses = tone === "amber" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"; return <Card><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div className="flex flex-col gap-1"><span className="text-sm font-medium text-muted-foreground">{title}</span><span className="text-2xl font-bold tracking-tight">{value}</span>{previous !== undefined && current !== undefined ? <TrendBadge current={current} previous={previous} /> : <span className="text-xs text-muted-foreground">{detail}</span>}</div><div className={`flex size-11 items-center justify-center rounded-lg ${toneClasses}`}><Icon className="size-5" /></div></div></CardContent></Card> }
+function LoadingCards() { return <>{Array.from({ length: 8 }, (_, i) => <Card key={i}><CardContent className="p-5"><Skeleton className="h-24 w-full" /></CardContent></Card>)}</> }
 
 export default function ReportsPage() {
-  const { user } = useAuth()
-  const [range, setRange] = useState<DateRange>("month")
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [currentHistory, setCurrentHistory] = useState<HistoryRow[]>([])
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const { user } = useAuth(); const [range, setRange] = useState<DateRange>("month"); const [orgId, setOrgId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [stats, setStats] = useState<Stats | null>(null); const [inventory, setInventory] = useState<InventoryStats | null>(null); const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]); const [salesData, setSalesData] = useState<SalesPoint[]>([]); const [topProducts, setTopProducts] = useState<ProductSale[]>([]); const [recentSales, setRecentSales] = useState<(Movement & { name: string })[]>([])
 
-  useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Failed to fetch organization:", error)
-            toast.error("Could not determine your organization")
-          } else if (data?.org_id) {
-            setCurrentOrgId(data.org_id)
-          }
-        })
-    }
-  }, [user?.id])
+  useEffect(() => { if (!user?.id) return; supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data, error }) => { if (error) { toast.error("Could not determine your organization"); return } setOrgId(data?.org_id || null) }) }, [user?.id])
+  const fetchData = useCallback(async () => { if (!orgId) return; setLoading(true); try {
+    const { start, end } = getDateRange(range); const previous = getPreviousRange(range); const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); sixMonthsAgo.setDate(1)
+    // Keep the contract and inventory reads in one parallel batch so changing the range never shows a mixed-period dashboard.
+    const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes] = await Promise.all([
+      supabase.from("contracts").select("id, status, contracts_price, customer_id, next_service_date").eq("org_id", orgId),
+      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(start)).lte("service_date", toDateStr(end)),
+      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(previous.start)).lte("service_date", toDateStr(previous.end)),
+      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(sixMonthsAgo)),
+      supabase.from("inventory_items").select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id").eq("org_id", orgId).eq("is_active", true),
+      supabase.from("inventory_stock_movements").select("id, item_id, movement_type, reason, quantity, selling_price, purchase_price, technician_id, created_at").eq("org_id", orgId).gte("created_at", toDateStr(sixMonthsAgo))
+    ])
+    for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) if (result.error) throw result.error
+    const contracts = (contractsRes.data || []) as ContractRow[]; const history = (historyRes.data || []) as HistoryRow[]; const previousHistory = (previousHistoryRes.data || []) as HistoryRow[]; const allHistory = (allHistoryRes.data || []) as HistoryRow[]; const items = (itemsRes.data || []) as Item[]; const allMovements = (movementsRes.data || []) as Movement[]; const itemMap = new Map(items.map((item) => [item.id, item])); const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString()); const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold")
+    const current = getContractStats(history, contracts); const prev = getContractStats(previousHistory, contracts); setStats({ totalServices: current.services, completedServices: current.completed, totalContracts: contracts.length, activeContracts: contracts.filter((c) => c.status === "active" && getDaysUntilService(c.next_service_date) > 7).length, totalEarnings: current.earnings, prevTotalServices: prev.services, prevCompletedServices: prev.completed, prevTotalEarnings: prev.earnings }); setMonthlyData(getMonthlyData(allHistory, contracts))
+    const sales = sold.reduce((sum, m) => sum + (m.selling_price || itemMap.get(m.item_id)?.selling_price || 0) * m.quantity, 0); const profit = sold.reduce((sum, m) => sum + ((m.selling_price ?? itemMap.get(m.item_id)?.selling_price ?? 0) - (m.purchase_price ?? itemMap.get(m.item_id)?.purchase_price ?? 0)) * m.quantity, 0); setInventory({ sales, sold: sold.reduce((sum, m) => sum + m.quantity, 0), profit, lowStock: items.filter((i) => i.current_stock <= i.min_stock_level).length, inventoryValue: items.reduce((sum, i) => sum + i.current_stock * (i.purchase_price || 0), 0), stockIn: movements.filter((m) => m.movement_type === "in").reduce((sum, m) => sum + m.quantity, 0), stockOut: movements.filter((m) => m.movement_type === "out").reduce((sum, m) => sum + m.quantity, 0) })
+    const productMap = new Map<string, ProductSale>(); sold.forEach((m) => { const item = itemMap.get(m.item_id); const name = item?.name || "Unknown item"; const existing = productMap.get(name) || { name, quantity: 0, revenue: 0, profit: 0 }; const selling = m.selling_price ?? item?.selling_price ?? 0; const purchase = m.purchase_price ?? item?.purchase_price ?? 0; existing.quantity += m.quantity; existing.revenue += selling * m.quantity; existing.profit += (selling - purchase) * m.quantity; productMap.set(name, existing) }); setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10)); setRecentSales(sold.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8).map((m) => ({ ...m, name: itemMap.get(m.item_id)?.name || "Unknown item" })))
+    const daily = new Map<string, SalesPoint>(); sold.forEach((m) => { const date = m.created_at.slice(0, 10); const point = daily.get(date) || { date, sales: 0, profit: 0 }; const selling = m.selling_price ?? itemMap.get(m.item_id)?.selling_price ?? 0; const purchase = m.purchase_price ?? itemMap.get(m.item_id)?.purchase_price ?? 0; point.sales += selling * m.quantity; point.profit += (selling - purchase) * m.quantity; daily.set(date, point) }); setSalesData([...daily.values()].sort((a, b) => a.date.localeCompare(b.date)).map((point) => ({ ...point, date: new Date(point.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) })))
+  } catch (error) { console.error("Error loading reports:", error); toast.error("Failed to load report data") } finally { setLoading(false) } }, [orgId, range])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id || !currentOrgId) return
-    setLoading(true)
-    try {
-      const { start, end } = getDateRange(range)
-      const { start: prevStart, end: prevEnd } = getPrevDateRange(range)
+  const exportReportPDF = () => { if (!stats || !inventory) return toast.error("No data to export"); const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" }); doc.setFontSize(16); doc.text("Remindi Reports Summary", 15, 15); doc.setFontSize(9); doc.text(`Period: ${RANGE_LABELS[range]} | Exported: ${new Date().toLocaleDateString("en-IN")}`, 15, 22); autoTable(doc, { startY: 28, head: [["Metric", "Value"]], body: [["Total Contracts", stats.totalContracts], ["Completed Services", stats.completedServices], ["Contract Earnings", formatINR(stats.totalEarnings)], ["Sales", formatINR(inventory.sales)], ["Items Sold", inventory.sold], ["Profit", formatINR(inventory.profit)], ["Low Stock Items", inventory.lowStock], ["Inventory Value", formatINR(inventory.inventoryValue)]], theme: "striped" }); autoTable(doc, { startY: (doc as any).lastAutoTable.finalY + 8, head: [["Product", "Qty Sold", "Revenue", "Profit"]], body: topProducts.map((p) => [p.name, p.quantity, formatINR(p.revenue), formatINR(p.profit)]), theme: "striped" }); doc.save(`Reports_${range}_${toDateStr(new Date())}.pdf`); toast.success("Report exported successfully") }
 
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-      sixMonthsAgo.setDate(1)
-      sixMonthsAgo.setHours(0, 0, 0, 0)
-
-      const [contractsRes, currentHistoryRes, prevHistoryRes, allHistoryRes] = await Promise.all([
-        supabase
-          .from("contracts")
-          .select("id, status, contracts_price, customer_id, next_service_date")
-          .eq("org_id", currentOrgId),
-        supabase
-          .from("service_history")
-          .select("id, contract_id, status, service_date")
-          .eq("org_id", currentOrgId)
-          .gte("service_date", toDateStr(start))
-          .lte("service_date", toDateStr(end)),
-        supabase
-          .from("service_history")
-          .select("id, contract_id, status, service_date")
-          .eq("org_id", currentOrgId)
-          .gte("service_date", toDateStr(prevStart))
-          .lte("service_date", toDateStr(prevEnd)),
-        supabase
-          .from("service_history")
-          .select("id, contract_id, status, service_date")
-          .eq("org_id", currentOrgId)
-          .gte("service_date", toDateStr(sixMonthsAgo))
-      ])
-
-      const contracts = (contractsRes.data || []) as ContractRow[]
-      const cHistory = (currentHistoryRes.data || []) as HistoryRow[]
-      const pHistory = (prevHistoryRes.data || []) as HistoryRow[]
-      const aHistory = (allHistoryRes.data || []) as HistoryRow[]
-
-      const contractMap = new Map(contracts.map(c => [c.id, c]))
-
-      setCurrentHistory(cHistory)
-
-      setStats({
-        totalServices: getTotalServices(cHistory),
-        completedServices: getCompletedServices(cHistory),
-        activeContracts: contracts.filter(c => {
-          const days = getDaysUntilService(c.next_service_date)
-          return c.status === "active" && days > 7
-        }).length,
-        totalContracts: contracts.length,
-        totalEarnings: getTotalEarnings(cHistory, contractMap),
-        prevTotalServices: getTotalServices(pHistory),
-        prevCompletedServices: getCompletedServices(pHistory),
-        prevTotalEarnings: getTotalEarnings(pHistory, contractMap),
-      })
-
-      setMonthlyData(getMonthlyData(aHistory, contractMap))
-    } catch (err) {
-      console.error("Error loading reports:", err)
-      toast.error("Failed to load report data")
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.id, range, currentOrgId])
-
-  useEffect(() => {
-    if (currentOrgId) {
-      fetchData()
-    }
-  }, [fetchData, currentOrgId])
-
-  // ===== NEW PDF EXPORT using jsPDF + autoTable =====
-  const exportReportPDF = () => {
-    if (!stats || monthlyData.length === 0) {
-      toast.error("No data to export")
-      return
-    }
-
-    try {
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
-      const pageW = 297
-      const margin = 15
-      const themeColor = "#162d3c"
-      const [r, g, b] = hexToRgb(themeColor)
-
-      // Header
-      doc.setFillColor(r, g, b)
-      doc.rect(0, 0, pageW, 14, "F")
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
-      doc.setFont("helvetica", "bold")
-      doc.text("Reports Summary", margin, 9)
-      doc.setTextColor(200, 200, 200)
-      doc.setFontSize(8)
-      doc.text("AMC REPORTS", pageW - margin, 9, { align: "right" })
-
-      // Meta info
-      const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-      const rangeLabel = RANGE_LABELS[range] || range
-      doc.setTextColor(40, 40, 40)
-      doc.setFontSize(8)
-      doc.text(`Exported: ${dateStr}  |  Period: ${rangeLabel}`, margin, 22)
-
-      // Stats summary
-      const statsData = [
-        ["Total Contracts", stats.totalContracts],
-        ["Completed Services", stats.completedServices],
-        ["Active Contracts", stats.activeContracts],
-        ["Total Earnings", `Rs. ${stats.totalEarnings.toLocaleString('en-IN')}`],
-      ]
-
-      autoTable(doc, {
-        startY: 28,
-        head: [["Metric", "Value"]],
-        body: statsData.map(row => [row[0], String(row[1])]),
-        theme: "striped",
-        headStyles: {
-          fillColor: [r, g, b],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 8,
-        },
-        bodyStyles: { fontSize: 8 },
-        columnStyles: {
-          0: { cellWidth: 60 },
-          1: { cellWidth: 40 },
-        },
-        margin: { left: margin, right: margin },
-      })
-
-      // Monthly data table
-      const yAfterStats = (doc as any).lastAutoTable.finalY + 8
-
-      const tableData = monthlyData.map(m => [
-        m.month,
-        m.completed,
-        m.scheduled,
-        `Rs. ${m.earnings.toLocaleString('en-IN')}`,
-      ])
-
-      autoTable(doc, {
-        startY: yAfterStats,
-        head: [["Month", "Completed", "Scheduled", "Earnings"]],
-        body: tableData,
-        theme: "striped",
-        headStyles: {
-          fillColor: [r, g, b],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 8,
-        },
-        bodyStyles: { fontSize: 7 },
-        columnStyles: {
-          0: { cellWidth: 30 },
-          1: { cellWidth: 30 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 40 },
-        },
-        margin: { left: margin, right: margin },
-      })
-
-      // Footer
-      const finalY = (doc as any).lastAutoTable.finalY + 8
-      doc.setFontSize(7)
-      doc.setTextColor(150, 150, 150)
-      doc.text("Generated by Remindi · remindi.online", pageW / 2, finalY, { align: "center" })
-
-      doc.save(`Reports_${range}_${new Date().toISOString().split('T')[0]}.pdf`)
-      toast.success("Report exported successfully")
-    } catch (error) {
-      console.error("Error exporting report:", error)
-      toast.error("Failed to export report")
-    }
-  }
-
-  return (
-    <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-            <p className="text-muted-foreground">Analytics dashboard powered by live data</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportReportPDF}
-              disabled={loading || !stats}
-            >
-              <Download className="mr-2 size-4" />
-              Export PDF
-            </Button>
-            <Select value={range} onValueChange={(v) => setRange(v as DateRange)}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-                <SelectItem value="last_month">Last Month</SelectItem>
-                <SelectItem value="year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Stat Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {loading || !stats ? (
-            <>
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-            </>
-          ) : (
-            <>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-muted-foreground">Total Contracts</span>
-                      <span className="text-3xl font-bold">{stats.totalContracts}</span>
-                      <span className="text-xs text-muted-foreground">All time</span>
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
-                      <Activity className="size-6 text-primary" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-muted-foreground">Completed Services</span>
-                      <span className="text-3xl font-bold">{stats.completedServices}</span>
-                      <TrendBadge current={stats.completedServices} prev={stats.prevCompletedServices} />
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-lg bg-green-500/10">
-                      <CheckCircle2 className="size-6 text-green-500" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{RANGE_LABELS[range]}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-muted-foreground">Active Contracts</span>
-                      <span className="text-3xl font-bold">{stats.activeContracts}</span>
-                      <span className="text-xs text-muted-foreground">Currently active</span>
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-lg bg-blue-500/10">
-                      <FileText className="size-6 text-blue-500" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">All time</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-muted-foreground">Total Earnings</span>
-                      <span className="text-3xl font-bold">{formatINR(stats.totalEarnings)}</span>
-                      <TrendBadge current={stats.totalEarnings} prev={stats.prevTotalEarnings} />
-                    </div>
-                    <div className="flex size-12 items-center justify-center rounded-lg bg-amber-500/10">
-                      <IndianRupee className="size-6 text-amber-500" />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{RANGE_LABELS[range]}</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Services Overview</CardTitle>
-              <CardDescription>Completed services and earnings over the last 6 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : monthlyData.every(m => m.completed === 0) ? (
-                <div className="flex h-64 items-center justify-center text-muted-foreground">
-                  No service history data yet
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <ComposedChart data={monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                      formatter={(value, name) => {
-                        if (name === "earnings") return [formatINR(Number(value)), "Earnings"]
-                        if (name === "completed") return [value, "Completed"]
-                        return [value, name]
-                      }}
-                    />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="completed" name="Completed" fill="#22c55e" radius={[3, 3, 0, 0]} />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="earnings"
-                      name="earnings"
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Earnings Bar Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Earnings (₹)</CardTitle>
-            <CardDescription>Revenue from completed services over the last 6 months</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : monthlyData.every(m => m.earnings === 0) ? (
-              <div className="flex h-48 items-center justify-center text-muted-foreground">
-                No earnings data yet — complete services and add contract prices to see data here
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(value) => [formatINR(Number(value)), "Earnings"]} />
-                  <Bar dataKey="earnings" name="Earnings" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
-  )
+  const salesHasData = useMemo(() => salesData.some((p) => p.sales > 0 || p.profit > 0), [salesData])
+  return <DashboardLayout><div className="flex flex-col gap-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground">Contracts, service performance, and inventory intelligence</p></div><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={exportReportPDF} disabled={loading || !stats}><Download data-icon="inline-start" />Export PDF</Button><Select value={range} onValueChange={(value) => setRange(value as DateRange)}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(RANGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{loading || !stats || !inventory ? <LoadingCards /> : <><StatCard title="Total Contracts" value={stats.totalContracts} detail="All time" icon={Activity} /><StatCard title="Completed Services" value={stats.completedServices} detail={RANGE_LABELS[range]} icon={CheckCircle2} current={stats.completedServices} previous={stats.prevCompletedServices} /><StatCard title="Active Contracts" value={stats.activeContracts} detail="Currently active" icon={FileText} /><StatCard title="Contract Earnings" value={formatINR(stats.totalEarnings)} detail={RANGE_LABELS[range]} icon={IndianRupee} current={stats.totalEarnings} previous={stats.prevTotalEarnings} /><StatCard title="Sales" value={formatINR(inventory.sales)} detail={RANGE_LABELS[range]} icon={ShoppingCart} /><StatCard title="Items Sold" value={inventory.sold} detail={RANGE_LABELS[range]} icon={Package} /><StatCard title="Profit" value={formatINR(inventory.profit)} detail={RANGE_LABELS[range]} icon={TrendingUp} /><StatCard title="Low Stock" value={inventory.lowStock} detail="Current stock levels" icon={AlertTriangle} tone="amber" /></>}</div>
+    <div className="grid gap-6 lg:grid-cols-2"><Card><CardHeader><CardTitle>Sales and Profit</CardTitle><CardDescription>Daily inventory sales for {RANGE_LABELS[range].toLowerCase()}</CardDescription></CardHeader><CardContent>{loading ? <Skeleton className="h-72 w-full" /> : !salesHasData ? <div className="flex h-72 items-center justify-center text-muted-foreground">No sales data for this period</div> : <ResponsiveContainer width="100%" height={280}><ComposedChart data={salesData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip formatter={(value) => formatINR(Number(value))} /><Legend /><Bar dataKey="sales" name="Sales" fill="#2563eb" radius={[3, 3, 0, 0]} /><Line dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} /></ComposedChart></ResponsiveContainer>}</CardContent></Card><Card><CardHeader><CardTitle>Monthly Services Overview</CardTitle><CardDescription>Completed services and contract earnings over six months</CardDescription></CardHeader><CardContent>{loading ? <Skeleton className="h-72 w-full" /> : <ResponsiveContainer width="100%" height={280}><ComposedChart data={monthlyData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis yAxisId="left" allowDecimals={false} /><YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip /><Legend /><Bar yAxisId="left" dataKey="completed" name="Completed" fill="#16a34a" /><Line yAxisId="right" dataKey="earnings" name="Earnings" stroke="#d97706" /></ComposedChart></ResponsiveContainer>}</CardContent></Card></div>
+    <div className="grid gap-6 lg:grid-cols-2"><Card><CardHeader><CardTitle>Top-Selling Products</CardTitle><CardDescription>Highest quantity sold in the selected period</CardDescription></CardHeader><CardContent className="p-0">{loading ? <Skeleton className="m-6 h-48" /> : topProducts.length === 0 ? <p className="p-6 text-muted-foreground">No sold products for this period.</p> : <Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Qty</TableHead><TableHead>Revenue</TableHead><TableHead>Profit</TableHead></TableRow></TableHeader><TableBody>{topProducts.map((p) => <TableRow key={p.name}><TableCell className="font-medium">{p.name}</TableCell><TableCell>{p.quantity}</TableCell><TableCell>{formatINR(p.revenue)}</TableCell><TableCell>{formatINR(p.profit)}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card><Card><CardHeader><CardTitle>Inventory Snapshot</CardTitle><CardDescription>Operational stock totals for the selected period</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Inventory value</span><span className="font-semibold">{loading || !inventory ? "—" : formatINR(inventory.inventoryValue)}</span></div><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Stock in</span><span className="font-semibold">{loading || !inventory ? "—" : inventory.stockIn}</span></div><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Stock out</span><span className="font-semibold">{loading || !inventory ? "—" : inventory.stockOut}</span></div><div className="flex items-center justify-between"><span className="text-muted-foreground">Low stock items</span><span className="font-semibold text-amber-600">{loading || !inventory ? "—" : inventory.lowStock}</span></div></CardContent></Card></div>
+    <Card><CardHeader><CardTitle>Recent Sales</CardTitle><CardDescription>Latest sold movements in this period</CardDescription></CardHeader><CardContent className="p-0">{loading ? <Skeleton className="m-6 h-40" /> : recentSales.length === 0 ? <p className="p-6 text-muted-foreground">No recent sales for this period.</p> : <Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Quantity</TableHead><TableHead>Total</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{recentSales.map((sale) => <TableRow key={sale.id}><TableCell>{sale.name}</TableCell><TableCell>{sale.quantity}</TableCell><TableCell>{formatINR((sale.selling_price || 0) * sale.quantity)}</TableCell><TableCell>{new Date(sale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
+  </div></DashboardLayout>
 }
