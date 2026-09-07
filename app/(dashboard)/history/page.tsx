@@ -299,7 +299,7 @@ export default function ServiceHistoryPage() {
           </CardContent>
         </Card>
 
-        {/* Mobile: Service History Cards (View button removed) */}
+        {/* Mobile: Service History Cards – Customer now visible with label */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading service history...</div>
@@ -338,6 +338,11 @@ export default function ServiceHistoryPage() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      {/* Customer field – always shown with label */}
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Customer</p>
+                        <p className="text-sm font-medium">{record.customerName}</p>
+                      </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-0.5">Technician</p>
                         <p className="text-sm font-medium">{record.technicianName}</p>
@@ -361,7 +366,6 @@ export default function ServiceHistoryPage() {
                         </div>
                       )}
                     </div>
-                    {/* Footer without View button */}
                     <div className="flex items-center justify-end pt-2 border-t border-border">
                       <span className="text-xs text-muted-foreground">Service Record</span>
                     </div>
