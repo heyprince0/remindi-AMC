@@ -47,49 +47,134 @@ function TrendBadge({ current, previous }: { current: number; previous: number }
 function getContractStats(history: HistoryRow[], contracts: ContractRow[]) { const map = new Map(contracts.map((c) => [c.id, c])); const completed = history.filter((h) => h.status === "completed"); const earned = new Set(completed.map((h) => h.contract_id)); return { services: history.length, completed: completed.length, earnings: [...earned].reduce((sum, id) => sum + (map.get(id)?.contracts_price || 0), 0) } }
 function getMonthlyData(history: HistoryRow[], contracts: ContractRow[]): MonthlyData[] { const map = new Map(contracts.map((c) => [c.id, c])); const now = new Date(); return Array.from({ length: 6 }, (_, index) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1); const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); const records = history.filter((h) => h.service_date >= toDateStr(d) && h.service_date <= toDateStr(end)); const stats = getContractStats(records, contracts); return { month: d.toLocaleString("default", { month: "short" }), completed: stats.completed, scheduled: records.filter((h) => h.status !== "completed" && h.status !== "cancelled").length, earnings: stats.earnings } }) }
 
-function StatCard({ title, value, detail, icon: Icon, tone = "primary", previous, current }: { title: string; value: string | number; detail: string; icon: typeof Activity; tone?: "primary" | "amber"; previous?: number; current?: number }) { const toneClasses = tone === "amber" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"; return <Card><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div className="flex flex-col gap-1"><span className="text-sm font-medium text-muted-foreground">{title}</span><span className="text-2xl font-bold tracking-tight">{value}</span>{previous !== undefined && current !== undefined ? <TrendBadge current={current} previous={previous} /> : <span className="text-xs text-muted-foreground">{detail}</span>}</div><div className={`flex size-11 items-center justify-center rounded-lg ${toneClasses}`}><Icon className="size-5" /></div></div></CardContent></Card> }
-function LoadingCards() { return <>{Array.from({ length: 8 }, (_, i) => <Card key={i}><CardContent className="p-5"><Skeleton className="h-24 w-full" /></CardContent></Card>)}</> }
+function StatCard({ title, value, detail, icon: Icon, tone = "primary", previous, current }: { title: string; value: string | number; detail: string; icon: typeof Activity; tone?: "primary" | "amber"; previous?: number; current?: number }) {
+  const toneClasses = tone === "amber" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+  return (
+    <Card>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</span>
+            <span className="text-xl sm:text-2xl font-bold tracking-tight">{value}</span>
+            {previous !== undefined && current !== undefined ? (
+              <TrendBadge current={current} previous={previous} />
+            ) : (
+              <span className="text-[10px] sm:text-xs text-muted-foreground">{detail}</span>
+            )}
+          </div>
+          <div className={`flex size-9 sm:size-11 shrink-0 items-center justify-center rounded-lg ${toneClasses}`}>
+            <Icon className="size-4 sm:size-5" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function LoadingCards() {
+  return (
+    <>
+      {Array.from({ length: 8 }, (_, i) => (
+        <Card key={i}>
+          <CardContent className="p-4 sm:p-5">
+            <Skeleton className="h-20 sm:h-24 w-full" />
+          </CardContent>
+        </Card>
+      ))}
+    </>
+  )
+}
 
 export default function ReportsPage() {
-  const { user } = useAuth(); const [range, setRange] = useState<DateRange>("month"); const [orgId, setOrgId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [stats, setStats] = useState<Stats | null>(null); const [inventory, setInventory] = useState<InventoryStats | null>(null); const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]); const [salesData, setSalesData] = useState<SalesPoint[]>([]); const [topProducts, setTopProducts] = useState<ProductSale[]>([]); const [recentSales, setRecentSales] = useState<RecentSale[]>([])
+  const { user } = useAuth()
+  const [range, setRange] = useState<DateRange>("month")
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [inventory, setInventory] = useState<InventoryStats | null>(null)
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
+  const [salesData, setSalesData] = useState<SalesPoint[]>([])
+  const [topProducts, setTopProducts] = useState<ProductSale[]>([])
+  const [recentSales, setRecentSales] = useState<RecentSale[]>([])
 
-  useEffect(() => { if (!user?.id) return; supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data, error }) => { if (error) { toast.error("Could not determine your organization"); return } setOrgId(data?.org_id || null) }) }, [user?.id])
+  useEffect(() => {
+    if (!user?.id) return
+    supabase
+      .from("memberships")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error("Could not determine your organization")
+          return
+        }
+        setOrgId(data?.org_id || null)
+      })
+  }, [user?.id])
 
   const fetchData = useCallback(async () => {
-    if (!orgId) return;
-    setLoading(true);
+    if (!orgId) return
+    setLoading(true)
     try {
-      const { start, end } = getDateRange(range);
-      const previous = getPreviousRange(range);
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-      sixMonthsAgo.setDate(1);
+      const { start, end } = getDateRange(range)
+      const previous = getPreviousRange(range)
+      const sixMonthsAgo = new Date()
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+      sixMonthsAgo.setDate(1)
 
       const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes] = await Promise.all([
-        supabase.from("contracts").select("id, status, contracts_price, customer_id, next_service_date").eq("org_id", orgId),
-        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(start)).lte("service_date", toDateStr(end)),
-        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(previous.start)).lte("service_date", toDateStr(previous.end)),
-        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(sixMonthsAgo)),
-        supabase.from("inventory_items").select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id").eq("org_id", orgId).eq("is_active", true),
-        supabase.from("inventory_stock_movements").select("id, item_id, movement_type, reason, quantity, technician_id, created_at").eq("org_id", orgId).gte("created_at", toDateStr(sixMonthsAgo))
+        supabase
+          .from("contracts")
+          .select("id, status, contracts_price, customer_id, next_service_date")
+          .eq("org_id", orgId),
+        supabase
+          .from("service_history")
+          .select("id, contract_id, status, service_date")
+          .eq("org_id", orgId)
+          .gte("service_date", toDateStr(start))
+          .lte("service_date", toDateStr(end)),
+        supabase
+          .from("service_history")
+          .select("id, contract_id, status, service_date")
+          .eq("org_id", orgId)
+          .gte("service_date", toDateStr(previous.start))
+          .lte("service_date", toDateStr(previous.end)),
+        supabase
+          .from("service_history")
+          .select("id, contract_id, status, service_date")
+          .eq("org_id", orgId)
+          .gte("service_date", toDateStr(sixMonthsAgo)),
+        supabase
+          .from("inventory_items")
+          .select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id")
+          .eq("org_id", orgId)
+          .eq("is_active", true),
+        supabase
+          .from("inventory_stock_movements")
+          .select("id, item_id, movement_type, reason, quantity, technician_id, created_at")
+          .eq("org_id", orgId)
+          .gte("created_at", toDateStr(sixMonthsAgo)),
       ])
 
-      for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) if (result.error) throw result.error
+      for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) {
+        if (result.error) throw result.error
+      }
 
-      const contracts = (contractsRes.data || []) as ContractRow[];
-      const history = (historyRes.data || []) as HistoryRow[];
-      const previousHistory = (previousHistoryRes.data || []) as HistoryRow[];
-      const allHistory = (allHistoryRes.data || []) as HistoryRow[];
-      const items = (itemsRes.data || []) as Item[];
-      const allMovements = (movementsRes.data || []) as Movement[];
-      const itemMap = new Map(items.map((item) => [item.id, item]));
+      const contracts = (contractsRes.data || []) as ContractRow[]
+      const history = (historyRes.data || []) as HistoryRow[]
+      const previousHistory = (previousHistoryRes.data || []) as HistoryRow[]
+      const allHistory = (allHistoryRes.data || []) as HistoryRow[]
+      const items = (itemsRes.data || []) as Item[]
+      const allMovements = (movementsRes.data || []) as Movement[]
+      const itemMap = new Map(items.map((item) => [item.id, item]))
 
-      const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString());
-      const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold");
+      const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString())
+      const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold")
 
       // Contract stats
-      const current = getContractStats(history, contracts);
-      const prev = getContractStats(previousHistory, contracts);
+      const current = getContractStats(history, contracts)
+      const prev = getContractStats(previousHistory, contracts)
       setStats({
         totalServices: current.services,
         completedServices: current.completed,
@@ -99,20 +184,20 @@ export default function ReportsPage() {
         prevTotalServices: prev.services,
         prevCompletedServices: prev.completed,
         prevTotalEarnings: prev.earnings,
-      });
-      setMonthlyData(getMonthlyData(allHistory, contracts));
+      })
+      setMonthlyData(getMonthlyData(allHistory, contracts))
 
       // Inventory stats
       const sales = sold.reduce((sum, m) => {
-        const item = itemMap.get(m.item_id);
-        return sum + (item?.selling_price ?? 0) * m.quantity;
-      }, 0);
+        const item = itemMap.get(m.item_id)
+        return sum + (item?.selling_price ?? 0) * m.quantity
+      }, 0)
       const profit = sold.reduce((sum, m) => {
-        const item = itemMap.get(m.item_id);
-        const selling = item?.selling_price ?? 0;
-        const purchase = item?.purchase_price ?? 0;
-        return sum + (selling - purchase) * m.quantity;
-      }, 0);
+        const item = itemMap.get(m.item_id)
+        const selling = item?.selling_price ?? 0
+        const purchase = item?.purchase_price ?? 0
+        return sum + (selling - purchase) * m.quantity
+      }, 0)
 
       setInventory({
         sales,
@@ -122,50 +207,50 @@ export default function ReportsPage() {
         inventoryValue: items.reduce((sum, i) => sum + i.current_stock * (i.purchase_price || 0), 0),
         stockIn: movements.filter((m) => m.movement_type === "in").reduce((sum, m) => sum + m.quantity, 0),
         stockOut: movements.filter((m) => m.movement_type === "out").reduce((sum, m) => sum + m.quantity, 0),
-      });
+      })
 
       // Top‑selling products
-      const productMap = new Map<string, ProductSale>();
+      const productMap = new Map<string, ProductSale>()
       sold.forEach((m) => {
-        const item = itemMap.get(m.item_id);
-        const name = item?.name || "Unknown item";
-        const selling = item?.selling_price ?? 0;
-        const purchase = item?.purchase_price ?? 0;
-        const existing = productMap.get(name) || { name, quantity: 0, revenue: 0, profit: 0 };
-        existing.quantity += m.quantity;
-        existing.revenue += selling * m.quantity;
-        existing.profit += (selling - purchase) * m.quantity;
-        productMap.set(name, existing);
-      });
-      setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10));
+        const item = itemMap.get(m.item_id)
+        const name = item?.name || "Unknown item"
+        const selling = item?.selling_price ?? 0
+        const purchase = item?.purchase_price ?? 0
+        const existing = productMap.get(name) || { name, quantity: 0, revenue: 0, profit: 0 }
+        existing.quantity += m.quantity
+        existing.revenue += selling * m.quantity
+        existing.profit += (selling - purchase) * m.quantity
+        productMap.set(name, existing)
+      })
+      setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10))
 
-      // Recent sales – store total price
+      // Recent sales
       setRecentSales(
         sold
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
           .slice(0, 8)
           .map((m) => {
-            const item = itemMap.get(m.item_id);
+            const item = itemMap.get(m.item_id)
             return {
               ...m,
               name: item?.name || "Unknown item",
               total: (item?.selling_price ?? 0) * m.quantity,
-            };
+            }
           })
-      );
+      )
 
       // Daily sales chart
-      const daily = new Map<string, SalesPoint>();
+      const daily = new Map<string, SalesPoint>()
       sold.forEach((m) => {
-        const date = m.created_at.slice(0, 10);
-        const point = daily.get(date) || { date, sales: 0, profit: 0 };
-        const item = itemMap.get(m.item_id);
-        const selling = item?.selling_price ?? 0;
-        const purchase = item?.purchase_price ?? 0;
-        point.sales += selling * m.quantity;
-        point.profit += (selling - purchase) * m.quantity;
-        daily.set(date, point);
-      });
+        const date = m.created_at.slice(0, 10)
+        const point = daily.get(date) || { date, sales: 0, profit: 0 }
+        const item = itemMap.get(m.item_id)
+        const selling = item?.selling_price ?? 0
+        const purchase = item?.purchase_price ?? 0
+        point.sales += selling * m.quantity
+        point.profit += (selling - purchase) * m.quantity
+        daily.set(date, point)
+      })
       setSalesData(
         [...daily.values()]
           .sort((a, b) => a.date.localeCompare(b.date))
@@ -173,24 +258,26 @@ export default function ReportsPage() {
             ...point,
             date: new Date(point.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
           }))
-      );
+      )
     } catch (error) {
-      console.error("Error loading reports:", error);
-      toast.error("Failed to load report data");
+      console.error("Error loading reports:", error)
+      toast.error("Failed to load report data")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [orgId, range]);
+  }, [orgId, range])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const exportReportPDF = () => {
-    if (!stats || !inventory) return toast.error("No data to export");
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    doc.setFontSize(16);
-    doc.text("Remindi Reports Summary", 15, 15);
-    doc.setFontSize(9);
-    doc.text(`Period: ${RANGE_LABELS[range]} | Exported: ${new Date().toLocaleDateString("en-IN")}`, 15, 22);
+    if (!stats || !inventory) return toast.error("No data to export")
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+    doc.setFontSize(16)
+    doc.text("Remindi Reports Summary", 15, 15)
+    doc.setFontSize(9)
+    doc.text(`Period: ${RANGE_LABELS[range]} | Exported: ${new Date().toLocaleDateString("en-IN")}`, 15, 22)
     autoTable(doc, {
       startY: 28,
       head: [["Metric", "Value"]],
@@ -205,34 +292,43 @@ export default function ReportsPage() {
         ["Inventory Value", formatINR(inventory.inventoryValue)],
       ],
       theme: "striped",
-    });
+    })
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 8,
       head: [["Product", "Qty Sold", "Revenue", "Profit"]],
       body: topProducts.map((p) => [p.name, p.quantity, formatINR(p.revenue), formatINR(p.profit)]),
       theme: "striped",
-    });
-    doc.save(`Reports_${range}_${toDateStr(new Date())}.pdf`);
-    toast.success("Report exported successfully");
-  };
+    })
+    doc.save(`Reports_${range}_${toDateStr(new Date())}.pdf`)
+    toast.success("Report exported successfully")
+  }
 
-  const salesHasData = useMemo(() => salesData.some((p) => p.sales > 0 || p.profit > 0), [salesData]);
+  const salesHasData = useMemo(() => salesData.some((p) => p.sales > 0 || p.profit > 0), [salesData])
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:gap-6">
+        {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Reports</h1>
-            <p className="text-muted-foreground">Contracts, service performance, and inventory intelligence</p>
+            <h1 className="text-xl sm:text-2xl font-bold">Reports</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Contracts, service performance, and inventory intelligence
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={exportReportPDF} disabled={loading || !stats}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportReportPDF}
+              disabled={loading || !stats}
+              className="w-full sm:w-auto"
+            >
               <Download className="mr-2 size-4" />
               Export PDF
             </Button>
             <Select value={range} onValueChange={(value) => setRange(value as DateRange)}>
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -244,40 +340,93 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {loading || !stats || !inventory ? <LoadingCards /> : (
+        {/* Stats Cards – 2 cols on mobile, 4 on desktop */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {loading || !stats || !inventory ? (
+            <LoadingCards />
+          ) : (
             <>
-              <StatCard title="Total Contracts" value={stats.totalContracts} detail="All time" icon={Activity} />
-              <StatCard title="Completed Services" value={stats.completedServices} detail={RANGE_LABELS[range]} icon={CheckCircle2} current={stats.completedServices} previous={stats.prevCompletedServices} />
-              <StatCard title="Active Contracts" value={stats.activeContracts} detail="Currently active" icon={FileText} />
-              <StatCard title="Contract Earnings" value={formatINR(stats.totalEarnings)} detail={RANGE_LABELS[range]} icon={IndianRupee} current={stats.totalEarnings} previous={stats.prevTotalEarnings} />
-              <StatCard title="Sales" value={formatINR(inventory.sales)} detail={RANGE_LABELS[range]} icon={ShoppingCart} />
-              <StatCard title="Items Sold" value={inventory.sold} detail={RANGE_LABELS[range]} icon={Package} />
-              <StatCard title="Profit" value={formatINR(inventory.profit)} detail={RANGE_LABELS[range]} icon={TrendingUp} />
-              <StatCard title="Low Stock" value={inventory.lowStock} detail="Current stock levels" icon={AlertTriangle} tone="amber" />
+              <StatCard
+                title="Total Contracts"
+                value={stats.totalContracts}
+                detail="All time"
+                icon={Activity}
+              />
+              <StatCard
+                title="Completed Services"
+                value={stats.completedServices}
+                detail={RANGE_LABELS[range]}
+                icon={CheckCircle2}
+                current={stats.completedServices}
+                previous={stats.prevCompletedServices}
+              />
+              <StatCard
+                title="Active Contracts"
+                value={stats.activeContracts}
+                detail="Currently active"
+                icon={FileText}
+              />
+              <StatCard
+                title="Contract Earnings"
+                value={formatINR(stats.totalEarnings)}
+                detail={RANGE_LABELS[range]}
+                icon={IndianRupee}
+                current={stats.totalEarnings}
+                previous={stats.prevTotalEarnings}
+              />
+              <StatCard
+                title="Sales"
+                value={formatINR(inventory.sales)}
+                detail={RANGE_LABELS[range]}
+                icon={ShoppingCart}
+              />
+              <StatCard
+                title="Items Sold"
+                value={inventory.sold}
+                detail={RANGE_LABELS[range]}
+                icon={Package}
+              />
+              <StatCard
+                title="Profit"
+                value={formatINR(inventory.profit)}
+                detail={RANGE_LABELS[range]}
+                icon={TrendingUp}
+              />
+              <StatCard
+                title="Low Stock"
+                value={inventory.lowStock}
+                detail="Current stock levels"
+                icon={AlertTriangle}
+                tone="amber"
+              />
             </>
           )}
         </div>
 
-        {/* Charts Row */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* Charts – stack on mobile, side-by-side on desktop */}
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Sales and Profit</CardTitle>
-              <CardDescription>Daily inventory sales for {RANGE_LABELS[range].toLowerCase()}</CardDescription>
+            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
+              <CardTitle className="text-base sm:text-lg">Sales and Profit</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Daily inventory sales for {RANGE_LABELS[range].toLowerCase()}
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {loading ? <Skeleton className="h-72 w-full" /> : !salesHasData ? (
-                <div className="flex h-72 items-center justify-center text-muted-foreground">No sales data for this period</div>
+            <CardContent className="px-2 sm:px-6 pb-4">
+              {loading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : !salesHasData ? (
+                <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">
+                  No sales data for this period
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
-                  <ComposedChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
+                  <ComposedChart data={salesData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(value) => formatINR(Number(value))} />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar dataKey="sales" name="Sales" fill="#2563eb" radius={[3, 3, 0, 0]} />
                     <Line dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} />
                   </ComposedChart>
@@ -287,20 +436,29 @@ export default function ReportsPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Monthly Services Overview</CardTitle>
-              <CardDescription>Completed services and contract earnings over six months</CardDescription>
+            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
+              <CardTitle className="text-base sm:text-lg">Monthly Services</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Completed services and contract earnings over six months
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {loading ? <Skeleton className="h-72 w-full" /> : (
+            <CardContent className="px-2 sm:px-6 pb-4">
+              {loading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
                 <ResponsiveContainer width="100%" height={280}>
-                  <ComposedChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis yAxisId="left" allowDecimals={false} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
+                  <ComposedChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tickFormatter={(v) => `₹${Math.round(v / 1000)}k`}
+                      tick={{ fontSize: 11 }}
+                    />
                     <Tooltip />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar yAxisId="left" dataKey="completed" name="Completed" fill="#16a34a" />
                     <Line yAxisId="right" dataKey="earnings" name="Earnings" stroke="#d97706" />
                   </ComposedChart>
@@ -311,61 +469,73 @@ export default function ReportsPage() {
         </div>
 
         {/* Top Products & Inventory Snapshot */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Top-Selling Products</CardTitle>
-              <CardDescription>Highest quantity sold in the selected period</CardDescription>
+            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
+              <CardTitle className="text-base sm:text-lg">Top-Selling Products</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Highest quantity sold in the selected period
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              {loading ? <Skeleton className="m-6 h-48" /> : topProducts.length === 0 ? (
-                <p className="p-6 text-muted-foreground">No sold products for this period.</p>
+              {loading ? (
+                <Skeleton className="m-4 sm:m-6 h-48" />
+              ) : topProducts.length === 0 ? (
+                <p className="p-4 sm:p-6 text-sm text-muted-foreground">No sold products for this period.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Revenue</TableHead>
-                      <TableHead>Profit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topProducts.map((p) => (
-                      <TableRow key={p.name}>
-                        <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell>{p.quantity}</TableCell>
-                        <TableCell>{formatINR(p.revenue)}</TableCell>
-                        <TableCell>{formatINR(p.profit)}</TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs sm:text-sm">Product</TableHead>
+                        <TableHead className="text-xs sm:text-sm text-right">Qty</TableHead>
+                        <TableHead className="text-xs sm:text-sm text-right">Revenue</TableHead>
+                        <TableHead className="text-xs sm:text-sm text-right">Profit</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {topProducts.map((p) => (
+                        <TableRow key={p.name}>
+                          <TableCell className="text-xs sm:text-sm font-medium">{p.name}</TableCell>
+                          <TableCell className="text-xs sm:text-sm text-right">{p.quantity}</TableCell>
+                          <TableCell className="text-xs sm:text-sm text-right">{formatINR(p.revenue)}</TableCell>
+                          <TableCell className="text-xs sm:text-sm text-right">{formatINR(p.profit)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Inventory Snapshot</CardTitle>
-              <CardDescription>Operational stock totals for the selected period</CardDescription>
+            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
+              <CardTitle className="text-base sm:text-lg">Inventory Snapshot</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Operational stock totals for the selected period
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b pb-3">
+            <CardContent className="flex flex-col gap-3 sm:gap-4 px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="flex items-center justify-between border-b pb-2 sm:pb-3 text-sm sm:text-base">
                 <span className="text-muted-foreground">Inventory value</span>
-                <span className="font-semibold">{loading || !inventory ? "—" : formatINR(inventory.inventoryValue)}</span>
+                <span className="font-semibold">
+                  {loading || !inventory ? "—" : formatINR(inventory.inventoryValue)}
+                </span>
               </div>
-              <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center justify-between border-b pb-2 sm:pb-3 text-sm sm:text-base">
                 <span className="text-muted-foreground">Stock in</span>
                 <span className="font-semibold">{loading || !inventory ? "—" : inventory.stockIn}</span>
               </div>
-              <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center justify-between border-b pb-2 sm:pb-3 text-sm sm:text-base">
                 <span className="text-muted-foreground">Stock out</span>
                 <span className="font-semibold">{loading || !inventory ? "—" : inventory.stockOut}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between text-sm sm:text-base">
                 <span className="text-muted-foreground">Low stock items</span>
-                <span className="font-semibold text-amber-600">{loading || !inventory ? "—" : inventory.lowStock}</span>
+                <span className="font-semibold text-amber-600">
+                  {loading || !inventory ? "—" : inventory.lowStock}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -373,34 +543,45 @@ export default function ReportsPage() {
 
         {/* Recent Sales */}
         <Card>
-          <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
-            <CardDescription>Latest sold movements in this period</CardDescription>
+          <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
+            <CardTitle className="text-base sm:text-lg">Recent Sales</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Latest sold movements in this period
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            {loading ? <Skeleton className="m-6 h-40" /> : recentSales.length === 0 ? (
-              <p className="p-6 text-muted-foreground">No recent sales for this period.</p>
+            {loading ? (
+              <Skeleton className="m-4 sm:m-6 h-40" />
+            ) : recentSales.length === 0 ? (
+              <p className="p-4 sm:p-6 text-sm text-muted-foreground">No recent sales for this period.</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentSales.map((sale) => (
-                    <TableRow key={sale.id}>
-                      <TableCell>{sale.name}</TableCell>
-                      <TableCell>{sale.quantity}</TableCell>
-                      <TableCell>{formatINR(sale.total)}</TableCell>
-                      <TableCell>{new Date(sale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs sm:text-sm">Product</TableHead>
+                      <TableHead className="text-xs sm:text-sm text-right">Qty</TableHead>
+                      <TableHead className="text-xs sm:text-sm text-right">Total</TableHead>
+                      <TableHead className="text-xs sm:text-sm text-right">Time</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {recentSales.map((sale) => (
+                      <TableRow key={sale.id}>
+                        <TableCell className="text-xs sm:text-sm">{sale.name}</TableCell>
+                        <TableCell className="text-xs sm:text-sm text-right">{sale.quantity}</TableCell>
+                        <TableCell className="text-xs sm:text-sm text-right">{formatINR(sale.total)}</TableCell>
+                        <TableCell className="text-xs sm:text-sm text-right whitespace-nowrap">
+                          {new Date(sale.created_at).toLocaleString("en-IN", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
