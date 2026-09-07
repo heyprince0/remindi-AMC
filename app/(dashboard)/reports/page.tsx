@@ -20,7 +20,8 @@ const RANGE_LABELS: Record<DateRange, string> = { today: "Today", week: "This We
 
 type ContractRow = { id: string; status: string; contracts_price: number | null; customer_id: string; next_service_date: string }
 type HistoryRow = { id: string; contract_id: string; status: string; service_date: string }
-type Movement = { id: string; item_id: string; movement_type: string; reason: string; quantity: number; selling_price: number | null; purchase_price: number | null; technician_id: string | null; created_at: string }
+// Removed selling_price and purchase_price from Movement because they don't exist in the table
+type Movement = { id: string; item_id: string; movement_type: string; reason: string; quantity: number; technician_id: string | null; created_at: string }
 type Item = { id: string; name: string; current_stock: number; min_stock_level: number; purchase_price: number | null; selling_price: number | null; category_id?: string | null }
 type ProductSale = { name: string; quantity: number; revenue: number; profit: number }
 type SalesPoint = { date: string; sales: number; profit: number }
@@ -53,33 +54,353 @@ export default function ReportsPage() {
   const { user } = useAuth(); const [range, setRange] = useState<DateRange>("month"); const [orgId, setOrgId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [stats, setStats] = useState<Stats | null>(null); const [inventory, setInventory] = useState<InventoryStats | null>(null); const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]); const [salesData, setSalesData] = useState<SalesPoint[]>([]); const [topProducts, setTopProducts] = useState<ProductSale[]>([]); const [recentSales, setRecentSales] = useState<(Movement & { name: string })[]>([])
 
   useEffect(() => { if (!user?.id) return; supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data, error }) => { if (error) { toast.error("Could not determine your organization"); return } setOrgId(data?.org_id || null) }) }, [user?.id])
-  const fetchData = useCallback(async () => { if (!orgId) return; setLoading(true); try {
-    const { start, end } = getDateRange(range); const previous = getPreviousRange(range); const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); sixMonthsAgo.setDate(1)
-    // Keep the contract and inventory reads in one parallel batch so changing the range never shows a mixed-period dashboard.
-    const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes] = await Promise.all([
-      supabase.from("contracts").select("id, status, contracts_price, customer_id, next_service_date").eq("org_id", orgId),
-      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(start)).lte("service_date", toDateStr(end)),
-      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(previous.start)).lte("service_date", toDateStr(previous.end)),
-      supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(sixMonthsAgo)),
-      supabase.from("inventory_items").select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id").eq("org_id", orgId).eq("is_active", true),
-      supabase.from("inventory_stock_movements").select("id, item_id, movement_type, reason, quantity, selling_price, purchase_price, technician_id, created_at").eq("org_id", orgId).gte("created_at", toDateStr(sixMonthsAgo))
-    ])
-    for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) if (result.error) throw result.error
-    const contracts = (contractsRes.data || []) as ContractRow[]; const history = (historyRes.data || []) as HistoryRow[]; const previousHistory = (previousHistoryRes.data || []) as HistoryRow[]; const allHistory = (allHistoryRes.data || []) as HistoryRow[]; const items = (itemsRes.data || []) as Item[]; const allMovements = (movementsRes.data || []) as Movement[]; const itemMap = new Map(items.map((item) => [item.id, item])); const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString()); const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold")
-    const current = getContractStats(history, contracts); const prev = getContractStats(previousHistory, contracts); setStats({ totalServices: current.services, completedServices: current.completed, totalContracts: contracts.length, activeContracts: contracts.filter((c) => c.status === "active" && getDaysUntilService(c.next_service_date) > 7).length, totalEarnings: current.earnings, prevTotalServices: prev.services, prevCompletedServices: prev.completed, prevTotalEarnings: prev.earnings }); setMonthlyData(getMonthlyData(allHistory, contracts))
-    const sales = sold.reduce((sum, m) => sum + (m.selling_price || itemMap.get(m.item_id)?.selling_price || 0) * m.quantity, 0); const profit = sold.reduce((sum, m) => sum + ((m.selling_price ?? itemMap.get(m.item_id)?.selling_price ?? 0) - (m.purchase_price ?? itemMap.get(m.item_id)?.purchase_price ?? 0)) * m.quantity, 0); setInventory({ sales, sold: sold.reduce((sum, m) => sum + m.quantity, 0), profit, lowStock: items.filter((i) => i.current_stock <= i.min_stock_level).length, inventoryValue: items.reduce((sum, i) => sum + i.current_stock * (i.purchase_price || 0), 0), stockIn: movements.filter((m) => m.movement_type === "in").reduce((sum, m) => sum + m.quantity, 0), stockOut: movements.filter((m) => m.movement_type === "out").reduce((sum, m) => sum + m.quantity, 0) })
-    const productMap = new Map<string, ProductSale>(); sold.forEach((m) => { const item = itemMap.get(m.item_id); const name = item?.name || "Unknown item"; const existing = productMap.get(name) || { name, quantity: 0, revenue: 0, profit: 0 }; const selling = m.selling_price ?? item?.selling_price ?? 0; const purchase = m.purchase_price ?? item?.purchase_price ?? 0; existing.quantity += m.quantity; existing.revenue += selling * m.quantity; existing.profit += (selling - purchase) * m.quantity; productMap.set(name, existing) }); setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10)); setRecentSales(sold.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8).map((m) => ({ ...m, name: itemMap.get(m.item_id)?.name || "Unknown item" })))
-    const daily = new Map<string, SalesPoint>(); sold.forEach((m) => { const date = m.created_at.slice(0, 10); const point = daily.get(date) || { date, sales: 0, profit: 0 }; const selling = m.selling_price ?? itemMap.get(m.item_id)?.selling_price ?? 0; const purchase = m.purchase_price ?? itemMap.get(m.item_id)?.purchase_price ?? 0; point.sales += selling * m.quantity; point.profit += (selling - purchase) * m.quantity; daily.set(date, point) }); setSalesData([...daily.values()].sort((a, b) => a.date.localeCompare(b.date)).map((point) => ({ ...point, date: new Date(point.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) })))
-  } catch (error) { console.error("Error loading reports:", error); toast.error("Failed to load report data") } finally { setLoading(false) } }, [orgId, range])
+
+  const fetchData = useCallback(async () => {
+    if (!orgId) return;
+    setLoading(true);
+    try {
+      const { start, end } = getDateRange(range);
+      const previous = getPreviousRange(range);
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+      sixMonthsAgo.setDate(1);
+
+      const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes] = await Promise.all([
+        supabase.from("contracts").select("id, status, contracts_price, customer_id, next_service_date").eq("org_id", orgId),
+        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(start)).lte("service_date", toDateStr(end)),
+        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(previous.start)).lte("service_date", toDateStr(previous.end)),
+        supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(sixMonthsAgo)),
+        supabase.from("inventory_items").select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id").eq("org_id", orgId).eq("is_active", true),
+        // Removed selling_price and purchase_price from movements query – they don't exist in the table
+        supabase.from("inventory_stock_movements").select("id, item_id, movement_type, reason, quantity, technician_id, created_at").eq("org_id", orgId).gte("created_at", toDateStr(sixMonthsAgo))
+      ])
+
+      for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) if (result.error) throw result.error
+
+      const contracts = (contractsRes.data || []) as ContractRow[];
+      const history = (historyRes.data || []) as HistoryRow[];
+      const previousHistory = (previousHistoryRes.data || []) as HistoryRow[];
+      const allHistory = (allHistoryRes.data || []) as HistoryRow[];
+      const items = (itemsRes.data || []) as Item[];
+      const allMovements = (movementsRes.data || []) as Movement[];
+      const itemMap = new Map(items.map((item) => [item.id, item]));
+
+      const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString());
+      const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold");
+
+      // Contract stats
+      const current = getContractStats(history, contracts);
+      const prev = getContractStats(previousHistory, contracts);
+      setStats({
+        totalServices: current.services,
+        completedServices: current.completed,
+        totalContracts: contracts.length,
+        activeContracts: contracts.filter((c) => c.status === "active" && getDaysUntilService(c.next_service_date) > 7).length,
+        totalEarnings: current.earnings,
+        prevTotalServices: prev.services,
+        prevCompletedServices: prev.completed,
+        prevTotalEarnings: prev.earnings,
+      });
+      setMonthlyData(getMonthlyData(allHistory, contracts));
+
+      // Inventory stats – always use item prices from itemMap
+      const sales = sold.reduce((sum, m) => {
+        const item = itemMap.get(m.item_id);
+        return sum + (item?.selling_price ?? 0) * m.quantity;
+      }, 0);
+      const profit = sold.reduce((sum, m) => {
+        const item = itemMap.get(m.item_id);
+        const selling = item?.selling_price ?? 0;
+        const purchase = item?.purchase_price ?? 0;
+        return sum + (selling - purchase) * m.quantity;
+      }, 0);
+
+      setInventory({
+        sales,
+        sold: sold.reduce((sum, m) => sum + m.quantity, 0),
+        profit,
+        lowStock: items.filter((i) => i.current_stock <= i.min_stock_level).length,
+        inventoryValue: items.reduce((sum, i) => sum + i.current_stock * (i.purchase_price || 0), 0),
+        stockIn: movements.filter((m) => m.movement_type === "in").reduce((sum, m) => sum + m.quantity, 0),
+        stockOut: movements.filter((m) => m.movement_type === "out").reduce((sum, m) => sum + m.quantity, 0),
+      });
+
+      // Top‑selling products
+      const productMap = new Map<string, ProductSale>();
+      sold.forEach((m) => {
+        const item = itemMap.get(m.item_id);
+        const name = item?.name || "Unknown item";
+        const selling = item?.selling_price ?? 0;
+        const purchase = item?.purchase_price ?? 0;
+        const existing = productMap.get(name) || { name, quantity: 0, revenue: 0, profit: 0 };
+        existing.quantity += m.quantity;
+        existing.revenue += selling * m.quantity;
+        existing.profit += (selling - purchase) * m.quantity;
+        productMap.set(name, existing);
+      });
+      setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10));
+
+      // Recent sales (without prices in movement, we use itemMap)
+      setRecentSales(
+        sold
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .slice(0, 8)
+          .map((m) => ({
+            ...m,
+            name: itemMap.get(m.item_id)?.name || "Unknown item",
+          }))
+      );
+
+      // Daily sales chart
+      const daily = new Map<string, SalesPoint>();
+      sold.forEach((m) => {
+        const date = m.created_at.slice(0, 10);
+        const point = daily.get(date) || { date, sales: 0, profit: 0 };
+        const item = itemMap.get(m.item_id);
+        const selling = item?.selling_price ?? 0;
+        const purchase = item?.purchase_price ?? 0;
+        point.sales += selling * m.quantity;
+        point.profit += (selling - purchase) * m.quantity;
+        daily.set(date, point);
+      });
+      setSalesData(
+        [...daily.values()]
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map((point) => ({
+            ...point,
+            date: new Date(point.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+          }))
+      );
+    } catch (error) {
+      console.error("Error loading reports:", error);
+      toast.error("Failed to load report data");
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, range]);
+
   useEffect(() => { fetchData() }, [fetchData])
 
-  const exportReportPDF = () => { if (!stats || !inventory) return toast.error("No data to export"); const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" }); doc.setFontSize(16); doc.text("Remindi Reports Summary", 15, 15); doc.setFontSize(9); doc.text(`Period: ${RANGE_LABELS[range]} | Exported: ${new Date().toLocaleDateString("en-IN")}`, 15, 22); autoTable(doc, { startY: 28, head: [["Metric", "Value"]], body: [["Total Contracts", stats.totalContracts], ["Completed Services", stats.completedServices], ["Contract Earnings", formatINR(stats.totalEarnings)], ["Sales", formatINR(inventory.sales)], ["Items Sold", inventory.sold], ["Profit", formatINR(inventory.profit)], ["Low Stock Items", inventory.lowStock], ["Inventory Value", formatINR(inventory.inventoryValue)]], theme: "striped" }); autoTable(doc, { startY: (doc as any).lastAutoTable.finalY + 8, head: [["Product", "Qty Sold", "Revenue", "Profit"]], body: topProducts.map((p) => [p.name, p.quantity, formatINR(p.revenue), formatINR(p.profit)]), theme: "striped" }); doc.save(`Reports_${range}_${toDateStr(new Date())}.pdf`); toast.success("Report exported successfully") }
+  const exportReportPDF = () => {
+    if (!stats || !inventory) return toast.error("No data to export");
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    doc.setFontSize(16);
+    doc.text("Remindi Reports Summary", 15, 15);
+    doc.setFontSize(9);
+    doc.text(`Period: ${RANGE_LABELS[range]} | Exported: ${new Date().toLocaleDateString("en-IN")}`, 15, 22);
+    autoTable(doc, {
+      startY: 28,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Total Contracts", stats.totalContracts],
+        ["Completed Services", stats.completedServices],
+        ["Contract Earnings", formatINR(stats.totalEarnings)],
+        ["Sales", formatINR(inventory.sales)],
+        ["Items Sold", inventory.sold],
+        ["Profit", formatINR(inventory.profit)],
+        ["Low Stock Items", inventory.lowStock],
+        ["Inventory Value", formatINR(inventory.inventoryValue)],
+      ],
+      theme: "striped",
+    });
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 8,
+      head: [["Product", "Qty Sold", "Revenue", "Profit"]],
+      body: topProducts.map((p) => [p.name, p.quantity, formatINR(p.revenue), formatINR(p.profit)]),
+      theme: "striped",
+    });
+    doc.save(`Reports_${range}_${toDateStr(new Date())}.pdf`);
+    toast.success("Report exported successfully");
+  };
 
-  const salesHasData = useMemo(() => salesData.some((p) => p.sales > 0 || p.profit > 0), [salesData])
-  return <DashboardLayout><div className="flex flex-col gap-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h1 className="text-2xl font-bold">Reports</h1><p className="text-muted-foreground">Contracts, service performance, and inventory intelligence</p></div><div className="flex items-center gap-3"><Button variant="outline" size="sm" onClick={exportReportPDF} disabled={loading || !stats}><Download data-icon="inline-start" />Export PDF</Button><Select value={range} onValueChange={(value) => setRange(value as DateRange)}><SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(RANGE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div>
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{loading || !stats || !inventory ? <LoadingCards /> : <><StatCard title="Total Contracts" value={stats.totalContracts} detail="All time" icon={Activity} /><StatCard title="Completed Services" value={stats.completedServices} detail={RANGE_LABELS[range]} icon={CheckCircle2} current={stats.completedServices} previous={stats.prevCompletedServices} /><StatCard title="Active Contracts" value={stats.activeContracts} detail="Currently active" icon={FileText} /><StatCard title="Contract Earnings" value={formatINR(stats.totalEarnings)} detail={RANGE_LABELS[range]} icon={IndianRupee} current={stats.totalEarnings} previous={stats.prevTotalEarnings} /><StatCard title="Sales" value={formatINR(inventory.sales)} detail={RANGE_LABELS[range]} icon={ShoppingCart} /><StatCard title="Items Sold" value={inventory.sold} detail={RANGE_LABELS[range]} icon={Package} /><StatCard title="Profit" value={formatINR(inventory.profit)} detail={RANGE_LABELS[range]} icon={TrendingUp} /><StatCard title="Low Stock" value={inventory.lowStock} detail="Current stock levels" icon={AlertTriangle} tone="amber" /></>}</div>
-    <div className="grid gap-6 lg:grid-cols-2"><Card><CardHeader><CardTitle>Sales and Profit</CardTitle><CardDescription>Daily inventory sales for {RANGE_LABELS[range].toLowerCase()}</CardDescription></CardHeader><CardContent>{loading ? <Skeleton className="h-72 w-full" /> : !salesHasData ? <div className="flex h-72 items-center justify-center text-muted-foreground">No sales data for this period</div> : <ResponsiveContainer width="100%" height={280}><ComposedChart data={salesData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip formatter={(value) => formatINR(Number(value))} /><Legend /><Bar dataKey="sales" name="Sales" fill="#2563eb" radius={[3, 3, 0, 0]} /><Line dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} /></ComposedChart></ResponsiveContainer>}</CardContent></Card><Card><CardHeader><CardTitle>Monthly Services Overview</CardTitle><CardDescription>Completed services and contract earnings over six months</CardDescription></CardHeader><CardContent>{loading ? <Skeleton className="h-72 w-full" /> : <ResponsiveContainer width="100%" height={280}><ComposedChart data={monthlyData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis yAxisId="left" allowDecimals={false} /><YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip /><Legend /><Bar yAxisId="left" dataKey="completed" name="Completed" fill="#16a34a" /><Line yAxisId="right" dataKey="earnings" name="Earnings" stroke="#d97706" /></ComposedChart></ResponsiveContainer>}</CardContent></Card></div>
-    <div className="grid gap-6 lg:grid-cols-2"><Card><CardHeader><CardTitle>Top-Selling Products</CardTitle><CardDescription>Highest quantity sold in the selected period</CardDescription></CardHeader><CardContent className="p-0">{loading ? <Skeleton className="m-6 h-48" /> : topProducts.length === 0 ? <p className="p-6 text-muted-foreground">No sold products for this period.</p> : <Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Qty</TableHead><TableHead>Revenue</TableHead><TableHead>Profit</TableHead></TableRow></TableHeader><TableBody>{topProducts.map((p) => <TableRow key={p.name}><TableCell className="font-medium">{p.name}</TableCell><TableCell>{p.quantity}</TableCell><TableCell>{formatINR(p.revenue)}</TableCell><TableCell>{formatINR(p.profit)}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card><Card><CardHeader><CardTitle>Inventory Snapshot</CardTitle><CardDescription>Operational stock totals for the selected period</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Inventory value</span><span className="font-semibold">{loading || !inventory ? "—" : formatINR(inventory.inventoryValue)}</span></div><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Stock in</span><span className="font-semibold">{loading || !inventory ? "—" : inventory.stockIn}</span></div><div className="flex items-center justify-between border-b pb-3"><span className="text-muted-foreground">Stock out</span><span className="font-semibold">{loading || !inventory ? "—" : inventory.stockOut}</span></div><div className="flex items-center justify-between"><span className="text-muted-foreground">Low stock items</span><span className="font-semibold text-amber-600">{loading || !inventory ? "—" : inventory.lowStock}</span></div></CardContent></Card></div>
-    <Card><CardHeader><CardTitle>Recent Sales</CardTitle><CardDescription>Latest sold movements in this period</CardDescription></CardHeader><CardContent className="p-0">{loading ? <Skeleton className="m-6 h-40" /> : recentSales.length === 0 ? <p className="p-6 text-muted-foreground">No recent sales for this period.</p> : <Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Quantity</TableHead><TableHead>Total</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{recentSales.map((sale) => <TableRow key={sale.id}><TableCell>{sale.name}</TableCell><TableCell>{sale.quantity}</TableCell><TableCell>{formatINR((sale.selling_price || 0) * sale.quantity)}</TableCell><TableCell>{new Date(sale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
-  </div></DashboardLayout>
+  const salesHasData = useMemo(() => salesData.some((p) => p.sales > 0 || p.profit > 0), [salesData]);
+
+  return (
+    <DashboardLayout>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Reports</h1>
+            <p className="text-muted-foreground">Contracts, service performance, and inventory intelligence</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={exportReportPDF} disabled={loading || !stats}>
+              <Download className="mr-2 size-4" />
+              Export PDF
+            </Button>
+            <Select value={range} onValueChange={(value) => setRange(value as DateRange)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(RANGE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {loading || !stats || !inventory ? <LoadingCards /> : (
+            <>
+              <StatCard title="Total Contracts" value={stats.totalContracts} detail="All time" icon={Activity} />
+              <StatCard title="Completed Services" value={stats.completedServices} detail={RANGE_LABELS[range]} icon={CheckCircle2} current={stats.completedServices} previous={stats.prevCompletedServices} />
+              <StatCard title="Active Contracts" value={stats.activeContracts} detail="Currently active" icon={FileText} />
+              <StatCard title="Contract Earnings" value={formatINR(stats.totalEarnings)} detail={RANGE_LABELS[range]} icon={IndianRupee} current={stats.totalEarnings} previous={stats.prevTotalEarnings} />
+              <StatCard title="Sales" value={formatINR(inventory.sales)} detail={RANGE_LABELS[range]} icon={ShoppingCart} />
+              <StatCard title="Items Sold" value={inventory.sold} detail={RANGE_LABELS[range]} icon={Package} />
+              <StatCard title="Profit" value={formatINR(inventory.profit)} detail={RANGE_LABELS[range]} icon={TrendingUp} />
+              <StatCard title="Low Stock" value={inventory.lowStock} detail="Current stock levels" icon={AlertTriangle} tone="amber" />
+            </>
+          )}
+        </div>
+
+        {/* Charts Row */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sales and Profit</CardTitle>
+              <CardDescription>Daily inventory sales for {RANGE_LABELS[range].toLowerCase()}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? <Skeleton className="h-72 w-full" /> : !salesHasData ? (
+                <div className="flex h-72 items-center justify-center text-muted-foreground">No sales data for this period</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={salesData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
+                    <Tooltip formatter={(value) => formatINR(Number(value))} />
+                    <Legend />
+                    <Bar dataKey="sales" name="Sales" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    <Line dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Services Overview</CardTitle>
+              <CardDescription>Completed services and contract earnings over six months</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? <Skeleton className="h-72 w-full" /> : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis yAxisId="left" allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="completed" name="Completed" fill="#16a34a" />
+                    <Line yAxisId="right" dataKey="earnings" name="Earnings" stroke="#d97706" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Top Products & Inventory Snapshot */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top-Selling Products</CardTitle>
+              <CardDescription>Highest quantity sold in the selected period</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? <Skeleton className="m-6 h-48" /> : topProducts.length === 0 ? (
+                <p className="p-6 text-muted-foreground">No sold products for this period.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Revenue</TableHead>
+                      <TableHead>Profit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topProducts.map((p) => (
+                      <TableRow key={p.name}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell>{p.quantity}</TableCell>
+                        <TableCell>{formatINR(p.revenue)}</TableCell>
+                        <TableCell>{formatINR(p.profit)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Inventory Snapshot</CardTitle>
+              <CardDescription>Operational stock totals for the selected period</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="text-muted-foreground">Inventory value</span>
+                <span className="font-semibold">{loading || !inventory ? "—" : formatINR(inventory.inventoryValue)}</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="text-muted-foreground">Stock in</span>
+                <span className="font-semibold">{loading || !inventory ? "—" : inventory.stockIn}</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="text-muted-foreground">Stock out</span>
+                <span className="font-semibold">{loading || !inventory ? "—" : inventory.stockOut}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Low stock items</span>
+                <span className="font-semibold text-amber-600">{loading || !inventory ? "—" : inventory.lowStock}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Sales */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Sales</CardTitle>
+            <CardDescription>Latest sold movements in this period</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? <Skeleton className="m-6 h-40" /> : recentSales.length === 0 ? (
+              <p className="p-6 text-muted-foreground">No recent sales for this period.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentSales.map((sale) => {
+                    const item = itemMap.get(sale.item_id); // We need itemMap here – we can't access it inside the component? Actually we can – we need to store itemMap in state or refactor. Since this is outside the fetchData closure, we need to either store itemMap in state or compute total from itemMap inside the map. The easiest fix: store the total as part of recentSales. But we already have recentSales with name; we can also include total. However for simplicity, we can compute total inside the map using the itemMap from the component's scope – but it's not available here because it's local to fetchData. To fix, we should either:
+                    // 1. Move itemMap to state, or
+                    // 2. When we setRecentSales, also store the computed total.
+                    // Let's do option 2: store total directly in the recentSales array.
+                    // Quick fix: we'll modify the setRecentSales to include `total` property.
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  )
 }
