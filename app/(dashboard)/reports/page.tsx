@@ -20,12 +20,12 @@ const RANGE_LABELS: Record<DateRange, string> = { today: "Today", week: "This We
 
 type ContractRow = { id: string; status: string; contracts_price: number | null; customer_id: string; next_service_date: string }
 type HistoryRow = { id: string; contract_id: string; status: string; service_date: string }
-// Removed selling_price and purchase_price from Movement because they don't exist in the table
 type Movement = { id: string; item_id: string; movement_type: string; reason: string; quantity: number; technician_id: string | null; created_at: string }
 type Item = { id: string; name: string; current_stock: number; min_stock_level: number; purchase_price: number | null; selling_price: number | null; category_id?: string | null }
 type ProductSale = { name: string; quantity: number; revenue: number; profit: number }
 type SalesPoint = { date: string; sales: number; profit: number }
 type MonthlyData = { month: string; completed: number; scheduled: number; earnings: number }
+type RecentSale = Movement & { name: string; total: number }
 
 type Stats = { totalServices: number; completedServices: number; activeContracts: number; totalContracts: number; totalEarnings: number; prevTotalServices: number; prevCompletedServices: number; prevTotalEarnings: number }
 type InventoryStats = { sales: number; sold: number; profit: number; lowStock: number; inventoryValue: number; stockIn: number; stockOut: number }
@@ -51,7 +51,7 @@ function StatCard({ title, value, detail, icon: Icon, tone = "primary", previous
 function LoadingCards() { return <>{Array.from({ length: 8 }, (_, i) => <Card key={i}><CardContent className="p-5"><Skeleton className="h-24 w-full" /></CardContent></Card>)}</> }
 
 export default function ReportsPage() {
-  const { user } = useAuth(); const [range, setRange] = useState<DateRange>("month"); const [orgId, setOrgId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [stats, setStats] = useState<Stats | null>(null); const [inventory, setInventory] = useState<InventoryStats | null>(null); const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]); const [salesData, setSalesData] = useState<SalesPoint[]>([]); const [topProducts, setTopProducts] = useState<ProductSale[]>([]); const [recentSales, setRecentSales] = useState<(Movement & { name: string })[]>([])
+  const { user } = useAuth(); const [range, setRange] = useState<DateRange>("month"); const [orgId, setOrgId] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [stats, setStats] = useState<Stats | null>(null); const [inventory, setInventory] = useState<InventoryStats | null>(null); const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]); const [salesData, setSalesData] = useState<SalesPoint[]>([]); const [topProducts, setTopProducts] = useState<ProductSale[]>([]); const [recentSales, setRecentSales] = useState<RecentSale[]>([])
 
   useEffect(() => { if (!user?.id) return; supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data, error }) => { if (error) { toast.error("Could not determine your organization"); return } setOrgId(data?.org_id || null) }) }, [user?.id])
 
@@ -71,7 +71,6 @@ export default function ReportsPage() {
         supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(previous.start)).lte("service_date", toDateStr(previous.end)),
         supabase.from("service_history").select("id, contract_id, status, service_date").eq("org_id", orgId).gte("service_date", toDateStr(sixMonthsAgo)),
         supabase.from("inventory_items").select("id, name, current_stock, min_stock_level, purchase_price, selling_price, category_id").eq("org_id", orgId).eq("is_active", true),
-        // Removed selling_price and purchase_price from movements query – they don't exist in the table
         supabase.from("inventory_stock_movements").select("id, item_id, movement_type, reason, quantity, technician_id, created_at").eq("org_id", orgId).gte("created_at", toDateStr(sixMonthsAgo))
       ])
 
@@ -103,7 +102,7 @@ export default function ReportsPage() {
       });
       setMonthlyData(getMonthlyData(allHistory, contracts));
 
-      // Inventory stats – always use item prices from itemMap
+      // Inventory stats
       const sales = sold.reduce((sum, m) => {
         const item = itemMap.get(m.item_id);
         return sum + (item?.selling_price ?? 0) * m.quantity;
@@ -140,15 +139,19 @@ export default function ReportsPage() {
       });
       setTopProducts([...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 10));
 
-      // Recent sales (without prices in movement, we use itemMap)
+      // Recent sales – store total price
       setRecentSales(
         sold
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
           .slice(0, 8)
-          .map((m) => ({
-            ...m,
-            name: itemMap.get(m.item_id)?.name || "Unknown item",
-          }))
+          .map((m) => {
+            const item = itemMap.get(m.item_id);
+            return {
+              ...m,
+              name: item?.name || "Unknown item",
+              total: (item?.selling_price ?? 0) * m.quantity,
+            };
+          })
       );
 
       // Daily sales chart
@@ -388,13 +391,14 @@ export default function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentSales.map((sale) => {
-                    const item = itemMap.get(sale.item_id); // We need itemMap here – we can't access it inside the component? Actually we can – we need to store itemMap in state or refactor. Since this is outside the fetchData closure, we need to either store itemMap in state or compute total from itemMap inside the map. The easiest fix: store the total as part of recentSales. But we already have recentSales with name; we can also include total. However for simplicity, we can compute total inside the map using the itemMap from the component's scope – but it's not available here because it's local to fetchData. To fix, we should either:
-                    // 1. Move itemMap to state, or
-                    // 2. When we setRecentSales, also store the computed total.
-                    // Let's do option 2: store total directly in the recentSales array.
-                    // Quick fix: we'll modify the setRecentSales to include `total` property.
-                  })}
+                  {recentSales.map((sale) => (
+                    <TableRow key={sale.id}>
+                      <TableCell>{sale.name}</TableCell>
+                      <TableCell>{sale.quantity}</TableCell>
+                      <TableCell>{formatINR(sale.total)}</TableCell>
+                      <TableCell>{new Date(sale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             )}
