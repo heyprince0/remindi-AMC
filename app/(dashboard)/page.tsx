@@ -50,12 +50,6 @@ interface InventoryMetrics {
   partsUsedThisMonth: number
 }
 
-interface SalesMetrics {
-  todaysSalesValue: number
-  itemsSoldCount: number
-  todaysProfitValue: number
-}
-
 function getStatusBadge(status: string) {
   switch (status) {
     case "today-servicing":
@@ -102,8 +96,6 @@ export default function DashboardPage() {
 
   const [inventoryMetrics, setInventoryMetrics] = useState<InventoryMetrics | null>(null)
   const [inventoryLoading, setInventoryLoading] = useState(true)
-  const [salesMetrics, setSalesMetrics] = useState<SalesMetrics | null>(null)
-  const [salesLoading, setSalesLoading] = useState(true)
 
   const [scanDialogOpen, setScanDialogOpen] = useState(false)
   const [categories, setCategories] = useState<any[]>([])
@@ -248,50 +240,6 @@ export default function DashboardPage() {
     }
   }
 
-  const loadSalesSummaryMetrics = async () => {
-    if (!currentOrgId) return
-    setSalesLoading(true)
-    try {
-      const now = new Date()
-      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-      const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
-
-      const { data, error } = await supabase
-        .from("inventory_stock_movements")
-        .select("quantity, inventory_items(selling_price, purchase_price)")
-        .eq("org_id", currentOrgId)
-        .eq("movement_type", "out")
-        .eq("reason", "Sold")
-        .gte("created_at", dayStart)
-        .lt("created_at", dayEnd)
-
-      if (error) throw error
-
-      const metrics = (data || []).reduce(
-        (summary, movement: any) => {
-          const quantity = Number(movement.quantity) || 0
-          const sellingPrice = Number(movement.inventory_items?.selling_price) || 0
-          const purchasePrice = Number(movement.inventory_items?.purchase_price) || 0
-          const salesValue = quantity * sellingPrice
-
-          return {
-            todaysSalesValue: summary.todaysSalesValue + salesValue,
-            itemsSoldCount: summary.itemsSoldCount + quantity,
-            todaysProfitValue: summary.todaysProfitValue + salesValue - quantity * purchasePrice,
-          }
-        },
-        { todaysSalesValue: 0, itemsSoldCount: 0, todaysProfitValue: 0 },
-      )
-
-      setSalesMetrics(metrics)
-    } catch (error) {
-      console.error("Error loading sales summary metrics:", error)
-      setSalesMetrics({ todaysSalesValue: 0, itemsSoldCount: 0, todaysProfitValue: 0 })
-    } finally {
-      setSalesLoading(false)
-    }
-  }
-
   const loadData = async () => {
     try {
       if (!user?.id || !currentOrgId) {
@@ -355,7 +303,6 @@ export default function DashboardPage() {
       setUpcomingServices(services.slice(0, 4))
       await fetchContractCount()
       await loadInventoryMetrics()
-      await loadSalesSummaryMetrics()
       await loadCategories()
       setDataReady(true)
     } catch (error) {
@@ -662,35 +609,6 @@ export default function DashboardPage() {
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
           <StatCard title="Technicians" value={stats.technicians} icon={Wrench} description="Available" />
         </div>
-
-        {/* ── Sales summary: responsive three-card row ── */}
-        <section aria-labelledby="sales-summary-title" className="flex flex-col gap-3">
-          <div>
-            <h2 id="sales-summary-title" className="text-lg font-semibold text-foreground">Today&apos;s Sales Summary</h2>
-            <p className="text-sm text-muted-foreground">Sold inventory performance for today</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard
-              title="Today&apos;s Sales"
-              value={salesLoading ? "—" : `₹${(salesMetrics?.todaysSalesValue ?? 0).toLocaleString()}`}
-              icon={DollarSign}
-              description="Gross sales"
-            />
-            <StatCard
-              title="Items Sold"
-              value={salesLoading ? "—" : salesMetrics?.itemsSoldCount ?? 0}
-              icon={Package}
-              description="Units sold today"
-            />
-            <StatCard
-              title="Today&apos;s Profit"
-              value={salesLoading ? "—" : `₹${(salesMetrics?.todaysProfitValue ?? 0).toLocaleString()}`}
-              icon={TrendingUp}
-              description="Sales less purchase cost"
-              iconClassName="bg-green-500/10"
-            />
-          </div>
-        </section>
 
         {/* ── Two-column section: Upcoming Services + Inventory Overview ── */}
         <div className="grid gap-6 lg:grid-cols-2">
