@@ -30,7 +30,6 @@ interface ServiceRecord extends ServiceHistory {
   technicianName: string
 }
 
-// Helper to compute contract end date (same as Contracts page)
 function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
   if (!startDate || !durationYears || durationYears <= 0) return null
   const start = new Date(startDate)
@@ -39,41 +38,38 @@ function getContractEndDate(startDate: string | null, durationYears: number | nu
   return end.toISOString().split('T')[0]
 }
 
-// Helper to format dates as "dd MMM yyyy" (e.g., "15 Dec 2025")
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return dateStr
-  return d.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function getStatusBadge(days: number, status: string) {
-  if (days < 0) {
-    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
-  } else if (days === 0) {
-    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
-  } else if (days <= 3) {
-    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Expiring Soon</Badge>
-  } else if (status === "active") {
-    return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Active</Badge>
-  }
+  if (days < 0) return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
+  if (days === 0) return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
+  if (days <= 3) return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Expiring Soon</Badge>
+  if (status === "active") return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Active</Badge>
   return <Badge variant="outline">{status}</Badge>
 }
 
+// Desktop table badge — normal size
 function getServiceStatusBadge(status: string) {
   switch (status) {
-    case "completed":
-      return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Completed</Badge>
-    case "partial":
-      return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Partial</Badge>
-    case "cancelled":
-      return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Cancelled</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
+    case "completed": return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Completed</Badge>
+    case "partial": return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Partial</Badge>
+    case "cancelled": return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Cancelled</Badge>
+    default: return <Badge variant="outline">{status}</Badge>
+  }
+}
+
+// Mobile timeline badge — compact size
+function getMobileServiceBadge(status: string) {
+  switch (status) {
+    case "completed": return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20 text-[11px] px-1.5 py-0">Completed</Badge>
+    case "partial": return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20 text-[11px] px-1.5 py-0">Partial</Badge>
+    case "cancelled": return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20 text-[11px] px-1.5 py-0">Cancelled</Badge>
+    default: return <Badge variant="outline" className="text-[11px] px-1.5 py-0">{status}</Badge>
   }
 }
 
@@ -108,9 +104,7 @@ export default function ContractDetailPage() {
   }, [user?.id])
 
   useEffect(() => {
-    if (currentOrgId && contractId) {
-      loadContractDetails()
-    }
+    if (currentOrgId && contractId) loadContractDetails()
   }, [currentOrgId, contractId])
 
   const loadContractDetails = async () => {
@@ -118,11 +112,7 @@ export default function ContractDetailPage() {
       if (!currentOrgId) return
 
       const { data: contractData, error: contractError } = await supabase
-        .from('contracts')
-        .select('*')
-        .eq('id', contractId)
-        .eq('org_id', currentOrgId)
-        .single()
+        .from('contracts').select('*').eq('id', contractId).eq('org_id', currentOrgId).single()
 
       if (contractError) throw contractError
       if (!contractData) {
@@ -132,15 +122,9 @@ export default function ContractDetailPage() {
       }
 
       const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', contractData.customer_id)
-        .eq('org_id', currentOrgId)
-        .single()
+        .from('customers').select('*').eq('id', contractData.customer_id).eq('org_id', currentOrgId).single()
 
-      if (customerError) {
-        console.error('Failed to fetch customer:', customerError)
-      }
+      if (customerError) console.error('Failed to fetch customer:', customerError)
 
       const daysUntilService = getDaysUntilService(contractData.next_service_date)
       const endDate = contractData.contract_type === 'old'
@@ -148,32 +132,19 @@ export default function ContractDetailPage() {
         : getContractEndDate(contractData.start_date, contractData.duration_years)
 
       setCustomer(customerData as Customer)
-      setContract({
-        ...contractData as Contract,
-        daysUntilService,
-        endDate,
-        customerName: customerData?.name || 'Unknown'
-      })
+      setContract({ ...contractData as Contract, daysUntilService, endDate, customerName: customerData?.name || 'Unknown' })
 
       const { data: historyData, error: historyError } = await supabase
-        .from('service_history')
-        .select('*')
-        .eq('contract_id', contractId)
-        .eq('org_id', currentOrgId)
+        .from('service_history').select('*').eq('contract_id', contractId).eq('org_id', currentOrgId)
 
       if (historyError) throw historyError
 
       const { data: techniciansData } = await supabase
-        .from('technicians')
-        .select('*')
-        .eq('org_id', currentOrgId)
+        .from('technicians').select('*').eq('org_id', currentOrgId)
 
       const historyWithTechnicianNames = (historyData as ServiceHistory[])?.map(record => {
         const technician = (techniciansData as Technician[])?.find(t => t.id === record.technician_id)
-        return {
-          ...record,
-          technicianName: technician?.name || 'Unknown'
-        }
+        return { ...record, technicianName: technician?.name || 'Unknown' }
       }) || []
 
       setServiceHistory(historyWithTechnicianNames)
@@ -210,14 +181,10 @@ export default function ContractDetailPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Header with back button */}
+
+        {/* Header */}
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/contracts')}
-            className="size-9"
-          >
+          <Button variant="ghost" size="icon" onClick={() => router.push('/contracts')} className="size-9">
             <ArrowLeft className="size-4" />
             <span className="sr-only">Back to contracts</span>
           </Button>
@@ -227,7 +194,7 @@ export default function ContractDetailPage() {
           </div>
         </div>
 
-        {/* Contract Information Card */}
+        {/* Contract Information Card — unchanged */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -338,8 +305,8 @@ export default function ContractDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Service History Section */}
-        <Card>
+        {/* ── DESKTOP: Service History Table ── */}
+        <Card className="hidden md:block">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wrench className="size-5" />
@@ -351,9 +318,7 @@ export default function ContractDetailPage() {
           </CardHeader>
           <CardContent>
             {serviceHistory.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No service history found for this contract
-              </div>
+              <div className="text-center py-8 text-muted-foreground">No service history found for this contract</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -377,9 +342,7 @@ export default function ContractDetailPage() {
                         <TableCell>{record.technicianName}</TableCell>
                         <TableCell>{getServiceStatusBadge(record.status)}</TableCell>
                         <TableCell className="max-w-[200px]">
-                          <span className="text-sm text-muted-foreground line-clamp-2">
-                            {record.notes || '—'}
-                          </span>
+                          <span className="text-sm text-muted-foreground line-clamp-2">{record.notes || '—'}</span>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -389,6 +352,60 @@ export default function ContractDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* ── MOBILE: Service History — compact timeline log ── */}
+        <div className="flex flex-col gap-3 md:hidden">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold flex items-center gap-1.5">
+                <Wrench className="size-4 text-muted-foreground" />
+                Service History
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {serviceHistory.length} record{serviceHistory.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+
+          {serviceHistory.length === 0 ? (
+            <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+              No service history found for this contract
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+              {serviceHistory.map((record) => (
+                <div key={record.id} className="flex items-start gap-3 px-4 py-3">
+                  {/* Small timeline dot */}
+                  <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                    <Calendar className="size-3 text-muted-foreground" />
+                  </div>
+
+                  {/* Content */}
+                  <div className="min-w-0 flex-1">
+                    {/* Date + status on same row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{formatDate(record.service_date)}</p>
+                      {getMobileServiceBadge(record.status)}
+                    </div>
+
+                    {/* Technician */}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {record.technicianName}
+                    </p>
+
+                    {/* Notes — only if present */}
+                    {record.notes && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">
+                        {record.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </DashboardLayout>
   )
