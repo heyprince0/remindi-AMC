@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation" // <-- added useSearchParams
+import { useRouter, useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -43,7 +43,7 @@ interface InventoryMetrics {
 export default function StocksPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const searchParams = useSearchParams() // <-- get query params
+  const searchParams = useSearchParams()
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<InventoryMetrics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,6 +63,9 @@ export default function StocksPage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
+  // ── Auto-show modal once on load (same pattern as contracts page) ──
+  const [autoShown, setAutoShown] = useState(false)
 
   // ── Read tab query param ──
   const tabParam = searchParams.get('tab')
@@ -96,6 +99,15 @@ export default function StocksPage() {
       loadCategories()
     }
   }, [currentOrgId, refreshTrigger])
+
+  // ── Auto-show subscription alert on page load ──
+  // Fires once after plan limits are loaded, mirroring contracts page behaviour
+  useEffect(() => {
+    if (!limitsLoading && currentOrgId && !autoShown) {
+      const blocked = checkAndShowLimitModal(true)
+      if (blocked) setAutoShown(true)
+    }
+  }, [limitsLoading, currentOrgId, status, autoShown])
 
   const loadMetrics = async () => {
     if (!currentOrgId) return
@@ -182,17 +194,23 @@ export default function StocksPage() {
     }
   }
 
-  const checkAndShowLimitModal = () => {
+  /**
+   * Central subscription check.
+   * Returns true if the user is blocked (modal shown), false if they can proceed.
+   * Pass showOnLoad=true when calling on page load to avoid double-showing.
+   */
+  const checkAndShowLimitModal = (showOnLoad = false) => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({
         title: `Your ${planName || 'current'} plan has expired`,
-        description: `Renew your ${planName || 'current'} plan to continue adding inventory items.`,
+        description: `Renew your ${planName || 'current'} plan to continue using inventory.`,
       })
       setShowLimitModal(true)
       return true
     }
-    if (maxInventory > 0 && currentInventoryCount >= maxInventory) {
+    // Only block "Add Item" on resource limit, not stock in/out (they don't add new items)
+    if (!showOnLoad && maxInventory > 0 && currentInventoryCount >= maxInventory) {
       setLimitModalType('resource-limit')
       setLimitModalCustom({
         title: "You've reached your inventory limit",
@@ -212,6 +230,28 @@ export default function StocksPage() {
     if (checkAndShowLimitModal()) return
     setEditingItem(null)
     setSheetOpen(true)
+  }
+
+  /**
+   * Passed to ItemsTable so Stock In / Stock Out buttons are also gated.
+   * Only blocks on expired/cancelled subscription — resource limit doesn't
+   * apply to stock movements (no new items are being created).
+   */
+  const handleStockAction = (): boolean => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return true // blocked
+    }
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({
+        title: `Your ${planName || 'current'} plan has expired`,
+        description: `Renew your ${planName || 'current'} plan to manage stock movements.`,
+      })
+      setShowLimitModal(true)
+      return true // blocked
+    }
+    return false // allowed
   }
 
   const handleEditItem = (item: any) => {
@@ -427,6 +467,7 @@ export default function StocksPage() {
                 onEditItem={handleEditItem}
                 categories={categories}
                 refreshTrigger={refreshTrigger}
+                onStockAction={handleStockAction}  // ← subscription gate for Stock In/Out
               />
             )}
           </TabsContent>
