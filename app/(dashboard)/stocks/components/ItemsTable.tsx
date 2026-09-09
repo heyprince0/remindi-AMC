@@ -74,6 +74,8 @@ interface ItemsTableProps {
   onEditItem: (item: InventoryItem) => void
   categories: Category[]
   refreshTrigger?: number
+  // ── Subscription gate: return true if the action is blocked ──
+  onStockAction?: () => boolean
 }
 
 function getStockStatus(current: number, min: number) {
@@ -89,6 +91,7 @@ export default function ItemsTable({
   onEditItem,
   categories,
   refreshTrigger,
+  onStockAction,
 }: ItemsTableProps) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
@@ -202,7 +205,9 @@ export default function ItemsTable({
     }
   }
 
+  // ── Gate stock in/out through subscription check ──
   const handleStockClick = (item: InventoryItem, mode: "in" | "out") => {
+    if (onStockAction && onStockAction()) return // blocked – modal already shown by parent
     setSelectedItem(item)
     setStockDialogMode(mode)
     setStockDialogOpen(true)
@@ -427,7 +432,6 @@ export default function ItemsTable({
                         <Package className="size-5 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        {/* ── FIX: allow long names to wrap ── */}
                         <CardTitle className="text-sm font-semibold leading-tight break-words">
                           {item.name}
                         </CardTitle>
@@ -499,6 +503,7 @@ export default function ItemsTable({
                     )}
                   </div>
 
+                  {/* ── Stock In / Out buttons ── */}
                   <div className="flex items-center gap-2 border-t border-border pt-2.5">
                     <Button
                       variant="outline"
