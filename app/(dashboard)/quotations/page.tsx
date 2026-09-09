@@ -18,7 +18,7 @@ import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Eye, Trash2, Edit, Settings, MoreHorizontal, FileText } from "lucide-react"
+import { Plus, Search, Trash2, Edit, Settings, MoreHorizontal, FileText } from "lucide-react" // Removed Eye import
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -248,7 +248,7 @@ export default function QuotationsPage() {
           </Button>
         </div>
 
-        {/* ── Standalone Search (no card) ── */}
+        {/* ── Standalone Search ── */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -289,7 +289,11 @@ export default function QuotationsPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredQuotations.map((quotation) => (
-                      <TableRow key={quotation.id}>
+                      <TableRow
+                        key={quotation.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/quotations/${quotation.id}`)}
+                      >
                         <TableCell className="font-medium">{quotation.quote_no}</TableCell>
                         <TableCell>{quotation.client_name}</TableCell>
                         <TableCell>
@@ -300,29 +304,32 @@ export default function QuotationsPage() {
                           })}
                         </TableCell>
                         <TableCell>{formatCurrency(quotation.grand_total)}</TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-2">
-                            <Link href={`/quotations/${quotation.id}`}>
-                              <Button variant="ghost" size="sm" title="View Quotation">
-                                <Eye className="size-4" />
-                                <span className="sr-only">View</span>
-                              </Button>
-                            </Link>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
                                   <MoreHorizontal className="size-4" />
                                   <span className="sr-only">More actions</span>
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleEditClick(quotation)}>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEditClick(quotation)
+                                  }}
+                                >
                                   <Edit className="mr-2 size-4" />
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-red-600 focus:text-red-600"
-                                  onClick={() => { setQuotationToDelete(quotation); setDeleteDialogOpen(true) }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setQuotationToDelete(quotation)
+                                    setDeleteDialogOpen(true)
+                                  }}
                                 >
                                   <Trash2 className="mr-2 size-4" />
                                   Delete
@@ -358,7 +365,11 @@ export default function QuotationsPage() {
               </p>
 
               {filteredQuotations.map((quotation) => (
-                <Card key={quotation.id} className="relative">
+                <Card
+                  key={quotation.id}
+                  className="relative cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => router.push(`/quotations/${quotation.id}`)}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3 min-w-0">
@@ -377,18 +388,32 @@ export default function QuotationsPage() {
                       <div className="flex items-center gap-1 shrink-0">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <MoreHorizontal className="size-4" />
                               <span className="sr-only">Actions</span>
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEditClick(quotation)}>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditClick(quotation)
+                              }}
+                            >
                               <Edit className="mr-2 size-4" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => { setQuotationToDelete(quotation); setDeleteDialogOpen(true) }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setQuotationToDelete(quotation)
+                                setDeleteDialogOpen(true)
+                              }}
                               className="text-red-600 focus:text-red-600"
                             >
                               <Trash2 className="mr-2 size-4" />
@@ -428,12 +453,7 @@ export default function QuotationsPage() {
                       <div className="text-xs text-muted-foreground truncate">
                         &nbsp;
                       </div>
-                      <Link href={`/quotations/${quotation.id}`}>
-                        <Button variant="ghost" size="sm" className="gap-2 shrink-0">
-                          <Eye className="size-4" />
-                          View
-                        </Button>
-                      </Link>
+                      {/* View button removed – card itself is clickable */}
                     </div>
                   </CardContent>
                 </Card>
