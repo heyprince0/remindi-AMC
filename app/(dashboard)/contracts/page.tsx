@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation" // <-- added for clickable cards
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -141,6 +142,7 @@ const MONTHS = [
 ]
 
 export default function ContractsPage() {
+  const router = useRouter() // <-- added for clickable cards
   const { user } = useAuth()
   const [contracts, setContracts] = useState<ContractDisplay[]>([])
   const [filteredContracts, setFilteredContracts] = useState<ContractDisplay[]>([])
@@ -748,7 +750,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE Cards ── */}
+        {/* ── MOBILE Cards (clickable) ── */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading contracts...</div>
@@ -769,7 +771,11 @@ export default function ContractsPage() {
                 const days = getDaysUntilService(contract.next_service_date)
                 const frequencyMonths = Math.round(contract.frequency_days / 30)
                 return (
-                  <Card key={contract.id} className="relative">
+                  <Card
+                    key={contract.id}
+                    className="relative cursor-pointer transition-shadow hover:shadow-md"
+                    onClick={() => router.push(`/contracts/${contract.id}`)}
+                  >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -777,7 +783,6 @@ export default function ContractsPage() {
                             <FileText className="size-5 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            {/* ── FIX: allow long names to wrap ── */}
                             <CardTitle className="text-sm font-semibold leading-tight break-words">
                               {contract.contract_name}
                             </CardTitle>
@@ -791,18 +796,32 @@ export default function ContractsPage() {
                           {!isTechnician && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="size-8">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <MoreHorizontal className="size-4" />
                                   <span className="sr-only">Actions</span>
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleEditClick(contract)}>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEditClick(contract)
+                                  }}
+                                >
                                   <Edit className="mr-2 size-4" />
                                   Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setContractToDelete(contract)
+                                    setDeleteDialogOpen(true)
+                                  }}
                                   className="text-red-600"
                                 >
                                   <Trash2 className="mr-2 size-4" />
@@ -841,16 +860,12 @@ export default function ContractsPage() {
                           <p className="text-sm font-medium">{contract.endDate || '—'}</p>
                         </div>
                       </div>
+                      {/* Footer with location only (View button removed) */}
                       <div className="flex items-center justify-between pt-2 border-t border-border">
                         <div className="text-xs text-muted-foreground truncate">
                           {contract.location || ''}
                         </div>
-                        <Link href={`/contracts/${contract.id}`}>
-                          <Button variant="ghost" size="sm" className="gap-2 shrink-0">
-                            <Eye className="size-4" />
-                            View
-                          </Button>
-                        </Link>
+                        {/* No View button – card itself is clickable */}
                       </div>
                     </CardContent>
                   </Card>
