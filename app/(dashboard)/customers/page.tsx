@@ -43,12 +43,13 @@ import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Eye, Edit, Phone, MapPin, FileText, Trash2, Check, ChevronsUpDown } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Phone, MapPin, FileText, Trash2, Check, ChevronsUpDown } from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export default function CustomersPage() {
+  const router = useRouter()
   const { user } = useAuth()
   const [customers, setCustomers] = useState<(Customer & { contractCount: number })[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<(Customer & { contractCount: number })[]>([])
@@ -332,7 +333,11 @@ export default function CustomersPage() {
             </div>
           ) : (
             filteredCustomers.map((customer) => (
-              <Card key={customer.id} className="relative">
+              <Card
+                key={customer.id}
+                className="relative cursor-pointer transition-shadow hover:shadow-md"
+                onClick={() => router.push(`/customers/${customer.id}`)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -350,18 +355,23 @@ export default function CustomersPage() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="size-4" />
                           <span className="sr-only">Actions</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditClick(customer)}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditClick(customer) }}>
                           <Edit className="mr-2 size-4" />
                           Edit Customer
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => { setCustomerToDelete(customer); setDeleteDialogOpen(true) }}
+                          onClick={(e) => { e.stopPropagation(); setCustomerToDelete(customer); setDeleteDialogOpen(true) }}
                           className="text-red-600"
                         >
                           <Trash2 className="mr-2 size-4" />
@@ -380,18 +390,12 @@ export default function CustomersPage() {
                     <MapPin className="size-4 shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{customer.address}</span>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <div className="flex items-center pt-2 border-t border-border">
                     <div className="flex items-center gap-2 text-sm">
                       <FileText className="size-4 text-muted-foreground" />
                       <span className="text-foreground font-medium">{customer.contractCount}</span>
                       <span className="text-muted-foreground">contracts</span>
                     </div>
-                    <Link href={`/customers/${customer.id}`}>
-                      <Button variant="ghost" size="sm" className="gap-2">
-                        <Eye className="size-4" />
-                        View
-                      </Button>
-                    </Link>
                   </div>
                 </CardContent>
               </Card>
