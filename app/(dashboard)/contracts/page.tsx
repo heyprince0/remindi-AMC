@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation" // <-- added for clickable cards
+import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -142,7 +142,7 @@ const MONTHS = [
 ]
 
 export default function ContractsPage() {
-  const router = useRouter() // <-- added for clickable cards
+  const router = useRouter()
   const { user } = useAuth()
   const [contracts, setContracts] = useState<ContractDisplay[]>([])
   const [filteredContracts, setFilteredContracts] = useState<ContractDisplay[]>([])
@@ -694,7 +694,11 @@ export default function ContractsPage() {
                       const days = getDaysUntilService(contract.next_service_date)
                       const frequencyMonths = Math.round(contract.frequency_days / 30)
                       return (
-                        <TableRow key={contract.id}>
+                        <TableRow
+                          key={contract.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => router.push(`/contracts/${contract.id}`)}
+                        >
                           <TableCell className="font-medium">{contract.contract_name}</TableCell>
                           <TableCell>{contract.customerName}</TableCell>
                           <TableCell>{frequencyMonths} months</TableCell>
@@ -708,28 +712,47 @@ export default function ContractsPage() {
                           <TableCell>{formatTableDate(contract.next_service_date)}</TableCell>
                           <TableCell>{getStatusBadge(days, contract.status)}</TableCell>
                           {!isTechnician && (
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
                                 <Link href={`/contracts/${contract.id}`}>
-                                  <Button variant="ghost" size="sm" title="View Contract Details">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="View Contract Details"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
                                     <Eye className="size-4" />
                                     <span className="sr-only">View</span>
                                   </Button>
                                 </Link>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="size-8">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
                                       <MoreHorizontal className="size-4" />
                                       <span className="sr-only">Actions</span>
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleEditClick(contract)}>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleEditClick(contract)
+                                      }}
+                                    >
                                       <Edit className="mr-2 size-4" />
                                       Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onClick={() => { setContractToDelete(contract); setDeleteDialogOpen(true) }}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setContractToDelete(contract)
+                                        setDeleteDialogOpen(true)
+                                      }}
                                       className="text-red-600"
                                     >
                                       <Trash2 className="mr-2 size-4" />
@@ -750,7 +773,7 @@ export default function ContractsPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE Cards (clickable) ── */}
+        {/* ── MOBILE Cards ── */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading contracts...</div>
@@ -860,12 +883,10 @@ export default function ContractsPage() {
                           <p className="text-sm font-medium">{contract.endDate || '—'}</p>
                         </div>
                       </div>
-                      {/* Footer with location only (View button removed) */}
                       <div className="flex items-center justify-between pt-2 border-t border-border">
                         <div className="text-xs text-muted-foreground truncate">
                           {contract.location || ''}
                         </div>
-                        {/* No View button – card itself is clickable */}
                       </div>
                     </CardContent>
                   </Card>
