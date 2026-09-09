@@ -44,7 +44,7 @@ import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Eye, Trash2, Settings, MoreHorizontal, FileText } from "lucide-react"
+import { Plus, Search, Trash2, Settings, MoreHorizontal, FileText } from "lucide-react" // Removed Eye import
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -330,24 +330,22 @@ export default function InvoicesPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredInvoices.map((invoice) => (
-                      <TableRow key={invoice.id}>
+                      <TableRow
+                        key={invoice.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/invoices/${invoice.id}`)}
+                      >
                         <TableCell className="font-medium">{invoice.invoice_no}</TableCell>
                         <TableCell>{invoice.client_name}</TableCell>
                         <TableCell>{formatDate(invoice.invoice_date)}</TableCell>
                         <TableCell>{formatDate(invoice.due_date)}</TableCell>
                         <TableCell>{formatCurrency(invoice.grand_total)}</TableCell>
                         <TableCell>{getPaymentStatusBadge(invoice.payment_status)}</TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
-                            <Link href={`/invoices/${invoice.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="size-4" />
-                                <span className="sr-only">View</span>
-                              </Button>
-                            </Link>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
                                   <MoreHorizontal className="size-4" />
                                   <span className="sr-only">More actions</span>
                                 </Button>
@@ -355,7 +353,8 @@ export default function InvoicesPage() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                   className="text-red-600 focus:text-red-600"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation()
                                     setInvoiceToDelete(invoice)
                                     setDeleteDialogOpen(true)
                                   }}
@@ -403,7 +402,11 @@ export default function InvoicesPage() {
               </p>
 
               {filteredInvoices.map((invoice) => (
-                <Card key={invoice.id}>
+                <Card
+                  key={invoice.id}
+                  className="relative cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => router.push(`/invoices/${invoice.id}`)}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
@@ -419,7 +422,12 @@ export default function InvoicesPage() {
                         {getPaymentStatusBadge(invoice.payment_status)}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <MoreHorizontal className="size-4" />
                               <span className="sr-only">More actions</span>
                             </Button>
@@ -427,7 +435,8 @@ export default function InvoicesPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               className="text-red-600 focus:text-red-600"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 setInvoiceToDelete(invoice)
                                 setDeleteDialogOpen(true)
                               }}
@@ -448,9 +457,7 @@ export default function InvoicesPage() {
                     </div>
                     <div className="flex items-center justify-between border-t border-border pt-2">
                       <span className="text-xs text-muted-foreground">Invoice</span>
-                      <Link href={`/invoices/${invoice.id}`}>
-                        <Button variant="ghost" size="sm"><Eye className="mr-2 size-4" />View</Button>
-                      </Link>
+                      {/* View button removed – card itself is clickable */}
                     </div>
                   </CardContent>
                 </Card>
