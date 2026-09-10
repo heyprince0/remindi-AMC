@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { supabase, type Technician, type TechnicianJob, type Customer, type Contract, type ServiceHistory } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2, CalendarIcon, X, ScanBarcode, Camera, Loader2, Eye } from 'lucide-react'
+import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2, CalendarIcon, X, ScanBarcode, Camera, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
 import { Input } from '@/components/ui/input'
@@ -448,7 +448,7 @@ export default function TechnicianDetailPage() {
 
   const getSourceBadgeLabel = (source: HistoryDisplayItem['source']) => {
     switch (source) {
-      case 'service_alert': return 'From Service Alert'
+      case 'service_alert': return 'Service Alert'
       case 'service_history': return 'Service Record'
       default: return 'Manual'
     }
@@ -867,16 +867,21 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE: Job History Cards ── */}
-        <div className="flex flex-col gap-4 md:hidden">
+        {/* ── MOBILE: Job History — compact timeline log (matches Customer detail style) ── */}
+        <div className="flex flex-col gap-3 md:hidden">
+          {/* Section header */}
           <div>
-            <h2 className="text-lg font-semibold">Job History</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="text-base font-semibold flex items-center gap-1.5">
+              <CheckCircle2 className="size-4 text-muted-foreground" />
+              Job History
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {filteredHistory.length} completed job{filteredHistory.length !== 1 ? 's' : ''}
               {historyDateFilter && ` on ${historyDateFilter}`}
             </p>
           </div>
 
+          {/* Date filter */}
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
               <CalendarIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -904,56 +909,72 @@ export default function TechnicianDetailPage() {
           </div>
 
           {filteredHistory.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
               {historyDateFilter
                 ? 'No completed jobs on this date'
                 : 'No completed jobs yet for this technician'}
             </div>
           ) : (
             <>
-              {visibleHistory.map((job) => (
-                <Card key={job.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                          <CheckCircle2 className="size-5 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <CardTitle className="truncate text-sm font-semibold">{job.title}</CardTitle>
-                          <CardDescription className="mt-0.5 truncate text-xs">{job.customerName || 'No customer'}</CardDescription>
-                        </div>
+              {/* Single contained list — divide-y between entries */}
+              <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+                {visibleHistory.map((job) => (
+                  <div key={job.id} className="flex items-start gap-3 px-4 py-3">
+                    {/* Timeline dot */}
+                    <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
+                      <CheckCircle2 className="size-3 text-muted-foreground" />
+                    </div>
+
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      {/* Job title + source badge */}
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium leading-snug break-words">{job.title}</p>
+                        <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">
+                          {getSourceBadgeLabel(job.source)}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="shrink-0 text-xs font-normal">
-                        {getSourceBadgeLabel(job.source)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                      <div><p className="text-xs text-muted-foreground">Completed</p><p className="text-sm font-medium">{job.completedDate || '—'}</p></div>
-                      {job.photoUrl && (
-                        <div>
-                          <p className="text-xs text-muted-foreground">Photo</p>
-                          <button
-                            type="button"
-                            onClick={() => setPhotoModalUrl(job.photoUrl)}
-                            className="mt-1 block overflow-hidden rounded-md focus-visible:outline-none"
-                          >
-                            <img src={job.photoUrl} alt="Work photo" className="size-12 rounded-md object-cover" />
-                          </button>
-                        </div>
+
+                      {/* Completed date • customer */}
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
+                        <span>{job.completedDate || '—'}</span>
+                        {job.customerName && (
+                          <>
+                            <span className="opacity-40">•</span>
+                            <span className="truncate">{job.customerName}</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Notes */}
+                      {job.notes && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">
+                          {job.notes}
+                        </p>
                       )}
-                      <div className="col-span-2"><p className="text-xs text-muted-foreground">Notes</p><p className="text-sm font-medium line-clamp-2">{job.notes || '—'}</p></div>
+
+                      {/* Photo thumbnail */}
+                      {job.photoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoModalUrl(job.photoUrl)}
+                          className="mt-2 block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={`View photo for ${job.title}`}
+                        >
+                          <img
+                            src={job.photoUrl}
+                            alt={`Photo for ${job.title}`}
+                            className="h-16 w-16 rounded-md object-cover"
+                          />
+                        </button>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between border-t border-border pt-2">
-                      <span className="text-xs text-muted-foreground">Job History</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                ))}
+              </div>
+
               {hasMoreHistory && (
-                <div className="flex justify-center mt-2">
+                <div className="flex justify-center mt-1">
                   <Button
                     variant="outline"
                     size="sm"
