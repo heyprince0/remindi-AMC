@@ -17,10 +17,9 @@ import { supabase, type Technician, type TechnicianJob } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2, Eye } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2 } from "lucide-react" // Removed Eye import
 import { toast } from "sonner"
 import { AddTechnicianModal } from "@/components/add-technician-modal"
-import Link from "next/link"
 
 function parseSpecializations(raw: unknown): string[] {
   let current: unknown = raw
@@ -272,7 +271,7 @@ export default function TechniciansPage() {
           />
         </div>
 
-        {/* Technicians Grid */}
+        {/* Technicians Grid (clickable cards) */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {loading ? (
             <div className="text-center py-8 col-span-full text-muted-foreground">Loading technicians...</div>
@@ -282,7 +281,11 @@ export default function TechniciansPage() {
             </div>
           ) : (
             filteredTechnicians.map((tech) => (
-              <Card key={tech.id}>
+              <Card
+                key={tech.id}
+                className="cursor-pointer transition-shadow hover:shadow-md"
+                onClick={() => router.push(`/technicians/${tech.id}`)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -293,22 +296,40 @@ export default function TechniciansPage() {
                       </div>
                       <div>
                         <CardTitle className="text-base">{tech.name}</CardTitle>
-                        <CardDescription className="text-xs">{parseSpecializations(tech.specialization)[0] || 'No specialization'}</CardDescription>
+                        <CardDescription className="text-xs">
+                          {parseSpecializations(tech.specialization)[0] || 'No specialization'}
+                        </CardDescription>
                       </div>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="size-4" />
                           <span className="sr-only">Actions</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditClick(tech)}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditClick(tech)
+                          }}
+                        >
                           <Edit className="mr-2 size-4" />
                           Edit Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(tech.id)} className="text-red-600">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(tech.id)
+                          }}
+                          className="text-red-600"
+                        >
                           <Trash2 className="mr-2 size-4" />
                           Delete
                         </DropdownMenuItem>
@@ -343,12 +364,7 @@ export default function TechniciansPage() {
                       </div>
                       {getStatusBadge(tech.status)}
                     </div>
-                    <Link href={`/technicians/${tech.id}`}>
-                      <Button variant="ghost" size="sm" className="gap-2">
-                        <Eye className="size-4" />
-                        View
-                      </Button>
-                    </Link>
+                    {/* View button removed – card itself is clickable */}
                   </div>
                 </CardContent>
               </Card>
