@@ -16,6 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { supabase, type Technician, type TechnicianJob, type Customer, type Contract, type ServiceHistory } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2, CalendarIcon, X, ScanBarcode, Camera, Loader2 } from 'lucide-react'
@@ -66,6 +76,11 @@ export default function TechnicianDetailPage() {
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [scanDialogOpen, setScanDialogOpen] = useState(false)
+
+  // ── Delete job dialog state ──
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -392,23 +407,33 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  const handleDeleteJob = async (jobId: string) => {
-    if (!currentOrgId) return
-    if (!confirm('Are you sure you want to delete this job?')) return
+  // ── Open delete confirmation dialog ──
+  const openDeleteDialog = (job: JobWithCustomer) => {
+    setJobToDelete(job)
+    setDeleteDialogOpen(true)
+  }
 
+  // ── Perform delete after confirmation ──
+  const handleConfirmDelete = async () => {
+    if (!currentOrgId || !jobToDelete || deleting) return
+    setDeleting(true)
     try {
       const { error } = await supabase
         .from('technician_jobs')
         .delete()
-        .eq('id', jobId)
+        .eq('id', jobToDelete.id)
         .eq('org_id', currentOrgId)
 
       if (error) throw error
       toast.success('Job deleted successfully')
-      setAssignedJobs(assignedJobs.filter((job) => job.id !== jobId))
+      setAssignedJobs(assignedJobs.filter((job) => job.id !== jobToDelete.id))
+      setDeleteDialogOpen(false)
+      setJobToDelete(null)
     } catch (error) {
       console.error('Error deleting job:', error)
       toast.error('Failed to delete job')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -686,7 +711,7 @@ export default function TechnicianDetailPage() {
                                 size="sm"
                                 variant="outline"
                                 className="gap-2 text-red-600 hover:text-red-600"
-                                onClick={() => handleDeleteJob(job.id)}
+                                onClick={() => openDeleteDialog(job)}
                               >
                                 <Trash2 className="size-4" />
                               </Button>
@@ -750,7 +775,7 @@ export default function TechnicianDetailPage() {
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openCompleteDialog(job)}><CheckCircle2 className="size-4" />Complete</Button>
                       {job.customer_id && <Button size="sm" variant="outline" onClick={() => router.push(`/customers/${job.customer_id}`)}>View</Button>}
-                      {role !== 'technician' && <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-600" onClick={() => handleDeleteJob(job.id)}><Trash2 className="size-4" /><span className="sr-only">Delete job</span></Button>}
+                      {role !== 'technician' && <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-600" onClick={() => openDeleteDialog(job)}><Trash2 className="size-4" /><span className="sr-only">Delete job</span></Button>}
                     </div>
                   </div>
                 </CardContent>
@@ -867,9 +892,8 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE: Job History — compact timeline log (matches Customer detail style) ── */}
+        {/* ── MOBILE: Job History — compact timeline log ── */}
         <div className="flex flex-col gap-3 md:hidden">
-          {/* Section header */}
           <div>
             <h2 className="text-base font-semibold flex items-center gap-1.5">
               <CheckCircle2 className="size-4 text-muted-foreground" />
@@ -881,7 +905,6 @@ export default function TechnicianDetailPage() {
             </p>
           </div>
 
-          {/* Date filter */}
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
               <CalendarIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -916,18 +939,14 @@ export default function TechnicianDetailPage() {
             </div>
           ) : (
             <>
-              {/* Single contained list — divide-y between entries */}
               <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
                 {visibleHistory.map((job) => (
                   <div key={job.id} className="flex items-start gap-3 px-4 py-3">
-                    {/* Timeline dot */}
                     <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
                       <CheckCircle2 className="size-3 text-muted-foreground" />
                     </div>
 
-                    {/* Content */}
                     <div className="min-w-0 flex-1">
-                      {/* Job title + source badge */}
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium leading-snug break-words">{job.title}</p>
                         <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">
@@ -935,7 +954,6 @@ export default function TechnicianDetailPage() {
                         </Badge>
                       </div>
 
-                      {/* Completed date • customer */}
                       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
                         <span>{job.completedDate || '—'}</span>
                         {job.customerName && (
@@ -946,14 +964,12 @@ export default function TechnicianDetailPage() {
                         )}
                       </div>
 
-                      {/* Notes */}
                       {job.notes && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">
                           {job.notes}
                         </p>
                       )}
 
-                      {/* Photo thumbnail */}
                       {job.photoUrl && (
                         <button
                           type="button"
@@ -1067,6 +1083,28 @@ export default function TechnicianDetailPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* ── Delete Job Confirmation Dialog ── */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Job</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete &quot;{jobToDelete?.title}&quot;? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {currentOrgId && (
           <ScanBarcodeDialog
