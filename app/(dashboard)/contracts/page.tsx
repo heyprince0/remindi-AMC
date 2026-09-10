@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Edit, Trash2, Download, Check, ChevronsUpDown, MoreHorizontal, FileText } from "lucide-react" // Removed Eye import
+import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -730,6 +730,15 @@ export default function ContractsPage() {
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation()
+                                        router.push(`/contracts/${contract.id}`)
+                                      }}
+                                    >
+                                      <Eye className="mr-2 size-4" />
+                                      View
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
                                         handleEditClick(contract)
                                       }}
                                     >
@@ -819,6 +828,15 @@ export default function ContractsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    router.push(`/contracts/${contract.id}`)
+                                  }}
+                                >
+                                  <Eye className="mr-2 size-4" />
+                                  View
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation()
