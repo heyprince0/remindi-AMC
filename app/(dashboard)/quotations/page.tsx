@@ -18,7 +18,7 @@ import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Trash2, Edit, Settings, MoreHorizontal, FileText } from "lucide-react" // Removed Eye import
+import { Plus, Search, Trash2, Edit, Settings, MoreHorizontal, FileText } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -58,7 +58,6 @@ export default function QuotationsPage() {
   const [deleting, setDeleting] = useState(false)
   const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
   const [checkingProfile, setCheckingProfile] = useState(false)
-  const [subscriptionAlertOpen, setSubscriptionAlertOpen] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
@@ -67,6 +66,9 @@ export default function QuotationsPage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
+  // ── Auto-show modal once on load ──
+  const [autoShown, setAutoShown] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -91,6 +93,14 @@ export default function QuotationsPage() {
       loadQuotations()
     }
   }, [currentOrgId])
+
+  // ── Auto-show subscription alert on page load ──
+  useEffect(() => {
+    if (!limitsLoading && currentOrgId && !autoShown) {
+      const blocked = checkAndShowLimitModal()
+      if (blocked) setAutoShown(true)
+    }
+  }, [limitsLoading, currentOrgId, status, autoShown])
 
   const handleFilter = () => {
     let filtered = quotations
@@ -213,15 +223,13 @@ export default function QuotationsPage() {
     }
   }
 
+  // ── Use LimitReachedModal for edit too (unified UI, no separate dialog) ──
   const handleEditClick = (quotation: Quotation) => {
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
       return
     }
-    if (status === 'expired' || status === 'cancelled') {
-      setSubscriptionAlertOpen(true)
-      return
-    }
+    if (checkAndShowLimitModal()) return
     router.push(`/quotations/${quotation.id}/edit`)
   }
 
@@ -453,7 +461,6 @@ export default function QuotationsPage() {
                       <div className="text-xs text-muted-foreground truncate">
                         &nbsp;
                       </div>
-                      {/* View button removed – card itself is clickable */}
                     </div>
                   </CardContent>
                 </Card>
@@ -463,7 +470,7 @@ export default function QuotationsPage() {
         </div>
       </div>
 
-      {/* Dialogs and Modals - unchanged */}
+      {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -485,6 +492,7 @@ export default function QuotationsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Profile Setup Dialog */}
       <Dialog open={profileSetupDialogOpen} onOpenChange={setProfileSetupDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -506,22 +514,7 @@ export default function QuotationsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Subscription Alert</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Your {planName || 'current'} plan has expired. Renew your plan to edit this quotation.
-          </p>
-          <DialogFooter>
-            <Button onClick={() => setSubscriptionAlertOpen(false)}>
-              OK
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      {/* Unified Limit/Subscription Modal */}
       <LimitReachedModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
