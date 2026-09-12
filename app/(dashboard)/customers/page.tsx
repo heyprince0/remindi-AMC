@@ -43,7 +43,7 @@ import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, MapPin, FileText, Trash2, Check, ChevronsUpDown } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Phone, MapPin, FileText, Trash2, Check, ChevronsUpDown, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
 import { useRouter } from "next/navigation"
@@ -390,12 +390,14 @@ export default function CustomersPage() {
                     <MapPin className="size-4 shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{customer.address}</span>
                   </div>
-                  <div className="flex items-center pt-2 border-t border-border">
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
                     <div className="flex items-center gap-2 text-sm">
                       <FileText className="size-4 text-muted-foreground" />
                       <span className="text-foreground font-medium">{customer.contractCount}</span>
                       <span className="text-muted-foreground">contracts</span>
                     </div>
+                    {/* NEW ARROW ICON ON BOTTOM RIGHT */}
+                    <ArrowUpRight className="size-4 text-muted-foreground" />
                   </div>
                 </CardContent>
               </Card>
