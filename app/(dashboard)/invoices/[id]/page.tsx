@@ -656,8 +656,11 @@ export default function ViewInvoicePage() {
         y += 20
 
         // ---- PAYMENT DETAILS ----
+        // Use invoice payment terms if available, otherwise fall back to profile payment terms
+        const resolvedPaymentTerms = invoice.payment_terms || profile?.payment_terms || "";
+
         // Only show if at least one payment detail exists
-        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || invoice.payment_terms) {
+        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || resolvedPaymentTerms) {
           y += 10
           doc.setFontSize(9)
           doc.setFont("helvetica", "bold")
@@ -683,8 +686,8 @@ export default function ViewInvoicePage() {
             doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
             y += 4
           }
-          if (invoice.payment_terms) {
-            doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
+          if (resolvedPaymentTerms) {
+            doc.text(`Payment Terms: ${safeStr(resolvedPaymentTerms)}`, margin, y)
             y += 4
           }
         }
@@ -820,6 +823,9 @@ export default function ViewInvoicePage() {
   const mappedItems = getMappedItems()
   const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
   const includeGst = invoice.include_gst ?? true
+  
+  // Resolve payment terms for UI display as well
+  const resolvedPaymentTerms = invoice.payment_terms || profile?.payment_terms || "";
 
   return (
     <DashboardLayout>
@@ -991,10 +997,10 @@ export default function ViewInvoicePage() {
                 <p className="font-medium">{invoice.order_no}</p>
               </div>
             )}
-            {invoice.payment_terms && (
+            {resolvedPaymentTerms && (
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Payment Terms</p>
-                <p className="font-medium text-sm">{invoice.payment_terms}</p>
+                <p className="font-medium text-sm">{resolvedPaymentTerms}</p>
               </div>
             )}
             <div className="sm:col-span-2">
