@@ -687,7 +687,7 @@ export default function ViewInvoicePage() {
             y += 4
           }
           if (resolvedPaymentTerms) {
-            doc.text(`Payment Terms: ${safeStr(resolvedPaymentTerms)}`, margin, y)
+            doc.text(`${safeStr(resolvedPaymentTerms)}`, margin, y)
             y += 4
           }
         }
