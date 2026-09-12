@@ -37,6 +37,12 @@ export interface CompanyProfile {
   updated_at: string
 }
 
+// ✅ Suggestion list for payment terms
+const PAYMENT_TERM_SUGGESTIONS = [
+  "100% advance along with work order.",
+  "Payment within 15 days from invoice date."
+]
+
 export function CompanyProfileSettings() {
   const { user, orgId } = useAuth()   // ✅ get orgId from context
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
@@ -58,7 +64,10 @@ export function CompanyProfileSettings() {
   const [accountNo, setAccountNo] = useState("")
   const [ifscCode, setIfscCode] = useState("")
   const [upiId, setUpiId] = useState("")
-  const [paymentTerms, setPaymentTerms] = useState("100% advance along with work order")
+  
+  // ✅ CHANGED: Initial state is now empty instead of the hardcoded default
+  const [paymentTerms, setPaymentTerms] = useState("")
+  
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -99,8 +108,8 @@ export function CompanyProfileSettings() {
           setIfscCode(data.ifsc_code || "")
           setUpiId(data.upi_id || "")
           
-          // ✅ FIXED: Use ?? instead of || so empty strings are preserved
-          setPaymentTerms(data.payment_terms ?? "100% advance along with work order")
+          // ✅ CHANGED: Fallback to empty string instead of hardcoded text
+          setPaymentTerms(data.payment_terms ?? "")
           
           setExistingLogoUrl(data.logo_url ?? null)
           setNewImageFile(null)
@@ -505,6 +514,7 @@ export function CompanyProfileSettings() {
               </div>
             </div>
 
+            {/* Payment Terms Section */}
             <div className="space-y-2">
               <Label htmlFor="payment-terms">Payment Terms</Label>
               <Textarea
@@ -514,6 +524,25 @@ export function CompanyProfileSettings() {
                 placeholder="e.g. 100% advance along with work order"
                 className="min-h-[60px] resize-none"
               />
+              
+              {/* ✅ NEW: Suggestion Buttons */}
+              <div className="pt-2">
+                <p className="text-xs text-muted-foreground mb-2">Suggestions (click to apply):</p>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_TERM_SUGGESTIONS.map((suggestion, index) => (
+                    <Button
+                      key={index}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 px-3 rounded-full"
+                      onClick={() => setPaymentTerms(suggestion)}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
