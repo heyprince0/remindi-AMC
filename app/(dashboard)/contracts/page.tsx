@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText, ArrowUpRight } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -714,6 +714,20 @@ export default function ContractsPage() {
                           {!isTechnician && (
                             <TableCell onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 text-muted-foreground hover:text-foreground"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    router.push(`/contracts/${contract.id}`)
+                                  }}
+                                  title="View details"
+                                >
+                                  <ArrowUpRight className="size-4" />
+                                  <span className="sr-only">View Details</span>
+                                </Button>
+
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button
