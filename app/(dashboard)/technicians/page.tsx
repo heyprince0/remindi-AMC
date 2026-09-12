@@ -17,7 +17,7 @@ import { supabase, type Technician, type TechnicianJob } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2 } from "lucide-react" // Removed Eye import
+import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { AddTechnicianModal } from "@/components/add-technician-modal"
 
@@ -364,7 +364,7 @@ export default function TechniciansPage() {
                       </div>
                       {getStatusBadge(tech.status)}
                     </div>
-                    {/* View button removed – card itself is clickable */}
+                    <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                   </div>
                 </CardContent>
               </Card>
