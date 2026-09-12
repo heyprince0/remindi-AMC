@@ -15,6 +15,8 @@ import {
   Loader2,
   FileText,
   CheckCircle2,
+  Upload,
+  Save,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -26,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -96,6 +99,12 @@ export default function ViewQuotationPage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [subscriptionAlertOpen, setSubscriptionAlertOpen] = useState(false)
 
+  // Stamp upload states
+  const [showStampUploadDialog, setShowStampUploadDialog] = useState(false)
+  const [stampFile, setStampFile] = useState<File | null>(null)
+  const [stampPreview, setStampPreview] = useState<string | null>(null)
+  const [uploadingStamp, setUploadingStamp] = useState(false)
+
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   useEffect(() => {
@@ -122,6 +131,10 @@ export default function ViewQuotationPage() {
   }, [id])
 
   const handleStampToggle = () => {
+    if (!profile?.stamp_url && !profile?.signature_url) {
+      setShowStampUploadDialog(true)
+      return
+    }
     const newVal = !includeStamp
     setIncludeStamp(newVal)
     localStorage.setItem(`stamp_toggle_q_${id}`, String(newVal))
@@ -164,6 +177,42 @@ export default function ViewQuotationPage() {
       toast.error("Failed to load quotation")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleUploadStamp = async () => {
+    if (!stampFile || !currentOrgId) return
+    setUploadingStamp(true)
+    try {
+      const fileName = `stamp-${currentOrgId}-${Date.now()}.png`
+      const { error: uploadError } = await supabase.storage
+        .from('company-assets')
+        .upload(fileName, stampFile, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(fileName)
+      const publicUrl = urlData.publicUrl
+
+      const { error: updateError } = await supabase
+        .from('company_profile')
+        .update({ stamp_url: publicUrl })
+        .eq('org_id', currentOrgId)
+
+      if (updateError) throw updateError
+
+      setProfile(prev => prev ? { ...prev, stamp_url: publicUrl } : null)
+      setIncludeStamp(true)
+      localStorage.setItem(`stamp_toggle_q_${id}`, 'true')
+      toast.success('Stamp uploaded successfully')
+      setShowStampUploadDialog(false)
+      setStampFile(null)
+      setStampPreview(null)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to upload stamp')
+    } finally {
+      setUploadingStamp(false)
     }
   }
 
@@ -291,11 +340,8 @@ export default function ViewQuotationPage() {
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!quotation) return
 
-    if (stampToggle && (!profile?.stamp_url && !profile?.signature_url)) {
-      toast.error('Please upload your stamp/signature in Settings first')
-      router.push('/settings')
-      return
-    }
+    // If stamp is requested but missing, just proceed without it
+    const shouldIncludeStamp = stampToggle && (!!profile?.stamp_url || !!profile?.signature_url)
 
     setGeneratingPdf(true)
     try {
@@ -348,10 +394,8 @@ export default function ViewQuotationPage() {
 
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
-      if (stampToggle && profile?.stamp_url) {
-        const stampPublicUrl = profile.stamp_url.startsWith('http')
-          ? profile.stamp_url
-          : supabase.storage.from('company-assets').getPublicUrl(profile.stamp_url).data.publicUrl
+      if (shouldIncludeStamp && profile?.stamp_url) {
+        const stampPublicUrl = profile.stamp_url
 
         const MAX_STAMP_ATTEMPTS = 3
         for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
@@ -542,12 +586,10 @@ export default function ViewQuotationPage() {
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
 
-        // Subtotal
         doc.text('Subtotal:', 160, y, { align: 'right' })
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
         y += 4
 
-        // Discount (if any)
         if (discountAmount > 0) {
           const discountLabel = discountType === "percentage"
             ? `${discountValue}%`
@@ -559,7 +601,6 @@ export default function ViewQuotationPage() {
           y += 4
         }
 
-        // SGST and CGST (separate lines)
         if (quotation.include_gst) {
           doc.text('SGST (9%):', 160, y, { align: 'right' })
           doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
@@ -647,7 +688,7 @@ export default function ViewQuotationPage() {
 
         let contentBottom = y + 12
 
-        if (stampToggle && stampBase64) {
+        if (shouldIncludeStamp && stampBase64) {
           let stampY = y + 18
           const stampW = 30
           const stampH = 30
@@ -747,22 +788,21 @@ export default function ViewQuotationPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {profile?.stamp_url || profile?.signature_url ? (
-              <Button
-                onClick={handleStampToggle}
-                disabled={generatingPdf}
-                variant="outline"
-                size="sm"
-                className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
-              >
-                {includeStamp ? (
-                  <CheckCircle2 className="mr-1.5 size-4" />
-                ) : (
-                  <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
-                )}
-                Stamp: {includeStamp ? 'ON' : 'OFF'}
-              </Button>
-            ) : null}
+            <Button
+              onClick={handleStampToggle}
+              disabled={generatingPdf}
+              variant="outline"
+              size="sm"
+              className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
+            >
+              {includeStamp ? (
+                <CheckCircle2 className="mr-1.5 size-4" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
+              )}
+              Stamp: {includeStamp ? 'ON' : 'OFF'}
+            </Button>
+
             <Button
               onClick={() => handleDownloadPdf(includeStamp)}
               disabled={generatingPdf}
@@ -1112,6 +1152,81 @@ export default function ViewQuotationPage() {
           <DialogFooter>
             <Button onClick={() => setSubscriptionAlertOpen(false)}>
               OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stamp Upload Dialog */}
+      <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Stamp / Signature</DialogTitle>
+            <DialogDescription>
+              You haven't added a stamp or signature yet. Upload one now to enable it on your quotation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+              {(stampPreview || profile?.stamp_url) ? (
+                <div className="relative">
+                  <img 
+                    src={stampPreview || profile?.stamp_url || ''} 
+                    alt="Stamp preview" 
+                    className="max-h-32 object-contain"
+                    onError={() => toast.error("Failed to load image. Check bucket permissions.")}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                    onClick={() => { setStampFile(null); setStampPreview(null); }}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ) : (
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                  <Upload className="size-8 text-muted-foreground" />
+                  <span className="text-sm font-medium">Click to upload stamp</span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <input
+                    id="stamp-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.error("File size must be less than 2MB")
+                        return
+                      }
+                      setStampFile(file)
+                      const reader = new FileReader()
+                      reader.onload = (ev) => setStampPreview(ev.target?.result as string)
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUploadStamp}
+              disabled={!stampFile || uploadingStamp}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {uploadingStamp ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 size-4" />
+              )}
+              Save Stamp
             </Button>
           </DialogFooter>
         </DialogContent>
