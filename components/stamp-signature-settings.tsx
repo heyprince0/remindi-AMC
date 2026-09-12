@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 import { supabase } from "@/lib/supabase"
-import { Save, Upload, Loader2, X } from "lucide-react"
+import { Save, Upload, Loader2, X, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
 const MAX_FILE_SIZE_MB = 2
@@ -41,15 +41,15 @@ export function StampSignatureSettings() {
   const { user, orgId } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
-  const [stampStoragePath, setStampStoragePath] = useState<string | null>(null)
-  const [displayUrl, setDisplayUrl] = useState<string | null>(null)
+  const [stampUrl, setStampUrl] = useState<string | null>(null)
   const [newStampFile, setNewStampFile] = useState<File | null>(null)
   const [localPreview, setLocalPreview] = useState<string | null>(null)
 
-  const stampInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load existing stamp path from DB using org_id
+  // Load existing stamp URL from DB using org_id
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -64,13 +64,15 @@ export function StampSignatureSettings() {
         if (error && error.code !== 'PGRST116') throw error
 
         if (data?.stamp_url) {
-          setStampStoragePath(data.stamp_url)
-
-          const { data: publicData } = supabase.storage
-            .from('company-assets')
-            .getPublicUrl(data.stamp_url)
-
-          setDisplayUrl(`${publicData.publicUrl}?t=${Date.now()}`)
+          // If it's a path (old format), construct the public URL
+          if (!data.stamp_url.startsWith('http')) {
+            const { data: publicData } = supabase.storage
+              .from('company-assets')
+              .getPublicUrl(data.stamp_url)
+            setStampUrl(publicData.publicUrl)
+          } else {
+            setStampUrl(data.stamp_url)
+          }
         }
       } catch (error) {
         console.error('Error loading stamp:', error)
@@ -90,13 +92,13 @@ export function StampSignatureSettings() {
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please upload PNG, JPG, or WEBP only')
-      if (stampInputRef.current) stampInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
       toast.error(`File size must be less than ${MAX_FILE_SIZE_MB}MB`)
-      if (stampInputRef.current) stampInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
@@ -105,11 +107,12 @@ export function StampSignatureSettings() {
       toast.error(
         `Image too large: ${width}×${height}px. Maximum allowed is ${MAX_WIDTH_PX}×${MAX_HEIGHT_PX}px`
       )
-      if (stampInputRef.current) stampInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     setNewStampFile(file)
+    setImageError(false)
     const reader = new FileReader()
     reader.onload = (event) => {
       setLocalPreview(event.target?.result as string)
@@ -129,13 +132,8 @@ export function StampSignatureSettings() {
       const extension = newStampFile.name.split('.').pop() || 'png'
       const filePath = STAMP_FILE_PATH(orgId, extension)
 
-      console.log('[Upload] Starting upload to bucket: company-assets')
-      console.log('[Upload] Path:', filePath)
-      console.log('[Upload] File type:', newStampFile.type)
-      console.log('[Upload] File size:', newStampFile.size)
-
       // Attempt upload
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('company-assets')
         .upload(filePath, newStampFile, {
           upsert: true,
@@ -144,7 +142,6 @@ export function StampSignatureSettings() {
 
       if (uploadError) {
         console.error('[Upload] Error:', uploadError)
-        // Show a detailed error message
         let msg = uploadError.message
         if (uploadError.statusCode === 400) {
           msg = 'Bad request – check bucket name, file path, or file format.'
@@ -157,14 +154,19 @@ export function StampSignatureSettings() {
         return
       }
 
-      console.log('[Upload] Success, file uploaded:', data)
+      // Get the FULL public URL
+      const { data: publicData } = supabase.storage
+        .from('company-assets')
+        .getPublicUrl(filePath)
 
-      // Update DB
+      const publicUrl = publicData.publicUrl
+
+      // Update DB with the full URL (safer for cross-component usage)
       const { error: dbError } = await supabase
         .from('company_profile')
         .upsert({
           org_id: orgId,
-          stamp_url: filePath,
+          stamp_url: publicUrl,
         }, {
           onConflict: 'org_id'
         })
@@ -175,16 +177,12 @@ export function StampSignatureSettings() {
         return
       }
 
-      const { data: publicData } = supabase.storage
-        .from('company-assets')
-        .getPublicUrl(filePath)
-
-      const freshUrl = `${publicData.publicUrl}?t=${Date.now()}`
-      setStampStoragePath(filePath)
-      setDisplayUrl(freshUrl)
+      // Add cache buster to force UI refresh
+      const freshUrl = `${publicUrl}?t=${Date.now()}`
+      setStampUrl(freshUrl)
       setNewStampFile(null)
       setLocalPreview(null)
-      if (stampInputRef.current) stampInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
 
       toast.success('Stamp saved successfully')
     } catch (error) {
@@ -198,7 +196,7 @@ export function StampSignatureSettings() {
   const handleCancelSelect = () => {
     setNewStampFile(null)
     setLocalPreview(null)
-    if (stampInputRef.current) stampInputRef.current.value = ''
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleRemoveStamp = async () => {
@@ -211,11 +209,10 @@ export function StampSignatureSettings() {
 
       if (error) throw error
 
-      setStampStoragePath(null)
-      setDisplayUrl(null)
+      setStampUrl(null)
       setNewStampFile(null)
       setLocalPreview(null)
-      if (stampInputRef.current) stampInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
       toast.success('Stamp removed')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to remove stamp')
@@ -235,7 +232,7 @@ export function StampSignatureSettings() {
     )
   }
 
-  const imageToShow = localPreview ?? displayUrl
+  const imageToShow = localPreview ?? stampUrl
 
   return (
     <Card>
@@ -250,33 +247,41 @@ export function StampSignatureSettings() {
         <div className="max-w-sm space-y-3">
           <Label>Company Stamp</Label>
 
-          {!imageToShow && (
-            <label htmlFor="stamp-upload" className="cursor-pointer block">
-              <input
-                ref={stampInputRef}
-                id="stamp-upload"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                <Upload className="mx-auto size-8 mb-2 text-muted-foreground" />
-                <p className="text-sm font-medium text-foreground">Click to upload stamp</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PNG, JPG, or WEBP · max {MAX_FILE_SIZE_MB}MB · max {MAX_WIDTH_PX}×{MAX_HEIGHT_PX}px
-                </p>
-              </div>
-            </label>
-          )}
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
 
-          {imageToShow && (
-            <div className="flex items-center justify-center w-full h-40 rounded-lg border border-border overflow-hidden bg-secondary">
-              <img
-                src={imageToShow}
-                alt="Company stamp"
-                className="max-w-full max-h-full object-contain p-2"
-              />
+          {!imageToShow ? (
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-border rounded-lg p-8 text-center bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer"
+            >
+              <Upload className="mx-auto size-8 mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Click to upload stamp</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                PNG, JPG, or WEBP · max {MAX_FILE_SIZE_MB}MB · max {MAX_WIDTH_PX}×{MAX_HEIGHT_PX}px
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full h-40 rounded-lg border border-border overflow-hidden bg-secondary relative">
+              {imageError ? (
+                <div className="flex flex-col items-center text-muted-foreground p-4 text-center">
+                  <AlertCircle className="size-8 mb-2 text-red-500" />
+                  <p className="text-sm font-medium text-red-500">Image failed to load</p>
+                  <p className="text-xs mt-1">Check if your 'company-assets' bucket is set to <b>Public</b> in Supabase.</p>
+                </div>
+              ) : (
+                <img
+                  src={imageToShow}
+                  alt="Company stamp"
+                  className="max-w-full max-h-full object-contain p-2"
+                  onError={() => setImageError(true)}
+                />
+              )}
             </div>
           )}
 
@@ -313,27 +318,18 @@ export function StampSignatureSettings() {
             </div>
           )}
 
-          {stampStoragePath && !newStampFile && (
+          {stampUrl && !newStampFile && (
             <div className="flex gap-2">
-              <label htmlFor="stamp-upload-change" className="flex-1 cursor-pointer">
-                <input
-                  ref={stampInputRef}
-                  id="stamp-upload-change"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full pointer-events-none"
-                >
-                  <Upload className="mr-2 size-4" />
-                  Change Stamp
-                </Button>
-              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mr-2 size-4" />
+                Change Stamp
+              </Button>
               <Button
                 type="button"
                 variant="outline"
