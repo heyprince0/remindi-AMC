@@ -143,18 +143,11 @@ export default function ViewInvoicePage() {
     if (saved === 'true') setIncludeStamp(true)
   }, [id])
 
-  // =============================================
-  // THIS IS THE LOGIC THAT HANDLES THE DIALOG VS TOGGLE
-  // =============================================
   const handleStampToggle = () => {
-    // 1. Check if the user DOES NOT have a stamp or signature uploaded
     if (!profile?.stamp_url && !profile?.signature_url) {
-      // If missing, show the upload dialog
       setShowStampUploadDialog(true)
       return
     }
-
-    // 2. If they DO have a stamp/signature, just toggle ON/OFF normally
     const newVal = !includeStamp
     setIncludeStamp(newVal)
     localStorage.setItem(`stamp_toggle_inv_${id}`, String(newVal))
@@ -225,7 +218,6 @@ export default function ViewInvoicePage() {
 
       if (updateError) throw updateError
 
-      // Update local profile state so the toggle works next time
       setProfile(prev => prev ? { ...prev, stamp_url: publicUrl } : null)
       setIncludeStamp(true)
       localStorage.setItem(`stamp_toggle_inv_${id}`, 'true')
@@ -372,16 +364,12 @@ export default function ViewInvoicePage() {
   }
 
   // =============================================
-  // PDF GENERATION – discount label fixed
+  // PDF GENERATION
   // =============================================
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!invoice) return
 
-    if (stampToggle && (!profile?.stamp_url && !profile?.signature_url)) {
-      toast.error('Please upload your stamp/signature in Settings first')
-      router.push('/settings')
-      return
-    }
+    const shouldIncludeStamp = stampToggle && (!!profile?.stamp_url || !!profile?.signature_url)
 
     setGeneratingPdf(true)
     try {
@@ -427,10 +415,8 @@ export default function ViewInvoicePage() {
 
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
-      if (stampToggle && profile?.stamp_url) {
-        const stampPublicUrl = profile.stamp_url.startsWith('http')
-          ? profile.stamp_url
-          : supabase.storage.from('company-assets').getPublicUrl(profile.stamp_url).data.publicUrl
+      if (shouldIncludeStamp && profile?.stamp_url) {
+        const stampPublicUrl = profile.stamp_url
 
         const MAX_STAMP_ATTEMPTS = 3
         for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
@@ -669,35 +655,38 @@ export default function ViewInvoicePage() {
         doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
         y += 20
 
-        // PAYMENT DETAILS
-        y += 10
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text("Payment Details:", margin, y)
-        y += 5
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(40, 40, 40)
+        // ---- PAYMENT DETAILS ----
+        // Only show if at least one payment detail exists
+        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || invoice.payment_terms) {
+          y += 10
+          doc.setFontSize(9)
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
+          doc.text("Payment Details:", margin, y)
+          y += 5
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(40, 40, 40)
 
-        if (profile?.bank_name) {
-          doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
-          y += 4
-        }
-        if (profile?.account_no) {
-          doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
-          y += 4
-        }
-        if (profile?.ifsc_code) {
-          doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
-          y += 4
-        }
-        if (profile?.upi_id) {
-          doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
-          y += 4
-        }
-        if (invoice.payment_terms) {
-          doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
-          y += 4
+          if (profile?.bank_name) {
+            doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
+            y += 4
+          }
+          if (profile?.account_no) {
+            doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
+            y += 4
+          }
+          if (profile?.ifsc_code) {
+            doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
+            y += 4
+          }
+          if (profile?.upi_id) {
+            doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
+            y += 4
+          }
+          if (invoice.payment_terms) {
+            doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y)
+            y += 4
+          }
         }
 
         // TAX INFORMATION
@@ -753,7 +742,7 @@ export default function ViewInvoicePage() {
         let contentBottom = y + 12
 
         // STAMP
-        if (stampToggle && stampBase64) {
+        if (shouldIncludeStamp && stampBase64) {
           let stampY = y + 18
           const stampW = 30
           const stampH = 30
@@ -857,7 +846,6 @@ export default function ViewInvoicePage() {
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {getPaymentStatusBadge(invoice.payment_status)}
 
-            {/* Stamp Toggle Button */}
             <Button
               onClick={handleStampToggle}
               disabled={generatingPdf}
