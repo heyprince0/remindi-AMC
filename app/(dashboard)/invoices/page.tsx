@@ -44,7 +44,7 @@ import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Trash2, Settings, MoreHorizontal, FileText } from "lucide-react"
+import { Plus, Search, Trash2, Settings, MoreHorizontal, FileText, ArrowUpRight } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -336,7 +336,7 @@ export default function InvoicesPage() {
                       <TableHead>Valid Till</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Payment Status</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -353,10 +353,25 @@ export default function InvoicesPage() {
                         <TableCell>{formatCurrency(invoice.grand_total)}</TableCell>
                         <TableCell>{getPaymentStatusBadge(invoice.payment_status)}</TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            {/* NEW ARROW BUTTON */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/invoices/${invoice.id}`)
+                              }}
+                              title="View details"
+                            >
+                              <ArrowUpRight className="size-4" />
+                              <span className="sr-only">View Details</span>
+                            </Button>
+
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="size-8" onClick={(e) => e.stopPropagation()}>
                                   <MoreHorizontal className="size-4" />
                                   <span className="sr-only">More actions</span>
                                 </Button>
