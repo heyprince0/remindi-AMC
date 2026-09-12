@@ -98,7 +98,10 @@ export function CompanyProfileSettings() {
           setAccountNo(data.account_no || "")
           setIfscCode(data.ifsc_code || "")
           setUpiId(data.upi_id || "")
-          setPaymentTerms(data.payment_terms || "100% advance along with work order")
+          
+          // ✅ FIXED: Use ?? instead of || so empty strings are preserved
+          setPaymentTerms(data.payment_terms ?? "100% advance along with work order")
+          
           setExistingLogoUrl(data.logo_url ?? null)
           setNewImageFile(null)
           setPreviewUrl(null)
