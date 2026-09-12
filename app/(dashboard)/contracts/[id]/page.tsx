@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, Eye } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 
 interface ContractDisplay extends Contract {
@@ -222,9 +222,9 @@ export default function ContractDetailPage() {
                     <p className="font-medium text-foreground">{contract.customerName}</p>
                     {customer && (
                       <Link href={`/customers/${customer.id}`}>
-                        <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs">
-                          <Eye className="size-3" />
-                          View
+                        <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-foreground">
+                          <ArrowUpRight className="size-4" />
+                          <span className="sr-only">View Customer</span>
                         </Button>
                       </Link>
                     )}
