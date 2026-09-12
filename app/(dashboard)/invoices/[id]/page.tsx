@@ -17,6 +17,8 @@ import {
   ChevronDown,
   Loader2,
   CheckCircle2,
+  Upload,
+  Save,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -34,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -66,7 +69,7 @@ function getPaymentStatusBadge(status: string) {
 }
 
 function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-fd]{2})$/i.exec(hex)
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : [24, 95, 165]
@@ -110,6 +113,12 @@ export default function ViewInvoicePage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [subscriptionAlertOpen, setSubscriptionAlertOpen] = useState(false)
 
+  // Stamp upload states
+  const [showStampUploadDialog, setShowStampUploadDialog] = useState(false)
+  const [stampFile, setStampFile] = useState<File | null>(null)
+  const [stampPreview, setStampPreview] = useState<string | null>(null)
+  const [uploadingStamp, setUploadingStamp] = useState(false)
+
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
   useEffect(() => {
@@ -134,7 +143,18 @@ export default function ViewInvoicePage() {
     if (saved === 'true') setIncludeStamp(true)
   }, [id])
 
+  // =============================================
+  // THIS IS THE LOGIC THAT HANDLES THE DIALOG VS TOGGLE
+  // =============================================
   const handleStampToggle = () => {
+    // 1. Check if the user DOES NOT have a stamp or signature uploaded
+    if (!profile?.stamp_url && !profile?.signature_url) {
+      // If missing, show the upload dialog
+      setShowStampUploadDialog(true)
+      return
+    }
+
+    // 2. If they DO have a stamp/signature, just toggle ON/OFF normally
     const newVal = !includeStamp
     setIncludeStamp(newVal)
     localStorage.setItem(`stamp_toggle_inv_${id}`, String(newVal))
@@ -181,6 +201,43 @@ export default function ViewInvoicePage() {
       toast.error("Failed to load invoice")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleUploadStamp = async () => {
+    if (!stampFile || !currentOrgId) return
+    setUploadingStamp(true)
+    try {
+      const fileName = `stamp-${currentOrgId}-${Date.now()}.png`
+      const { error: uploadError } = await supabase.storage
+        .from('company-assets')
+        .upload(fileName, stampFile, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(fileName)
+      const publicUrl = urlData.publicUrl
+
+      const { error: updateError } = await supabase
+        .from('company_profile')
+        .update({ stamp_url: publicUrl })
+        .eq('org_id', currentOrgId)
+
+      if (updateError) throw updateError
+
+      // Update local profile state so the toggle works next time
+      setProfile(prev => prev ? { ...prev, stamp_url: publicUrl } : null)
+      setIncludeStamp(true)
+      localStorage.setItem(`stamp_toggle_inv_${id}`, 'true')
+      toast.success('Stamp uploaded successfully')
+      setShowStampUploadDialog(false)
+      setStampFile(null)
+      setStampPreview(null)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to upload stamp')
+    } finally {
+      setUploadingStamp(false)
     }
   }
 
@@ -567,11 +624,8 @@ export default function ViewInvoicePage() {
         doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
         y += 4
 
-        // Discount line – uses "Rs." like the other totals lines above/below it.
-        // (The ₹ glyph isn't in jsPDF's standard helvetica font encoding, which
-        // was breaking the whole line's letter-spacing in the rendered PDF.)
         if (discountAmount > 0) {
-          const discountVal = Number(discountValue).toString() // ensures integer without decimals
+          const discountVal = Number(discountValue).toString()
           const discountLabel = discountType === "percentage" ? `${discountVal}%` : `Rs. ${discountVal}`
           doc.text(`Discount (${discountLabel}):`, 160, y, { align: 'right' })
           doc.setTextColor(200, 0, 0)
@@ -803,22 +857,22 @@ export default function ViewInvoicePage() {
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {getPaymentStatusBadge(invoice.payment_status)}
 
-            {profile?.stamp_url || profile?.signature_url ? (
-              <Button
-                onClick={handleStampToggle}
-                disabled={generatingPdf}
-                variant="outline"
-                size="sm"
-                className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
-              >
-                {includeStamp ? (
-                  <CheckCircle2 className="mr-1.5 size-4" />
-                ) : (
-                  <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
-                )}
-                Stamp: {includeStamp ? 'ON' : 'OFF'}
-              </Button>
-            ) : null}
+            {/* Stamp Toggle Button */}
+            <Button
+              onClick={handleStampToggle}
+              disabled={generatingPdf}
+              variant="outline"
+              size="sm"
+              className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
+            >
+              {includeStamp ? (
+                <CheckCircle2 className="mr-1.5 size-4" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
+              )}
+              Stamp: {includeStamp ? 'ON' : 'OFF'}
+            </Button>
+
             <Button
               onClick={() => handleDownloadPdf(includeStamp)}
               disabled={generatingPdf}
@@ -1033,7 +1087,7 @@ export default function ViewInvoicePage() {
           </CardContent>
         </Card>
 
-        {/* TOTALS – discount label fixed in UI too */}
+        {/* TOTALS */}
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col items-end gap-3 max-w-xs ml-auto">
@@ -1243,6 +1297,7 @@ export default function ViewInvoicePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
       {/* Subscription Alert Modal */}
       <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
         <DialogContent>
@@ -1255,6 +1310,76 @@ export default function ViewInvoicePage() {
           <DialogFooter>
             <Button onClick={() => setSubscriptionAlertOpen(false)}>
               OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stamp Upload Dialog - Only shown if user doesn't have a stamp yet */}
+      <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Stamp / Signature</DialogTitle>
+            <DialogDescription>
+              You haven't added a stamp or signature yet. Upload one now to enable it on your invoice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+              {stampPreview ? (
+                <div className="relative">
+                  <img src={stampPreview} alt="Stamp preview" className="max-h-32 object-contain" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                    onClick={() => { setStampFile(null); setStampPreview(null); }}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ) : (
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                  <Upload className="size-8 text-muted-foreground" />
+                  <span className="text-sm font-medium">Click to upload stamp</span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <input
+                    id="stamp-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.error("File size must be less than 2MB")
+                        return
+                      }
+                      setStampFile(file)
+                      const reader = new FileReader()
+                      reader.onload = (ev) => setStampPreview(ev.target?.result as string)
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUploadStamp}
+              disabled={!stampFile || uploadingStamp}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {uploadingStamp ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 size-4" />
+              )}
+              Save Stamp
             </Button>
           </DialogFooter>
         </DialogContent>
