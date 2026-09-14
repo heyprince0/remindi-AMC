@@ -491,29 +491,118 @@
     }
     .trusted-badge .check { color: var(--blue); font-weight: 700; }
 
-    /* ─── PROBLEM ─────────────────────────────────────── */
-    .problem { background: white; }
-    .problem-cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-      margin-top: 48px;
+    /* ─── TRUSTED CLIENTS ────────────────────────────── */
+    .clients { background: white; }
+    .clients-header { margin-bottom: 56px; }
+    .clients-logos {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      gap: 28px;
+      flex-wrap: wrap;
+      margin-bottom: 52px;
     }
-    .problem-card {
+    .client-logo-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
       background: var(--gray-50);
-      border: 1px solid var(--gray-200);
-      border-radius: var(--radius);
-      padding: 32px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 18px;
+      padding: 36px 28px 28px;
+      width: calc(25% - 24px);
+      min-width: 190px;
+      max-width: 240px;
+      flex: 1;
+      transition: transform .25s, box-shadow .25s, border-color .25s;
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+    }
+    .client-logo-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(41,171,226,.04) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity .25s;
+    }
+    .client-logo-card:hover::before { opacity: 1; }
+    .client-logo-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 16px 48px rgba(41,171,226,.18);
+      border-color: var(--blue);
+    }
+    .client-logo-wrap {
+      width: 100px;
+      height: 100px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 1px solid var(--gray-100);
+    }
+    .client-logo-wrap img {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      object-position: center;
+      transition: transform .25s;
+      display: block;
+    }
+    .client-logo-card:hover .client-logo-wrap img { transform: scale(1.08); }
+    .client-logo-name {
+      font-size: .88rem;
+      font-weight: 700;
+      color: var(--gray-800);
       text-align: center;
-      transition: transform .2s, box-shadow .2s;
+      line-height: 1.4;
     }
-    .problem-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-md);
+    .client-logo-tag {
+      font-size: .74rem;
+      font-weight: 500;
+      color: var(--blue-dark);
+      background: rgba(41,171,226,.1);
+      padding: 4px 12px;
+      border-radius: 999px;
     }
-    .problem-card .emoji { font-size: 2.5rem; margin-bottom: 16px; display: block; }
-    .problem-card h3 { font-size: 1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
-    .problem-card p { font-size: .88rem; color: var(--gray-500); line-height: 1.6; }
+    .clients-trust-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      padding: 20px 36px;
+      background: var(--blue-bg);
+      border: 1px solid rgba(41,171,226,.2);
+      border-radius: 14px;
+      flex-wrap: wrap;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .86rem;
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+    .trust-item-icon { color: var(--blue); font-size: 1rem; }
+    .trust-divider { width: 1px; height: 22px; background: rgba(41,171,226,.25); }
+
+    @media (max-width: 768px) {
+      .clients-logos { gap: 16px; }
+      .client-logo-card { width: calc(50% - 12px); min-width: 140px; max-width: calc(50% - 12px); padding: 24px 16px 20px; }
+      .client-logo-wrap { width: 80px; height: 80px; }
+      .client-logo-wrap img { width: 68px; height: 68px; }
+      .clients-trust-bar { gap: 16px; padding: 16px 20px; }
+      .trust-divider { display: none; }
+    }
 
     /* ─── FEATURES ────────────────────────────────────── */
     .features { background: var(--gray-50); }
@@ -1212,7 +1301,6 @@
       .hero h1 { font-size: 2rem; }
       .hero-stats { gap: 20px; flex-wrap: wrap; }
 
-      .problem-cards { grid-template-columns: 1fr; }
       .features-grid { grid-template-columns: 1fr; }
       .steps { grid-template-columns: 1fr; }
       .steps::before { display: none; }
@@ -1379,26 +1467,63 @@
   </div>
 </div>
 
-<!-- PROBLEM -->
-<section class="problem" id="problem">
+<!-- TRUSTED CLIENTS -->
+<section class="clients" id="clients">
   <div class="container text-center">
-    <div class="section-badge reveal">The Problem</div>
-    <h2 class="section-title reveal">Still Managing AMC on WhatsApp<br>and Notebooks?</h2>
-    <div class="problem-cards">
-      <div class="problem-card reveal reveal-delay-1">
-        <span class="emoji">😫</span>
-        <h3>Forgetting service dates costs you clients</h3>
-        <p>Missing even one service visit can damage your reputation and lose you a contract worth thousands of rupees.</p>
+    <div class="clients-header">
+      <div class="section-badge reveal">Trusted By</div>
+      <h2 class="section-title reveal">Businesses Already Running<br>on <span style="color:var(--blue)">remindi</span></h2>
+      <p class="section-subtitle reveal">Real contractors, real businesses — managing their AMC operations with confidence every day.</p>
+    </div>
+
+    <div class="clients-logos">
+      <div class="client-logo-card reveal reveal-delay-1">
+        <div class="client-logo-wrap">
+          <img src="/aaradhya.jpg" alt="Aaradhya Enterprises logo" />
+        </div>
+        <span class="client-logo-name">Aaradhya Enterprises</span>
+        <span class="client-logo-tag">Service Contractor</span>
       </div>
-      <div class="problem-card reveal reveal-delay-2">
-        <span class="emoji">⏰</span>
-        <h3>Manual reminders waste hours every day</h3>
-        <p>Scrolling through WhatsApp chats and notebooks to figure out who needs service today is exhausting and error-prone.</p>
+
+      <div class="client-logo-card reveal reveal-delay-2">
+        <div class="client-logo-wrap">
+          <img src="/gravity.png" alt="Gravity Services logo" />
+        </div>
+        <span class="client-logo-name">Gravity Services</span>
+        <span class="client-logo-tag">Service Contractor</span>
       </div>
-      <div class="problem-card reveal reveal-delay-3">
-        <span class="emoji">📋</span>
-        <h3>No record of who visited which building</h3>
-        <p>Without a proper log, disputes with clients become impossible to resolve and audits become nightmares.</p>
+
+      <div class="client-logo-card reveal reveal-delay-3">
+        <div class="client-logo-wrap">
+          <img src="/manas.png" alt="Manas Aqua System logo" />
+        </div>
+        <span class="client-logo-name">Manas Aqua System</span>
+        <span class="client-logo-tag">Aqua & RO Services</span>
+      </div>
+
+      <div class="client-logo-card reveal reveal-delay-1">
+        <div class="client-logo-wrap">
+          <img src="/owns.png" alt="Owns Lift PVT.LTD logo" />
+        </div>
+        <span class="client-logo-name">Owns Lift PVT.LTD</span>
+        <span class="client-logo-tag">Lift & Elevator AMC</span>
+      </div>
+    </div>
+
+    <div class="clients-trust-bar reveal">
+      <div class="trust-item">
+        <span class="trust-item-icon">🏢</span>
+        Real businesses, real results
+      </div>
+      <div class="trust-divider"></div>
+      <div class="trust-item">
+        <span class="trust-item-icon">🔒</span>
+        Trusted across industries
+      </div>
+      <div class="trust-divider"></div>
+      <div class="trust-item">
+        <span class="trust-item-icon">🇮🇳</span>
+        Built & loved in India
       </div>
     </div>
   </div>
