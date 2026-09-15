@@ -39,29 +39,14 @@ export function MobileBottomNav() {
     <nav
       aria-label="Mobile navigation"
       className={cn(
-        // positioning & visibility
         "fixed inset-x-0 bottom-0 z-50 md:hidden",
-        // frosted glass background
-        "bg-background/80 backdrop-blur-xl",
-        // top border
-        "border-t border-border/60",
-        // iOS home indicator space
+        "bg-background/90 backdrop-blur-xl",
+        "border-t border-border/50",
         "pb-[env(safe-area-inset-bottom)]",
-        // subtle top shadow
-        "shadow-[0_-1px_20px_rgba(0,0,0,0.06)]",
+        "shadow-[0_-1px_24px_rgba(0,0,0,0.07)]",
       )}
     >
-      {/* Scrollable row — hides scrollbar, allows 6 items to breathe */}
-      <div
-        className={cn(
-          "flex overflow-x-auto",
-          // hide scrollbar across browsers
-          "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
-          // snap behavior for smooth swipe
-          "snap-x snap-mandatory",
-          "px-1",
-        )}
-      >
+      <div className="flex h-16 w-full items-center">
         {navigationItems.map(({ href, label, icon: Icon }) => {
           const isActive = isActiveRoute(pathname, href)
 
@@ -71,48 +56,42 @@ export function MobileBottomNav() {
               href={href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                // sizing — min-w keeps items from squishing, flex-shrink-0 prevents compression
-                "flex-shrink-0 min-w-[72px] snap-start",
-                // layout
-                "flex flex-col items-center justify-center gap-1",
-                // height & padding
-                "py-2 px-1 min-h-[60px]",
-                // tap highlight off on mobile
-                "tap-highlight-transparent",
-                // focus ring
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded-xl",
-                // transition
-                "transition-all duration-200 ease-out",
-                // active text
-                isActive ? "text-primary" : "text-muted-foreground",
+                "flex flex-1 flex-col items-center justify-center h-full",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "transition-colors duration-150",
               )}
             >
-              {/* Icon wrapped in pill — pill only visible when active */}
+              {/* Pill wraps icon — expands softly on active */}
               <span
                 className={cn(
-                  "flex items-center justify-center rounded-2xl transition-all duration-200 ease-out",
+                  "flex flex-col items-center justify-center gap-1 rounded-2xl transition-all duration-200 ease-out",
                   isActive
-                    ? "bg-primary/10 px-4 py-1.5 scale-100"
-                    : "bg-transparent px-4 py-1.5 scale-95",
+                    ? "bg-primary/10 px-3 py-1.5"
+                    : "px-3 py-1.5",
                 )}
               >
                 <Icon
                   aria-hidden="true"
-                  className="size-[18px] shrink-0"
-                  strokeWidth={isActive ? 2.25 : 1.75}
+                  className={cn(
+                    "shrink-0 transition-all duration-200",
+                    isActive
+                      ? "size-[19px] text-primary"
+                      : "size-[19px] text-muted-foreground",
+                  )}
+                  strokeWidth={isActive ? 2.3 : 1.8}
                 />
-              </span>
 
-              {/* Label */}
-              <span
-                className={cn(
-                  "block leading-none transition-all duration-200",
-                  isActive
-                    ? "text-[10.5px] font-semibold tracking-tight"
-                    : "text-[10px] font-medium",
-                )}
-              >
-                {label}
+                {/* Label only renders for active item */}
+                <span
+                  className={cn(
+                    "overflow-hidden transition-all duration-200 ease-out leading-none text-primary font-semibold tracking-tight",
+                    isActive
+                      ? "max-h-4 opacity-100 text-[9.5px]"
+                      : "max-h-0 opacity-0 text-[9.5px]",
+                  )}
+                >
+                  {label}
+                </span>
               </span>
             </Link>
           )
