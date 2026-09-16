@@ -483,6 +483,8 @@ export default function InvoicesPage() {
                     </div>
                     <div className="flex items-center justify-between border-t border-border pt-2">
                       <span className="text-xs text-muted-foreground">Invoice</span>
+                      {/* ✅ NEW: Arrow icon added here */}
+                      <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                     </div>
                   </CardContent>
                 </Card>
