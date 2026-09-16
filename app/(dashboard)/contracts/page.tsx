@@ -908,6 +908,8 @@ export default function ContractsPage() {
                         <div className="text-xs text-muted-foreground truncate">
                           {contract.location || ''}
                         </div>
+                        {/* ✅ NEW: Arrow icon added here */}
+                        <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                       </div>
                     </CardContent>
                   </Card>
