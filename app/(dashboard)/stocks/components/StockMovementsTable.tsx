@@ -124,33 +124,47 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
     return suppliers.find((s) => s.id === id)?.name || "—"
   }
 
+  // Normalize reason for case/whitespace-insensitive comparisons.
+  // Fixes: DB values like "purchase", "PURCHASE", " Purchase " now match "Purchase".
+  const normalizeReason = (reason: string | null | undefined) =>
+    (reason || "").trim().toLowerCase()
+
   const getDisplayReason = (reason: string) => {
-    if (reason === "Sold") return "Sell"
+    const norm = normalizeReason(reason)
+    if (norm === "sold" || norm === "sell") return "Sell"
+    if (norm === "purchase") return "Purchase"
     return reason
   }
 
-  const getMovementTotal = (movement: StockMovement): { amount: number; sign: string; color: string } | null => {
+  const getMovementTotal = (
+    movement: StockMovement
+  ): { amount: number; sign: string; color: string } | null => {
     const item = getItem(movement.item_id)
     if (!item) return null
 
-    const qty = movement.quantity
+    const qty = Number(movement.quantity) || 0
+    const reason = normalizeReason(movement.reason)
+    const purchasePrice = Number(item.purchase_price) || 0
+    const sellingPrice = Number(item.selling_price) || 0
 
     if (movement.movement_type === "in") {
-      if (movement.reason === "Purchase") {
-        const amount = qty * (item.purchase_price || 0)
+      // Buying stock (Purchase) → money leaves the business → "-"
+      if (reason === "purchase") {
+        const amount = qty * purchasePrice
         return { amount, sign: "-", color: "text-red-600" }
-      } else {
-        const amount = qty * (item.purchase_price || 0)
-        return { amount, sign: "+", color: "text-green-600" }
       }
+      // Any other stock-in (return, adjustment, etc.) → value added → "+"
+      const amount = qty * purchasePrice
+      return { amount, sign: "+", color: "text-green-600" }
     } else {
-      if (movement.reason === "Sold") {
-        const amount = qty * (item.selling_price || 0)
+      // Selling stock → money comes in at selling price → "+"
+      if (reason === "sold" || reason === "sell") {
+        const amount = qty * sellingPrice
         return { amount, sign: "+", color: "text-green-600" }
-      } else {
-        const amount = qty * (item.purchase_price || 0)
-        return { amount, sign: "-", color: "text-red-600" }
       }
+      // Any other stock-out → value removed at cost → "-"
+      const amount = qty * purchasePrice
+      return { amount, sign: "-", color: "text-red-600" }
     }
   }
 
@@ -345,7 +359,6 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                         }
                       </div>
                       <div className="min-w-0">
-                        {/* ── FIX: allow long names to wrap ── */}
                         <CardTitle className="text-sm font-semibold leading-tight break-words">
                           {getItemName(movement.item_id)}
                         </CardTitle>
