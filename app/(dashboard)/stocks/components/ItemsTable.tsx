@@ -543,7 +543,7 @@ export default function ItemsTable({
 
       <StockHistoryDialog
         open={historyDialogOpen}
-        onOpenChange={setStockDialogOpen}
+        onOpenChange={setHistoryDialogOpen}   {/* ✅ fixed (was setStockDialogOpen) */}
         item={historyItem}
         orgId={orgId}
       />
