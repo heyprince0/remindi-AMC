@@ -124,47 +124,82 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
     return suppliers.find((s) => s.id === id)?.name || "—"
   }
 
-  // Normalize reason for case/whitespace-insensitive comparisons.
-  // Fixes: DB values like "purchase", "PURCHASE", " Purchase " now match "Purchase".
-  const normalizeReason = (reason: string | null | undefined) =>
-    (reason || "").trim().toLowerCase()
-
   const getDisplayReason = (reason: string) => {
-    const norm = normalizeReason(reason)
-    if (norm === "sold" || norm === "sell") return "Sell"
-    if (norm === "purchase") return "Purchase"
+    if (reason === "Sold") return "Sell"
     return reason
   }
 
-  const getMovementTotal = (
-    movement: StockMovement
-  ): { amount: number; sign: string; color: string } | null => {
+  const getMovementTotal = (movement: StockMovement): { amount: number; sign: string; color: string } | null => {
     const item = getItem(movement.item_id)
     if (!item) return null
 
-    const qty = Number(movement.quantity) || 0
-    const reason = normalizeReason(movement.reason)
-    const purchasePrice = Number(item.purchase_price) || 0
-    const sellingPrice = Number(item.selling_price) || 0
+    const qty = movement.quantity
+    const purchaseCost = qty * (item.purchase_price || 0)
+    const sellingRevenue = qty * (item.selling_price || 0)
 
     if (movement.movement_type === "in") {
-      // Buying stock (Purchase) → money leaves the business → "-"
-      if (reason === "purchase") {
-        const amount = qty * purchasePrice
-        return { amount, sign: "-", color: "text-red-600" }
+      switch (movement.reason) {
+        // ── Money goes OUT — we paid to restock ──
+        case "Purchase":
+          return { amount: purchaseCost, sign: "-", color: "text-red-600" }
+
+        // ── Customer/job returned item — we get selling value back ──
+        case "Return":
+        case "Customer Return":
+        case "Sales Return":
+          return { amount: sellingRevenue, sign: "+", color: "text-green-600" }
+
+        // ── Supplier gave a replacement/credit — recover at purchase price ──
+        case "Supplier Return Received":
+        case "Warranty Return":
+          return { amount: purchaseCost, sign: "+", color: "text-green-600" }
+
+        // ── Internal additions — valued at purchase price, no cash flow ──
+        case "Initial Stock":
+        case "Opening Stock":
+        case "Transfer In":
+        case "Adjustment":
+        case "Found":
+        default:
+          return { amount: purchaseCost, sign: "+", color: "text-green-600" }
       }
-      // Any other stock-in (return, adjustment, etc.) → value added → "+"
-      const amount = qty * purchasePrice
-      return { amount, sign: "+", color: "text-green-600" }
     } else {
-      // Selling stock → money comes in at selling price → "+"
-      if (reason === "sold" || reason === "sell") {
-        const amount = qty * sellingPrice
-        return { amount, sign: "+", color: "text-green-600" }
+      switch (movement.reason) {
+        // ── Money comes IN — we earned selling price ──
+        case "Sold":
+        case "Sale":
+          return { amount: sellingRevenue, sign: "+", color: "text-green-600" }
+
+        // ── Consumed for a job/AMC — cost at purchase price ──
+        case "Used":
+        case "Usage":
+        case "Job Usage":
+        case "AMC Usage":
+        case "Service":
+          return { amount: purchaseCost, sign: "-", color: "text-red-600" }
+
+        // ── Loss events — valued at purchase price ──
+        case "Damaged":
+        case "Damage":
+        case "Waste":
+        case "Expired":
+        case "Lost":
+        case "Theft":
+        case "Defective":
+          return { amount: purchaseCost, sign: "-", color: "text-red-600" }
+
+        // ── Returned to supplier — we get purchase price back ──
+        case "Return to Supplier":
+        case "Supplier Return":
+          return { amount: purchaseCost, sign: "+", color: "text-green-600" }
+
+        // ── Internal removals — valued at purchase price, no cash in ──
+        case "Transfer Out":
+        case "Adjustment":
+        case "Sample":
+        default:
+          return { amount: purchaseCost, sign: "-", color: "text-red-600" }
       }
-      // Any other stock-out → value removed at cost → "-"
-      const amount = qty * purchasePrice
-      return { amount, sign: "-", color: "text-red-600" }
     }
   }
 
@@ -359,6 +394,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
                         }
                       </div>
                       <div className="min-w-0">
+                        {/* ── FIX: allow long names to wrap ── */}
                         <CardTitle className="text-sm font-semibold leading-tight break-words">
                           {getItemName(movement.item_id)}
                         </CardTitle>
