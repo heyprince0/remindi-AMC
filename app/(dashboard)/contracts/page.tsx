@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText, ArrowUpRight } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText, ArrowUpRight, MessageSquare } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +61,7 @@ import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 
 interface ContractDisplay extends Contract {
   customerName: string
+  customerPhone: string | null
   endDate: string | null
 }
 
@@ -172,6 +173,7 @@ export default function ContractsPage() {
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
+  const [senderName, setSenderName] = useState<string>("")
 
   useEffect(() => {
     if (user?.id) {
@@ -195,6 +197,26 @@ export default function ContractsPage() {
     } else {
       setLoading(false)
     }
+  }, [user?.id])
+
+  // Load sender name from profile (company_name preferred, fallback to full_name)
+  useEffect(() => {
+    const loadSenderName = async () => {
+      if (!user?.id) return
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('company_name, full_name')
+          .eq('id', user.id)
+          .single()
+        if (data) {
+          setSenderName(data.company_name || data.full_name || "")
+        }
+      } catch {
+        // silently fail — sender name is optional
+      }
+    }
+    loadSenderName()
   }, [user?.id])
 
   useEffect(() => {
@@ -417,7 +439,7 @@ export default function ContractsPage() {
 
       const { data: customersData } = await supabase
         .from('customers')
-        .select('*')
+        .select('id, name, phone')
         .eq('org_id', currentOrgId)
 
       const displayed = (contractsData as Contract[]).map(contract => {
@@ -428,6 +450,7 @@ export default function ContractsPage() {
         return {
           ...contract,
           customerName: customer?.name || 'Unknown',
+          customerPhone: (customer as any)?.phone || null,
           endDate,
         }
       })
@@ -533,6 +556,38 @@ export default function ContractsPage() {
       console.error("Error exporting PDF:", error)
       toast.error("Failed to export PDF")
     }
+  }
+
+  const handleSendWhatsApp = (contract: ContractDisplay) => {
+    const rawPhone = contract.customerPhone?.trim()
+    if (!rawPhone) {
+      toast.error("No phone number found for this customer")
+      return
+    }
+
+    // Normalize phone: strip spaces/dashes, ensure country code
+    let phone = rawPhone.replace(/[\s\-().]/g, '')
+    if (phone.startsWith('0')) phone = '91' + phone.slice(1)
+    if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
+    phone = phone.replace(/^\+/, '')
+
+    const lastService = formatTableDate(contract.start_date)
+    const nextService = formatTableDate(contract.next_service_date)
+    const contractEnd = contract.endDate ? formatTableDate(contract.endDate) : '—'
+    const from = senderName ? `*${senderName}*` : 'your service provider'
+
+    const message =
+      `Dear ${contract.customerName},\n\n` +
+      `This is a service reminder from ${from} regarding your AMC contract *${contract.contract_name}*.\n\n` +
+      `📋 *Service Details:*\n` +
+      `• Last Service: ${lastService}\n` +
+      `• Next Service Due: ${nextService}\n` +
+      `• Contract Expiry: ${contractEnd}\n\n` +
+      `Please contact us to schedule your next service and renew your contract.\n\n` +
+      `Thank you for choosing ${senderName || 'us'}! 🙏`
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
   }
 
   const isTechnician = userRole === 'technician'
@@ -762,6 +817,16 @@ export default function ContractsPage() {
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation()
+                                        handleSendWhatsApp(contract)
+                                      }}
+                                      className="text-green-600 focus:text-green-600"
+                                    >
+                                      <MessageSquare className="mr-2 size-4" />
+                                      Send WhatsApp
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation()
                                         setContractToDelete(contract)
                                         setDeleteDialogOpen(true)
                                       }}
@@ -859,6 +924,16 @@ export default function ContractsPage() {
                                 >
                                   <Edit className="mr-2 size-4" />
                                   Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSendWhatsApp(contract)
+                                  }}
+                                  className="text-green-600 focus:text-green-600"
+                                >
+                                  <MessageSquare className="mr-2 size-4" />
+                                  Send WhatsApp
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={(e) => {
