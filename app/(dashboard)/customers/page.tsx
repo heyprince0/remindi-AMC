@@ -290,17 +290,33 @@ export default function CustomersPage() {
     window.location.href = '/billing'
   }
 
-  // ── Download sample template ──────────────────────────────────────────────
-  const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["name", "phone", "address"],
-      ["Ramesh Sharma", "9876543210", "123 MG Road, Pune"],
-      ["Priya Mehta", "9123456789", "45 Park Street, Mumbai"],
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Customers")
-    XLSX.writeFile(wb, "customers_template.xlsx")
-    toast.success("Template downloaded")
+  // ── Export customers to Excel ─────────────────────────────────────────────
+  const exportCustomersExcel = () => {
+    if (filteredCustomers.length === 0) {
+      toast.error("No customers to export")
+      return
+    }
+    try {
+      const rows = filteredCustomers.map(c => ({
+        "Name": c.name || "",
+        "Phone": c.phone || "",
+        "Address": c.address || "",
+        "Contracts": c.contractCount,
+      }))
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws["!cols"] = [
+        { wch: 26 }, { wch: 16 }, { wch: 42 }, { wch: 12 },
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Customers")
+
+      XLSX.writeFile(wb, `Customers_${new Date().toISOString().split("T")[0]}.xlsx`)
+      toast.success("Excel exported successfully")
+    } catch (error) {
+      console.error("Error exporting Excel:", error)
+      toast.error("Failed to export Excel")
+    }
   }
 
   // ── Excel import handler ──────────────────────────────────────────────────
@@ -346,8 +362,7 @@ export default function CustomersPage() {
     const missingFields = REQUIRED_FIELDS.filter(f => !foundFields.has(f))
     if (missingFields.length > 0) {
       toast.error(
-        `Missing required column${missingFields.length > 1 ? 's' : ''}: ${missingFields.join(", ")}. ` +
-        `Download the template to see the correct format.`
+        `Missing required column${missingFields.length > 1 ? 's' : ''}: ${missingFields.join(", ")}.`
       )
       return
     }
@@ -466,15 +481,16 @@ export default function CustomersPage() {
 
           {/* ── Action Buttons ── */}
           <div className="flex items-center gap-2">
-            {/* Download template */}
+            {/* Export Excel */}
             <Button
               variant="outline"
               size="sm"
-              onClick={handleDownloadTemplate}
-              title="Download Excel template"
+              onClick={exportCustomersExcel}
+              disabled={filteredCustomers.length === 0}
+              title="Export customers to Excel"
             >
               <Download className="mr-2 size-4" />
-              Template
+              Export Excel
             </Button>
 
             {/* Import Excel */}
