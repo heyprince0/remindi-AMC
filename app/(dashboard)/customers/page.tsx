@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,10 +43,66 @@ import { supabase, type Customer, type Contract } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, MapPin, FileText, Trash2, Check, ChevronsUpDown, ArrowUpRight } from "lucide-react"
+import {
+  Plus,
+  Search,
+  MoreHorizontal,
+  Edit,
+  Phone,
+  MapPin,
+  FileText,
+  Trash2,
+  Check,
+  ChevronsUpDown,
+  ArrowUpRight,
+  Upload,
+  Download,
+  Loader2,
+} from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
 import { useRouter } from "next/navigation"
+import * as XLSX from "xlsx"
+
+// ── Column alias map ─────────────────────────────────────────────────────────
+// Maps flexible user-typed headers → our internal field names
+const COLUMN_ALIASES: Record<string, string> = {
+  // name
+  name: "name",
+  "customer name": "name",
+  customer_name: "name",
+  "full name": "name",
+  fullname: "name",
+  "client name": "name",
+  client: "name",
+  // phone
+  phone: "phone",
+  mobile: "phone",
+  "phone number": "phone",
+  phonenumber: "phone",
+  "mobile number": "phone",
+  contact: "phone",
+  "contact number": "phone",
+  // address
+  address: "address",
+  addr: "address",
+  "full address": "address",
+  location: "address",
+  area: "address",
+  // email (optional)
+  email: "email",
+  "email address": "email",
+  "e-mail": "email",
+  mail: "email",
+}
+
+const REQUIRED_FIELDS = ["name", "phone", "address"]
+
+// ── Normalize a header string ─────────────────────────────────────────────────
+function normalizeHeader(raw: string): string | null {
+  const cleaned = raw.toString().toLowerCase().trim()
+  return COLUMN_ALIASES[cleaned] ?? null
+}
 
 export default function CustomersPage() {
   const router = useRouter()
@@ -63,6 +119,7 @@ export default function CustomersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [customerToDelete, setCustomerToDelete] = useState<(Customer & { contractCount: number }) | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
@@ -71,6 +128,9 @@ export default function CustomersPage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+
+  // Hidden file input ref for Excel import
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -190,7 +250,7 @@ export default function CustomersPage() {
     }
   }
 
-  const checkAndShowLimitModal = () => {
+  const checkAndShowLimitModal = (extraCount = 1) => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({
@@ -200,11 +260,12 @@ export default function CustomersPage() {
       setShowLimitModal(true)
       return true
     }
-    if (maxCustomers > 0 && currentCustomerCount >= maxCustomers) {
+    if (maxCustomers > 0 && currentCustomerCount + extraCount > maxCustomers) {
+      const remaining = Math.max(0, maxCustomers - currentCustomerCount)
       setLimitModalType('resource-limit')
       setLimitModalCustom({
-        title: "You've reached your customer limit",
-        description: `Your current plan allows a maximum of ${maxCustomers} customers. You have already created ${currentCustomerCount}. Upgrade to manage more customers.`,
+        title: "Customer limit reached",
+        description: `Your plan allows ${maxCustomers} customers. You have ${currentCustomerCount} and are trying to add ${extraCount}. Only ${remaining} slot${remaining === 1 ? '' : 's'} remaining. Upgrade to add more.`,
       })
       setShowLimitModal(true)
       return true
@@ -217,7 +278,7 @@ export default function CustomersPage() {
       toast.error("Checking your plan status, please try again in a moment...")
       return
     }
-    if (checkAndShowLimitModal()) return
+    if (checkAndShowLimitModal(1)) return
     setEditingCustomer(null)
     setModalOpen(true)
   }
@@ -235,6 +296,133 @@ export default function CustomersPage() {
     window.location.href = '/billing'
   }
 
+  // ── Download sample template ──────────────────────────────────────────────
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["name", "phone", "address", "email"],
+      ["Ramesh Sharma", "9876543210", "123 MG Road, Pune", "ramesh@example.com"],
+      ["Priya Mehta", "9123456789", "45 Park Street, Mumbai", ""],
+    ])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Customers")
+    XLSX.writeFile(wb, "customers_template.xlsx")
+    toast.success("Template downloaded")
+  }
+
+  // ── Excel import handler ──────────────────────────────────────────────────
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Reset input so same file can be re-selected
+    if (importInputRef.current) importInputRef.current.value = ""
+    if (!file || !currentOrgId) return
+
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again...")
+      return
+    }
+
+    // ── Read the file ───────────────────────────────────────────────────────
+    let rows: Record<string, unknown>[] = []
+    try {
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      rows = XLSX.utils.sheet_to_json(ws, { defval: "" })
+    } catch {
+      toast.error("Could not read file. Make sure it's a valid .xlsx or .xls file.")
+      return
+    }
+
+    if (rows.length === 0) {
+      toast.error("The Excel file is empty.")
+      return
+    }
+
+    // ── Normalize column headers ────────────────────────────────────────────
+    // Build a map: original column key → our internal field name
+    const firstRow = rows[0]
+    const headerMap: Record<string, string> = {}
+    for (const key of Object.keys(firstRow)) {
+      const normalized = normalizeHeader(key)
+      if (normalized) headerMap[key] = normalized
+    }
+
+    // Check all required fields are present
+    const foundFields = new Set(Object.values(headerMap))
+    const missingFields = REQUIRED_FIELDS.filter(f => !foundFields.has(f))
+    if (missingFields.length > 0) {
+      toast.error(
+        `Missing required column${missingFields.length > 1 ? 's' : ''}: ${missingFields.join(", ")}. ` +
+        `Download the template to see the correct format.`
+      )
+      return
+    }
+
+    // ── Parse rows → valid customers ────────────────────────────────────────
+    type ParsedCustomer = { name: string; phone: string; address: string; email?: string }
+    const validRows: ParsedCustomer[] = []
+    let skippedCount = 0
+
+    for (const row of rows) {
+      // Re-map columns to internal field names
+      const mapped: Record<string, string> = {}
+      for (const [origKey, fieldName] of Object.entries(headerMap)) {
+        mapped[fieldName] = String(row[origKey] ?? "").trim()
+      }
+
+      // Check required fields have values
+      const missingValues = REQUIRED_FIELDS.filter(f => !mapped[f])
+      if (missingValues.length > 0) {
+        skippedCount++
+        continue
+      }
+
+      validRows.push({
+        name: mapped.name,
+        phone: mapped.phone,
+        address: mapped.address,
+        email: mapped.email || undefined,
+      })
+    }
+
+    if (validRows.length === 0) {
+      toast.error(`No valid rows found. All ${skippedCount} row${skippedCount > 1 ? 's' : ''} are missing required fields (name, phone, or address).`)
+      return
+    }
+
+    // ── Plan limit check ────────────────────────────────────────────────────
+    if (checkAndShowLimitModal(validRows.length)) return
+
+    // ── Insert to Supabase ──────────────────────────────────────────────────
+    setImporting(true)
+    try {
+      const payload = validRows.map(r => ({
+        org_id: currentOrgId,
+        name: r.name,
+        phone: r.phone,
+        address: r.address,
+        ...(r.email ? { email: r.email } : {}),
+        created_by: user?.id,
+      }))
+
+      const { error } = await supabase.from("customers").insert(payload)
+      if (error) throw error
+
+      await loadCustomers()
+
+      const msg =
+        skippedCount > 0
+          ? `${validRows.length} customer${validRows.length > 1 ? 's' : ''} imported, ${skippedCount} row${skippedCount > 1 ? 's' : ''} skipped (missing required fields)`
+          : `${validRows.length} customer${validRows.length > 1 ? 's' : ''} imported successfully`
+      toast.success(msg)
+    } catch (error: any) {
+      console.error("Import error:", error)
+      toast.error(error?.message ?? "Import failed. Please try again.")
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -244,13 +432,54 @@ export default function CustomersPage() {
             <h1 className="text-2xl font-bold text-foreground">Customers</h1>
             <p className="text-muted-foreground">Manage your customers and their contact information</p>
           </div>
-          <Button onClick={handleAddClick} disabled={limitsLoading}>
-            <Plus className="mr-2 size-4" />
-            Add Customer
-          </Button>
+
+          {/* ── Action Buttons ── */}
+          <div className="flex items-center gap-2">
+            {/* Download template */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+              title="Download Excel template"
+            >
+              <Download className="mr-2 size-4" />
+              Template
+            </Button>
+
+            {/* Import Excel */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing || limitsLoading}
+              title="Import customers from Excel"
+            >
+              {importing ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 size-4" />
+              )}
+              {importing ? "Importing..." : "Import Excel"}
+            </Button>
+
+            {/* Hidden file input */}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportExcel}
+            />
+
+            {/* Add single customer */}
+            <Button onClick={handleAddClick} disabled={limitsLoading}>
+              <Plus className="mr-2 size-4" />
+              Add Customer
+            </Button>
+          </div>
         </div>
 
-        {/* ── Standalone Filter Bar (no card) ── */}
+        {/* ── Standalone Filter Bar ── */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
           <div className="relative flex-1 min-w-[150px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -396,7 +625,6 @@ export default function CustomersPage() {
                       <span className="text-foreground font-medium">{customer.contractCount}</span>
                       <span className="text-muted-foreground">contracts</span>
                     </div>
-                    {/* NEW ARROW ICON ON BOTTOM RIGHT */}
                     <ArrowUpRight className="size-4 text-muted-foreground" />
                   </div>
                 </CardContent>
