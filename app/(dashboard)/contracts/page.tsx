@@ -599,21 +599,6 @@ export default function ContractsPage() {
     }
   }
 
-  const handleDownloadContractTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["customer_phone", "contract_name", "frequency_months", "start_date", "duration_years", "price", "location", "notes"],
-      ["9876543210", "AC Service Contract", "3", "2024-01-15", "2", "5000", "Mumbai", ""],
-    ])
-    ws["!cols"] = [
-      { wch: 16 }, { wch: 28 }, { wch: 18 }, { wch: 14 },
-      { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 24 },
-    ]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Contracts")
-    XLSX.writeFile(wb, "contracts_template.xlsx")
-    toast.success("Template downloaded")
-  }
-
   const handleImportContracts = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (importInputRef.current) importInputRef.current.value = ""
@@ -657,7 +642,7 @@ export default function ContractsPage() {
     const missingCols = CONTRACT_REQUIRED_FIELDS.filter(f => !foundFields.has(f))
     if (missingCols.length > 0) {
       toast.error(
-        `Missing required column${missingCols.length > 1 ? "s" : ""}: ${missingCols.join(", ")}. Download the template to see the correct format.`
+        `Missing required column${missingCols.length > 1 ? "s" : ""}: ${missingCols.join(", ")}.`
       )
       return
     }
@@ -906,13 +891,16 @@ export default function ContractsPage() {
             <p className="text-muted-foreground">Manage your AMC contracts and service agreements</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {/* Download template */}
-            {!isTechnician && (
-              <Button variant="outline" size="sm" onClick={handleDownloadContractTemplate}>
-                <Download className="mr-2 size-4" />
-                Template
-              </Button>
-            )}
+            {/* Export Excel */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportContractsExcel}
+              disabled={filteredContracts.length === 0}
+            >
+              <Download className="mr-2 size-4" />
+              Export Excel
+            </Button>
 
             {/* Import Excel */}
             {!isTechnician && (
@@ -939,12 +927,6 @@ export default function ContractsPage() {
               className="hidden"
               onChange={handleImportContracts}
             />
-
-            {/* Export Excel */}
-            <Button variant="outline" size="sm" onClick={exportContractsExcel} disabled={filteredContracts.length === 0}>
-              <Download className="mr-2 size-4" />
-              Export Excel
-            </Button>
 
             {/* Add Contract */}
             {!isTechnician && (
