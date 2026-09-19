@@ -352,24 +352,33 @@ export default function CustomersPage() {
       return
     }
 
-    // ── Parse rows → valid customers ────────────────────────────────────────
+    // Parse rows into valid customers
     type ParsedCustomer = { name: string; phone: string; address: string }
     const validRows: ParsedCustomer[] = []
-    let skippedCount = 0
+    let skippedMissing = 0
+    const seenPhonesInFile = new Set<string>()
+    let skippedDupeInFile = 0
 
     for (const row of rows) {
-      // Re-map columns to internal field names
       const mapped: Record<string, string> = {}
       for (const [origKey, fieldName] of Object.entries(headerMap)) {
         mapped[fieldName] = String(row[origKey] ?? "").trim()
       }
 
-      // Check required fields have values
+      // Skip rows missing required fields
       const missingValues = REQUIRED_FIELDS.filter(f => !mapped[f])
       if (missingValues.length > 0) {
-        skippedCount++
+        skippedMissing++
         continue
       }
+
+      // Skip duplicate phones within the file
+      const normalizedPhone = mapped.phone.replace(/\s+/g, "")
+      if (seenPhonesInFile.has(normalizedPhone)) {
+        skippedDupeInFile++
+        continue
+      }
+      seenPhonesInFile.add(normalizedPhone)
 
       validRows.push({
         name: mapped.name,
@@ -379,17 +388,41 @@ export default function CustomersPage() {
     }
 
     if (validRows.length === 0) {
-      toast.error(`No valid rows found. All ${skippedCount} row${skippedCount > 1 ? 's' : ''} are missing required fields (name, phone, or address).`)
+      toast.error(`No valid rows found. ${skippedMissing} row${skippedMissing > 1 ? 's' : ''} missing required fields.`)
       return
     }
 
-    // ── Plan limit check ────────────────────────────────────────────────────
-    if (checkAndShowLimitModal(validRows.length)) return
-
-    // ── Insert to Supabase ──────────────────────────────────────────────────
+    // Check duplicates against existing customers in DB (by phone)
     setImporting(true)
+    let skippedDupeInDB = 0
     try {
-      const payload = validRows.map(r => ({
+      const existingPhones = new Set(
+        customers.map(c => c.phone.replace(/\s+/g, ""))
+      )
+
+      const uniqueRows = validRows.filter(r => {
+        const normalized = r.phone.replace(/\s+/g, "")
+        if (existingPhones.has(normalized)) {
+          skippedDupeInDB++
+          return false
+        }
+        return true
+      })
+
+      if (uniqueRows.length === 0) {
+        toast.warning("All customers in the file already exist (duplicate phone numbers). Nothing imported.")
+        setImporting(false)
+        return
+      }
+
+      // Plan limit check
+      if (checkAndShowLimitModal(uniqueRows.length)) {
+        setImporting(false)
+        return
+      }
+
+      // Insert to Supabase
+      const payload = uniqueRows.map(r => ({
         org_id: currentOrgId,
         user_id: user?.id,
         name: r.name,
@@ -402,10 +435,16 @@ export default function CustomersPage() {
 
       await loadCustomers()
 
-      const msg =
-        skippedCount > 0
-          ? `${validRows.length} customer${validRows.length > 1 ? 's' : ''} imported, ${skippedCount} row${skippedCount > 1 ? 's' : ''} skipped (missing required fields)`
-          : `${validRows.length} customer${validRows.length > 1 ? 's' : ''} imported successfully`
+      // Build summary toast
+      const skippedTotal = skippedMissing + skippedDupeInFile + skippedDupeInDB
+      const skippedParts: string[] = []
+      if (skippedMissing > 0) skippedParts.push(`${skippedMissing} missing fields`)
+      if (skippedDupeInFile > 0) skippedParts.push(`${skippedDupeInFile} duplicate in file`)
+      if (skippedDupeInDB > 0) skippedParts.push(`${skippedDupeInDB} already exist`)
+
+      const msg = skippedTotal > 0
+        ? `${uniqueRows.length} imported, ${skippedTotal} skipped (${skippedParts.join(", ")})`
+        : `${uniqueRows.length} customer${uniqueRows.length > 1 ? 's' : ''} imported successfully`
       toast.success(msg)
     } catch (error: any) {
       console.error("Import error:", error)
