@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -89,11 +89,6 @@ const COLUMN_ALIASES: Record<string, string> = {
   "full address": "address",
   location: "address",
   area: "address",
-  // email (optional)
-  email: "email",
-  "email address": "email",
-  "e-mail": "email",
-  mail: "email",
 }
 
 const REQUIRED_FIELDS = ["name", "phone", "address"]
@@ -205,8 +200,7 @@ export default function CustomersPage() {
     if (term) {
       filtered = filtered.filter(c =>
         c.name.toLowerCase().includes(term.toLowerCase()) ||
-        c.phone.includes(term) ||
-        (c.email && c.email.toLowerCase().includes(term.toLowerCase()))
+        c.phone.includes(term)
       )
     }
 
@@ -299,9 +293,9 @@ export default function CustomersPage() {
   // ── Download sample template ──────────────────────────────────────────────
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["name", "phone", "address", "email"],
-      ["Ramesh Sharma", "9876543210", "123 MG Road, Pune", "ramesh@example.com"],
-      ["Priya Mehta", "9123456789", "45 Park Street, Mumbai", ""],
+      ["name", "phone", "address"],
+      ["Ramesh Sharma", "9876543210", "123 MG Road, Pune"],
+      ["Priya Mehta", "9123456789", "45 Park Street, Mumbai"],
     ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Customers")
@@ -359,7 +353,7 @@ export default function CustomersPage() {
     }
 
     // ── Parse rows → valid customers ────────────────────────────────────────
-    type ParsedCustomer = { name: string; phone: string; address: string; email?: string }
+    type ParsedCustomer = { name: string; phone: string; address: string }
     const validRows: ParsedCustomer[] = []
     let skippedCount = 0
 
@@ -381,7 +375,6 @@ export default function CustomersPage() {
         name: mapped.name,
         phone: mapped.phone,
         address: mapped.address,
-        email: mapped.email || undefined,
       })
     }
 
@@ -398,11 +391,10 @@ export default function CustomersPage() {
     try {
       const payload = validRows.map(r => ({
         org_id: currentOrgId,
+        user_id: user?.id,
         name: r.name,
         phone: r.phone,
         address: r.address,
-        ...(r.email ? { email: r.email } : {}),
-        created_by: user?.id,
       }))
 
       const { error } = await supabase.from("customers").insert(payload)
@@ -485,7 +477,7 @@ export default function CustomersPage() {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search customers by name, email, or phone..."
+              placeholder="Search customers by name or phone..."
               className="pl-10"
               value={searchTerm}
               onChange={(e) => handleSearch(e.target.value)}
@@ -577,9 +569,6 @@ export default function CustomersPage() {
                       </div>
                       <div>
                         <CardTitle className="text-base">{customer.name}</CardTitle>
-                        {customer.email && (
-                          <CardDescription className="text-xs">{customer.email}</CardDescription>
-                        )}
                       </div>
                     </div>
                     <DropdownMenu>
