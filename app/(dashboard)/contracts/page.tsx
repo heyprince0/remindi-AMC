@@ -571,20 +571,71 @@ export default function ContractsPage() {
     if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
     phone = phone.replace(/^\+/, '')
 
+    const days = getDaysUntilService(contract.next_service_date)
     const lastService = formatTableDate(contract.start_date)
     const nextService = formatTableDate(contract.next_service_date)
     const contractEnd = contract.endDate ? formatTableDate(contract.endDate) : '—'
-    const from = senderName ? `*${senderName}*` : 'your service provider'
+    const from = senderName || 'your service provider'
+    const contractName = contract.contract_name
+    const customerName = contract.customerName
 
-    const message =
-      `Dear ${contract.customerName},\n\n` +
-      `This is a service reminder from ${from} regarding your AMC contract *${contract.contract_name}*.\n\n` +
-      `📋 *Service Details:*\n` +
-      `• Last Service: ${lastService}\n` +
-      `• Next Service Due: ${nextService}\n` +
-      `• Contract Expiry: ${contractEnd}\n\n` +
-      `Please contact us to schedule your next service and renew your contract.\n\n` +
-      `Thank you for choosing ${senderName || 'us'}! 🙏`
+    let message = ""
+
+    if (days < 0) {
+      // ── EXPIRED ──
+      const overdueDays = Math.abs(days)
+      message =
+        `Dear ${customerName},\n\n` +
+        `⚠️ *Contract Expired – Action Required*\n\n` +
+        `Your AMC contract *${contractName}* with *${from}* has expired ${overdueDays} day${overdueDays > 1 ? 's' : ''} ago.\n\n` +
+        `📋 *Contract Details:*\n` +
+        `• Last Service: ${lastService}\n` +
+        `• Contract Expired On: ${contractEnd}\n\n` +
+        `To avoid any service disruption, please renew your contract at the earliest.\n\n` +
+        `Contact us now to get your contract renewed and next service scheduled.\n\n` +
+        `Thank you for choosing *${from}*! 🙏`
+
+    } else if (days === 0) {
+      // ── TODAY SERVICING ──
+      message =
+        `Dear ${customerName},\n\n` +
+        `🔧 *Service Due Today!*\n\n` +
+        `This is a reminder that your AMC service for *${contractName}* is scheduled for *today*.\n\n` +
+        `📋 *Service Details:*\n` +
+        `• Last Service: ${lastService}\n` +
+        `• Today's Service Date: ${nextService}\n` +
+        `• Contract Expiry: ${contractEnd}\n\n` +
+        `Our technician will be visiting you today. Please ensure someone is available at the premises.\n\n` +
+        `For any queries, feel free to reach out to us.\n\n` +
+        `Thank you for choosing *${from}*! 🙏`
+
+    } else if (days <= 3) {
+      // ── EXPIRING SOON (1–3 days) ──
+      message =
+        `Dear ${customerName},\n\n` +
+        `⏰ *Upcoming Service Reminder – ${days} Day${days > 1 ? 's' : ''} Left*\n\n` +
+        `Your next AMC service for *${contractName}* is due in *${days} day${days > 1 ? 's' : ''}* on *${nextService}*.\n\n` +
+        `📋 *Service Details:*\n` +
+        `• Last Service: ${lastService}\n` +
+        `• Next Service Due: ${nextService}\n` +
+        `• Contract Expiry: ${contractEnd}\n\n` +
+        `Please confirm your availability so we can schedule the technician visit accordingly.\n\n` +
+        `Contact us to confirm your appointment.\n\n` +
+        `Thank you for choosing *${from}*! 🙏`
+
+    } else {
+      // ── ACTIVE (regular reminder) ──
+      message =
+        `Dear ${customerName},\n\n` +
+        `📢 *Service Reminder – ${contractName}*\n\n` +
+        `This is a friendly reminder from *${from}* regarding your AMC contract.\n\n` +
+        `📋 *Service Details:*\n` +
+        `• Last Service: ${lastService}\n` +
+        `• Next Service Due: ${nextService}\n` +
+        `• Contract Expiry: ${contractEnd}\n\n` +
+        `We will reach out closer to your service date. For any queries or to reschedule, feel free to contact us.\n\n` +
+        `Thank you for choosing *${from}*! 🙏`
+    }
 
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(url, '_blank')
