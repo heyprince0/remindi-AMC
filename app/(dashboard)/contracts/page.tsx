@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,7 +44,22 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { Plus, Search, Edit, Trash2, Download, Eye, Check, ChevronsUpDown, MoreHorizontal, FileText, ArrowUpRight, MessageSquare } from "lucide-react"
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Download,
+  Upload,
+  Loader2,
+  Eye,
+  Check,
+  ChevronsUpDown,
+  MoreHorizontal,
+  FileText,
+  ArrowUpRight,
+  MessageSquare,
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,11 +71,64 @@ import { AddContractModal } from "@/components/add-contract-modal"
 import Link from "next/link"
 import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
 import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
+import * as XLSX from "xlsx"
 
 interface ContractDisplay extends Contract {
   customerName: string
   customerPhone: string | null
   endDate: string | null
+}
+
+// ── Contract import: column alias map ─────────────────────────────────────────
+const CONTRACT_COLUMN_ALIASES: Record<string, string> = {
+  // customer phone
+  customer_phone: "customer_phone",
+  "customer phone": "customer_phone",
+  phone: "customer_phone",
+  mobile: "customer_phone",
+  "phone number": "customer_phone",
+  contact: "customer_phone",
+  // contract name
+  contract_name: "contract_name",
+  "contract name": "contract_name",
+  name: "contract_name",
+  // frequency
+  frequency_months: "frequency_months",
+  "frequency (months)": "frequency_months",
+  "frequency months": "frequency_months",
+  frequency: "frequency_months",
+  // start date
+  start_date: "start_date",
+  "start date": "start_date",
+  "last service": "start_date",
+  last_service: "start_date",
+  // duration
+  duration_years: "duration_years",
+  "duration (years)": "duration_years",
+  "duration years": "duration_years",
+  duration: "duration_years",
+  // optional
+  price: "price",
+  "price (rs.)": "price",
+  "price (rs)": "price",
+  amount: "price",
+  location: "location",
+  area: "location",
+  notes: "notes",
+  note: "notes",
+}
+
+const CONTRACT_REQUIRED_FIELDS = [
+  "customer_phone",
+  "contract_name",
+  "frequency_months",
+  "start_date",
+  "duration_years",
+]
+
+function normalizeContractHeader(raw: string): string | null {
+  const cleaned = raw.toString().toLowerCase().trim()
+  return CONTRACT_COLUMN_ALIASES[cleaned] ?? null
 }
 
 function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
@@ -156,6 +224,10 @@ export default function ContractsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [contractToDelete, setContractToDelete] = useState<ContractDisplay | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // ✅ NEW: import state + ref
+  const [importing, setImporting] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -499,7 +571,6 @@ export default function ContractsPage() {
       })
 
       const ws = XLSX.utils.json_to_sheet(rows)
-      // Set column widths
       ws["!cols"] = [
         { wch: 28 }, { wch: 22 }, { wch: 16 }, { wch: 18 },
         { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
@@ -508,7 +579,6 @@ export default function ContractsPage() {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Contracts")
 
-      // Summary sheet
       const summaryRows = [
         { "Summary": "Total Contracts", "Count": filteredContracts.length },
         { "Summary": "Active", "Count": counts.active },
@@ -639,14 +709,12 @@ export default function ContractsPage() {
         mapped[fieldName] = String(row[origKey] ?? "").trim()
       }
 
-      // Check required fields have values
       const missingVals = CONTRACT_REQUIRED_FIELDS.filter(f => !mapped[f])
       if (missingVals.length > 0) {
         skippedMissing++
         continue
       }
 
-      // Validate numeric fields
       const freqMonths = parseInt(mapped.frequency_months)
       const durationYears = parseInt(mapped.duration_years)
       if (isNaN(freqMonths) || freqMonths < 1 || freqMonths > 12 || isNaN(durationYears) || durationYears < 1) {
@@ -654,7 +722,6 @@ export default function ContractsPage() {
         continue
       }
 
-      // Validate date
       const startDateObj = new Date(mapped.start_date)
       if (isNaN(startDateObj.getTime())) {
         skippedBadData++
@@ -662,7 +729,6 @@ export default function ContractsPage() {
       }
       const startDateStr = startDateObj.toISOString().split("T")[0]
 
-      // Link customer by phone
       const phoneNorm = mapped.customer_phone.replace(/\s+/g, "")
       const customerId = phoneToCustomerId.get(phoneNorm)
       if (!customerId) {
@@ -670,12 +736,10 @@ export default function ContractsPage() {
         continue
       }
 
-      // Skip duplicate contract_name + customer combo in this import
       const dupeKey = `${customerId}__${mapped.contract_name.toLowerCase()}`
       if (seenKeys.has(dupeKey)) continue
       seenKeys.add(dupeKey)
 
-      // Calculate next_service_date and end_date
       const frequencyDays = freqMonths * 30
       const nextServiceDate = new Date(startDateObj)
       nextServiceDate.setDate(nextServiceDate.getDate() + frequencyDays)
@@ -762,7 +826,6 @@ export default function ContractsPage() {
       return
     }
 
-    // Normalize phone: strip spaces/dashes, ensure country code
     let phone = rawPhone.replace(/[\s\-().]/g, '')
     if (phone.startsWith('0')) phone = '91' + phone.slice(1)
     if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
@@ -1261,7 +1324,6 @@ export default function ContractsPage() {
                         <div className="text-xs text-muted-foreground truncate">
                           {contract.location || ''}
                         </div>
-                        {/* ✅ NEW: Arrow icon added here */}
                         <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                       </div>
                     </CardContent>
