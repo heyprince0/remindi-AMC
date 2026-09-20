@@ -33,11 +33,7 @@ export async function POST(request: NextRequest) {
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
     const cleanPhone = phoneNumber.replace('+', '')
-    const today = new Date().toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
+    const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
     const msg91Response = await fetch('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/', {
       method: 'POST',
