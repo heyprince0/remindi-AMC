@@ -19,6 +19,7 @@ import {
   CreditCard,
   UserCircle,
   Package,
+  MessageCircle,
 } from "lucide-react"
 import {
   Sidebar,
@@ -52,6 +53,7 @@ const memberNavItems = [
 
 const adminOnlyNavItems = [
   { title: "Settings", icon: Settings, href: "/settings" },
+  { title: "WhatsApp", icon: MessageCircle, href: "/whatsapp", className: "text-[#25D366]" },
   { title: "Team", icon: UsersRound, href: "/team" },
   { title: "Billing", icon: CreditCard, href: "/billing" },
 ]
@@ -228,7 +230,7 @@ export function AppSidebar() {
                     tooltip={item.title}
                   >
                     <Link href={item.href}>
-                      <item.icon className="size-4" />
+                      <item.icon className={`size-4 ${'className' in item ? item.className : ''}`} />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
