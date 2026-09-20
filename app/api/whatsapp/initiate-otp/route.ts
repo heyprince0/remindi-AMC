@@ -33,11 +33,11 @@ export async function POST(request: NextRequest) {
 
     // 1. Generate a random 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
-    
-    // 2. Clean phone number (remove the + sign)
+
+    // 2. Clean the phone number (MSG91 wants country code without "+")
     const cleanPhone = phoneNumber.replace('+', '')
 
-    // 3. Send via MSG91 using the new Utility template
+    // 3. Send via MSG91 WhatsApp API
     const msg91Response = await fetch('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/', {
       method: 'POST',
       headers: {
@@ -45,22 +45,24 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        integrated_number: "15553241999", 
-        content_type: "template",
+        integrated_number: '15553241999',
+        content_type: 'template',
         payload: {
-          messaging_product: "whatsapp",
-          type: "template",
+          messaging_product: 'whatsapp',
+          type: 'template',
           template: {
-            name: "otp_verification_utility", // Your new template name
-            language: { code: "en", policy: "deterministic" },
-            to_and_components: [{
-              to: [cleanPhone],
-              components: {
-                body_1: { type: "text", value: otpCode }
-              }
-            }]
-          }
-        }
+            name: 'remindi_otp',
+            language: { code: 'en', policy: 'deterministic' },
+            to_and_components: [
+              {
+                to: [cleanPhone],
+                components: {
+                  body_1: { type: 'text', value: otpCode },
+                },
+              },
+            ],
+          },
+        },
       }),
     })
 
@@ -74,16 +76,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 4. Save the OTP to Supabase so verify-otp can check it
+    // 4. Save the OTP so verify-otp can compare it
     const { error } = await getSupabaseAdmin()
       .from('whatsapp_accounts')
       .upsert(
-        { 
-          org_id: orgId, 
-          whatsapp_number: phoneNumber, 
+        {
+          org_id: orgId,
+          whatsapp_number: phoneNumber,
           status: 'pending',
-          otp_code: otpCode 
-        }, 
+          otp_code: otpCode,
+        },
         { onConflict: 'org_id' }
       )
 
