@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { encryptToken } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -9,13 +8,6 @@ interface VerifyOtpBody {
   orgId: string
   phoneNumber: string
   otp: string
-}
-
-interface Msg91VerifyResponse {
-  access_token?: string
-  integrated_number_id?: string
-  message?: string
-  [key: string]: unknown
 }
 
 function getSupabaseAdmin() {
@@ -36,29 +28,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'orgId, phoneNumber, and otp are required' }, { status: 400 })
     }
 
-    const authkey = process.env.MSG91_AUTHKEY
-    if (!authkey) return NextResponse.json({ error: 'MSG91 configuration is missing' }, { status: 500 })
+    const supabase = getSupabaseAdmin()
 
-    const msg91Response = await fetch('https://control.msg91.com/api/v5/whatsapp/verify-number', {
-      method: 'POST',
-      headers: { authkey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone_number: phoneNumber, otp }),
-    })
-    const result = (await msg91Response.json()) as Msg91VerifyResponse
-
-    if (!msg91Response.ok || !result.access_token || !result.integrated_number_id) {
-      return NextResponse.json({ error: result.message ?? 'Failed to verify OTP' }, { status: msg91Response.ok ? 502 : msg91Response.status })
-    }
-
-    const encryptedToken = await encryptToken(result.access_token)
-    const { error } = await getSupabaseAdmin()
+    // 1. Fetch the stored OTP for this org
+    const { data: account, error: fetchError } = await supabase
       .from('whatsapp_accounts')
-      .update({ integrated_number_id: result.integrated_number_id, access_token: encryptedToken, status: 'active', connected_at: new Date().toISOString() })
+      .select('otp_code, status')
       .eq('org_id', orgId)
       .eq('whatsapp_number', phoneNumber)
+      .maybeSingle()
 
-    if (error) {
-      console.error('Failed to activate WhatsApp account', error)
+    if (fetchError || !account) {
+      return NextResponse.json({ error: 'No pending OTP request found' }, { status: 404 })
+    }
+
+    // 2. Compare the OTPs
+    if (account.otp_code !== otp) {
+      return NextResponse.json({ error: 'Invalid OTP' }, { status: 400 })
+    }
+
+    // 3. Correct OTP -> activate the account
+    const { error: updateError } = await supabase
+      .from('whatsapp_accounts')
+      .update({
+        status: 'active',
+        connected_at: new Date().toISOString(),
+        otp_code: null, // clear the OTP after successful verification
+      })
+      .eq('org_id', orgId)
+
+    if (updateError) {
+      console.error('Failed to activate account:', updateError)
       return NextResponse.json({ error: 'Failed to save WhatsApp connection' }, { status: 500 })
     }
 
