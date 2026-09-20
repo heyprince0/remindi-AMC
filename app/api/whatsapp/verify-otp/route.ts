@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { encryptToken } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 interface VerifyOtpBody {
   orgId: string
