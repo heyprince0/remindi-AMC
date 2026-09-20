@@ -9,19 +9,10 @@ interface InitiateOtpBody {
   phoneNumber: string
 }
 
-interface Msg91Response {
-  message?: string
-  [key: string]: unknown
-}
-
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceRoleKey) {
-    throw new Error('Supabase configuration is missing')
-  }
-
+  if (!url || !serviceRoleKey) throw new Error('Supabase configuration is missing')
   return createClient(url, serviceRoleKey)
 }
 
@@ -40,20 +31,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MSG91 configuration is missing' }, { status: 500 })
     }
 
-    const msg91Response = await fetch('https://control.msg91.com/api/v5/whatsapp/add-number', {
+    // 1. Generate a random 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
+    
+    // 2. Clean phone number (remove the + sign)
+    const cleanPhone = phoneNumber.replace('+', '')
+
+    // 3. Send via MSG91 using the new Utility template
+    const msg91Response = await fetch('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/', {
       method: 'POST',
-      headers: { authkey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone_number: phoneNumber }),
+      headers: {
+        authkey: authkey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        integrated_number: "15553241999", 
+        content_type: "template",
+        payload: {
+          messaging_product: "whatsapp",
+          type: "template",
+          template: {
+            name: "otp_verification_utility", // Your new template name
+            language: { code: "en", policy: "deterministic" },
+            to_and_components: [{
+              to: [cleanPhone],
+              components: {
+                body_1: { type: "text", value: otpCode }
+              }
+            }]
+          }
+        }
+      }),
     })
-    const result = (await msg91Response.json()) as Msg91Response
+
+    const result = await msg91Response.json()
 
     if (!msg91Response.ok) {
-      return NextResponse.json({ error: result.message ?? 'Failed to send OTP' }, { status: msg91Response.status })
+      console.error('MSG91 Error:', result)
+      return NextResponse.json(
+        { error: result.message ?? 'Failed to send OTP' },
+        { status: msg91Response.status }
+      )
     }
 
+    // 4. Save the OTP to Supabase so verify-otp can check it
     const { error } = await getSupabaseAdmin()
       .from('whatsapp_accounts')
-      .upsert({ org_id: orgId, whatsapp_number: phoneNumber, status: 'pending' }, { onConflict: 'org_id' })
+      .upsert(
+        { 
+          org_id: orgId, 
+          whatsapp_number: phoneNumber, 
+          status: 'pending',
+          otp_code: otpCode 
+        }, 
+        { onConflict: 'org_id' }
+      )
 
     if (error) {
       console.error('Failed to save pending WhatsApp account', error)
