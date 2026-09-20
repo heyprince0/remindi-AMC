@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { encryptToken } from '@/lib/crypto'
 
+export const dynamic = 'force-dynamic'
+
 interface VerifyOtpBody {
   orgId: string
   phoneNumber: string
