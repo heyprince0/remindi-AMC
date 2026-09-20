@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { decryptToken } from '@/lib/crypto'
 
+export const dynamic = 'force-dynamic'
+
 interface SendMessageBody {
   orgId: string
   customerPhone: string
