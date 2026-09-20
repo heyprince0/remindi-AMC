@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: 'active',
         connected_at: new Date().toISOString(),
-        otp_code: null, // clear the OTP after successful verification
+        otp_code: null,
       })
       .eq('org_id', orgId)
 
