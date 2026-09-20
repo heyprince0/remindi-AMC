@@ -31,13 +31,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MSG91 configuration is missing' }, { status: 500 })
     }
 
-    // 1. Generate a random 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
-
-    // 2. Clean the phone number (MSG91 wants country code without "+")
     const cleanPhone = phoneNumber.replace('+', '')
+    const today = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
 
-    // 3. Send via MSG91 WhatsApp API
     const msg91Response = await fetch('https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/', {
       method: 'POST',
       headers: {
@@ -51,13 +52,16 @@ export async function POST(request: NextRequest) {
           messaging_product: 'whatsapp',
           type: 'template',
           template: {
-            name: 'remindi_otp',
-            language: { code: 'en', policy: 'deterministic' },
+            name: 'service_completed',
+            language: { code: 'en' },
             to_and_components: [
               {
                 to: [cleanPhone],
                 components: {
-                  body_1: { type: 'text', value: otpCode },
+                  customer_name: { type: 'text', value: otpCode },
+                  service_type: { type: 'text', value: 'Remindi' },
+                  completion_date: { type: 'text', value: today },
+                  business_name: { type: 'text', value: 'Remindi AMC' },
                 },
               },
             ],
@@ -76,7 +80,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 4. Save the OTP so verify-otp can compare it
     const { error } = await getSupabaseAdmin()
       .from('whatsapp_accounts')
       .upsert(
