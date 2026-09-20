@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { decryptToken } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 interface SendMessageBody {
   orgId: string
