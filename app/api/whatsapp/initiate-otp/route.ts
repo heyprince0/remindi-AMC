@@ -33,11 +33,16 @@ export async function POST(request: NextRequest) {
     // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
 
-    // Format phone: strip everything except digits, ensure starts with 91
+    // Format phone: strip non-digits, ensure starts with 91
     const digits = phoneNumber.replace(/\D/g, '')
     const cleanPhone = digits.startsWith('91') ? digits : `91${digits}`
 
-    // Send OTP via remindi_otp template
+    const today = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
       {
@@ -53,7 +58,7 @@ export async function POST(request: NextRequest) {
             messaging_product: 'whatsapp',
             type: 'template',
             template: {
-              name: 'remindi_otp',
+              name: 'service_completed',
               language: {
                 code: 'en',
                 policy: 'deterministic',
@@ -63,9 +68,25 @@ export async function POST(request: NextRequest) {
                 {
                   to: [cleanPhone],
                   components: {
-                    body_1: {
+                    body_customer_name: {
                       type: 'text',
-                      value: otpCode,
+                      value: otpCode,           // OTP shown as customer name
+                      parameter_name: 'customer_name',
+                    },
+                    body_service_type: {
+                      type: 'text',
+                      value: 'WhatsApp Verification',
+                      parameter_name: 'service_type',
+                    },
+                    body_completion_date: {
+                      type: 'text',
+                      value: today,
+                      parameter_name: 'completion_date',
+                    },
+                    body_business_name: {
+                      type: 'text',
+                      value: 'Remindi',
+                      parameter_name: 'business_name',
                     },
                   },
                 },
@@ -86,7 +107,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Save OTP + pending status in DB
+    // Save OTP in DB
     const { error: upsertError } = await getSupabaseAdmin()
       .from('whatsapp_accounts')
       .upsert(
