@@ -19,7 +19,6 @@ import {
   CreditCard,
   UserCircle,
   Package,
-  MessageCircle,
 } from "lucide-react"
 import {
   Sidebar,
@@ -53,7 +52,6 @@ const memberNavItems = [
 
 const adminOnlyNavItems = [
   { title: "Settings", icon: Settings, href: "/settings" },
-  { title: "WhatsApp", icon: MessageCircle, href: "/whatsapp", className: "text-[#25D366]" },
   { title: "Team", icon: UsersRound, href: "/team" },
   { title: "Billing", icon: CreditCard, href: "/billing" },
 ]
