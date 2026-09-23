@@ -1300,7 +1300,7 @@ export default function ContractsPage() {
         </Card>
 
         {/* ── MOBILE Cards ── */}
-        <div className="flex flex-col gap-3 md:hidden pb-24">
+        <div className="flex flex-col gap-3 md:hidden pb-44">
           {loading ? (
             /* Loading skeleton */
             <div className="flex flex-col gap-3">
@@ -1512,7 +1512,7 @@ export default function ContractsPage() {
         {/* ── MOBILE FAB — Add Contract ── */}
         {!isTechnician && (
           <button
-            className="fixed bottom-6 right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+            className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
             onClick={handleAddClick}
             disabled={subscriptionLoading}
             aria-label="Add Contract"
