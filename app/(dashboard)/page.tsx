@@ -548,81 +548,69 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── MOBILE: Horizontal scrollable stat chips ── */}
-        <div className="md:hidden -mx-4 px-4">
-          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {/* ── MOBILE: 2-row stat grid ── */}
+        <div className="md:hidden flex flex-col gap-2">
 
-            {/* Active Contracts */}
-            <button
-              onClick={() => router.push('/contracts')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
-            >
-              <FileText className="size-4 text-muted-foreground" />
-              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.contracts}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Active Contracts</p>
-            </button>
-
-            {/* Today Servicing — most urgent, highlighted */}
+          {/* Row 1 — urgent alerts */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => router.push('/alerts')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-alert-due-today/30 bg-alert-due-today/5 p-3 w-[108px] text-left active:scale-95 transition-all"
+              className="flex flex-col gap-1.5 rounded-xl border border-alert-due-today/30 bg-alert-due-today/5 p-3 text-left active:scale-95 transition-all"
             >
               <CalendarCheck className="size-4 text-alert-due-today" />
               <p className="text-[22px] font-bold leading-none text-alert-due-today">{loading ? "—" : stats.todayServicing}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Due Today</p>
             </button>
 
-            {/* Expiring Soon */}
             <button
               onClick={() => router.push('/alerts')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-900/10 p-3 w-[108px] text-left active:scale-95 transition-all"
+              className="flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-900/10 p-3 text-left active:scale-95 transition-all"
             >
               <CalendarClock className="size-4 text-amber-500" />
               <p className="text-[22px] font-bold leading-none text-amber-600">{loading ? "—" : stats.expiringSoon}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Expiring Soon</p>
             </button>
 
-            {/* Expired */}
             <button
               onClick={() => router.push('/contracts')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 w-[108px] text-left active:scale-95 transition-all"
+              className="flex flex-col gap-1.5 rounded-xl border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 text-left active:scale-95 transition-all"
             >
               <Clock className="size-4 text-red-500" />
               <p className="text-[22px] font-bold leading-none text-red-600">{loading ? "—" : stats.expired}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Expired</p>
             </button>
+          </div>
 
-            {/* This Month */}
+          {/* Row 2 — general info */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => router.push('/contracts')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+              className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
-              <CalendarClock className="size-4 text-blue-500" />
-              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.monthServicing}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">This Month</p>
+              <FileText className="size-4 text-muted-foreground" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.contracts}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Active</p>
             </button>
 
-            {/* Customers */}
             <button
               onClick={() => router.push('/customers')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+              className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
               <Users className="size-4 text-muted-foreground" />
               <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.customers}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">Customers</p>
             </button>
 
-            {/* Technicians */}
             <button
-              onClick={() => router.push('/technicians')}
-              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+              onClick={() => router.push('/contracts')}
+              className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
-              <Wrench className="size-4 text-muted-foreground" />
-              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.technicians}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Technicians</p>
+              <CalendarClock className="size-4 text-blue-500" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.monthServicing}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">This Month</p>
             </button>
-
           </div>
+
         </div>
 
         {/* ── DESKTOP: 6 StatCards grid ── */}
