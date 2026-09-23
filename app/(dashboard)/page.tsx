@@ -505,7 +505,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 pb-20 md:pb-0">
 
         {/* ── MOBILE header: compact with icon-only buttons ── */}
         <div className="flex items-center justify-between md:hidden">
@@ -548,56 +548,81 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── MOBILE: Compact summary Card with icons ── */}
-        <div className="md:hidden">
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div className="flex items-center gap-3">
-                  <FileText className="size-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Active Contracts</p>
-                    <p className="text-2xl font-bold">{loading ? "—" : stats.contracts}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CalendarClock className="size-5 text-blue-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">This Month</p>
-                    <p className="text-2xl font-bold">{loading ? "—" : stats.monthServicing}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CalendarCheck className="size-5 text-amber-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Expiring Soon</p>
-                    <p className="text-2xl font-bold text-amber-600">{loading ? "—" : stats.expiringSoon}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Clock className="size-5 text-red-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Expired</p>
-                    <p className="text-2xl font-bold text-red-600">{loading ? "—" : stats.expired}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Users className="size-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Customers</p>
-                    <p className="text-2xl font-bold">{loading ? "—" : stats.customers}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Wrench className="size-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Technicians</p>
-                    <p className="text-2xl font-bold">{loading ? "—" : stats.technicians}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* ── MOBILE: Horizontal scrollable stat chips ── */}
+        <div className="md:hidden -mx-4 px-4">
+          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+
+            {/* Active Contracts */}
+            <button
+              onClick={() => router.push('/contracts')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <FileText className="size-4 text-muted-foreground" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.contracts}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Active Contracts</p>
+            </button>
+
+            {/* Today Servicing — most urgent, highlighted */}
+            <button
+              onClick={() => router.push('/alerts')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-alert-due-today/30 bg-alert-due-today/5 p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <CalendarCheck className="size-4 text-alert-due-today" />
+              <p className="text-[22px] font-bold leading-none text-alert-due-today">{loading ? "—" : stats.todayServicing}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Due Today</p>
+            </button>
+
+            {/* Expiring Soon */}
+            <button
+              onClick={() => router.push('/alerts')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-900/10 p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <CalendarClock className="size-4 text-amber-500" />
+              <p className="text-[22px] font-bold leading-none text-amber-600">{loading ? "—" : stats.expiringSoon}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Expiring Soon</p>
+            </button>
+
+            {/* Expired */}
+            <button
+              onClick={() => router.push('/contracts')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <Clock className="size-4 text-red-500" />
+              <p className="text-[22px] font-bold leading-none text-red-600">{loading ? "—" : stats.expired}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Expired</p>
+            </button>
+
+            {/* This Month */}
+            <button
+              onClick={() => router.push('/contracts')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <CalendarClock className="size-4 text-blue-500" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.monthServicing}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">This Month</p>
+            </button>
+
+            {/* Customers */}
+            <button
+              onClick={() => router.push('/customers')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <Users className="size-4 text-muted-foreground" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.customers}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Customers</p>
+            </button>
+
+            {/* Technicians */}
+            <button
+              onClick={() => router.push('/technicians')}
+              className="shrink-0 flex flex-col gap-1.5 rounded-xl border bg-card p-3 w-[108px] text-left active:scale-95 transition-all"
+            >
+              <Wrench className="size-4 text-muted-foreground" />
+              <p className="text-[22px] font-bold leading-none">{loading ? "—" : stats.technicians}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Technicians</p>
+            </button>
+
+          </div>
         </div>
 
         {/* ── DESKTOP: 6 StatCards grid ── */}
@@ -611,105 +636,161 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Two-column section: Upcoming Services + Inventory Overview ── */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
+
+          {/* ── Upcoming Services ── */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
               <div>
-                <CardTitle className="text-lg">Upcoming Services</CardTitle>
-                <CardDescription>Services scheduled for the next few days</CardDescription>
+                <CardTitle className="text-base md:text-lg">Upcoming Services</CardTitle>
+                <CardDescription className="text-xs md:text-sm">Next few days</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" className="text-primary" onClick={() => window.location.href = '/alerts'}>
-                View All <ArrowRight className="ml-2 size-4" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary h-8 px-2 gap-1 text-xs shrink-0"
+                onClick={() => router.push('/alerts')}
+              >
+                View All <ArrowRight className="size-3" />
               </Button>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-4">
+            <CardContent className="px-4 pb-4">
+              <div className="flex flex-col gap-2.5">
                 {loading ? (
-                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                  /* Loading skeleton */
+                  [1, 2, 3].map((i) => (
+                    <div key={i} className="h-[68px] rounded-lg bg-muted animate-pulse" />
+                  ))
                 ) : upcomingServices.length > 0 ? (
                   upcomingServices.map((service) => (
-                    <div key={service.id} className="flex items-start justify-between rounded-lg border border-border bg-secondary/30 p-4">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-card-foreground">{service.customer}</span>
-                        <span className="text-sm text-muted-foreground">{service.service}</span>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="size-3" />
-                          <span>{service.date} {service.time}</span>
+                    <button
+                      key={service.id}
+                      onClick={() => router.push(`/contracts/${service.id}`)}
+                      className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 p-3 w-full text-left active:scale-[0.99] active:bg-secondary/50 transition-all"
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1 mr-3">
+                        <span className="font-medium text-sm text-card-foreground truncate">{service.customer}</span>
+                        <span className="text-xs text-muted-foreground truncate">{service.service}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                          <Clock className="size-3 shrink-0" />
+                          <span>{service.date}</span>
                         </div>
                       </div>
                       {getStatusBadge(service.status)}
-                    </div>
+                    </button>
                   ))
                 ) : (
-                  <div className="text-center py-4 text-muted-foreground">No upcoming services</div>
+                  <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
+                    <CalendarCheck className="size-8 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">No upcoming services</p>
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
 
+          {/* ── Inventory Overview ── */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
               <div>
-                <CardTitle className="text-lg">Inventory Overview</CardTitle>
-                <CardDescription>Current stock and usage summary</CardDescription>
+                <CardTitle className="text-base md:text-lg">Inventory</CardTitle>
+                <CardDescription className="text-xs md:text-sm">Stock & usage summary</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" className="text-primary" onClick={() => window.location.href = '/stocks'}>
-                View All <ArrowRight className="ml-2 size-4" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary h-8 px-2 gap-1 text-xs shrink-0"
+                onClick={() => router.push('/stocks')}
+              >
+                View All <ArrowRight className="size-3" />
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4">
               {inventoryLoading ? (
-                <div className="text-center py-4 text-muted-foreground">Loading inventory data...</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />
+                  ))}
+                </div>
               ) : inventoryMetrics ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Package className="size-5" />
+                <div className="grid grid-cols-2 gap-3">
+
+                  {/* Total Items */}
+                  <div
+                    className="flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
+                    onClick={() => router.push('/stocks')}
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Package className="size-4" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Items</p>
-                      <p className="text-xl font-semibold">{inventoryMetrics.totalItems}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-600">
-                      <AlertTriangle className="size-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Low Stock</p>
-                      <p className="text-xl font-semibold">{inventoryMetrics.lowStockCount}</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-muted-foreground leading-tight">Total Items</p>
+                      <p className="text-lg font-bold leading-tight">{inventoryMetrics.totalItems}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-600">
-                      <AlertTriangle className="size-5" />
+
+                  {/* Low Stock */}
+                  <div
+                    className="flex items-center gap-2.5 rounded-lg border border-yellow-200 bg-yellow-50/50 dark:border-yellow-900/30 dark:bg-yellow-900/10 p-3 cursor-pointer active:scale-95 transition-all"
+                    onClick={() => router.push('/stocks')}
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-yellow-500/10 text-yellow-600">
+                      <AlertTriangle className="size-4" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Out of Stock</p>
-                      <p className="text-xl font-semibold">{inventoryMetrics.outOfStockCount}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-green-500/10 text-green-600">
-                      <DollarSign className="size-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Value</p>
-                      <p className="text-xl font-semibold">₹{inventoryMetrics.totalInventoryValue.toLocaleString()}</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-muted-foreground leading-tight">Low Stock</p>
+                      <p className="text-lg font-bold leading-tight text-yellow-600">{inventoryMetrics.lowStockCount}</p>
                     </div>
                   </div>
-                  <div className="col-span-2 flex items-center gap-3 pt-2 border-t border-border">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-blue-500/10 text-blue-600">
-                      <TrendingUp className="size-5" />
+
+                  {/* Out of Stock */}
+                  <div
+                    className="flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 cursor-pointer active:scale-95 transition-all"
+                    onClick={() => router.push('/stocks')}
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600">
+                      <AlertTriangle className="size-4" />
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Parts Used This Month</p>
-                      <p className="text-xl font-semibold">{inventoryMetrics.partsUsedThisMonth}</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-muted-foreground leading-tight">Out of Stock</p>
+                      <p className="text-lg font-bold leading-tight text-red-600">{inventoryMetrics.outOfStockCount}</p>
                     </div>
                   </div>
+
+                  {/* Total Value */}
+                  <div
+                    className="flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
+                    onClick={() => router.push('/stocks')}
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-green-500/10 text-green-600">
+                      <DollarSign className="size-4" />
+                    </div>
+                    <div className="min-w-0 overflow-hidden">
+                      <p className="text-[10px] text-muted-foreground leading-tight">Total Value</p>
+                      <p className="text-lg font-bold leading-tight truncate">₹{inventoryMetrics.totalInventoryValue.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+
+                  {/* Parts Used — full width */}
+                  <div
+                    className="col-span-2 flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
+                    onClick={() => router.push('/stocks')}
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                      <TrendingUp className="size-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground leading-tight">Parts Used This Month</p>
+                      <p className="text-lg font-bold leading-tight">{inventoryMetrics.partsUsedThisMonth}</p>
+                    </div>
+                  </div>
+
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground">No inventory data available</div>
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
+                  <Package className="size-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No inventory data</p>
+                </div>
               )}
             </CardContent>
           </Card>
