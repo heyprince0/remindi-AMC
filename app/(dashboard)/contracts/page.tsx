@@ -81,33 +81,27 @@ interface ContractDisplay extends Contract {
 
 // ── Contract import: column alias map ─────────────────────────────────────────
 const CONTRACT_COLUMN_ALIASES: Record<string, string> = {
-  // customer phone
   customer_phone: "customer_phone",
   "customer phone": "customer_phone",
   phone: "customer_phone",
   mobile: "customer_phone",
   "phone number": "customer_phone",
   contact: "customer_phone",
-  // contract name
   contract_name: "contract_name",
   "contract name": "contract_name",
   name: "contract_name",
-  // frequency
   frequency_months: "frequency_months",
   "frequency (months)": "frequency_months",
   "frequency months": "frequency_months",
   frequency: "frequency_months",
-  // start date
   start_date: "start_date",
   "start date": "start_date",
   "last service": "start_date",
   last_service: "start_date",
-  // duration
   duration_years: "duration_years",
   "duration (years)": "duration_years",
   "duration years": "duration_years",
   duration: "duration_years",
-  // optional
   price: "price",
   "price (rs.)": "price",
   "price (rs)": "price",
@@ -225,7 +219,6 @@ export default function ContractsPage() {
   const [contractToDelete, setContractToDelete] = useState<ContractDisplay | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // ✅ NEW: import state + ref
   const [importing, setImporting] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
 
@@ -269,7 +262,6 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
-  // Load sender name from profile (company_name preferred, fallback to full_name)
   useEffect(() => {
     const loadSenderName = async () => {
       if (!user?.id) return
@@ -283,7 +275,7 @@ export default function ContractsPage() {
           setSenderName(data.company_name || data.full_name || "")
         }
       } catch {
-        // silently fail — sender name is optional
+        // silently fail
       }
     }
     loadSenderName()
@@ -609,7 +601,6 @@ export default function ContractsPage() {
       return
     }
 
-    // Read all sheets
     let rows: Record<string, unknown>[] = []
     try {
       const buffer = await file.arrayBuffer()
@@ -629,7 +620,6 @@ export default function ContractsPage() {
       return
     }
 
-    // Normalize headers
     const firstRow = rows[0]
     const headerMap: Record<string, string> = {}
     for (const key of Object.keys(firstRow)) {
@@ -637,7 +627,6 @@ export default function ContractsPage() {
       if (normalized) headerMap[key] = normalized
     }
 
-    // Check required columns exist
     const foundFields = new Set(Object.values(headerMap))
     const missingCols = CONTRACT_REQUIRED_FIELDS.filter(f => !foundFields.has(f))
     if (missingCols.length > 0) {
@@ -647,7 +636,6 @@ export default function ContractsPage() {
       return
     }
 
-    // Fetch all org customers → build phone → customer_id map
     const { data: customersData, error: custError } = await supabase
       .from("customers")
       .select("id, phone")
@@ -664,7 +652,6 @@ export default function ContractsPage() {
       if (normalized) phoneToCustomerId.set(normalized, c.id)
     }
 
-    // Parse rows
     type ParsedContract = {
       customer_id: string
       contract_name: string
@@ -763,7 +750,6 @@ export default function ContractsPage() {
       return
     }
 
-    // Plan limit check
     const maxContracts = plan?.max_contracts ?? 99999
     if (contractCount + validRows.length > maxContracts) {
       const remaining = Math.max(0, maxContracts - contractCount)
@@ -892,7 +878,6 @@ export default function ContractsPage() {
             <p className="text-xs text-muted-foreground mt-0.5">AMC contracts & service agreements</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Secondary actions in overflow menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="size-9 shrink-0">
@@ -973,7 +958,6 @@ export default function ContractsPage() {
 
         {/* ── MOBILE Filter Bar ── */}
         <div className="flex flex-col gap-2 md:hidden">
-          {/* Search — full width */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input
@@ -1022,57 +1006,27 @@ export default function ContractsPage() {
               </SelectContent>
             </Select>
 
-            <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={locationPopoverOpen}
-                  className={cn(
-                    "shrink-0 h-8 rounded-full border px-3 text-xs gap-1 font-normal justify-between",
-                    filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
-                  )}
-                >
-                  <span className="truncate max-w-[80px]">
-                    {filterLocation === "all" ? "Location" : filterLocation}
-                  </span>
-                  <ChevronsUpDown className="size-3 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search location..." />
-                  <CommandList>
-                    <CommandEmpty>No location found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setFilterLocation("all")
-                          setLocationPopoverOpen(false)
-                        }}
-                      >
-                        <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
-                        All Locations
-                      </CommandItem>
-                      {availableLocations.map((loc) => (
-                        <CommandItem
-                          key={loc}
-                          value={loc}
-                          onSelect={() => {
-                            setFilterLocation(filterLocation === loc ? "all" : loc)
-                            setLocationPopoverOpen(false)
-                          }}
-                        >
-                          <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
-                          <span className="truncate">{loc}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            {/* Location — Select on mobile (Popover doesn't work inside horizontal scroll) */}
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger
+                className={cn(
+                  "shrink-0 h-8 rounded-full border px-3 text-xs gap-1",
+                  filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                )}
+              >
+                <span className="truncate max-w-[90px]">
+                  {filterLocation === "all" ? "Location" : filterLocation}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {availableLocations.map((loc) => (
+                  <SelectItem key={loc} value={loc}>
+                    {loc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -1302,7 +1256,6 @@ export default function ContractsPage() {
         {/* ── MOBILE Cards ── */}
         <div className="flex flex-col gap-3 md:hidden pb-44">
           {loading ? (
-            /* Loading skeleton */
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="rounded-xl border bg-card p-4 animate-pulse">
@@ -1326,7 +1279,6 @@ export default function ContractsPage() {
               ))}
             </div>
           ) : filteredContracts.length === 0 ? (
-            /* Empty state */
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <div className="flex size-14 items-center justify-center rounded-full bg-muted">
                 <FileText className="size-6 text-muted-foreground" />
@@ -1348,7 +1300,6 @@ export default function ContractsPage() {
             </div>
           ) : (
             <>
-              {/* Result count */}
               <p className="text-xs text-muted-foreground px-0.5">
                 <span className="font-medium text-foreground">{filteredContracts.length}</span>{" "}
                 contract{filteredContracts.length !== 1 ? 's' : ''}{" "}
@@ -1361,7 +1312,6 @@ export default function ContractsPage() {
                 const days = getDaysUntilService(contract.next_service_date)
                 const frequencyMonths = Math.round(contract.frequency_days / 30)
 
-                // Status-based left border color
                 const statusBorderClass =
                   days < 0 ? "border-l-[3px] border-l-alert-overdue" :
                   days === 0 ? "border-l-[3px] border-l-alert-due-today" :
@@ -1369,7 +1319,6 @@ export default function ContractsPage() {
                   contract.status === 'active' ? "border-l-[3px] border-l-alert-success" :
                   ""
 
-                // Countdown label for next service
                 const countdownLabel =
                   days < 0 ? `${Math.abs(days)}d overdue` :
                   days === 0 ? "Due today" :
@@ -1385,7 +1334,6 @@ export default function ContractsPage() {
                     )}
                     onClick={() => router.push(`/contracts/${contract.id}`)}
                   >
-                    {/* Card Header */}
                     <CardHeader className="pb-0 pt-4 px-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -1407,7 +1355,6 @@ export default function ContractsPage() {
                       </div>
                     </CardHeader>
 
-                    {/* Card Body */}
                     <CardContent className="px-4 pt-3 pb-0">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <div>
@@ -1449,13 +1396,11 @@ export default function ContractsPage() {
                       </div>
                     </CardContent>
 
-                    {/* Card Footer — quick actions */}
                     <div className="flex items-center justify-between px-4 pt-3 pb-3 mt-1 border-t border-border">
                       <p className="text-xs text-muted-foreground truncate flex-1 mr-2">
                         {contract.location || <span className="opacity-40">No location</span>}
                       </p>
                       <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {/* WhatsApp — primary mobile action */}
                         {contract.customerPhone && (
                           <Button
                             variant="ghost"
