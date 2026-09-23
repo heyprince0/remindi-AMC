@@ -855,11 +855,6 @@ export default function CustomersPage() {
                             </div>
                           </div>
                         </div>
-                        {hasContracts && (
-                          <Badge className="shrink-0 bg-alert-success/10 text-alert-success border-alert-success/20 mt-0.5">
-                            Active
-                          </Badge>
-                        )}
                       </div>
                     </CardHeader>
 
