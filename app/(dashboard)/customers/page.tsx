@@ -22,13 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Command,
@@ -58,6 +51,8 @@ import {
   Upload,
   Download,
   Loader2,
+  Users,
+  MessageSquare,
 } from "lucide-react"
 import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
@@ -65,9 +60,7 @@ import { useRouter } from "next/navigation"
 import * as XLSX from "xlsx"
 
 // ── Column alias map ─────────────────────────────────────────────────────────
-// Maps flexible user-typed headers → our internal field names
 const COLUMN_ALIASES: Record<string, string> = {
-  // name
   name: "name",
   "customer name": "name",
   customer_name: "name",
@@ -75,7 +68,6 @@ const COLUMN_ALIASES: Record<string, string> = {
   fullname: "name",
   "client name": "name",
   client: "name",
-  // phone
   phone: "phone",
   mobile: "phone",
   "phone number": "phone",
@@ -83,7 +75,6 @@ const COLUMN_ALIASES: Record<string, string> = {
   "mobile number": "phone",
   contact: "phone",
   "contact number": "phone",
-  // address
   address: "address",
   addr: "address",
   "full address": "address",
@@ -93,7 +84,6 @@ const COLUMN_ALIASES: Record<string, string> = {
 
 const REQUIRED_FIELDS = ["name", "phone", "address"]
 
-// ── Normalize a header string ─────────────────────────────────────────────────
 function normalizeHeader(raw: string): string | null {
   const cleaned = raw.toString().toLowerCase().trim()
   return COLUMN_ALIASES[cleaned] ?? null
@@ -117,6 +107,7 @@ export default function CustomersPage() {
   const [importing, setImporting] = useState(false)
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [senderName, setSenderName] = useState<string>("")
 
   const { maxCustomers, currentCustomerCount, status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
@@ -124,7 +115,6 @@ export default function CustomersPage() {
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
-  // Hidden file input ref for Excel import
   const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -143,6 +133,24 @@ export default function CustomersPage() {
           }
         })
     }
+  }, [user?.id])
+
+  // Load sender name for WhatsApp messages
+  useEffect(() => {
+    const loadSenderName = async () => {
+      if (!user?.id) return
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('company_name, full_name')
+          .eq('id', user.id)
+          .single()
+        if (data) setSenderName(data.company_name || data.full_name || "")
+      } catch {
+        // optional — silently fail
+      }
+    }
+    loadSenderName()
   }, [user?.id])
 
   useEffect(() => {
@@ -169,10 +177,7 @@ export default function CustomersPage() {
 
       const customersWithContracts = (customersData as Customer[]).map(customer => {
         const contractCount = (contractsData as Contract[])?.filter(c => c.customer_id === customer.id).length || 0
-        return {
-          ...customer,
-          contractCount
-        }
+        return { ...customer, contractCount }
       })
 
       setAllContracts((contractsData as Contract[]) || [])
@@ -290,6 +295,44 @@ export default function CustomersPage() {
     window.location.href = '/billing'
   }
 
+  // ── Call customer ────────────────────────────────────────────────────────
+  const handleCallCustomer = (customer: Customer) => {
+    if (!customer.phone) {
+      toast.error("No phone number available")
+      return
+    }
+    window.location.href = `tel:${customer.phone.replace(/[\s\-().]/g, '')}`
+  }
+
+  // ── WhatsApp customer ────────────────────────────────────────────────────
+  const handleSendWhatsApp = (customer: Customer & { contractCount: number }) => {
+    const rawPhone = customer.phone?.trim()
+    if (!rawPhone) {
+      toast.error("No phone number found for this customer")
+      return
+    }
+
+    let phone = rawPhone.replace(/[\s\-().]/g, '')
+    if (phone.startsWith('0')) phone = '91' + phone.slice(1)
+    if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
+    phone = phone.replace(/^\+/, '')
+
+    const from = senderName || 'your service provider'
+    const contractLine = customer.contractCount > 0
+      ? `You currently have ${customer.contractCount} active AMC contract${customer.contractCount > 1 ? 's' : ''} with us.`
+      : `We'd love to help you set up an AMC contract for your equipment.`
+
+    const message =
+      `Dear ${customer.name},\n\n` +
+      `Greetings from *${from}*!\n\n` +
+      `${contractLine}\n\n` +
+      `If you need any service, maintenance, or have any questions, feel free to reply to this message or call us directly.\n\n` +
+      `Thank you for choosing *${from}*.`
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
+  }
+
   // ── Export customers to Excel ─────────────────────────────────────────────
   const exportCustomersExcel = () => {
     if (filteredCustomers.length === 0) {
@@ -305,9 +348,7 @@ export default function CustomersPage() {
       }))
 
       const ws = XLSX.utils.json_to_sheet(rows)
-      ws["!cols"] = [
-        { wch: 26 }, { wch: 16 }, { wch: 42 }, { wch: 12 },
-      ]
+      ws["!cols"] = [{ wch: 26 }, { wch: 16 }, { wch: 42 }, { wch: 12 }]
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Customers")
 
@@ -322,7 +363,6 @@ export default function CustomersPage() {
   // ── Excel import handler ──────────────────────────────────────────────────
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    // Reset input so same file can be re-selected
     if (importInputRef.current) importInputRef.current.value = ""
     if (!file || !currentOrgId) return
 
@@ -331,7 +371,6 @@ export default function CustomersPage() {
       return
     }
 
-    // ── Read the file ───────────────────────────────────────────────────────
     let rows: Record<string, unknown>[] = []
     try {
       const buffer = await file.arrayBuffer()
@@ -348,8 +387,6 @@ export default function CustomersPage() {
       return
     }
 
-    // ── Normalize column headers ────────────────────────────────────────────
-    // Build a map: original column key → our internal field name
     const firstRow = rows[0]
     const headerMap: Record<string, string> = {}
     for (const key of Object.keys(firstRow)) {
@@ -357,7 +394,6 @@ export default function CustomersPage() {
       if (normalized) headerMap[key] = normalized
     }
 
-    // Check all required fields are present
     const foundFields = new Set(Object.values(headerMap))
     const missingFields = REQUIRED_FIELDS.filter(f => !foundFields.has(f))
     if (missingFields.length > 0) {
@@ -367,7 +403,6 @@ export default function CustomersPage() {
       return
     }
 
-    // Parse rows into valid customers
     type ParsedCustomer = { name: string; phone: string; address: string }
     const validRows: ParsedCustomer[] = []
     let skippedMissing = 0
@@ -380,14 +415,12 @@ export default function CustomersPage() {
         mapped[fieldName] = String(row[origKey] ?? "").trim()
       }
 
-      // Skip rows missing required fields
       const missingValues = REQUIRED_FIELDS.filter(f => !mapped[f])
       if (missingValues.length > 0) {
         skippedMissing++
         continue
       }
 
-      // Skip duplicate phones within the file
       const normalizedPhone = mapped.phone.replace(/\s+/g, "")
       if (seenPhonesInFile.has(normalizedPhone)) {
         skippedDupeInFile++
@@ -407,13 +440,10 @@ export default function CustomersPage() {
       return
     }
 
-    // Check duplicates against existing customers in DB (by phone)
     setImporting(true)
     let skippedDupeInDB = 0
     try {
-      const existingPhones = new Set(
-        customers.map(c => c.phone.replace(/\s+/g, ""))
-      )
+      const existingPhones = new Set(customers.map(c => c.phone.replace(/\s+/g, "")))
 
       const uniqueRows = validRows.filter(r => {
         const normalized = r.phone.replace(/\s+/g, "")
@@ -430,13 +460,11 @@ export default function CustomersPage() {
         return
       }
 
-      // Plan limit check
       if (checkAndShowLimitModal(uniqueRows.length)) {
         setImporting(false)
         return
       }
 
-      // Insert to Supabase
       const payload = uniqueRows.map(r => ({
         org_id: currentOrgId,
         user_id: user?.id,
@@ -450,7 +478,6 @@ export default function CustomersPage() {
 
       await loadCustomers()
 
-      // Build summary toast
       const skippedTotal = skippedMissing + skippedDupeInFile + skippedDupeInDB
       const skippedParts: string[] = []
       if (skippedMissing > 0) skippedParts.push(`${skippedMissing} missing fields`)
@@ -469,19 +496,57 @@ export default function CustomersPage() {
     }
   }
 
+  const hasActiveFilters = searchTerm !== "" || filterLocation !== "all"
+
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        {/* Page Header */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-6 min-w-0 overflow-x-hidden">
+
+        {/* ── MOBILE Header ── */}
+        <div className="flex items-center justify-between gap-2 md:hidden">
+          <div>
+            <h1 className="text-xl font-bold text-foreground leading-tight">Customers</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage your customer directory
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="size-9 shrink-0">
+                  <MoreHorizontal className="size-4" />
+                  <span className="sr-only">More actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={exportCustomersExcel}
+                  disabled={filteredCustomers.length === 0}
+                >
+                  <Download className="mr-2 size-4" />
+                  Export Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importing || limitsLoading}
+                >
+                  {importing
+                    ? <Loader2 className="mr-2 size-4 animate-spin" />
+                    : <Upload className="mr-2 size-4" />}
+                  {importing ? "Importing..." : "Import Excel"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* ── DESKTOP Header ── */}
+        <div className="hidden md:flex md:flex-row md:items-center md:justify-between gap-2 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Customers</h1>
             <p className="text-muted-foreground">Manage your customers and their contact information</p>
           </div>
-
-          {/* ── Action Buttons ── */}
-          <div className="flex items-center gap-2">
-            {/* Export Excel */}
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -492,8 +557,6 @@ export default function CustomersPage() {
               <Download className="mr-2 size-4" />
               Export Excel
             </Button>
-
-            {/* Import Excel */}
             <Button
               variant="outline"
               size="sm"
@@ -508,17 +571,6 @@ export default function CustomersPage() {
               )}
               {importing ? "Importing..." : "Import Excel"}
             </Button>
-
-            {/* Hidden file input */}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={handleImportExcel}
-            />
-
-            {/* Add single customer */}
             <Button onClick={handleAddClick} disabled={limitsLoading}>
               <Plus className="mr-2 size-4" />
               Add Customer
@@ -526,8 +578,84 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        {/* ── Standalone Filter Bar ── */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
+        {/* Hidden file input */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={handleImportExcel}
+        />
+
+        {/* ── MOBILE Filter Bar ── */}
+        <div className="flex flex-col gap-2 md:hidden">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              type="search"
+              placeholder="Search by name or phone..."
+              className="pl-10 h-10 w-full"
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1" style={{ scrollbarWidth: "none" }}>
+            <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={locationPopoverOpen}
+                  className={cn(
+                    "shrink-0 h-8 rounded-full border px-3 text-xs gap-1 font-normal justify-between",
+                    filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                  )}
+                >
+                  <span className="truncate max-w-[110px]">
+                    {filterLocation === "all" ? "Location" : filterLocation}
+                  </span>
+                  <ChevronsUpDown className="size-3 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search location..." />
+                  <CommandList>
+                    <CommandEmpty>No location found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setFilterLocation("all")
+                          setLocationPopoverOpen(false)
+                        }}
+                      >
+                        <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
+                        All Locations
+                      </CommandItem>
+                      {availableLocations.map((loc) => (
+                        <CommandItem
+                          key={loc}
+                          value={loc}
+                          onSelect={() => {
+                            setFilterLocation(filterLocation === loc ? "all" : loc)
+                            setLocationPopoverOpen(false)
+                          }}
+                        >
+                          <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
+                          <span className="truncate">{loc}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* ── DESKTOP Filter Bar ── */}
+        <div className="hidden md:flex gap-4 md:flex-row md:items-center flex-wrap min-w-0">
           <div className="relative flex-1 min-w-[150px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -566,12 +694,7 @@ export default function CustomersPage() {
                         setLocationPopoverOpen(false)
                       }}
                     >
-                      <Check
-                        className={cn(
-                          "mr-2 size-4",
-                          filterLocation === "all" ? "opacity-100" : "opacity-0"
-                        )}
-                      />
+                      <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
                       All Locations
                     </CommandItem>
                     {availableLocations.map((loc) => (
@@ -583,12 +706,7 @@ export default function CustomersPage() {
                           setLocationPopoverOpen(false)
                         }}
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 size-4",
-                            filterLocation === loc ? "opacity-100" : "opacity-0"
-                          )}
-                        />
+                        <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
                         <span className="truncate">{loc}</span>
                       </CommandItem>
                     ))}
@@ -599,13 +717,13 @@ export default function CustomersPage() {
           </Popover>
         </div>
 
-        {/* Customers Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* ── DESKTOP Grid ── */}
+        <div className="hidden md:grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {loading ? (
             <div className="text-center py-8 col-span-full text-muted-foreground">Loading customers...</div>
           ) : filteredCustomers.length === 0 ? (
             <div className="text-center py-8 col-span-full text-muted-foreground">
-              {searchTerm ? 'No customers found matching your search' : 'No customers yet'}
+              {hasActiveFilters ? 'No customers found matching your filters' : 'No customers yet'}
             </div>
           ) : (
             filteredCustomers.map((customer) => (
@@ -639,6 +757,10 @@ export default function CustomersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSendWhatsApp(customer) }}>
+                          <MessageSquare className="mr-2 size-4 text-green-600" />
+                          Send WhatsApp
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditClick(customer) }}>
                           <Edit className="mr-2 size-4" />
                           Edit Customer
@@ -677,7 +799,194 @@ export default function CustomersPage() {
           )}
         </div>
 
-        {/* Add/Edit Customer Modal */}
+        {/* ── MOBILE Cards ── */}
+        <div className="flex flex-col gap-3 md:hidden pb-44">
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-xl border bg-card p-4 animate-pulse">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="size-10 rounded-lg bg-muted shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-muted rounded w-3/4" />
+                      <div className="h-3 bg-muted rounded w-1/2" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-muted rounded w-2/3" />
+                    <div className="h-3 bg-muted rounded w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredCustomers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+                <Users className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No customers found</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {hasActiveFilters
+                    ? 'Try adjusting your filters'
+                    : 'Add your first customer to get started'}
+                </p>
+              </div>
+              {!hasActiveFilters && (
+                <Button size="sm" onClick={handleAddClick} disabled={limitsLoading} className="mt-1">
+                  <Plus className="mr-1.5 size-4" />
+                  Add Customer
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Result count */}
+              <p className="text-xs text-muted-foreground px-0.5">
+                <span className="font-medium text-foreground">{filteredCustomers.length}</span>{" "}
+                customer{filteredCustomers.length !== 1 ? 's' : ''}{" "}
+                {hasActiveFilters ? 'found' : 'total'}
+              </p>
+
+              {filteredCustomers.map((customer) => {
+                const hasContracts = customer.contractCount > 0
+
+                // Status stripe: green when they have active contracts, muted when none
+                const statusBorderClass = hasContracts
+                  ? "border-l-[3px] border-l-alert-success"
+                  : "border-l-[3px] border-l-muted-foreground/30"
+
+                return (
+                  <Card
+                    key={customer.id}
+                    className={cn(
+                      "relative cursor-pointer transition-all active:scale-[0.99] active:shadow-none hover:shadow-md overflow-hidden",
+                      statusBorderClass
+                    )}
+                    onClick={() => router.push(`/customers/${customer.id}`)}
+                  >
+                    {/* Card Header */}
+                    <CardHeader className="pb-0 pt-4 px-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <span className="text-sm font-semibold text-primary">
+                              {customer.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold leading-tight break-words text-foreground">
+                              {customer.name}
+                            </p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <FileText className="size-3 text-muted-foreground" />
+                              <p className="text-xs text-muted-foreground">
+                                {customer.contractCount} contract{customer.contractCount !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        {hasContracts && (
+                          <Badge className="shrink-0 bg-alert-success/10 text-alert-success border-alert-success/20 mt-0.5">
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+
+                    {/* Card Body */}
+                    <CardContent className="px-4 pt-3 pb-0">
+                      <div className="space-y-2.5">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Phone</p>
+                          <p className="text-sm font-medium">{customer.phone}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Address</p>
+                          <p className="text-sm font-medium line-clamp-2">{customer.address}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+
+                    {/* Card Footer — quick actions */}
+                    <div className="flex items-center justify-between px-4 pt-3 pb-3 mt-1 border-t border-border">
+                      <p className="text-xs text-muted-foreground truncate flex-1 mr-2 opacity-60">
+                        Tap for details
+                      </p>
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Call — primary mobile action */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCallCustomer(customer)
+                          }}
+                          title="Call"
+                        >
+                          <Phone className="size-4" />
+                        </Button>
+                        {/* WhatsApp — most used mobile action */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 text-green-600 hover:text-green-600 hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSendWhatsApp(customer)
+                          }}
+                          title="Send WhatsApp"
+                        >
+                          <MessageSquare className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditClick(customer)
+                          }}
+                          title="Edit"
+                        >
+                          <Edit className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-9 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCustomerToDelete(customer)
+                            setDeleteDialogOpen(true)
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                        <ArrowUpRight className="size-4 text-muted-foreground ml-1" />
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })}
+            </>
+          )}
+        </div>
+
+        {/* ── MOBILE FAB — Add Customer ── */}
+        <button
+          className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+          onClick={handleAddClick}
+          disabled={limitsLoading}
+          aria-label="Add Customer"
+        >
+          <Plus className="size-4" />
+          Add Customer
+        </button>
+
+        {/* Modals */}
         {user && currentOrgId && (
           <AddCustomerModal
             open={modalOpen}
