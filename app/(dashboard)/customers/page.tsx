@@ -22,6 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Command,
@@ -135,7 +142,6 @@ export default function CustomersPage() {
     }
   }, [user?.id])
 
-  // Load sender name for WhatsApp messages
   useEffect(() => {
     const loadSenderName = async () => {
       if (!user?.id) return
@@ -295,7 +301,6 @@ export default function CustomersPage() {
     window.location.href = '/billing'
   }
 
-  // ── Call customer ────────────────────────────────────────────────────────
   const handleCallCustomer = (customer: Customer) => {
     if (!customer.phone) {
       toast.error("No phone number available")
@@ -304,7 +309,6 @@ export default function CustomersPage() {
     window.location.href = `tel:${customer.phone.replace(/[\s\-().]/g, '')}`
   }
 
-  // ── WhatsApp customer ────────────────────────────────────────────────────
   const handleSendWhatsApp = (customer: Customer & { contractCount: number }) => {
     const rawPhone = customer.phone?.trim()
     if (!rawPhone) {
@@ -333,7 +337,6 @@ export default function CustomersPage() {
     window.open(url, '_blank')
   }
 
-  // ── Export customers to Excel ─────────────────────────────────────────────
   const exportCustomersExcel = () => {
     if (filteredCustomers.length === 0) {
       toast.error("No customers to export")
@@ -360,7 +363,6 @@ export default function CustomersPage() {
     }
   }
 
-  // ── Excel import handler ──────────────────────────────────────────────────
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (importInputRef.current) importInputRef.current.value = ""
@@ -600,57 +602,27 @@ export default function CustomersPage() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1" style={{ scrollbarWidth: "none" }}>
-            <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={locationPopoverOpen}
-                  className={cn(
-                    "shrink-0 h-8 rounded-full border px-3 text-xs gap-1 font-normal justify-between",
-                    filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
-                  )}
-                >
-                  <span className="truncate max-w-[110px]">
-                    {filterLocation === "all" ? "Location" : filterLocation}
-                  </span>
-                  <ChevronsUpDown className="size-3 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search location..." />
-                  <CommandList>
-                    <CommandEmpty>No location found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setFilterLocation("all")
-                          setLocationPopoverOpen(false)
-                        }}
-                      >
-                        <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
-                        All Locations
-                      </CommandItem>
-                      {availableLocations.map((loc) => (
-                        <CommandItem
-                          key={loc}
-                          value={loc}
-                          onSelect={() => {
-                            setFilterLocation(filterLocation === loc ? "all" : loc)
-                            setLocationPopoverOpen(false)
-                          }}
-                        >
-                          <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
-                          <span className="truncate">{loc}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            {/* Location — Select on mobile (Popover doesn't work inside horizontal scroll) */}
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger
+                className={cn(
+                  "shrink-0 h-8 rounded-full border px-3 text-xs gap-1",
+                  filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                )}
+              >
+                <span className="truncate max-w-[110px]">
+                  {filterLocation === "all" ? "Location" : filterLocation}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {availableLocations.map((loc) => (
+                  <SelectItem key={loc} value={loc}>
+                    {loc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -841,7 +813,6 @@ export default function CustomersPage() {
             </div>
           ) : (
             <>
-              {/* Result count */}
               <p className="text-xs text-muted-foreground px-0.5">
                 <span className="font-medium text-foreground">{filteredCustomers.length}</span>{" "}
                 customer{filteredCustomers.length !== 1 ? 's' : ''}{" "}
@@ -851,7 +822,6 @@ export default function CustomersPage() {
               {filteredCustomers.map((customer) => {
                 const hasContracts = customer.contractCount > 0
 
-                // Status stripe: green when they have active contracts, muted when none
                 const statusBorderClass = hasContracts
                   ? "border-l-[3px] border-l-alert-success"
                   : "border-l-[3px] border-l-muted-foreground/30"
@@ -865,7 +835,6 @@ export default function CustomersPage() {
                     )}
                     onClick={() => router.push(`/customers/${customer.id}`)}
                   >
-                    {/* Card Header */}
                     <CardHeader className="pb-0 pt-4 px-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -894,7 +863,6 @@ export default function CustomersPage() {
                       </div>
                     </CardHeader>
 
-                    {/* Card Body */}
                     <CardContent className="px-4 pt-3 pb-0">
                       <div className="space-y-2.5">
                         <div>
@@ -908,13 +876,11 @@ export default function CustomersPage() {
                       </div>
                     </CardContent>
 
-                    {/* Card Footer — quick actions */}
                     <div className="flex items-center justify-between px-4 pt-3 pb-3 mt-1 border-t border-border">
                       <p className="text-xs text-muted-foreground truncate flex-1 mr-2 opacity-60">
                         Tap for details
                       </p>
                       <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {/* Call — primary mobile action */}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -927,7 +893,6 @@ export default function CustomersPage() {
                         >
                           <Phone className="size-4" />
                         </Button>
-                        {/* WhatsApp — most used mobile action */}
                         <Button
                           variant="ghost"
                           size="icon"
