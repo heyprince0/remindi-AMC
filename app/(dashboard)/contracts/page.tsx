@@ -884,14 +884,53 @@ export default function ContractsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 min-w-0 overflow-x-hidden">
-        {/* Page Header */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between flex-wrap">
+
+        {/* ── MOBILE Header ── */}
+        <div className="flex items-center justify-between gap-2 md:hidden">
+          <div>
+            <h1 className="text-xl font-bold text-foreground leading-tight">Contracts</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">AMC contracts & service agreements</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Secondary actions in overflow menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="size-9 shrink-0">
+                  <MoreHorizontal className="size-4" />
+                  <span className="sr-only">More actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={exportContractsExcel}
+                  disabled={filteredContracts.length === 0}
+                >
+                  <Download className="mr-2 size-4" />
+                  Export Excel
+                </DropdownMenuItem>
+                {!isTechnician && (
+                  <DropdownMenuItem
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={importing || subscriptionLoading}
+                  >
+                    {importing
+                      ? <Loader2 className="mr-2 size-4 animate-spin" />
+                      : <Upload className="mr-2 size-4" />}
+                    {importing ? "Importing..." : "Import Excel"}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* ── DESKTOP Header ── */}
+        <div className="hidden md:flex flex-col gap-2 md:flex-row md:items-center md:justify-between flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
             <p className="text-muted-foreground">Manage your AMC contracts and service agreements</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {/* Export Excel */}
             <Button
               variant="outline"
               size="sm"
@@ -901,8 +940,6 @@ export default function ContractsPage() {
               <Download className="mr-2 size-4" />
               Export Excel
             </Button>
-
-            {/* Import Excel */}
             {!isTechnician && (
               <Button
                 variant="outline"
@@ -910,25 +947,12 @@ export default function ContractsPage() {
                 onClick={() => importInputRef.current?.click()}
                 disabled={importing || subscriptionLoading}
               >
-                {importing ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 size-4" />
-                )}
+                {importing
+                  ? <Loader2 className="mr-2 size-4 animate-spin" />
+                  : <Upload className="mr-2 size-4" />}
                 {importing ? "Importing..." : "Import Excel"}
               </Button>
             )}
-
-            {/* Hidden file input */}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={handleImportContracts}
-            />
-
-            {/* Add Contract */}
             {!isTechnician && (
               <Button onClick={handleAddClick} disabled={subscriptionLoading}>
                 <Plus className="mr-2 size-4" />
@@ -938,8 +962,122 @@ export default function ContractsPage() {
           </div>
         </div>
 
-        {/* ── Filter Bar ── */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap min-w-0">
+        {/* Hidden file input (shared) */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={handleImportContracts}
+        />
+
+        {/* ── MOBILE Filter Bar ── */}
+        <div className="flex flex-col gap-2 md:hidden">
+          {/* Search — full width */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              type="search"
+              placeholder="Search contracts..."
+              className="pl-10 h-10 w-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          {/* Horizontal scrollable filter pills */}
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1" style={{ scrollbarWidth: "none" }}>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger
+                className={cn(
+                  "shrink-0 h-8 rounded-full border px-3 text-xs gap-1",
+                  filterStatus !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                )}
+              >
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="today-servicing">Today Servicing</SelectItem>
+                <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger
+                className={cn(
+                  "shrink-0 h-8 rounded-full border px-3 text-xs gap-1",
+                  filterMonth !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                )}
+              >
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTHS.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={locationPopoverOpen}
+                  className={cn(
+                    "shrink-0 h-8 rounded-full border px-3 text-xs gap-1 font-normal justify-between",
+                    filterLocation !== "all" && "border-primary text-primary bg-primary/5 font-medium"
+                  )}
+                >
+                  <span className="truncate max-w-[80px]">
+                    {filterLocation === "all" ? "Location" : filterLocation}
+                  </span>
+                  <ChevronsUpDown className="size-3 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search location..." />
+                  <CommandList>
+                    <CommandEmpty>No location found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setFilterLocation("all")
+                          setLocationPopoverOpen(false)
+                        }}
+                      >
+                        <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
+                        All Locations
+                      </CommandItem>
+                      {availableLocations.map((loc) => (
+                        <CommandItem
+                          key={loc}
+                          value={loc}
+                          onSelect={() => {
+                            setFilterLocation(filterLocation === loc ? "all" : loc)
+                            setLocationPopoverOpen(false)
+                          }}
+                        >
+                          <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
+                          <span className="truncate">{loc}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* ── DESKTOP Filter Bar ── */}
+        <div className="hidden md:flex gap-4 md:flex-row md:items-center flex-wrap min-w-0">
           <div className="relative flex-1 min-w-[150px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -963,7 +1101,6 @@ export default function ContractsPage() {
                 <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
               </SelectContent>
             </Select>
-
             <Select value={filterMonth} onValueChange={setFilterMonth}>
               <SelectTrigger className="w-[140px] sm:w-[160px]">
                 <SelectValue placeholder="Month" />
@@ -976,7 +1113,6 @@ export default function ContractsPage() {
                 ))}
               </SelectContent>
             </Select>
-
             <Popover open={locationPopoverOpen} onOpenChange={setLocationPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -1004,12 +1140,7 @@ export default function ContractsPage() {
                           setLocationPopoverOpen(false)
                         }}
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 size-4",
-                            filterLocation === "all" ? "opacity-100" : "opacity-0"
-                          )}
-                        />
+                        <Check className={cn("mr-2 size-4", filterLocation === "all" ? "opacity-100" : "opacity-0")} />
                         All Locations
                       </CommandItem>
                       {availableLocations.map((loc) => (
@@ -1021,12 +1152,7 @@ export default function ContractsPage() {
                             setLocationPopoverOpen(false)
                           }}
                         >
-                          <Check
-                            className={cn(
-                              "mr-2 size-4",
-                              filterLocation === loc ? "opacity-100" : "opacity-0"
-                            )}
-                          />
+                          <Check className={cn("mr-2 size-4", filterLocation === loc ? "opacity-100" : "opacity-0")} />
                           <span className="truncate">{loc}</span>
                         </CommandItem>
                       ))}
@@ -1174,115 +1300,138 @@ export default function ContractsPage() {
         </Card>
 
         {/* ── MOBILE Cards ── */}
-        <div className="flex flex-col gap-4 md:hidden">
+        <div className="flex flex-col gap-3 md:hidden pb-24">
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading contracts...</div>
+            /* Loading skeleton */
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-xl border bg-card p-4 animate-pulse">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="size-10 rounded-lg bg-muted shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-muted rounded w-3/4" />
+                      <div className="h-3 bg-muted rounded w-1/2" />
+                    </div>
+                    <div className="h-5 w-16 bg-muted rounded-full" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[1, 2, 3, 4].map((j) => (
+                      <div key={j} className="space-y-1">
+                        <div className="h-2.5 bg-muted rounded w-1/2" />
+                        <div className="h-3.5 bg-muted rounded w-3/4" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : filteredContracts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No contracts found</div>
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+                <FileText className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">No contracts found</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {filterStatus !== 'all' || filterMonth !== 'all' || filterLocation !== 'all' || searchTerm
+                    ? 'Try adjusting your filters'
+                    : 'Add your first contract to get started'}
+                </p>
+              </div>
+              {!isTechnician && !searchTerm && filterStatus === 'all' && filterMonth === 'all' && filterLocation === 'all' && (
+                <Button size="sm" onClick={handleAddClick} disabled={subscriptionLoading} className="mt-1">
+                  <Plus className="mr-1.5 size-4" />
+                  Add Contract
+                </Button>
+              )}
+            </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                You have{" "}
+              {/* Result count */}
+              <p className="text-xs text-muted-foreground px-0.5">
                 <span className="font-medium text-foreground">{filteredContracts.length}</span>{" "}
-                contracts{" "}
-                {filterStatus !== 'all' || filterMonth !== 'all' || filterLocation !== 'all'
-                  ? 'matching filters'
-                  : 'in total'}
+                contract{filteredContracts.length !== 1 ? 's' : ''}{" "}
+                {filterStatus !== 'all' || filterMonth !== 'all' || filterLocation !== 'all' || searchTerm
+                  ? 'found'
+                  : 'total'}
               </p>
 
               {filteredContracts.map((contract) => {
                 const days = getDaysUntilService(contract.next_service_date)
                 const frequencyMonths = Math.round(contract.frequency_days / 30)
+
+                // Status-based left border color
+                const statusBorderClass =
+                  days < 0 ? "border-l-[3px] border-l-alert-overdue" :
+                  days === 0 ? "border-l-[3px] border-l-alert-due-today" :
+                  days <= 3 ? "border-l-[3px] border-l-alert-due-today" :
+                  contract.status === 'active' ? "border-l-[3px] border-l-alert-success" :
+                  ""
+
+                // Countdown label for next service
+                const countdownLabel =
+                  days < 0 ? `${Math.abs(days)}d overdue` :
+                  days === 0 ? "Due today" :
+                  days <= 7 ? `in ${days}d` :
+                  null
+
                 return (
                   <Card
                     key={contract.id}
-                    className="relative cursor-pointer transition-shadow hover:shadow-md"
+                    className={cn(
+                      "relative cursor-pointer transition-all active:scale-[0.99] active:shadow-none hover:shadow-md overflow-hidden",
+                      statusBorderClass
+                    )}
                     onClick={() => router.push(`/contracts/${contract.id}`)}
                   >
-                    <CardHeader className="pb-3">
+                    {/* Card Header */}
+                    <CardHeader className="pb-0 pt-4 px-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                            <FileText className="size-5 text-primary" />
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <FileText className="size-4 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <CardTitle className="text-sm font-semibold leading-tight break-words">
+                            <p className="text-sm font-semibold leading-tight break-words text-foreground">
                               {contract.contract_name}
-                            </CardTitle>
-                            <CardDescription className="text-xs break-words mt-0.5">
+                            </p>
+                            <p className="text-xs text-muted-foreground break-words mt-0.5">
                               {contract.customerName}
-                            </CardDescription>
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0 mt-0.5">
                           {getStatusBadge(days, contract.status)}
-                          {!isTechnician && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                  <span className="sr-only">Actions</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    router.push(`/contracts/${contract.id}`)
-                                  }}
-                                >
-                                  <Eye className="mr-2 size-4" />
-                                  View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEditClick(contract)
-                                  }}
-                                >
-                                  <Edit className="mr-2 size-4" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleSendWhatsApp(contract)
-                                  }}
-                                  className="text-green-600 focus:text-green-600"
-                                >
-                                  <MessageSquare className="mr-2 size-4" />
-                                  Send WhatsApp
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setContractToDelete(contract)
-                                    setDeleteDialogOpen(true)
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="mr-2 size-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+
+                    {/* Card Body */}
+                    <CardContent className="px-4 pt-3 pb-0">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Frequency</p>
-                          <p className="text-sm font-medium">{frequencyMonths} months</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Last Service</p>
+                          <p className="text-sm font-medium">{formatShortDate(contract.start_date)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Price</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Next Service</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium">{formatShortDate(contract.next_service_date)}</p>
+                            {countdownLabel && (
+                              <span className={cn(
+                                "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                                days < 0 ? "bg-alert-overdue/10 text-alert-overdue" :
+                                days === 0 ? "bg-alert-due-today/10 text-alert-due-today" :
+                                "bg-alert-due-today/10 text-alert-due-today"
+                              )}>
+                                {countdownLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Price</p>
                           <p className="text-sm font-medium">
                             {contract.contracts_price != null
                               ? `₹${contract.contracts_price.toLocaleString('en-IN')}`
@@ -1290,31 +1439,88 @@ export default function ContractsPage() {
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Last Service</p>
-                          <p className="text-sm font-medium">{formatShortDate(contract.start_date)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Next Service</p>
-                          <p className="text-sm font-medium">{formatShortDate(contract.next_service_date)}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Frequency</p>
+                          <p className="text-sm font-medium">{frequencyMonths}mo</p>
                         </div>
                         <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground mb-0.5">Contract End</p>
-                          <p className="text-sm font-medium">{contract.endDate || '—'}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Contract End</p>
+                          <p className="text-sm font-medium">{formatShortDate(contract.endDate)}</p>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-border">
-                        <div className="text-xs text-muted-foreground truncate">
-                          {contract.location || ''}
-                        </div>
-                        <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                       </div>
                     </CardContent>
+
+                    {/* Card Footer — quick actions */}
+                    <div className="flex items-center justify-between px-4 pt-3 pb-3 mt-1 border-t border-border">
+                      <p className="text-xs text-muted-foreground truncate flex-1 mr-2">
+                        {contract.location || <span className="opacity-40">No location</span>}
+                      </p>
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* WhatsApp — primary mobile action */}
+                        {contract.customerPhone && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-9 text-green-600 hover:text-green-600 hover:bg-green-50"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSendWhatsApp(contract)
+                            }}
+                            title="Send WhatsApp"
+                          >
+                            <MessageSquare className="size-4" />
+                          </Button>
+                        )}
+                        {!isTechnician && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-9 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditClick(contract)
+                              }}
+                              title="Edit"
+                            >
+                              <Edit className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-9 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setContractToDelete(contract)
+                                setDeleteDialogOpen(true)
+                              }}
+                              title="Delete"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </>
+                        )}
+                        <ArrowUpRight className="size-4 text-muted-foreground ml-1" />
+                      </div>
+                    </div>
                   </Card>
                 )
               })}
             </>
           )}
         </div>
+
+        {/* ── MOBILE FAB — Add Contract ── */}
+        {!isTechnician && (
+          <button
+            className="fixed bottom-6 right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+            onClick={handleAddClick}
+            disabled={subscriptionLoading}
+            aria-label="Add Contract"
+          >
+            <Plus className="size-4" />
+            Add Contract
+          </button>
+        )}
 
         {/* Modals */}
         {user && currentOrgId && !isTechnician && (
