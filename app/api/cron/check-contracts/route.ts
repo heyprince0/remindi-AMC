@@ -17,17 +17,22 @@ function formatDate(dateStr: string): string {
   })
 }
 
-async function alreadyRemindedToday(
+function addDays(base: Date, days: number): string {
+  const d = new Date(base)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+async function alreadySent(
   contractId: string,
-  type: string
+  type: 'expiring_soon' | 'expired'
 ): Promise<boolean> {
-  const todayStr = new Date().toISOString().split('T')[0]
   const { data } = await supabase
     .from('reminders_log')
     .select('id')
     .eq('contract_id', contractId)
     .eq('message_type', `whatsapp_${type}`)
-    .gte('sent_at', `${todayStr}T00:00:00`)
+    .limit(1)
     .maybeSingle()
   return !!data
 }
@@ -60,29 +65,52 @@ export async function GET(req: Request) {
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
 
-  const in7Days = new Date(today)
-  in7Days.setDate(today.getDate() + 7)
-  const in7DaysStr = in7Days.toISOString().split('T')[0]
+  // Exact target dates
+  const tMinus3 = addDays(today, 3)   // end_date == today + 3  → "3 days before expiry"
+  const tZero   = todayStr            // end_date == today      → "on expiry day"
+  const tPlus3  = addDays(today, -3)  // end_date == today - 3  → "3 days after expiry"
 
   let sent = 0
   let skipped = 0
   let failed = 0
 
-  // ─── 1. EXPIRING SOON (end_date within 7 days) ───
-  const { data: expiringContracts } = await supabase
+  // Fetch contracts hitting any of our 3 target dates, in one query
+  const { data: contracts } = await supabase
     .from('contracts')
     .select(`
-      id, contract_name, contract_type, end_date, org_id,
+      id, contract_name, contract_type, end_date, org_id, status,
       customers ( id, name ),
       organizations ( id, name, owner_id )
     `)
     .eq('status', 'active')
-    .gte('end_date', todayStr)
-    .lte('end_date', in7DaysStr)
+    .in('end_date', [tMinus3, tZero, tPlus3])
 
-  for (const contract of expiringContracts || []) {
-    const alreadySent = await alreadyRemindedToday(contract.id, 'expiring_soon')
-    if (alreadySent) { skipped++; continue }
+  for (const contract of contracts || []) {
+    const endDate = contract.end_date as string
+
+    // Decide which reminder this contract is due for today
+    let type: 'expiring_soon' | 'expired' | null = null
+    if (endDate === tMinus3) type = 'expiring_soon'
+    else if (endDate === tZero) type = 'expiring_soon'
+    else if (endDate === tPlus3) type = 'expired'
+
+    if (!type) continue
+
+    // Dedup: only send each type once per contract
+    // (expiring_soon fires twice — T-3 and T-0 — so we key on the exact date)
+    const dedupKey = `${type}_${endDate}` // unique per (type, end_date)
+    const { data: existing } = await supabase
+      .from('reminders_log')
+      .select('id')
+      .eq('contract_id', contract.id)
+      .eq('message_type', `whatsapp_${dedupKey}`)
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      skipped++
+      continue
+    }
 
     const org = contract.organizations as any
     const customer = contract.customers as any
@@ -93,7 +121,10 @@ export async function GET(req: Request) {
       .eq('id', org?.owner_id)
       .maybeSingle()
 
-    if (!profile?.phone) { skipped++; continue }
+    if (!profile?.phone) {
+      skipped++
+      continue
+    }
 
     const ok = await sendReminder({
       orgId: contract.org_id,
@@ -101,49 +132,9 @@ export async function GET(req: Request) {
       contractorName: profile.full_name || profile.company_name || 'there',
       customerName: customer?.name || 'your customer',
       serviceType: contract.contract_type || contract.contract_name || 'Service',
-      date: formatDate(contract.end_date!),
+      date: formatDate(endDate),
       contractId: contract.id,
-      type: 'expiring_soon',
-    })
-
-    ok ? sent++ : failed++
-  }
-
-  // ─── 2. EXPIRED (end_date already passed) ───
-  const { data: expiredContracts } = await supabase
-    .from('contracts')
-    .select(`
-      id, contract_name, contract_type, end_date, org_id,
-      customers ( id, name ),
-      organizations ( id, name, owner_id )
-    `)
-    .eq('status', 'active')
-    .lt('end_date', todayStr)
-
-  for (const contract of expiredContracts || []) {
-    const alreadySent = await alreadyRemindedToday(contract.id, 'expired')
-    if (alreadySent) { skipped++; continue }
-
-    const org = contract.organizations as any
-    const customer = contract.customers as any
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('phone, full_name, company_name')
-      .eq('id', org?.owner_id)
-      .maybeSingle()
-
-    if (!profile?.phone) { skipped++; continue }
-
-    const ok = await sendReminder({
-      orgId: contract.org_id,
-      contractorPhone: profile.phone,
-      contractorName: profile.full_name || profile.company_name || 'there',
-      customerName: customer?.name || 'your customer',
-      serviceType: contract.contract_type || contract.contract_name || 'Service',
-      date: formatDate(contract.end_date!),
-      contractId: contract.id,
-      type: 'expired',
+      type,
     })
 
     ok ? sent++ : failed++
@@ -154,7 +145,7 @@ export async function GET(req: Request) {
     sent,
     skipped,
     failed,
-    expiring: expiringContracts?.length || 0,
-    expired: expiredContracts?.length || 0,
+    targets: { tMinus3, tZero, tPlus3 },
+    matched: contracts?.length || 0,
   })
 }
