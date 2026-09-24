@@ -131,7 +131,7 @@ export async function GET(req: Request) {
       contractorPhone: profile.phone,
       contractorName: profile.full_name || profile.company_name || 'there',
       customerName: customer?.name || 'your customer',
-      serviceType: contract.contract_type || contract.contract_name || 'Service',
+      serviceType: contract.contract_name || contract.contract_type || 'Service',
       date: formatDate(endDate),
       contractId: contract.id,
       type,
