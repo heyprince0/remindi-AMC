@@ -49,11 +49,9 @@ Remindi uses Supabase with the following key tables:
 
 ---
 
-## Part of Cosmos
+## Remindi info
 
-Remindi is built and maintained by Cosmos — a product studio building practical software for Indian SMBs. Founder prakash jadhav (prince)
-
-Sister product: **Gain.ai** — AI fitness platform for gym owners.
+Remindi is built and founded by Prakash jadhav. Founder prakash jadhav (prince)
 
 ---
 
