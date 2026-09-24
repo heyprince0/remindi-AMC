@@ -25,6 +25,7 @@ interface ReminderBody {
   date: string           // due date OR expiry date
   contractId: string
   type: 'due' | 'expiring_soon' | 'expired'
+  dedupKey?: string      // NEW: unique log key, e.g. "expiring_soon_2026-11-17"
 }
 
 export async function POST(request: NextRequest) {
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       date,
       contractId,
       type,
+      dedupKey,
     } = body
 
     if (!orgId || !contractorPhone || !contractorName || !customerName || !serviceType || !date || !contractId || !type) {
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     const cleanPhone = formatPhone(contractorPhone)
 
-    // Pick template based on type
+    // Pick template based on type (unchanged)
     const templateName =
       type === 'expired' ? 'contract_expired' :
       type === 'expiring_soon' ? 'contract_expiring_soon' :
@@ -83,22 +85,10 @@ export async function POST(request: NextRequest) {
                 {
                   to: [cleanPhone],
                   components: {
-                    body_1: {
-                      type: 'text',
-                      value: contractorName,
-                    },
-                    body_2: {
-                      type: 'text',
-                      value: customerName,
-                    },
-                    body_3: {
-                      type: 'text',
-                      value: serviceType,
-                    },
-                    body_4: {
-                      type: 'text',
-                      value: date,
-                    },
+                    body_1: { type: 'text', value: contractorName },
+                    body_2: { type: 'text', value: customerName },
+                    body_3: { type: 'text', value: serviceType },
+                    body_4: { type: 'text', value: date },
                     button_1: {
                       subtype: 'url',
                       type: 'text',
@@ -115,13 +105,14 @@ export async function POST(request: NextRequest) {
 
     const result = await msg91Response.json()
 
-    // Log to reminders_log
+    // CHANGED: log using dedupKey when provided, so T-3 and T-0
+    // expiring_soon sends don't collide in reminders_log
     const supabase = getSupabaseAdmin()
     await supabase.from('reminders_log').insert({
       org_id: orgId,
       contract_id: contractId,
       sent_at: new Date().toISOString(),
-      message_type: `whatsapp_${type}`,
+      message_type: `whatsapp_${dedupKey ?? type}`,
       status: msg91Response.ok ? 'sent' : 'failed',
       recipient_phone: contractorPhone,
       whatsapp_sent: msg91Response.ok,
