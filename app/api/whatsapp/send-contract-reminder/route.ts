@@ -21,12 +21,12 @@ interface ReminderBody {
   contractorPhone: string
   contractorName: string
   customerName: string
-  customerPhone: string            // NEW — needed for body_5
+  customerPhone: string            // required — used for body_5
   serviceType: string
   date: string                     // formatted date, e.g. "23 Sep 2026"
   contractId: string
-  type: 'due' | 'expiring_soon' | 'expired'
-  dedupKey?: string                // e.g. "expired_2026-09-23"
+  type: 'due' | 'upcoming' | 'not_completed'   // ← updated union
+  dedupKey?: string                // e.g. "upcoming_2026-09-29"
 }
 
 export async function POST(request: NextRequest) {
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
       dedupKey,
     } = body
 
-    // customerPhone is now required — body_5 needs it
     if (
       !orgId || !contractorPhone || !contractorName ||
       !customerName || !customerPhone || !serviceType ||
@@ -61,15 +60,14 @@ export async function POST(request: NextRequest) {
 
     const cleanContractorPhone = formatPhone(contractorPhone)
 
-    // Template mapping (only these two are used now):
-    //   expiring_soon → contract_end          ("upcoming service visit")
-    //   expired       → service_notcompleted  ("service visit was not completed")
-    //   due           → contract_end          (fallback, not used by cron)
+    // Template mapping:
+    //   upcoming      → contract_end          ("🛠️ Upcoming Service Visit")
+    //   not_completed → service_notcompleted  ("⚠️ Service Visit Not Completed")
+    //   due           → contract_end          (legacy fallback)
     const templateName =
-      type === 'expired'
-        ? 'service_notcompleted'
-        : 'contract_end'
-
+      type === 'not_completed' ? 'service_notcompleted' :
+      type === 'upcoming'      ? 'contract_end' :
+                                 'contract_end'
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
       {
@@ -95,21 +93,15 @@ export async function POST(request: NextRequest) {
                 {
                   to: [cleanContractorPhone],
                   components: {
-                    // "Hi {{1}}"                     → greeting for the contractor (recipient)
-                    body_1: { type: 'text', value: contractorName },
-                    // "with {{2}}"                   → the customer
-                    body_2: { type: 'text', value: customerName },
-                    // "for {{3}}"                    → service / contract name
-                    body_3: { type: 'text', value: serviceType },
-                    // "on {{4}}"                     → date
-                    body_4: { type: 'text', value: date },
-                    // "Call {{2}} at 📞 {{5}}"       → customer's phone
-                    body_5: { type: 'text', value: customerPhone },
-                    // Button URL → https://remindi.online/contracts/{{1}}
+                    body_1: { type: 'text', value: contractorName },   // recipient greeting
+                    body_2: { type: 'text', value: customerName },     // customer
+                    body_3: { type: 'text', value: serviceType },      // contract/service name
+                    body_4: { type: 'text', value: date },             // service date
+                    body_5: { type: 'text', value: customerPhone },    // customer phone
                     button_1: {
                       subtype: 'url',
                       type: 'text',
-                      value: contractId,
+                      value: contractId,                                // → /contracts/{id}
                     },
                   },
                 },
@@ -122,7 +114,6 @@ export async function POST(request: NextRequest) {
 
     const result = await msg91Response.json()
 
-    // Log to reminders_log — same as before
     const supabase = getSupabaseAdmin()
     await supabase.from('reminders_log').insert({
       org_id: orgId,
