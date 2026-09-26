@@ -178,6 +178,8 @@ export default function ContractDetailPage() {
         return
       }
 
+      // Always send service_notcompleted on click — no expiry logic, no date dependency.
+      // type: 'expired' maps to `service_notcompleted` template in the sender route.
       const res = await fetch('/api/whatsapp/send-contract-reminder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,13 +190,9 @@ export default function ContractDetailPage() {
           customerName: contract.customerName,
           customerPhone: customer?.phone || profile.phone,
           serviceType: contract.contract_name || contract.contract_type || 'Service',
-          date: contract.next_service_date
-            ? new Date(contract.next_service_date).toLocaleDateString('en-IN', {
-                day: 'numeric', month: 'short', year: 'numeric'
-              })
-            : new Date().toLocaleDateString('en-IN', {
-                day: 'numeric', month: 'short', year: 'numeric'
-              }),
+          date: new Date().toLocaleDateString('en-IN', {
+            day: 'numeric', month: 'short', year: 'numeric'
+          }),
           contractId: contract.id,
           type: 'expired',
           dedupKey: `test_expired_${Date.now()}`,
@@ -455,25 +453,20 @@ export default function ContractDetailPage() {
             <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
               {serviceHistory.map((record) => (
                 <div key={record.id} className="flex items-start gap-3 px-4 py-3">
-                  {/* Small timeline dot */}
                   <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
                     <Calendar className="size-3 text-muted-foreground" />
                   </div>
 
-                  {/* Content */}
                   <div className="min-w-0 flex-1">
-                    {/* Date + status on same row */}
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">{formatDate(record.service_date)}</p>
                       {getMobileServiceBadge(record.status)}
                     </div>
 
-                    {/* Technician */}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {record.technicianName}
                     </p>
 
-                    {/* Notes — only if present */}
                     {record.notes && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">
                         {record.notes}
