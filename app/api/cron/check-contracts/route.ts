@@ -28,12 +28,12 @@ async function sendReminder(params: {
   contractorPhone: string
   contractorName: string
   customerName: string
-  customerPhone: string          // ← NEW — passed through to body_5
+  customerPhone: string
   serviceType: string
   date: string
   contractId: string
-  type: 'expiring_soon' | 'expired'
-  dedupKey: string               // ← NEW — unique log key
+  type: 'upcoming' | 'not_completed'
+  dedupKey: string
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://remindi.online'
   const res = await fetch(`${appUrl}/api/whatsapp/send-contract-reminder`, {
@@ -53,40 +53,40 @@ export async function GET(req: Request) {
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
 
-  // Exact target dates
-  const tMinus3 = addDays(today, 3)   // end_date == today + 3  → "3 days before expiry"
-  const tZero   = todayStr            // end_date == today      → "on expiry day"
-  const tPlus3  = addDays(today, -3)  // end_date == today - 3  → "3 days after expiry"
+  // ── Target dates based on next_service_date ──
+  const tMinus3 = addDays(today, 3)   // 3 days before service → "upcoming"
+  const tZero   = todayStr            // on service day        → "not_completed"
+  const tPlus3  = addDays(today, -3)  // 3 days after service  → "not_completed"
 
   let sent = 0
   let skipped = 0
-  let skippedNoPhone = 0              // ← NEW — visibility into silent skips
+  let skippedNoPhone = 0
   let failed = 0
 
-  // Fetch contracts hitting any of our 3 target dates, in one query
+  // Fetch contracts whose next service falls on one of the 3 target dates
   const { data: contracts } = await supabase
     .from('contracts')
     .select(`
-      id, contract_name, contract_type, end_date, org_id, status,
+      id, contract_name, contract_type, next_service_date, org_id, status,
       customers ( id, name, phone ),
       organizations ( id, name, owner_id )
     `)
     .eq('status', 'active')
-    .in('end_date', [tMinus3, tZero, tPlus3])
+    .in('next_service_date', [tMinus3, tZero, tPlus3])
 
   for (const contract of contracts || []) {
-    const endDate = contract.end_date as string
+    const serviceDate = contract.next_service_date as string
 
     // Decide which reminder this contract is due for today
-    let type: 'expiring_soon' | 'expired' | null = null
-    if (endDate === tMinus3) type = 'expiring_soon'
-    else if (endDate === tZero) type = 'expiring_soon'
-    else if (endDate === tPlus3) type = 'expired'
+    let type: 'upcoming' | 'not_completed' | null = null
+    if (serviceDate === tMinus3) type = 'upcoming'
+    else if (serviceDate === tZero) type = 'not_completed'
+    else if (serviceDate === tPlus3) type = 'not_completed'
 
     if (!type) continue
 
-    // Dedup: only send each (type, endDate) combo once per contract
-    const dedupKey = `${type}_${endDate}`
+    // Dedup — unique per (type, serviceDate)
+    const dedupKey = `${type}_${serviceDate}`
     const { data: existing } = await supabase
       .from('reminders_log')
       .select('id')
@@ -103,7 +103,6 @@ export async function GET(req: Request) {
     const org = contract.organizations as any
     const customer = contract.customers as any
 
-    // Owner (contractor) profile — must have phone
     const { data: profile } = await supabase
       .from('profiles')
       .select('phone, full_name, company_name')
@@ -116,8 +115,6 @@ export async function GET(req: Request) {
       continue
     }
 
-    // Customer phone — required for body_5.
-    // Fall back to owner's phone only if customer's phone is missing.
     const customerPhone = customer?.phone || profile.phone
 
     const ok = await sendReminder({
@@ -127,7 +124,7 @@ export async function GET(req: Request) {
       customerName: customer?.name || 'your customer',
       customerPhone,
       serviceType: contract.contract_name || contract.contract_type || 'Service',
-      date: formatDate(endDate),
+      date: formatDate(serviceDate),
       contractId: contract.id,
       type,
       dedupKey,
