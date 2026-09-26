@@ -21,12 +21,18 @@ interface ReminderBody {
   contractorPhone: string
   contractorName: string
   customerName: string
-  customerPhone: string            // required — used for body_5
+  customerPhone: string
   serviceType: string
-  date: string                     // formatted date, e.g. "23 Sep 2026"
+  date: string
   contractId: string
-  type: 'due' | 'upcoming' | 'not_completed'   // ← updated union
-  dedupKey?: string                // e.g. "upcoming_2026-09-29"
+  // Types:
+  //   upcoming           → soon_service          (service T-3, uses next_service_date)
+  //   not_completed      → service_notcompleted  (service T-0 & T+3, uses next_service_date)
+  //   expired            → service_notcompleted  (test button + service T+3 alias)
+  //   contract_end       → contract_end          (contract expiry, uses end_date)
+  //   due                → soon_service          (legacy fallback)
+  type: 'due' | 'upcoming' | 'not_completed' | 'expired' | 'contract_end'
+  dedupKey?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -60,14 +66,17 @@ export async function POST(request: NextRequest) {
 
     const cleanContractorPhone = formatPhone(contractorPhone)
 
-    // Template mapping:
-    //   upcoming      → contract_end          ("🛠️ Upcoming Service Visit")
-    //   not_completed → service_notcompleted  ("⚠️ Service Visit Not Completed")
-    //   due           → contract_end          (legacy fallback)
+    // ── Template mapping ──
+    //   not_completed | expired → service_notcompleted  ("⚠️ Service Visit Not Completed")
+    //   upcoming                → soon_service          ("🛠️ Upcoming Service Visit")
+    //   contract_end            → contract_end          ("📄 Contract Expiry Notice")
+    //   due                     → soon_service          (fallback)
     const templateName =
-      type === 'not_completed' ? 'service_notcompleted' :
-      type === 'upcoming'      ? 'contract_end' :
-                                 'contract_end'
+      (type === 'not_completed' || type === 'expired') ? 'service_notcompleted' :
+      type === 'upcoming'                              ? 'soon_service' :
+      type === 'contract_end'                          ? 'contract_end' :
+                                                         'soon_service'
+
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
       {
@@ -93,15 +102,15 @@ export async function POST(request: NextRequest) {
                 {
                   to: [cleanContractorPhone],
                   components: {
-                    body_1: { type: 'text', value: contractorName },   // recipient greeting
-                    body_2: { type: 'text', value: customerName },     // customer
-                    body_3: { type: 'text', value: serviceType },      // contract/service name
-                    body_4: { type: 'text', value: date },             // service date
-                    body_5: { type: 'text', value: customerPhone },    // customer phone
+                    body_1: { type: 'text', value: contractorName },
+                    body_2: { type: 'text', value: customerName },
+                    body_3: { type: 'text', value: serviceType },
+                    body_4: { type: 'text', value: date },
+                    body_5: { type: 'text', value: customerPhone },
                     button_1: {
                       subtype: 'url',
                       type: 'text',
-                      value: contractId,                                // → /contracts/{id}
+                      value: contractId,
                     },
                   },
                 },
