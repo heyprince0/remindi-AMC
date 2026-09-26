@@ -23,29 +23,17 @@ function addDays(base: Date, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
-async function alreadySent(
-  contractId: string,
-  type: 'expiring_soon' | 'expired'
-): Promise<boolean> {
-  const { data } = await supabase
-    .from('reminders_log')
-    .select('id')
-    .eq('contract_id', contractId)
-    .eq('message_type', `whatsapp_${type}`)
-    .limit(1)
-    .maybeSingle()
-  return !!data
-}
-
 async function sendReminder(params: {
   orgId: string
   contractorPhone: string
   contractorName: string
   customerName: string
+  customerPhone: string          // ← NEW — passed through to body_5
   serviceType: string
   date: string
   contractId: string
   type: 'expiring_soon' | 'expired'
+  dedupKey: string               // ← NEW — unique log key
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://remindi.online'
   const res = await fetch(`${appUrl}/api/whatsapp/send-contract-reminder`, {
@@ -72,6 +60,7 @@ export async function GET(req: Request) {
 
   let sent = 0
   let skipped = 0
+  let skippedNoPhone = 0              // ← NEW — visibility into silent skips
   let failed = 0
 
   // Fetch contracts hitting any of our 3 target dates, in one query
@@ -79,7 +68,7 @@ export async function GET(req: Request) {
     .from('contracts')
     .select(`
       id, contract_name, contract_type, end_date, org_id, status,
-      customers ( id, name ),
+      customers ( id, name, phone ),
       organizations ( id, name, owner_id )
     `)
     .eq('status', 'active')
@@ -96,9 +85,8 @@ export async function GET(req: Request) {
 
     if (!type) continue
 
-    // Dedup: only send each type once per contract
-    // (expiring_soon fires twice — T-3 and T-0 — so we key on the exact date)
-    const dedupKey = `${type}_${endDate}` // unique per (type, end_date)
+    // Dedup: only send each (type, endDate) combo once per contract
+    const dedupKey = `${type}_${endDate}`
     const { data: existing } = await supabase
       .from('reminders_log')
       .select('id')
@@ -115,6 +103,7 @@ export async function GET(req: Request) {
     const org = contract.organizations as any
     const customer = contract.customers as any
 
+    // Owner (contractor) profile — must have phone
     const { data: profile } = await supabase
       .from('profiles')
       .select('phone, full_name, company_name')
@@ -123,18 +112,25 @@ export async function GET(req: Request) {
 
     if (!profile?.phone) {
       skipped++
+      skippedNoPhone++
       continue
     }
+
+    // Customer phone — required for body_5.
+    // Fall back to owner's phone only if customer's phone is missing.
+    const customerPhone = customer?.phone || profile.phone
 
     const ok = await sendReminder({
       orgId: contract.org_id,
       contractorPhone: profile.phone,
       contractorName: profile.full_name || profile.company_name || 'there',
       customerName: customer?.name || 'your customer',
+      customerPhone,
       serviceType: contract.contract_name || contract.contract_type || 'Service',
       date: formatDate(endDate),
       contractId: contract.id,
       type,
+      dedupKey,
     })
 
     ok ? sent++ : failed++
@@ -144,6 +140,7 @@ export async function GET(req: Request) {
     success: true,
     sent,
     skipped,
+    skippedNoPhone,
     failed,
     targets: { tMinus3, tZero, tPlus3 },
     matched: contracts?.length || 0,
