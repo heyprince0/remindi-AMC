@@ -21,11 +21,12 @@ interface ReminderBody {
   contractorPhone: string
   contractorName: string
   customerName: string
+  customerPhone: string            // NEW — needed for body_5
   serviceType: string
-  date: string           // due date OR expiry date
+  date: string                     // formatted date, e.g. "23 Sep 2026"
   contractId: string
   type: 'due' | 'expiring_soon' | 'expired'
-  dedupKey?: string      // NEW: unique log key, e.g. "expiring_soon_2026-11-17"
+  dedupKey?: string                // e.g. "expired_2026-09-23"
 }
 
 export async function POST(request: NextRequest) {
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
       contractorPhone,
       contractorName,
       customerName,
+      customerPhone,
       serviceType,
       date,
       contractId,
@@ -43,7 +45,12 @@ export async function POST(request: NextRequest) {
       dedupKey,
     } = body
 
-    if (!orgId || !contractorPhone || !contractorName || !customerName || !serviceType || !date || !contractId || !type) {
+    // customerPhone is now required — body_5 needs it
+    if (
+      !orgId || !contractorPhone || !contractorName ||
+      !customerName || !customerPhone || !serviceType ||
+      !date || !contractId || !type
+    ) {
       return NextResponse.json({ error: 'All fields required' }, { status: 400 })
     }
 
@@ -52,13 +59,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MSG91 config missing' }, { status: 500 })
     }
 
-    const cleanPhone = formatPhone(contractorPhone)
+    const cleanContractorPhone = formatPhone(contractorPhone)
 
-    // Pick template based on type (unchanged)
+    // Template mapping (only these two are used now):
+    //   expiring_soon → contract_end          ("upcoming service visit")
+    //   expired       → service_notcompleted  ("service visit was not completed")
+    //   due           → contract_end          (fallback, not used by cron)
     const templateName =
-      type === 'expired' ? 'contract_expired' :
-      type === 'expiring_soon' ? 'contract_expiring_soon' :
-      'service_due_reminder'
+      type === 'expired'
+        ? 'service_notcompleted'
+        : 'contract_end'
 
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
@@ -83,12 +93,19 @@ export async function POST(request: NextRequest) {
               namespace: '43e589d3_fa5d_4f63_8f02_4ac10a934039',
               to_and_components: [
                 {
-                  to: [cleanPhone],
+                  to: [cleanContractorPhone],
                   components: {
+                    // "Hi {{1}}"                     → greeting for the contractor (recipient)
                     body_1: { type: 'text', value: contractorName },
+                    // "with {{2}}"                   → the customer
                     body_2: { type: 'text', value: customerName },
+                    // "for {{3}}"                    → service / contract name
                     body_3: { type: 'text', value: serviceType },
+                    // "on {{4}}"                     → date
                     body_4: { type: 'text', value: date },
+                    // "Call {{2}} at 📞 {{5}}"       → customer's phone
+                    body_5: { type: 'text', value: customerPhone },
+                    // Button URL → https://remindi.online/contracts/{{1}}
                     button_1: {
                       subtype: 'url',
                       type: 'text',
@@ -105,8 +122,7 @@ export async function POST(request: NextRequest) {
 
     const result = await msg91Response.json()
 
-    // CHANGED: log using dedupKey when provided, so T-3 and T-0
-    // expiring_soon sends don't collide in reminders_log
+    // Log to reminders_log — same as before
     const supabase = getSupabaseAdmin()
     await supabase.from('reminders_log').insert({
       org_id: orgId,
