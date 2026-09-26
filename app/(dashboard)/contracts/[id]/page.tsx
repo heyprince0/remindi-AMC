@@ -186,14 +186,18 @@ export default function ContractDetailPage() {
           contractorPhone: profile.phone,
           contractorName: profile.full_name || profile.company_name || 'there',
           customerName: contract.customerName,
-          serviceType: contract.contract_type || contract.contract_name,
-          date: contract.endDate
-            ? new Date(contract.endDate).toLocaleDateString('en-IN', {
+          customerPhone: customer?.phone || profile.phone,
+          serviceType: contract.contract_name || contract.contract_type || 'Service',
+          date: contract.next_service_date
+            ? new Date(contract.next_service_date).toLocaleDateString('en-IN', {
                 day: 'numeric', month: 'short', year: 'numeric'
               })
-            : 'N/A',
+            : new Date().toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric'
+              }),
           contractId: contract.id,
           type: 'expired',
+          dedupKey: `test_expired_${Date.now()}`,
         }),
       })
 
