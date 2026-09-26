@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, Loader2, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 interface ContractDisplay extends Contract {
@@ -84,6 +84,7 @@ export default function ContractDetailPage() {
   const [serviceHistory, setServiceHistory] = useState<ServiceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [sendingReminder, setSendingReminder] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -156,6 +157,60 @@ export default function ContractDetailPage() {
     }
   }
 
+  const handleTestReminder = async () => {
+    if (!contract || !currentOrgId) return
+    setSendingReminder(true)
+    try {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('owner_id')
+        .eq('id', currentOrgId)
+        .single()
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('phone, full_name, company_name')
+        .eq('id', org?.owner_id)
+        .single()
+
+      if (!profile?.phone) {
+        toast.error('No phone number found. Please add your phone number in Settings first.')
+        return
+      }
+
+      const res = await fetch('/api/whatsapp/send-contract-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId: currentOrgId,
+          contractorPhone: profile.phone,
+          contractorName: profile.full_name || profile.company_name || 'there',
+          customerName: contract.customerName,
+          serviceType: contract.contract_type || contract.contract_name,
+          date: contract.endDate
+            ? new Date(contract.endDate).toLocaleDateString('en-IN', {
+                day: 'numeric', month: 'short', year: 'numeric'
+              })
+            : 'N/A',
+          contractId: contract.id,
+          type: 'expired',
+        }),
+      })
+
+      const result = await res.json()
+      if (res.ok) {
+        toast.success('Test reminder sent to your WhatsApp!')
+      } else {
+        toast.error(result.error || 'Failed to send reminder')
+      }
+    } catch (err) {
+      toast.error('Something went wrong')
+      console.error(err)
+    } finally {
+      setSendingReminder(false)
+    }
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -183,15 +238,36 @@ export default function ContractDetailPage() {
       <div className="flex flex-col gap-6">
 
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/contracts')} className="size-9">
-            <ArrowLeft className="size-4" />
-            <span className="sr-only">Back to contracts</span>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{contract.contract_name}</h1>
-            <p className="text-muted-foreground">Contract Details</p>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/contracts')} className="size-9">
+              <ArrowLeft className="size-4" />
+              <span className="sr-only">Back to contracts</span>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">{contract.contract_name}</h1>
+              <p className="text-muted-foreground">Contract Details</p>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestReminder}
+            disabled={sendingReminder}
+            className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+          >
+            {sendingReminder ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <MessageCircle className="mr-2 size-4" />
+                Test Reminder
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Contract Information Card — unchanged */}
