@@ -60,15 +60,38 @@ export async function sendPasswordResetEmail(userEmail: string, resetLink: strin
   }
 }
 
-export async function sendServiceReminderEmail(userEmail: string, contractName: string, serviceDate: string, customerName: string): Promise<EmailResponse> {
+// ✅ FIXED — variables now match the HTML template exactly
+// Template expects: contractorName, customerName, serviceType, serviceDate, customerPhone
+export async function sendServiceReminderEmail(
+  userEmail: string,
+  contractorName: string,
+  customerName: string,
+  serviceType: string,
+  serviceDate: string,
+  customerPhone: string
+): Promise<EmailResponse> {
   try {
     if (!resend) return { success: false, error: 'Email service is not configured.' }
+    console.log(`[Email Service] Sending service reminder email to ${userEmail}`)
     const response = await resend.emails.send({
       from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
       to: userEmail,
-      template: { id: 'service-reminder', variables: { contractName, serviceDate, customerName } },
+      template: {
+        id: 'service-reminder',
+        variables: {
+          contractorName,  // ✅ was contractName before
+          customerName,
+          serviceType,     // ✅ was missing before
+          serviceDate,
+          customerPhone,   // ✅ was missing before
+        },
+      },
     })
-    if (response.error) return { success: false, error: response.error.message }
+    if (response.error) {
+      console.error(`[Email Service] service-reminder email failed:`, response.error)
+      return { success: false, error: response.error.message }
+    }
+    console.log(`[Email Service] service-reminder email sent: ${response.data?.id}`)
     return { success: true, messageId: response.data?.id }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
@@ -90,7 +113,6 @@ export async function sendAMCExpiryReminderEmail(userEmail: string, contractName
   }
 }
 
-// NEW — for the red-banner "already expired" template
 export async function sendAMCExpiredEmail(userEmail: string, contractName: string, expiryDate: string, customerName: string): Promise<EmailResponse> {
   try {
     if (!resend) return { success: false, error: 'Email service is not configured.' }
@@ -104,7 +126,7 @@ export async function sendAMCExpiredEmail(userEmail: string, contractName: strin
       console.error(`[Email Service] AMC expired email failed:`, response.error)
       return { success: false, error: response.error.message }
     }
-    console.log(`[Email Service] AMC expired email sent. Message ID: ${response.data?.id}`)
+    console.log(`[Email Service] AMC expired email sent: ${response.data?.id}`)
     return { success: true, messageId: response.data?.id }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
