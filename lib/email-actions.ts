@@ -46,10 +46,20 @@ export async function triggerPasswordResetEmail(userEmail: string, resetLink: st
   }
 }
 
-export async function triggerServiceReminderEmail(userEmail: string, contractName: string, serviceDate: string, customerName: string) {
+// ✅ FIXED — params updated to match new sendServiceReminderEmail signature
+export async function triggerServiceReminderEmail(
+  userEmail: string,
+  contractorName: string,
+  customerName: string,
+  serviceType: string,
+  serviceDate: string,
+  customerPhone: string
+) {
   try {
-    if (!userEmail || !contractName || !serviceDate || !customerName) return { success: false, error: 'Missing required fields' }
-    const result = await sendServiceReminderEmail(userEmail, contractName, serviceDate, customerName)
+    if (!userEmail || !contractorName || !customerName || !serviceType || !serviceDate || !customerPhone) {
+      return { success: false, error: 'Missing required fields' }
+    }
+    const result = await sendServiceReminderEmail(userEmail, contractorName, customerName, serviceType, serviceDate, customerPhone)
     if (!result.success) { console.error(`[Email Actions] ${result.error}`); return { success: false, error: result.error } }
     return { success: true, messageId: result.messageId }
   } catch (error) {
@@ -70,7 +80,6 @@ export async function triggerAMCExpiryReminderEmail(userEmail: string, contractN
   }
 }
 
-// NEW
 export async function triggerAMCExpiredEmail(userEmail: string, contractName: string, expiryDate: string, customerName: string) {
   try {
     if (!userEmail || !contractName || !expiryDate || !customerName) return { success: false, error: 'Missing required fields' }
