@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, Loader2, MessageCircle } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare } from "lucide-react"
 import { toast } from "sonner"
 
 interface ContractDisplay extends Contract {
@@ -84,7 +84,7 @@ export default function ContractDetailPage() {
   const [serviceHistory, setServiceHistory] = useState<ServiceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [sendingReminder, setSendingReminder] = useState(false)
+  const [senderName, setSenderName] = useState<string>("")
 
   useEffect(() => {
     if (user?.id) {
@@ -102,6 +102,25 @@ export default function ContractDetailPage() {
           }
         })
     }
+  }, [user?.id])
+
+  useEffect(() => {
+    const loadSenderName = async () => {
+      if (!user?.id) return
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('company_name, full_name')
+          .eq('id', user.id)
+          .single()
+        if (data) {
+          setSenderName(data.company_name || data.full_name || "")
+        }
+      } catch {
+        // silently fail
+      }
+    }
+    loadSenderName()
   }, [user?.id])
 
   useEffect(() => {
@@ -157,60 +176,80 @@ export default function ContractDetailPage() {
     }
   }
 
-  const handleTestReminder = async () => {
-    if (!contract || !currentOrgId) return
-    setSendingReminder(true)
-    try {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('owner_id')
-        .eq('id', currentOrgId)
-        .single()
+  const handleSendWhatsApp = () => {
+    if (!contract || !customer) return
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('phone, full_name, company_name')
-        .eq('id', org?.owner_id)
-        .single()
-
-      if (!profile?.phone) {
-        toast.error('No phone number found. Please add your phone number in Settings first.')
-        return
-      }
-
-      // Always send service_notcompleted on click — no expiry logic, no date dependency.
-      // type: 'expired' maps to `service_notcompleted` template in the sender route.
-      const res = await fetch('/api/whatsapp/send-contract-reminder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orgId: currentOrgId,
-          contractorPhone: profile.phone,
-          contractorName: profile.full_name || profile.company_name || 'there',
-          customerName: contract.customerName,
-          customerPhone: customer?.phone || profile.phone,
-          serviceType: contract.contract_name || contract.contract_type || 'Service',
-          date: new Date().toLocaleDateString('en-IN', {
-            day: 'numeric', month: 'short', year: 'numeric'
-          }),
-          contractId: contract.id,
-          type: 'expired',
-          dedupKey: `test_expired_${Date.now()}`,
-        }),
-      })
-
-      const result = await res.json()
-      if (res.ok) {
-        toast.success('Test reminder sent to your WhatsApp!')
-      } else {
-        toast.error(result.error || 'Failed to send reminder')
-      }
-    } catch (err) {
-      toast.error('Something went wrong')
-      console.error(err)
-    } finally {
-      setSendingReminder(false)
+    const rawPhone = customer.phone?.trim()
+    if (!rawPhone) {
+      toast.error("No phone number found for this customer")
+      return
     }
+
+    let phone = rawPhone.replace(/[\s\-().]/g, '')
+    if (phone.startsWith('0')) phone = '91' + phone.slice(1)
+    if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
+    phone = phone.replace(/^\+/, '')
+
+    const days = contract.daysUntilService
+    const lastService = formatDate(contract.start_date)
+    const nextService = formatDate(contract.next_service_date)
+    const from = senderName || 'your service provider'
+    const contractName = contract.contract_name
+    const customerName = contract.customerName
+
+    let message = ""
+
+    if (days < 0) {
+      const overdueDays = Math.abs(days)
+      message =
+        `Dear ${customerName},\n\n` +
+        `*Contract Expired - Action Required*\n\n` +
+        `Your AMC contract *${contractName}* with *${from}* has expired ${overdueDays} day${overdueDays > 1 ? 's' : ''} ago.\n\n` +
+        `*Service Details:*\n` +
+        `- Last Service: ${lastService}\n` +
+        `- Service Expired On: ${nextService}\n\n` +
+        `To avoid any service disruption, please renew your contract at the earliest.\n\n` +
+        `Contact us now to get your contract renewed and next service scheduled.\n\n` +
+        `Thank you for choosing *${from}*.`
+
+    } else if (days === 0) {
+      message =
+        `Dear ${customerName},\n\n` +
+        `*Service Due Today*\n\n` +
+        `This is a reminder that your AMC service for *${contractName}* is scheduled for today.\n\n` +
+        `*Service Details:*\n` +
+        `- Last Service: ${lastService}\n` +
+        `- Scheduled Service Date: ${nextService}\n\n` +
+        `Our technician will be visiting you today. Please ensure someone is available at the premises.\n\n` +
+        `For any queries, feel free to reach out to us.\n\n` +
+        `Thank you for choosing *${from}*.`
+
+    } else if (days <= 3) {
+      message =
+        `Dear ${customerName},\n\n` +
+        `*Upcoming Service Reminder - ${days} Day${days > 1 ? 's' : ''} Left*\n\n` +
+        `Your next AMC service for *${contractName}* is due in ${days} day${days > 1 ? 's' : ''}.\n\n` +
+        `*Service Details:*\n` +
+        `- Last Service: ${lastService}\n` +
+        `- Upcoming Service Date: ${nextService}\n\n` +
+        `Please confirm your availability so we can schedule the technician visit accordingly.\n\n` +
+        `Contact us to confirm your appointment.\n\n` +
+        `Thank you for choosing *${from}*.`
+
+    } else {
+      message =
+        `Dear ${customerName},\n\n` +
+        `*Service Reminder - ${contractName}*\n\n` +
+        `This is a friendly reminder from *${from}* regarding your AMC contract.\n\n` +
+        `*Service Details:*\n` +
+        `- Last Service: ${lastService}\n` +
+        `- Next Service Due: ${nextService}\n\n` +
+        `We will reach out closer to your service date. For any queries or to reschedule, feel free to contact us.\n\n` +
+        `Thank you for choosing *${from}*.`
+    }
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    window.open(url, '_blank')
   }
 
   if (loading) {
@@ -251,25 +290,17 @@ export default function ContractDetailPage() {
               <p className="text-muted-foreground">Contract Details</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTestReminder}
-            disabled={sendingReminder}
-            className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
-          >
-            {sendingReminder ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <MessageCircle className="mr-2 size-4" />
-                Test Reminder
-              </>
-            )}
-          </Button>
+          {customer?.phone && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendWhatsApp}
+              className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+            >
+              <MessageSquare className="mr-2 size-4" />
+              Send WhatsApp
+            </Button>
+          )}
         </div>
 
         {/* Contract Information Card — unchanged */}
