@@ -14,10 +14,7 @@ export async function POST(request: NextRequest) {
     const { type, userEmail, data } = body
 
     if (!type || !userEmail || !data) {
-      return NextResponse.json(
-        { error: 'Missing required fields: type, userEmail, or data' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing required fields: type, userEmail, or data' }, { status: 400 })
     }
 
     let result
@@ -46,18 +43,16 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      // ✅ FIXED — now requires all 5 correct fields
+      // service-reminder: contractorName, customerName, serviceType, serviceDate, customerPhone
       case 'service-reminder': {
         const { contractorName, customerName, serviceType, serviceDate, customerPhone } = data
         if (!contractorName || !customerName || !serviceType || !serviceDate || !customerPhone)
-          return NextResponse.json(
-            { error: 'Missing: contractorName, customerName, serviceType, serviceDate, or customerPhone' },
-            { status: 400 }
-          )
+          return NextResponse.json({ error: 'Missing: contractorName, customerName, serviceType, serviceDate, or customerPhone' }, { status: 400 })
         result = await sendServiceReminderEmail(userEmail, contractorName, customerName, serviceType, serviceDate, customerPhone)
         break
       }
 
+      // amc-expiry-reminder: contractName, expiryDate, customerName
       case 'amc-expiry-reminder': {
         const { contractName, expiryDate, customerName } = data
         if (!contractName || !expiryDate || !customerName)
@@ -66,11 +61,12 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      // ✅ amc-expired: contractorName, customerName, serviceType, serviceDate, customerPhone
       case 'amc-expired': {
-        const { contractName, expiryDate, customerName } = data
-        if (!contractName || !expiryDate || !customerName)
-          return NextResponse.json({ error: 'Missing: contractName, expiryDate, or customerName' }, { status: 400 })
-        result = await sendAMCExpiredEmail(userEmail, contractName, expiryDate, customerName)
+        const { contractorName, customerName, serviceType, serviceDate, customerPhone } = data
+        if (!contractorName || !customerName || !serviceType || !serviceDate || !customerPhone)
+          return NextResponse.json({ error: 'Missing: contractorName, customerName, serviceType, serviceDate, or customerPhone' }, { status: 400 })
+        result = await sendAMCExpiredEmail(userEmail, contractorName, customerName, serviceType, serviceDate, customerPhone)
         break
       }
 
