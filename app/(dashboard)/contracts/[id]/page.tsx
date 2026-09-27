@@ -279,27 +279,44 @@ export default function ContractDetailPage() {
       <div className="flex flex-col gap-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/contracts')} className="size-9">
-              <ArrowLeft className="size-4" />
-              <span className="sr-only">Back to contracts</span>
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{contract.contract_name}</h1>
-              <p className="text-muted-foreground">Contract Details</p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <Button variant="ghost" size="icon" onClick={() => router.push('/contracts')} className="size-9 shrink-0">
+                <ArrowLeft className="size-4" />
+                <span className="sr-only">Back to contracts</span>
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold text-foreground truncate">{contract.contract_name}</h1>
+                <p className="text-muted-foreground">Contract Details</p>
+              </div>
             </div>
+            {/* Desktop: button inline in header row */}
+            {customer?.phone && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSendWhatsApp}
+                className="hidden md:flex shrink-0 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+              >
+                <MessageSquare className="mr-2 size-4" />
+                Send WhatsApp
+              </Button>
+            )}
           </div>
+          {/* Mobile: button on its own row below the title */}
           {customer?.phone && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSendWhatsApp}
-              className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
-            >
-              <MessageSquare className="mr-2 size-4" />
-              Send WhatsApp
-            </Button>
+            <div className="md:hidden pl-[52px]">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSendWhatsApp}
+                className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+              >
+                <MessageSquare className="mr-2 size-4" />
+                Send WhatsApp
+              </Button>
+            </div>
           )}
         </div>
 
