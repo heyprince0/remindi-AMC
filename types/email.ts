@@ -52,47 +52,32 @@ export interface PasswordResetEmailData {
   resetLink: string
 }
 
-// ✅ FIXED — matches HTML template variables exactly
+// service-reminder template
 export interface ServiceReminderEmailData {
-  contractorName: string  // was contractName before
+  contractorName: string
   customerName: string
-  serviceType: string     // was missing before
+  serviceType: string
   serviceDate: string
-  customerPhone: string   // was missing before
+  customerPhone: string
 }
 
+// amc-expiry-reminder template (contract ending soon)
 export interface AMCExpiryReminderEmailData {
   contractName: string
   expiryDate: string
   customerName: string
 }
 
+// ✅ FIXED — amc-expired template (service visit overdue, red banner)
+// Same shape as service-reminder — different template ID
 export interface AMCExpiredEmailData {
-  contractName: string
-  expiryDate: string
+  contractorName: string
   customerName: string
+  serviceType: string
+  serviceDate: string
+  customerPhone: string
 }
 
-// Params interfaces
-export interface SendWelcomeEmailParams {
-  userEmail: string
-  userName: string
-}
-
-export interface SendInvoiceEmailParams {
-  userEmail: string
-  invoiceNumber: string
-  clientName: string
-  grandTotal: number
-}
-
-export interface SendPasswordResetEmailParams {
-  userEmail: string
-  resetLink: string
-  userName: string
-}
-
-// ✅ FIXED
 export interface SendServiceReminderEmailParams {
   userEmail: string
   contractorName: string
@@ -111,7 +96,9 @@ export interface SendAMCExpiryReminderEmailParams {
 
 export interface SendAMCExpiredEmailParams {
   userEmail: string
-  contractName: string
-  expiryDate: string
+  contractorName: string
   customerName: string
+  serviceType: string
+  serviceDate: string
+  customerPhone: string
 }
