@@ -17,6 +17,7 @@ export async function triggerWelcomeEmail(userEmail: string, userName: string) {
     return { success: true, messageId: result.messageId }
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`[Email Actions] Exception in triggerWelcomeEmail: ${msg}`)
     return { success: false, error: msg }
   }
 }
@@ -45,18 +46,10 @@ export async function triggerPasswordResetEmail(userEmail: string, resetLink: st
   }
 }
 
-export async function triggerServiceReminderEmail(
-  userEmail: string,
-  contractorName: string,
-  customerName: string,
-  serviceType: string,
-  serviceDate: string,
-  customerPhone: string
-) {
+export async function triggerServiceReminderEmail(userEmail: string, contractName: string, serviceDate: string, customerName: string) {
   try {
-    if (!userEmail || !contractorName || !customerName || !serviceType || !serviceDate || !customerPhone)
-      return { success: false, error: 'Missing required fields' }
-    const result = await sendServiceReminderEmail(userEmail, contractorName, customerName, serviceType, serviceDate, customerPhone)
+    if (!userEmail || !contractName || !serviceDate || !customerName) return { success: false, error: 'Missing required fields' }
+    const result = await sendServiceReminderEmail(userEmail, contractName, serviceDate, customerName)
     if (!result.success) { console.error(`[Email Actions] ${result.error}`); return { success: false, error: result.error } }
     return { success: true, messageId: result.messageId }
   } catch (error) {
@@ -77,19 +70,11 @@ export async function triggerAMCExpiryReminderEmail(userEmail: string, contractN
   }
 }
 
-// ✅ FIXED — now matches amc-expired HTML template variables
-export async function triggerAMCExpiredEmail(
-  userEmail: string,
-  contractorName: string,
-  customerName: string,
-  serviceType: string,
-  serviceDate: string,
-  customerPhone: string
-) {
+// NEW
+export async function triggerAMCExpiredEmail(userEmail: string, contractName: string, expiryDate: string, customerName: string) {
   try {
-    if (!userEmail || !contractorName || !customerName || !serviceType || !serviceDate || !customerPhone)
-      return { success: false, error: 'Missing required fields' }
-    const result = await sendAMCExpiredEmail(userEmail, contractorName, customerName, serviceType, serviceDate, customerPhone)
+    if (!userEmail || !contractName || !expiryDate || !customerName) return { success: false, error: 'Missing required fields' }
+    const result = await sendAMCExpiredEmail(userEmail, contractName, expiryDate, customerName)
     if (!result.success) { console.error(`[Email Actions] ${result.error}`); return { success: false, error: result.error } }
     return { success: true, messageId: result.messageId }
   } catch (error) {
