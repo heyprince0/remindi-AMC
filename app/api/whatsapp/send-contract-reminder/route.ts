@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { sendAMCExpiryReminderEmail, sendAMCExpiredEmail } from '@/lib/email-service'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -21,13 +20,17 @@ interface ReminderBody {
   orgId: string
   contractorPhone: string
   contractorName: string
-  contractorEmail?: string  // optional — used for email
   customerName: string
   customerPhone: string
   serviceType: string
   date: string
   contractId: string
-  contractName?: string     // optional — used for amc-expiry-reminder email
+  // Types:
+  //   upcoming           → soon_service          (service T-3, uses next_service_date)
+  //   not_completed      → service_notcompleted  (service T-0 & T+3, uses next_service_date)
+  //   expired            → service_notcompleted  (test button + service T+3 alias)
+  //   contract_end       → contract_end          (contract expiry, uses end_date)
+  //   due                → soon_service          (legacy fallback)
   type: 'due' | 'upcoming' | 'not_completed' | 'expired' | 'contract_end'
   dedupKey?: string
 }
@@ -39,13 +42,11 @@ export async function POST(request: NextRequest) {
       orgId,
       contractorPhone,
       contractorName,
-      contractorEmail,
       customerName,
       customerPhone,
       serviceType,
       date,
       contractId,
-      contractName,
       type,
       dedupKey,
     } = body
@@ -65,18 +66,25 @@ export async function POST(request: NextRequest) {
 
     const cleanContractorPhone = formatPhone(contractorPhone)
 
+    // ── Template mapping ──
+    //   not_completed | expired → service_notcompleted  ("⚠️ Service Visit Not Completed")
+    //   upcoming                → soon_service          ("🛠️ Upcoming Service Visit")
+    //   contract_end            → contract_end          ("📄 Contract Expiry Notice")
+    //   due                     → soon_service          (fallback)
     const templateName =
       (type === 'not_completed' || type === 'expired') ? 'service_notcompleted' :
       type === 'upcoming'                              ? 'soon_service' :
       type === 'contract_end'                          ? 'contract_end' :
                                                          'soon_service'
 
-    // ── WhatsApp via MSG91 ──
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
       {
         method: 'POST',
-        headers: { authkey, 'Content-Type': 'application/json' },
+        headers: {
+          authkey,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           integrated_number: '15553241999',
           content_type: 'template',
@@ -85,7 +93,10 @@ export async function POST(request: NextRequest) {
             type: 'template',
             template: {
               name: templateName,
-              language: { code: 'en', policy: 'deterministic' },
+              language: {
+                code: 'en',
+                policy: 'deterministic',
+              },
               namespace: '43e589d3_fa5d_4f63_8f02_4ac10a934039',
               to_and_components: [
                 {
@@ -96,7 +107,11 @@ export async function POST(request: NextRequest) {
                     body_3: { type: 'text', value: serviceType },
                     body_4: { type: 'text', value: date },
                     body_5: { type: 'text', value: customerPhone },
-                    button_1: { subtype: 'url', type: 'text', value: contractId },
+                    button_1: {
+                      subtype: 'url',
+                      type: 'text',
+                      value: contractId,
+                    },
                   },
                 },
               ],
@@ -108,33 +123,6 @@ export async function POST(request: NextRequest) {
 
     const result = await msg91Response.json()
 
-    // ── Email via Resend (fire-and-forget) ──
-    if (contractorEmail) {
-      if (type === 'not_completed' || type === 'expired') {
-        // ✅ amc-expired template: service visit overdue (red banner)
-        // variables: contractorName, customerName, serviceType, serviceDate, customerPhone
-        sendAMCExpiredEmail(contractorEmail, contractorName!, customerName!, serviceType!, date!, customerPhone!)
-          .then(r => {
-            if (!r.success) console.error('[Reminder] amc-expired email failed:', r.error)
-            else console.log('[Reminder] amc-expired email sent:', r.messageId)
-          })
-          .catch(e => console.error('[Reminder] amc-expired email exception:', e))
-      }
-
-      if (type === 'contract_end') {
-        // ✅ amc-expiry-reminder template: contract ending soon
-        // variables: contractName, expiryDate, customerName
-        const emailContractName = contractName ?? serviceType ?? 'AMC Contract'
-        sendAMCExpiryReminderEmail(contractorEmail, emailContractName, date!, customerName!)
-          .then(r => {
-            if (!r.success) console.error('[Reminder] amc-expiry-reminder email failed:', r.error)
-            else console.log('[Reminder] amc-expiry-reminder email sent:', r.messageId)
-          })
-          .catch(e => console.error('[Reminder] amc-expiry-reminder email exception:', e))
-      }
-    }
-
-    // ── Log to Supabase ──
     const supabase = getSupabaseAdmin()
     await supabase.from('reminders_log').insert({
       org_id: orgId,
@@ -155,7 +143,6 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, result })
-
   } catch (err) {
     console.error('send-contract-reminder error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
