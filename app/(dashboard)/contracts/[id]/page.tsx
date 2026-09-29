@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, Send, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 interface ContractDisplay extends Contract {
@@ -76,8 +76,10 @@ function getMobileServiceBadge(status: string) {
 export default function ContractDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const { user } = useAuth()
+  const { user, role } = useAuth()
+  const isAdmin = role === "admin"
   const contractId = params.id as string
+  const [testing, setTesting] = useState(false)
 
   const [contract, setContract] = useState<ContractDisplay | null>(null)
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -173,6 +175,37 @@ export default function ContractDetailPage() {
       toast.error('Failed to load contract details')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Sends the "soon_service" template to the contractor right now
+  const handleTestReminder = async () => {
+    if (!contract || testing) return
+    setTesting(true)
+    const toastId = toast.loading("Sending test reminder...")
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error("Please log in again")
+
+      const res = await fetch("/api/whatsapp/test-contract-reminder", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ contractId: contract.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || "Failed to send test reminder")
+
+      toast.success(
+        `Reminder sent to ${data.sentTo?.name ?? "contractor"} (${data.sentTo?.phone ?? ""})`,
+        { id: toastId }
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send test reminder", { id: toastId })
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -291,22 +324,46 @@ export default function ContractDetailPage() {
                 <p className="text-muted-foreground">Contract Details</p>
               </div>
             </div>
-            {/* Desktop: button inline in header row */}
-            {customer?.phone && (
+            {/* Desktop: buttons inline in header row */}
+            <div className="hidden md:flex items-center gap-2 shrink-0">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestReminder}
+                  disabled={testing}
+                >
+                  {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
+                  {testing ? "Sending..." : "Test Reminder"}
+                </Button>
+              )}
+              {customer?.phone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSendWhatsApp}
+                  className="border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+                >
+                  <MessageSquare className="mr-2 size-4" />
+                  Send WhatsApp
+                </Button>
+              )}
+            </div>
+          </div>
+          {/* Mobile: buttons on their own row below the title */}
+          <div className="md:hidden pl-[52px] flex flex-wrap gap-2">
+            {isAdmin && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSendWhatsApp}
-                className="hidden md:flex shrink-0 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+                onClick={handleTestReminder}
+                disabled={testing}
               >
-                <MessageSquare className="mr-2 size-4" />
-                Send WhatsApp
+                {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
+                {testing ? "Sending..." : "Test Reminder"}
               </Button>
             )}
-          </div>
-          {/* Mobile: button on its own row below the title */}
-          {customer?.phone && (
-            <div className="md:hidden pl-[52px]">
+            {customer?.phone && (
               <Button
                 variant="outline"
                 size="sm"
@@ -316,8 +373,8 @@ export default function ContractDetailPage() {
                 <MessageSquare className="mr-2 size-4" />
                 Send WhatsApp
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Contract Information Card — unchanged */}
