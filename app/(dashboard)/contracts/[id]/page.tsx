@@ -326,17 +326,6 @@ export default function ContractDetailPage() {
             </div>
             {/* Desktop: buttons inline in header row */}
             <div className="hidden md:flex items-center gap-2 shrink-0">
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestReminder}
-                  disabled={testing}
-                >
-                  {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
-                  {testing ? "Sending..." : "Test Reminder"}
-                </Button>
-              )}
               {customer?.phone && (
                 <Button
                   variant="outline"
@@ -352,17 +341,6 @@ export default function ContractDetailPage() {
           </div>
           {/* Mobile: buttons on their own row below the title */}
           <div className="md:hidden pl-[52px] flex flex-wrap gap-2">
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestReminder}
-                disabled={testing}
-              >
-                {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
-                {testing ? "Sending..." : "Test Reminder"}
-              </Button>
-            )}
             {customer?.phone && (
               <Button
                 variant="outline"
