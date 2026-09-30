@@ -9,10 +9,11 @@ import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { supabase, type Profile, signOut } from "@/lib/supabase"
-import { Save, LogOut, Shield } from "lucide-react"
+import { Save, LogOut, Shield, Languages } from "lucide-react"
 import { toast } from "sonner"
 import { CompanyProfileSettings } from "./company-profile"
 import { StampSignatureSettings } from "@/components/stamp-signature-settings"
+import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
 
 const SERVICE_TYPES = ['AC', 'Lift', 'RO Water Purifier', 'CCTV', 'Pest Control', 'Generator', 'Fire Safety', 'UPS', 'Other']
 
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isOwner, setIsOwner] = useState(false)          // ✅ new state
+  const [waLanguage, setWaLanguage] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
+  const [savingLang, setSavingLang] = useState(false)
 
   // Redirect non‑admin users
   useEffect(() => {
@@ -84,6 +87,7 @@ export default function SettingsPage() {
           setPhone(data.phone || "")
           setCity(data.city || "")
           setSelectedServices(data.service_types || [])
+          setWaLanguage(normalizeWhatsAppLanguage(data.whatsapp_language))
         }
       } catch (error) {
         console.error('Error loading profile:', error)
@@ -119,6 +123,24 @@ export default function SettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to save profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveLanguage = async () => {
+    if (!user?.id) return
+
+    setSavingLang(true)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: user.id, whatsapp_language: waLanguage }, { onConflict: 'id' })
+
+      if (error) throw error
+      toast.success('WhatsApp message language saved!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save language')
+    } finally {
+      setSavingLang(false)
     }
   }
 
@@ -168,6 +190,39 @@ export default function SettingsPage() {
         {/* Org‑level settings – visible to all admins */}
         <CompanyProfileSettings />
         <StampSignatureSettings />
+
+        {/* WhatsApp message language – visible to all admins */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Languages className="size-5" />
+              WhatsApp Message Language
+            </CardTitle>
+            <CardDescription>Default language for reminder messages sent to your customers</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              {WHATSAPP_LANGUAGES.map(l => (
+                <button
+                  key={l.value}
+                  type="button"
+                  onClick={() => setWaLanguage(l.value)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    waLanguage === l.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  {l.native}
+                </button>
+              ))}
+            </div>
+            <Button onClick={handleSaveLanguage} disabled={savingLang}>
+              <Save className="mr-2 size-4" />
+              {savingLang ? 'Saving...' : 'Save Language'}
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Business Information Card – only for the organization owner */}
         {isOwner && (
