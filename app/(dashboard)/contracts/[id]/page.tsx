@@ -236,7 +236,7 @@ export default function ContractDetailPage() {
       const overdueDays = Math.abs(days)
       message =
         `Dear ${customerName},\n\n` +
-        `*Contract Expired - Action Required*\n\n` +
+        `*Service Reminder - Action Required*\n\n` +
         `Your AMC contract *${contractName}* with *${from}* has expired ${overdueDays} day${overdueDays > 1 ? 's' : ''} ago.\n\n` +
         `*Service Details:*\n` +
         `- Last Service: ${lastService}\n` +
@@ -248,7 +248,7 @@ export default function ContractDetailPage() {
     } else if (days === 0) {
       message =
         `Dear ${customerName},\n\n` +
-        `*Service Due Today*\n\n` +
+        `*Today Servicing*\n\n` +
         `This is a reminder that your AMC service for *${contractName}* is scheduled for today.\n\n` +
         `*Service Details:*\n` +
         `- Last Service: ${lastService}\n` +
@@ -261,7 +261,7 @@ export default function ContractDetailPage() {
       message =
         `Dear ${customerName},\n\n` +
         `*Upcoming Service Reminder - ${days} Day${days > 1 ? 's' : ''} Left*\n\n` +
-        `Your next AMC service for *${contractName}* is due in ${days} day${days > 1 ? 's' : ''}.\n\n` +
+        `Your next AMC service for ${contractName} is due in ${days} day${days > 1 ? 's' : ''}.\n\n` +
         `*Service Details:*\n` +
         `- Last Service: ${lastService}\n` +
         `- Upcoming Service Date: ${nextService}\n\n` +
