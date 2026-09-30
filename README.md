@@ -55,7 +55,7 @@ Remindi uses Supabase with the following key tables:
 ## About
 
 Remindi is built and maintained by **Prakash Jadhav (Prince)**, founder.  
-A product of **Cosmos** — a software company building practical tools for Indian businesses.
+A product of **Cosmos** — a software company building practical tools for Businesses.
 
 ---
 
