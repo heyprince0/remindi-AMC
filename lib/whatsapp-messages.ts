@@ -191,3 +191,65 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
     `Thank you for choosing *${from}*.`
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer greeting / follow-up message (used on the Customers page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CustomerMessageInput {
+  lang: WhatsAppLanguage
+  customerName: string
+  senderName: string
+  contractCount: number
+}
+
+export function buildCustomerMessage(input: CustomerMessageInput): string {
+  const { lang, customerName, contractCount } = input
+  const from = input.senderName || FALLBACK_SENDER[lang]
+
+  // ───────────── MARATHI ─────────────
+  if (lang === "mr") {
+    const contractLine =
+      contractCount > 0
+        ? `तुमच्याकडे आमच्यासोबत सध्या ${contractCount} सक्रिय AMC करार आहे${contractCount > 1 ? "त" : ""}.`
+        : `तुमच्या उपकरणांसाठी AMC करार सुरू करण्यात आम्हाला आनंद होईल.`
+
+    return (
+      `प्रिय ${customerName},\n\n` +
+      `*${from}* कडून नमस्कार!\n\n` +
+      `${contractLine}\n\n` +
+      `तुम्हाला कोणतीही सेवा, देखभाल हवी असल्यास किंवा काही प्रश्न असल्यास, या संदेशाला उत्तर द्या किंवा थेट आम्हाला कॉल करा.\n\n` +
+      `*${from}* निवडल्याबद्दल धन्यवाद.`
+    )
+  }
+
+  // ───────────── HINDI ─────────────
+  if (lang === "hi") {
+    const contractLine =
+      contractCount > 0
+        ? `आपके पास हमारे साथ वर्तमान में ${contractCount} सक्रिय AMC अनुबंध ${contractCount > 1 ? "हैं" : "है"}।`
+        : `हम आपके उपकरणों के लिए AMC अनुबंध स्थापित करने में मदद करना चाहेंगे।`
+
+    return (
+      `प्रिय ${customerName},\n\n` +
+      `*${from}* की ओर से नमस्कार!\n\n` +
+      `${contractLine}\n\n` +
+      `अगर आपको कोई सेवा, रखरखाव चाहिए या कोई सवाल है, तो इस संदेश का जवाब दें या सीधे हमें कॉल करें।\n\n` +
+      `*${from}* को चुनने के लिए धन्यवाद।`
+    )
+  }
+
+  // ───────────── ENGLISH ─────────────
+  const contractLine =
+    contractCount > 0
+      ? `You currently have ${contractCount} active AMC contract${contractCount > 1 ? "s" : ""} with us.`
+      : `We'd love to help you set up an AMC contract for your equipment.`
+
+  return (
+    `Dear ${customerName},\n\n` +
+    `Greetings from *${from}*!\n\n` +
+    `${contractLine}\n\n` +
+    `If you need any service, maintenance, or have any questions, feel free to reply to this message or call us directly.\n\n` +
+    `Thank you for choosing *${from}*.`
+  )
+}
