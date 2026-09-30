@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -19,6 +20,7 @@ import { supabase, type Contract, type Customer, type ServiceHistory, type Techn
 import { useAuth } from "@/lib/auth-context"
 import { ArrowLeft, FileText, Phone, MapPin, Calendar, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, Send, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, buildReminderMessage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
 
 interface ContractDisplay extends Contract {
   daysUntilService: number
@@ -87,6 +89,9 @@ export default function ContractDetailPage() {
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [senderName, setSenderName] = useState<string>("")
+  const [langDialogOpen, setLangDialogOpen] = useState(false)
+  const [defaultLang, setDefaultLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
+  const [selectedLang, setSelectedLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
 
   useEffect(() => {
     if (user?.id) {
@@ -123,6 +128,25 @@ export default function ContractDetailPage() {
       }
     }
     loadSenderName()
+  }, [user?.id])
+
+  useEffect(() => {
+    const loadWhatsAppLanguage = async () => {
+      if (!user?.id) return
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('whatsapp_language')
+          .eq('id', user.id)
+          .single()
+        const lang = normalizeWhatsAppLanguage(data?.whatsapp_language)
+        setDefaultLang(lang)
+        setSelectedLang(lang)
+      } catch {
+        // silently fail, English stays as default
+      }
+    }
+    loadWhatsAppLanguage()
   }, [user?.id])
 
   useEffect(() => {
@@ -209,7 +233,22 @@ export default function ContractDetailPage() {
     }
   }
 
+  // Step 1: validate the phone number, then open the language dialog
   const handleSendWhatsApp = () => {
+    if (!contract || !customer) return
+
+    const rawPhone = customer.phone?.trim()
+    if (!rawPhone) {
+      toast.error("No phone number found for this customer")
+      return
+    }
+
+    setSelectedLang(defaultLang)
+    setLangDialogOpen(true)
+  }
+
+  // Step 2: build the message in the chosen language and open WhatsApp
+  const sendWhatsAppInLanguage = (lang: WhatsAppLanguage) => {
     if (!contract || !customer) return
 
     const rawPhone = customer.phone?.trim()
@@ -223,66 +262,19 @@ export default function ContractDetailPage() {
     if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
     phone = phone.replace(/^\+/, '')
 
-    const days = contract.daysUntilService
-    const lastService = formatDate(contract.start_date)
-    const nextService = formatDate(contract.next_service_date)
-    const from = senderName || 'your service provider'
-    const contractName = contract.contract_name
-    const customerName = contract.customerName
-
-    let message = ""
-
-    if (days < 0) {
-      const overdueDays = Math.abs(days)
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Service Reminder - Action Required*\n\n` +
-        `Your AMC contract *${contractName}* with *${from}* has expired ${overdueDays} day${overdueDays > 1 ? 's' : ''} ago.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Service Expired On: ${nextService}\n\n` +
-        `To avoid any service disruption, please renew your contract at the earliest.\n\n` +
-        `Contact us now to get your contract renewed and next service scheduled.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else if (days === 0) {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Today Servicing*\n\n` +
-        `This is a reminder that your AMC service for *${contractName}* is scheduled for today.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Scheduled Service Date: ${nextService}\n\n` +
-        `Our technician will be visiting you today. Please ensure someone is available at the premises.\n\n` +
-        `For any queries, feel free to reach out to us.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else if (days <= 3) {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Upcoming Service Reminder - ${days} Day${days > 1 ? 's' : ''} Left*\n\n` +
-        `Your next AMC service for ${contractName} is due in ${days} day${days > 1 ? 's' : ''}.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Upcoming Service Date: ${nextService}\n\n` +
-        `Please confirm your availability so we can schedule the technician visit accordingly.\n\n` +
-        `Contact us to confirm your appointment.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Service Reminder - ${contractName}*\n\n` +
-        `This is a friendly reminder from *${from}* regarding your AMC contract.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Next Service Due: ${nextService}\n\n` +
-        `We will reach out closer to your service date. For any queries or to reschedule, feel free to contact us.\n\n` +
-        `Thank you for choosing *${from}*.`
-    }
+    const message = buildReminderMessage({
+      lang,
+      days: contract.daysUntilService,
+      customerName: contract.customerName,
+      contractName: contract.contract_name,
+      senderName,
+      lastService: formatDate(contract.start_date),
+      nextService: formatDate(contract.next_service_date),
+    })
 
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(url, '_blank')
+    setLangDialogOpen(false)
   }
 
   if (loading) {
@@ -561,6 +553,43 @@ export default function ContractDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Language selection dialog for WhatsApp message */}
+        <Dialog open={langDialogOpen} onOpenChange={setLangDialogOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Select message language</DialogTitle>
+              <DialogDescription>Choose the language for the WhatsApp message.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              {WHATSAPP_LANGUAGES.map(l => (
+                <button
+                  key={l.value}
+                  type="button"
+                  onClick={() => setSelectedLang(l.value)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-md text-sm font-medium transition-colors ${
+                    selectedLang === l.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-foreground hover:bg-secondary/80'
+                  }`}
+                >
+                  <span>{l.native}</span>
+                  {l.native !== l.label && <span className="text-xs opacity-80">{l.label}</span>}
+                </button>
+              ))}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setLangDialogOpen(false)}>Cancel</Button>
+              <Button
+                onClick={() => sendWhatsAppInLanguage(selectedLang)}
+                className="bg-[#25D366] text-white hover:bg-[#25D366]/90"
+              >
+                <MessageSquare className="mr-2 size-4" />
+                Send
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </DashboardLayout>
