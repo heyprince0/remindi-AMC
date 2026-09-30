@@ -65,6 +65,13 @@ import { toast } from "sonner"
 import { AddCustomerModal } from "@/components/add-customer-modal"
 import { useRouter } from "next/navigation"
 import * as XLSX from "xlsx"
+// ✅ NEW: shared customer message builder (uses the language saved in Settings)
+import {
+  buildCustomerMessage,
+  normalizeWhatsAppLanguage,
+  DEFAULT_WHATSAPP_LANGUAGE,
+  type WhatsAppLanguage,
+} from "@/lib/whatsapp-messages"
 
 // ── Column alias map ─────────────────────────────────────────────────────────
 const COLUMN_ALIASES: Record<string, string> = {
@@ -115,6 +122,8 @@ export default function CustomersPage() {
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [senderName, setSenderName] = useState<string>("")
+  // ✅ NEW: WhatsApp language (loaded from profile settings)
+  const [waLanguage, setWaLanguage] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
 
   const { maxCustomers, currentCustomerCount, status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
@@ -142,21 +151,25 @@ export default function CustomersPage() {
     }
   }, [user?.id])
 
+  // ✅ UPDATED: also loads the saved WhatsApp language in the same query
   useEffect(() => {
-    const loadSenderName = async () => {
+    const loadProfileSettings = async () => {
       if (!user?.id) return
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('company_name, full_name')
+          .select('company_name, full_name, whatsapp_language')
           .eq('id', user.id)
           .single()
-        if (data) setSenderName(data.company_name || data.full_name || "")
+        if (data) {
+          setSenderName(data.company_name || data.full_name || "")
+          setWaLanguage(normalizeWhatsAppLanguage(data.whatsapp_language))
+        }
       } catch {
-        // optional — silently fail
+        // optional — silently fail, English stays as default
       }
     }
-    loadSenderName()
+    loadProfileSettings()
   }, [user?.id])
 
   useEffect(() => {
@@ -309,6 +322,7 @@ export default function CustomersPage() {
     window.location.href = `tel:${customer.phone.replace(/[\s\-().]/g, '')}`
   }
 
+  // ✅ UPDATED: builds the message in the user's saved language
   const handleSendWhatsApp = (customer: Customer & { contractCount: number }) => {
     const rawPhone = customer.phone?.trim()
     if (!rawPhone) {
@@ -321,17 +335,12 @@ export default function CustomersPage() {
     if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
     phone = phone.replace(/^\+/, '')
 
-    const from = senderName || 'your service provider'
-    const contractLine = customer.contractCount > 0
-      ? `You currently have ${customer.contractCount} active AMC contract${customer.contractCount > 1 ? 's' : ''} with us.`
-      : `We'd love to help you set up an AMC contract for your equipment.`
-
-    const message =
-      `Dear ${customer.name},\n\n` +
-      `Greetings from *${from}*!\n\n` +
-      `${contractLine}\n\n` +
-      `If you need any service, maintenance, or have any questions, feel free to reply to this message or call us directly.\n\n` +
-      `Thank you for choosing *${from}*.`
+    const message = buildCustomerMessage({
+      lang: waLanguage, // 👈 uses the language saved in Settings
+      customerName: customer.name,
+      senderName,
+      contractCount: customer.contractCount,
+    })
 
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(url, '_blank')
