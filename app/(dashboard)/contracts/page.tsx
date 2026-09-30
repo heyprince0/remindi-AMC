@@ -72,6 +72,13 @@ import Link from "next/link"
 import LimitReachedModal, { LimitModalType } from "@/components/billing/limit-reached-modal"
 import PlanSelectionModal from "@/components/billing/PlanSelectionModal"
 import * as XLSX from "xlsx"
+// ✅ NEW: shared WhatsApp message builder (uses the language saved in Settings)
+import {
+  buildReminderMessage,
+  normalizeWhatsAppLanguage,
+  DEFAULT_WHATSAPP_LANGUAGE,
+  type WhatsAppLanguage,
+} from "@/lib/whatsapp-messages"
 
 interface ContractDisplay extends Contract {
   customerName: string
@@ -237,6 +244,8 @@ export default function ContractsPage() {
   const [dataReady, setDataReady] = useState(false)
   const [autoShown, setAutoShown] = useState(false)
   const [senderName, setSenderName] = useState<string>("")
+  // ✅ NEW: WhatsApp language (loaded from profile settings)
+  const [waLanguage, setWaLanguage] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
 
   useEffect(() => {
     if (user?.id) {
@@ -262,23 +271,25 @@ export default function ContractsPage() {
     }
   }, [user?.id])
 
+  // ✅ UPDATED: load both sender name AND saved WhatsApp language in one query
   useEffect(() => {
-    const loadSenderName = async () => {
+    const loadProfileSettings = async () => {
       if (!user?.id) return
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('company_name, full_name')
+          .select('company_name, full_name, whatsapp_language')
           .eq('id', user.id)
           .single()
         if (data) {
           setSenderName(data.company_name || data.full_name || "")
+          setWaLanguage(normalizeWhatsAppLanguage(data.whatsapp_language))
         }
       } catch {
-        // silently fail
+        // silently fail — English stays as default
       }
     }
-    loadSenderName()
+    loadProfileSettings()
   }, [user?.id])
 
   useEffect(() => {
@@ -790,6 +801,7 @@ export default function ContractsPage() {
     }
   }
 
+  // ✅ UPDATED: Uses buildReminderMessage with the user's saved language
   const handleSendWhatsApp = (contract: ContractDisplay) => {
     const rawPhone = contract.customerPhone?.trim()
     if (!rawPhone) {
@@ -805,61 +817,16 @@ export default function ContractsPage() {
     const days = getDaysUntilService(contract.next_service_date)
     const lastService = formatTableDate(contract.start_date)
     const nextService = formatTableDate(contract.next_service_date)
-    const contractEnd = contract.endDate ? formatTableDate(contract.endDate) : '—'
-    const from = senderName || 'your service provider'
-    const contractName = contract.contract_name
-    const customerName = contract.customerName
 
-    let message = ""
-
-    if (days < 0) {
-      const overdueDays = Math.abs(days)
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Contract Expired - Action Required*\n\n` +
-        `Your AMC contract *${contractName}* with *${from}* has expired ${overdueDays} day${overdueDays > 1 ? 's' : ''} ago.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Service Expired On: ${nextService}\n\n` +
-        `To avoid any service disruption, please renew your contract at the earliest.\n\n` +
-        `Contact us now to get your contract renewed and next service scheduled.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else if (days === 0) {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Service Due Today*\n\n` +
-        `This is a reminder that your AMC service for *${contractName}* is scheduled for today.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Scheduled Service Date: ${nextService}\n\n` +
-        `Our technician will be visiting you today. Please ensure someone is available at the premises.\n\n` +
-        `For any queries, feel free to reach out to us.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else if (days <= 3) {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Upcoming Service Reminder - ${days} Day${days > 1 ? 's' : ''} Left*\n\n` +
-        `Your next AMC service for *${contractName}* is due in ${days} day${days > 1 ? 's' : ''}.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Upcoming Service Date: ${nextService}\n\n` +
-        `Please confirm your availability so we can schedule the technician visit accordingly.\n\n` +
-        `Contact us to confirm your appointment.\n\n` +
-        `Thank you for choosing *${from}*.`
-
-    } else {
-      message =
-        `Dear ${customerName},\n\n` +
-        `*Service Reminder - ${contractName}*\n\n` +
-        `This is a friendly reminder from *${from}* regarding your AMC contract.\n\n` +
-        `*Service Details:*\n` +
-        `- Last Service: ${lastService}\n` +
-        `- Next Service Due: ${nextService}\n\n` +
-        `We will reach out closer to your service date. For any queries or to reschedule, feel free to contact us.\n\n` +
-        `Thank you for choosing *${from}*.`
-    }
+    const message = buildReminderMessage({
+      lang: waLanguage, // 👈 uses the language saved in Settings
+      days,
+      customerName: contract.customerName,
+      contractName: contract.contract_name,
+      senderName,
+      lastService,
+      nextService,
+    })
 
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(url, '_blank')
