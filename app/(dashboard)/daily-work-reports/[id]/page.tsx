@@ -9,7 +9,6 @@ import { ArrowLeft, Download, Edit, Loader2 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
@@ -22,6 +21,17 @@ function hexToRgb(hex: string): [number, number, number] {
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : [24, 95, 165]
+}
+
+function formatDateLong(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
 }
 
 export default function DailyWorkReportDetailPage() {
@@ -286,10 +296,10 @@ export default function DailyWorkReportDetailPage() {
             if (data.section === 'body' && data.column.index === 3) {
               const val = data.cell.raw;
               if (val === 'Completed') {
-                data.cell.styles.textColor = [22, 163, 74]; // Green
+                data.cell.styles.textColor = [22, 163, 74];
                 data.cell.styles.fontStyle = 'bold';
               } else if (val === 'Pending') {
-                data.cell.styles.textColor = [234, 88, 12]; // Orange
+                data.cell.styles.textColor = [234, 88, 12];
                 data.cell.styles.fontStyle = 'bold';
               }
             }
@@ -301,7 +311,7 @@ export default function DailyWorkReportDetailPage() {
         // ── INSPECTION / TESTING BLOCK ──
         const boxY = y
         const boxH = 22
-        doc.setFillColor(240, 248, 255) // Light blue aliceblue
+        doc.setFillColor(240, 248, 255)
         doc.rect(margin, boxY, pageW - 2 * margin, boxH, 'F')
 
         doc.setFontSize(10)
@@ -333,14 +343,12 @@ export default function DailyWorkReportDetailPage() {
         doc.setDrawColor(200, 200, 200)
         doc.setLineWidth(0.3)
         
-        // Technician line
         doc.line(margin, y, margin + 65, y)
         doc.setFontSize(8)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(120, 120, 120)
         doc.text("Technician / Engineer Signature", margin, y - 2)
 
-        // Customer line
         doc.line(pageW - margin - 65, y, pageW - margin, y)
         doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
 
@@ -385,7 +393,6 @@ export default function DailyWorkReportDetailPage() {
         return y + 6
       }
 
-      // Two-pass measurement so we get a single tall page
       const scratchDoc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -412,173 +419,287 @@ export default function DailyWorkReportDetailPage() {
     }
   }
 
-  if (loading)
+  if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="animate-spin" />
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
-  if (!report) return null
+  }
 
-  const row = (label: string, value: unknown) => (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span>{String(value || "-")}</span>
-    </div>
-  )
+  if (!report) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-96 gap-4">
+          <p className="text-muted-foreground">Report not found</p>
+          <Link href="/daily-work-reports">
+            <Button>Back to Reports</Button>
+          </Link>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const workItems = report.work_items ?? []
 
   return (
     <DashboardLayout>
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+        {/* Header — same style as quotation detail */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
             <Link href="/daily-work-reports">
-              <Button variant="outline" size="icon" aria-label="Back">
-                <ArrowLeft />
+              <Button variant="outline" size="icon" className="shrink-0 mt-1">
+                <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">{report.report_no}</h1>
-              <p className="text-muted-foreground">Daily Work Completion Report</p>
+              <h1 className="text-2xl font-bold text-foreground">{report.report_no}</h1>
+              {report.work_order_no && (
+                <p className="text-sm text-muted-foreground">
+                  Work Order:{" "}
+                  <span className="font-medium text-foreground">{report.work_order_no}</span>
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {formatDateLong(report.report_date)}
+              </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Button
+              onClick={downloadPdf}
+              disabled={pdf}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              size="sm"
+            >
+              {pdf ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Download className="mr-1.5 size-4" />
+              )}
+              Download PDF
+            </Button>
+            <Button variant="outline" size="sm" asChild>
               <Link href={`/daily-work-reports/${report.id}/edit`}>
-                <Edit data-icon="inline-start" />
+                <Edit className="mr-1.5 size-4" />
                 Edit
               </Link>
             </Button>
-            <Button onClick={downloadPdf} disabled={pdf}>
-              <Download data-icon="inline-start" />
-              {pdf ? "Generating..." : "Download PDF"}
-            </Button>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 bg-background p-1">
+        {/* Company Information */}
+        {profile && (
           <Card>
             <CardHeader>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  {profile?.logo_url && (
-                    <img
-                      src={profile.logo_url}
-                      alt="Company logo"
-                      className="mb-2 max-h-14 max-w-40 object-contain"
-                    />
-                  )}
-                  <CardTitle>{profile?.company_name || "Company"}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {[
-                      profile?.tagline,
-                      profile?.address,
-                      profile?.city,
-                      profile?.state,
-                      profile?.zip_code,
-                      profile?.phone,
-                      profile?.email,
-                      profile?.gstin,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                <Badge variant="secondary">{report.status || "Draft"}</Badge>
-              </div>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Report Header</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {row("Report No", report.report_no)}
-              {row("Date", new Date(report.report_date).toLocaleDateString("en-IN"))}
-              {row("Work Order No", report.work_order_no)}
-              {row("Lift No", report.lift_no)}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Technician & Site</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {row("Technician", report.technician_name)}
-              {row("Contact No", report.contact_no)}
-              {row("Customer", report.customer_name)}
-              {row("Site", report.site_name)}
-              <div className="sm:col-span-2">{row("Site Address", report.site_address)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Work Items</CardTitle>
+              <CardTitle className="text-base">Company Information</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[580px] text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="p-2">Sr. No</th>
-                      <th className="p-2">Description of Work</th>
-                      <th className="p-2">Material Used</th>
-                      <th className="p-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.work_items?.map((item) => (
-                      <tr className="border-b" key={item.sr_no}>
-                        <td className="p-2">{item.sr_no}</td>
-                        <td className="p-2">{item.description}</td>
-                        <td className="p-2">{item.material_used || "-"}</td>
-                        <td className="p-2">{item.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex items-start gap-4">
+                {profile.logo_url && (
+                  <img
+                    src={profile.logo_url}
+                    alt="Company logo"
+                    className="h-16 w-16 object-contain rounded border"
+                  />
+                )}
+                <div className="space-y-0.5">
+                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
+                  {profile.tagline && (
+                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
+                  )}
+                  {profile.address && (
+                    <p className="text-xs text-muted-foreground">{profile.address}</p>
+                  )}
+                  {(profile.city || profile.state || profile.zip_code) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                  {profile.phone && (
+                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
+                  )}
+                  {profile.email && (
+                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
+                  )}
+                  {profile.gstin && (
+                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Inspection / Testing</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-3">
-              {row("Operational Test", report.operational_test_status)}
-              {row("Safety Observations", report.safety_observations)}
-              {row("Pending Recommendations", report.pending_recommendations)}
-            </CardContent>
-          </Card>
+        {/* Report Header */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Report Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Report No</p>
+              <p className="font-medium">{report.report_no ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
+              <p className="font-medium">{formatDateLong(report.report_date)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Work Order No</p>
+              <p className="font-medium">{report.work_order_no ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Lift No</p>
+              <p className="font-medium">{report.lift_no ?? "-"}</p>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Acknowledgement</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {row("Technician Signature", report.tech_sign_name)}
-              {row("Technician Date", report.tech_sign_datetime)}
-              {row("Customer Signature", report.customer_sign_name)}
-              {row("Customer Date", report.customer_sign_datetime)}
-            </CardContent>
-          </Card>
+        {/* Technician & Site */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Technician & Site</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician</p>
+              <p className="font-medium">{report.technician_name ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Contact No</p>
+              <p className="font-medium">{report.contact_no ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer</p>
+              <p className="font-medium">{report.customer_name ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site</p>
+              <p className="font-medium">{report.site_name ?? "-"}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site Address</p>
+              <p className="font-medium">{report.site_address ?? "-"}</p>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Office Use</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {row("Office Status", report.office_status)}
-              {row("Checked By", report.checked_by)}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Work Items */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Work Items</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-12">SR</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description of Work</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground w-40">Material Used</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-28">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-muted-foreground">No work items</td>
+                    </tr>
+                  ) : (
+                    workItems.map((item, i) => (
+                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr_no}</td>
+                        <td className="py-3 px-4">{item.description || "-"}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{item.material_used || "—"}</td>
+                        <td className="text-center py-3 px-4">
+                          <span
+                            className={
+                              item.status === "Completed"
+                                ? "font-semibold text-green-600"
+                                : item.status === "Pending"
+                                ? "font-semibold text-orange-600"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            {item.status || "-"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Inspection / Testing */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Inspection / Testing</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Operational Test</p>
+              <p className="font-medium">{report.operational_test_status ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Safety Observations</p>
+              <p className="font-medium">{report.safety_observations ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pending Recommendations</p>
+              <p className="font-medium">{report.pending_recommendations ?? "-"}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Acknowledgement */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Acknowledgement</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Signature</p>
+              <p className="font-medium">{report.tech_sign_name ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Date</p>
+              <p className="font-medium">{report.tech_sign_datetime ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Signature</p>
+              <p className="font-medium">{report.customer_sign_name ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Date</p>
+              <p className="font-medium">{report.customer_sign_datetime ?? "-"}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Office Use */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Office Use</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Office Status</p>
+              <p className="font-medium">{report.office_status ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Checked By</p>
+              <p className="font-medium">{report.checked_by ?? "-"}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   )
