@@ -141,7 +141,7 @@ export default function DailyWorkReportDetailPage() {
       const renderReport = (doc: jsPDF): number => {
         let y = margin
 
-        // ── HEADER (same system as quotation) ──
+        // ── HEADER (KEPT EXACTLY AS IS) ──
         if (headerStyle === "thumbnail" && bannerBase64) {
           const bannerW = pageW - margin * 2
           doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
@@ -188,96 +188,73 @@ export default function DailyWorkReportDetailPage() {
           y += 6
         }
 
-        // ── TITLE ──
-        doc.setFontSize(13)
+        // ── TITLE SECTION ──
+        doc.setFontSize(8)
         doc.setFont("helvetica", "bold")
+        doc.setTextColor(120, 120, 120)
+        doc.text("REPORT NO.", margin, y)
+        
+        doc.setFontSize(14)
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(report.report_no), margin, y + 5)
+
+        doc.setFontSize(16)
         doc.setTextColor(tr, tg, tb)
         doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y, { align: "right" })
 
-        y += 6
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(report.report_no), margin, y)
-        doc.text("DATE: " + formattedDate, pageW - margin, y, { align: "right" })
-        y += 5
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(120, 120, 120)
-        doc.text(`Status: ${safeStr(report.status || "Draft")}`, pageW - margin, y, { align: "right" })
-        y += 7
+        doc.text(`DATE: ${formattedDate}   WORK ORDER: ${safeStr(report.work_order_no || "-")}`, pageW - margin, y + 5, { align: "right" })
 
-        // Section title helper
-        const sectionTitle = (title: string) => {
-          doc.setFontSize(11)
+        y += 12
+        doc.setDrawColor(220, 220, 220)
+        doc.setLineWidth(0.3)
+        doc.line(margin, y, pageW - margin, y)
+        y += 8
+
+        // ── DETAILS SECTION ──
+        const detailLabel = (text: string, x: number, yPos: number) => {
+          doc.setFontSize(8)
           doc.setFont("helvetica", "bold")
-          doc.setTextColor(tr, tg, tb)
-          doc.text(title.toUpperCase(), margin, y)
-          y += 2
-          doc.setDrawColor(tr, tg, tb)
-          doc.setLineWidth(0.2)
-          doc.line(margin, y, pageW - margin, y)
-          y += 4
+          doc.setTextColor(120, 120, 120)
+          doc.text(text, x, yPos)
+        }
+        const detailValue = (text: string, x: number, yPos: number, bold = true) => {
+          doc.setFontSize(10)
+          doc.setFont("helvetica", bold ? "bold" : "normal")
+          doc.setTextColor(0, 0, 0)
+          doc.text(text, x, yPos)
         }
 
-        const kvStyles = {
-          fontSize: 9,
-          cellPadding: 1.5,
-          textColor: [0, 0, 0] as [number, number, number],
-        }
-        const labelStyle = {
-          fontStyle: "bold" as const,
-          textColor: [100, 100, 100] as [number, number, number],
-          cellWidth: 32,
-        }
+        // Left column
+        detailLabel("TECHNICIAN / ENGINEER", margin, y)
+        detailValue(safeStr(report.technician_name), margin, y + 4)
+        
+        detailLabel("CUSTOMER / SITE", margin, y + 10)
+        detailValue(`${safeStr(report.customer_name)} – ${safeStr(report.site_name)}`, margin, y + 14)
+        
+        detailLabel("SITE ADDRESS", margin, y + 20)
+        detailValue(safeStr(report.site_address), margin, y + 24, false)
 
-        // ── Report Header ──
-        sectionTitle("Report Header")
-        autoTable(doc, {
-          startY: y,
-          body: [
-            ["Report No", safeStr(report.report_no), "Date", formattedDate],
-            ["Work Order No", safeStr(report.work_order_no), "Lift No", safeStr(report.lift_no)],
-          ],
-          theme: "plain",
-          styles: kvStyles,
-          columnStyles: {
-            0: labelStyle,
-            1: { cellWidth: "auto" },
-            2: labelStyle,
-            3: { cellWidth: "auto" },
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 6
+        // Right column
+        const col2X = pageW / 2 + 10
+        detailLabel("CONTACT NO.", col2X, y)
+        detailValue(safeStr(report.contact_no), col2X, y + 4)
+        
+        detailLabel("LIFT NO. / EQUIPMENT ID", col2X, y + 10)
+        detailValue(safeStr(report.lift_no), col2X, y + 14)
 
-        // ── Technician & Site ──
-        sectionTitle("Technician & Site")
-        autoTable(doc, {
-          startY: y,
-          body: [
-            ["Technician", safeStr(report.technician_name), "Contact No", safeStr(report.contact_no)],
-            ["Customer", safeStr(report.customer_name), "Site", safeStr(report.site_name)],
-            ["Site Address", safeStr(report.site_address), "", ""],
-          ],
-          theme: "plain",
-          styles: kvStyles,
-          columnStyles: {
-            0: labelStyle,
-            1: { cellWidth: "auto" },
-            2: labelStyle,
-            3: { cellWidth: "auto" },
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 6
+        y += 32
+        doc.setDrawColor(220, 220, 220)
+        doc.line(margin, y, pageW - margin, y)
+        y += 6
 
-        // ── Work Items ──
-        sectionTitle("Work Items")
+        // ── WORK ITEMS TABLE ──
         const workItems = report.work_items ?? []
         autoTable(doc, {
           startY: y,
-          head: [["SR.NO", "DESCRIPTION OF WORK", "MATERIAL USED", "STATUS"]],
+          head: [["SR.", "Description of Work / Service", "Material Used", "Status"]],
           body: workItems.map((item) => [
             String(item.sr_no ?? ""),
             safeStr(item.description),
@@ -290,97 +267,125 @@ export default function DailyWorkReportDetailPage() {
             textColor: [255, 255, 255],
             fontStyle: "bold",
             fontSize: 9,
-            halign: "center",
+            halign: "left",
           },
-          bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [0, 0, 0],
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252],
+          },
           columnStyles: {
             0: { cellWidth: 15, halign: "center" },
             1: { cellWidth: "auto" },
-            2: { cellWidth: 45 },
-            3: { cellWidth: 30, halign: "center" },
+            2: { cellWidth: 45, textColor: [120, 120, 120] },
+            3: { cellWidth: 25, halign: "center" },
+          },
+          didParseCell: function (data) {
+            if (data.section === 'body' && data.column.index === 3) {
+              const val = data.cell.raw;
+              if (val === 'Completed') {
+                data.cell.styles.textColor = [22, 163, 74]; // Green
+                data.cell.styles.fontStyle = 'bold';
+              } else if (val === 'Pending') {
+                data.cell.styles.textColor = [234, 88, 12]; // Orange
+                data.cell.styles.fontStyle = 'bold';
+              }
+            }
           },
           margin: { left: margin, right: margin },
         })
         y = (doc as any).lastAutoTable.finalY + 6
 
-        // ── Inspection / Testing ──
-        sectionTitle("Inspection / Testing")
-        autoTable(doc, {
-          startY: y,
-          body: [
-            ["Operational Test", safeStr(report.operational_test_status)],
-            ["Safety Observations", safeStr(report.safety_observations)],
-            ["Pending Recommendations", safeStr(report.pending_recommendations)],
-          ],
-          theme: "plain",
-          styles: kvStyles,
-          columnStyles: {
-            0: { ...labelStyle, cellWidth: 55 },
-            1: { cellWidth: "auto" },
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 6
+        // ── INSPECTION / TESTING BLOCK ──
+        const boxY = y
+        const boxH = 22
+        doc.setFillColor(240, 248, 255) // Light blue aliceblue
+        doc.rect(margin, boxY, pageW - 2 * margin, boxH, 'F')
 
-        // ── Acknowledgement ──
-        sectionTitle("Acknowledgement")
-        autoTable(doc, {
-          startY: y,
-          body: [
-            [
-              "Technician Signature",
-              safeStr(report.tech_sign_name),
-              "Date",
-              safeStr(report.tech_sign_datetime),
-            ],
-            [
-              "Customer Signature",
-              safeStr(report.customer_sign_name),
-              "Date",
-              safeStr(report.customer_sign_datetime),
-            ],
-          ],
-          theme: "plain",
-          styles: kvStyles,
-          columnStyles: {
-            0: { ...labelStyle, cellWidth: 45 },
-            1: { cellWidth: "auto" },
-            2: { ...labelStyle, cellWidth: 20 },
-            3: { cellWidth: "auto" },
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 6
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(tr, tg, tb)
+        doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
 
-        // ── Office Use ──
-        sectionTitle("Office Use")
-        autoTable(doc, {
-          startY: y,
-          body: [
-            ["Office Status", safeStr(report.office_status), "Checked By", safeStr(report.checked_by)],
-          ],
-          theme: "plain",
-          styles: kvStyles,
-          columnStyles: {
-            0: labelStyle,
-            1: { cellWidth: "auto" },
-            2: labelStyle,
-            3: { cellWidth: "auto" },
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 12
-
-        // ── Footer ──
-        doc.setFontSize(8)
-        doc.setTextColor(150, 150, 150)
+        doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
+        doc.setTextColor(0, 0, 0)
+        
+        doc.text(`Operational test: `, margin + 5, boxY + 12)
+        doc.setFont("helvetica", "bold")
+        doc.text(safeStr(report.operational_test_status), margin + 32, boxY + 12)
+        
+        doc.setFont("helvetica", "normal")
+        doc.text(`Safety observations: `, pageW / 2, boxY + 12)
+        doc.setFont("helvetica", "bold")
+        doc.text(safeStr(report.safety_observations), pageW / 2 + 35, boxY + 12)
+
+        doc.setFont("helvetica", "normal")
+        doc.text(`Pending recommendations: `, margin + 5, boxY + 18)
+        doc.setFont("helvetica", "bold")
+        doc.text(safeStr(report.pending_recommendations), margin + 45, boxY + 18)
+
+        y = boxY + boxH + 10
+
+        // ── SIGNATURE SECTION ──
+        doc.setDrawColor(200, 200, 200)
+        doc.setLineWidth(0.3)
+        
+        // Technician line
+        doc.line(margin, y, margin + 65, y)
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(120, 120, 120)
+        doc.text("Technician / Engineer Signature", margin, y - 2)
+
+        // Customer line
+        doc.line(pageW - margin - 65, y, pageW - margin, y)
+        doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
+
+        y += 8
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Name: ${safeStr(report.tech_sign_name)}`, margin, y)
+        doc.text(`Name: ${safeStr(report.customer_sign_name)}`, pageW - margin, y, { align: "right" })
+
+        y += 5
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(8)
+        doc.setTextColor(120, 120, 120)
+        doc.text(safeStr(report.tech_sign_datetime), margin, y)
+        doc.text(safeStr(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
+
+        y += 12
+
+        // ── OFFICE USE SECTION ──
+        doc.setDrawColor(220, 220, 220)
+        doc.setLineWidth(0.3)
+        doc.rect(margin, y, pageW - 2 * margin, 12)
+        
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "italic")
+        doc.setTextColor(150, 150, 150)
+        doc.text("For office use only", margin + 4, y + 7)
+        
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(`Status: ${safeStr(report.office_status || "Approved")}  |  Checked By: ${safeStr(report.checked_by || "Admin")}`, pageW - margin - 4, y + 7, { align: "right" })
+
+        y += 16
+
+        // ── FOOTER ──
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(180, 180, 180)
         doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
 
         return y + 6
       }
 
-      // Two-pass measurement so we get a single tall page (same trick as quotation)
+      // Two-pass measurement so we get a single tall page
       const scratchDoc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
