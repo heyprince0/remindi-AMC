@@ -160,6 +160,45 @@ export const getAuthUser = async () => {
   return user
 }
 
+export type DailyWorkItem = {
+  sr_no: number
+  description: string
+  material_used: string
+  status: "Completed" | "Pending"
+}
+
+export type DailyWorkReport = {
+  id: string
+  org_id: string
+  user_id: string
+  report_no: string
+  report_date: string
+  work_order_no: string | null
+  lift_no: string | null
+  site_address: string | null
+  customer_id: string | null
+  technician_id: string | null
+  contract_id: string | null
+  customer_name: string | null
+  site_name: string | null
+  technician_name: string | null
+  contact_no: string | null
+  work_items: DailyWorkItem[]
+  operational_test_status: "Yes" | "No" | "Not Applicable" | null
+  safety_observations: string | null
+  pending_recommendations: string | null
+  tech_sign_name: string | null
+  tech_sign_datetime: string | null
+  customer_sign_name: string | null
+  customer_sign_datetime: string | null
+  office_status: "Approved" | "Follow-up Required" | null
+  checked_by: string | null
+  status: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 // Quotations
 export type QuotationItem = {
   id: string
