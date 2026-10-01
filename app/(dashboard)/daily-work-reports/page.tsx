@@ -8,7 +8,6 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -264,13 +263,9 @@ export default function DailyWorkReportsPage() {
                         <p className="text-xs text-muted-foreground mb-0.5">Technician</p>
                         <p className="text-sm font-medium truncate">{r.technician_name || "—"}</p>
                       </div>
-                      <div>
+                      <div className="col-span-2">
                         <p className="text-xs text-muted-foreground mb-0.5">Site</p>
                         <p className="text-sm font-medium truncate">{r.site_name || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Status</p>
-                        <Badge variant="secondary">{r.status || "Draft"}</Badge>
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
