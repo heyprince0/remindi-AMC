@@ -19,6 +19,7 @@ import {
   CreditCard,
   UserCircle,
   Package,
+  ClipboardList,
 } from "lucide-react"
 import {
   Sidebar,
@@ -47,6 +48,7 @@ const memberNavItems = [
   { title: "Inventory", icon: Package, href: "/stocks" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
+  { title: "Daily Work Reports", icon: ClipboardList, href: "/daily-work-reports" },
   { title: "Reports", icon: BarChart3, href: "/reports" },
 ]
 
