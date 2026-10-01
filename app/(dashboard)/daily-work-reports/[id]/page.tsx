@@ -203,7 +203,7 @@ export default function DailyWorkReportDetailPage() {
         doc.setFont("helvetica", "bold")
         doc.setTextColor(120, 120, 120)
         doc.text("REPORT NO.", margin, y)
-        
+
         doc.setFontSize(14)
         doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.report_no), margin, y + 5)
@@ -212,10 +212,16 @@ export default function DailyWorkReportDetailPage() {
         doc.setTextColor(tr, tg, tb)
         doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y, { align: "right" })
 
+        // ── DATE / WORK ORDER LINE — now solid black & bold ──
         doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
-        doc.text(`DATE: ${formattedDate}   WORK ORDER: ${safeStr(report.work_order_no || "-")}`, pageW - margin, y + 5, { align: "right" })
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(
+          `DATE: ${formattedDate}   WORK ORDER: ${safeStr(report.work_order_no || "-")}`,
+          pageW - margin,
+          y + 5,
+          { align: "right" }
+        )
 
         y += 12
         doc.setDrawColor(220, 220, 220)
@@ -240,10 +246,10 @@ export default function DailyWorkReportDetailPage() {
         // Left column
         detailLabel("TECHNICIAN / ENGINEER", margin, y)
         detailValue(safeStr(report.technician_name), margin, y + 4)
-        
+
         detailLabel("CUSTOMER / SITE", margin, y + 10)
         detailValue(`${safeStr(report.customer_name)} – ${safeStr(report.site_name)}`, margin, y + 14)
-        
+
         detailLabel("SITE ADDRESS", margin, y + 20)
         detailValue(safeStr(report.site_address), margin, y + 24, false)
 
@@ -251,7 +257,7 @@ export default function DailyWorkReportDetailPage() {
         const col2X = pageW / 2 + 10
         detailLabel("CONTACT NO.", col2X, y)
         detailValue(safeStr(report.contact_no), col2X, y + 4)
-        
+
         detailLabel("LIFT NO. / EQUIPMENT ID", col2X, y + 10)
         detailValue(safeStr(report.lift_no), col2X, y + 14)
 
@@ -322,11 +328,11 @@ export default function DailyWorkReportDetailPage() {
         doc.setFontSize(9)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(0, 0, 0)
-        
+
         doc.text(`Operational test: `, margin + 5, boxY + 12)
         doc.setFont("helvetica", "bold")
         doc.text(safeStr(report.operational_test_status), margin + 32, boxY + 12)
-        
+
         doc.setFont("helvetica", "normal")
         doc.text(`Safety observations: `, pageW / 2, boxY + 12)
         doc.setFont("helvetica", "bold")
@@ -342,7 +348,7 @@ export default function DailyWorkReportDetailPage() {
         // ── SIGNATURE SECTION ──
         doc.setDrawColor(200, 200, 200)
         doc.setLineWidth(0.3)
-        
+
         doc.line(margin, y, margin + 65, y)
         doc.setFontSize(8)
         doc.setFont("helvetica", "normal")
@@ -372,12 +378,12 @@ export default function DailyWorkReportDetailPage() {
         doc.setDrawColor(220, 220, 220)
         doc.setLineWidth(0.3)
         doc.rect(margin, y, pageW - 2 * margin, 12)
-        
+
         doc.setFontSize(8)
         doc.setFont("helvetica", "italic")
         doc.setTextColor(150, 150, 150)
         doc.text("For office use only", margin + 4, y + 7)
-        
+
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text(`Status: ${safeStr(report.office_status || "Approved")}  |  Checked By: ${safeStr(report.checked_by || "Admin")}`, pageW - margin - 4, y + 7, { align: "right" })
