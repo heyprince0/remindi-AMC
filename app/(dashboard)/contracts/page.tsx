@@ -142,11 +142,11 @@ function getContractEndDate(startDate: string | null, durationYears: number | nu
 
 function getStatusBadge(days: number, status: string) {
   if (days < 0) {
-    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Expired</Badge>
+    return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20">Overdue</Badge>
   } else if (days === 0) {
     return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Today Servicing</Badge>
   } else if (days <= 3) {
-    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Expiring Soon</Badge>
+    return <Badge className="bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20">Upcoming</Badge>
   } else if (status === "active") {
     return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Active</Badge>
   }
@@ -154,9 +154,9 @@ function getStatusBadge(days: number, status: string) {
 }
 
 function getStatusLabel(days: number, status: string): string {
-  if (days < 0) return 'Expired'
+  if (days < 0) return 'Overdue'
   if (days === 0) return 'Today Servicing'
-  if (days <= 3) return 'Expiring Soon'
+  if (days <= 3) return 'Upcoming'
   if (status === 'active') return 'Active'
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
@@ -585,9 +585,9 @@ export default function ContractsPage() {
       const summaryRows = [
         { "Summary": "Total Contracts", "Count": filteredContracts.length },
         { "Summary": "Active", "Count": counts.active },
-        { "Summary": "Expired", "Count": counts.expired },
+        { "Summary": "Overdue", "Count": counts.expired },
         { "Summary": "Today Servicing", "Count": counts.todayServicing },
-        { "Summary": "Expiring Soon", "Count": counts.expiringSoon },
+        { "Summary": "Upcoming", "Count": counts.expiringSoon },
         { "Summary": "Exported On", "Count": new Date().toLocaleDateString("en-IN") },
       ]
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows)
@@ -949,9 +949,9 @@ export default function ContractsPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="expired">Overdue</SelectItem>
                 <SelectItem value="today-servicing">Today Servicing</SelectItem>
-                <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
+                <SelectItem value="expiring-soon">Upcoming</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1017,9 +1017,9 @@ export default function ContractsPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="expired">Overdue</SelectItem>
                 <SelectItem value="today-servicing">Today Servicing</SelectItem>
-                <SelectItem value="expiring-soon">Expiring Soon</SelectItem>
+                <SelectItem value="expiring-soon">Upcoming</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterMonth} onValueChange={setFilterMonth}>
