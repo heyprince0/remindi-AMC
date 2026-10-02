@@ -283,28 +283,39 @@ async function downloadBlankDwr(
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.3)
 
+    // Column anchors: technician starts at `margin`, customer starts at `pageW - margin - 65`
+    const leftColX = margin
+    const rightColX = pageW - margin - 65
+
+    // Signature lines + captions (above the line)
     doc.setFontSize(8)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(120, 120, 120)
-    doc.text("Technician / Engineer Signature", margin, y - 2)
-    doc.line(margin, y, margin + 65, y)
 
-    doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
-    doc.line(pageW - margin - 65, y, pageW - margin, y)
+    doc.text("Technician / Engineer Signature", leftColX, y - 2)
+    doc.line(leftColX, y, leftColX + 65, y)
+
+    doc.text("Customer / Site Representative Signature", rightColX, y - 2)
+    doc.line(rightColX, y, rightColX + 65, y)
 
     y += 8
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text("Name:", margin, y)
-    doc.text("Name:", pageW - margin, y, { align: "right" })
+
+    // Both "Name:" labels left-aligned at their column's start
+    // → writing space extends to the right of the label (same as technician side)
+    doc.text("Name:", leftColX, y)
+    doc.text("Name:", rightColX, y)
 
     y += 5
     doc.setFont("helvetica", "normal")
     doc.setFontSize(8)
     doc.setTextColor(120, 120, 120)
-    doc.text("Date & Time:", margin, y)
-    doc.text("Date & Time:", pageW - margin, y, { align: "right" })
+
+    // Both "Date & Time:" labels left-aligned at their column's start
+    doc.text("Date & Time:", leftColX, y)
+    doc.text("Date & Time:", rightColX, y)
 
     y += 12
 
