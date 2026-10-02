@@ -568,7 +568,7 @@ export default function DashboardPage() {
             >
               <CalendarClock className="size-4 text-amber-500" />
               <p className="text-[22px] font-bold leading-none text-amber-600">{loading ? "—" : stats.expiringSoon}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Expiring Soon</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Upcoming</p>
             </button>
 
             <button
@@ -577,7 +577,7 @@ export default function DashboardPage() {
             >
               <Clock className="size-4 text-red-500" />
               <p className="text-[22px] font-bold leading-none text-red-600">{loading ? "—" : stats.expired}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">Expired</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">Overdue</p>
             </button>
           </div>
 
@@ -617,8 +617,8 @@ export default function DashboardPage() {
         <div className="hidden md:grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard title="Active Contracts" value={stats.contracts} icon={FileText} description="Total" />
           <StatCard title="This Month Servicing" value={stats.monthServicing} icon={CalendarClock} description="This month" iconClassName="bg-alert-due-today/10" />
-          <StatCard title="Expiring Soon" value={stats.expiringSoon} icon={CalendarCheck} description="In next 3 days" />
-          <StatCard title="Expired" value={stats.expired} icon={Clock} description="Overdue contracts" iconClassName="bg-alert-overdue/10" />
+          <StatCard title="Upcoming" value={stats.expiringSoon} icon={CalendarCheck} description="In next 3 days" />
+          <StatCard title="Overdue" value={stats.expired} icon={Clock} description="Overdue contracts" iconClassName="bg-alert-overdue/10" />
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
           <StatCard title="Technicians" value={stats.technicians} icon={Wrench} description="Available" />
         </div>
