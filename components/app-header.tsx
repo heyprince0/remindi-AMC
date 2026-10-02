@@ -168,7 +168,7 @@ export function AppHeader() {
           expired++
           items.push({
             id: contract.id,
-            title: `Expired: ${contract.contract_name}`,
+            title: `Overdue: ${contract.contract_name}`,
             description: `${customerName} — ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} expired`,
             type: "expired",
           })
@@ -184,7 +184,7 @@ export function AppHeader() {
           expiringSoon++
           items.push({
             id: contract.id,
-            title: `Expiring Soon: ${contract.contract_name}`,
+            title: `Upcoming Service: ${contract.contract_name}`,
             description: `${customerName} — in ${days} day${days !== 1 ? "s" : ""}`,
             type: "expiring-soon",
           })
