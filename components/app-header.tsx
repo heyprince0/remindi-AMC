@@ -169,7 +169,7 @@ export function AppHeader() {
           items.push({
             id: contract.id,
             title: `Overdue: ${contract.contract_name}`,
-            description: `${customerName} — ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} expired`,
+            description: `${customerName} — ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} Overdue`,
             type: "expired",
           })
         } else if (days === 0) {
