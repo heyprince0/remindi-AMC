@@ -184,7 +184,7 @@ export function AppHeader() {
           expiringSoon++
           items.push({
             id: contract.id,
-            title: `Upcoming Service: ${contract.contract_name}`,
+            title: `Upcoming: ${contract.contract_name}`,
             description: `${customerName} — in ${days} day${days !== 1 ? "s" : ""}`,
             type: "expiring-soon",
           })
