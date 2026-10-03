@@ -66,7 +66,7 @@ function ServiceAlertCard({
                 <Clock className="size-3.5 shrink-0" />
                 <span>
                   {variant === "overdue"
-                    ? `${service.daysOverdue} days expired`
+                    ? `${service.daysOverdue} days overdue`
                     : variant === "due-today"
                     ? "Today"
                     : service.dueDate}
@@ -288,7 +288,7 @@ export default function ServiceAlertsPage() {
           <div className="rounded-lg border-l-4 border-l-alert-overdue bg-alert-overdue/5 p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <AlertTriangle className="size-3.5 text-alert-overdue shrink-0" />
-              <p className="text-[11px] text-muted-foreground leading-tight">Expired</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">Overdue</p>
             </div>
             <p className="text-2xl font-bold">{loading ? "—" : overdueServices.length}</p>
           </div>
@@ -302,7 +302,7 @@ export default function ServiceAlertsPage() {
           <div className="rounded-lg border-l-4 border-l-alert-upcoming bg-alert-upcoming/5 p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <Clock className="size-3.5 text-alert-upcoming shrink-0" />
-              <p className="text-[11px] text-muted-foreground leading-tight">Soon</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">Upcoming</p>
             </div>
             <p className="text-2xl font-bold">{loading ? "—" : upcomingServices.length}</p>
           </div>
@@ -314,7 +314,7 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <AlertTriangle className="size-4 text-alert-overdue" />
-                Expired Services
+                Overdue Services
               </CardDescription>
               <CardTitle className="text-3xl">{overdueServices.length}</CardTitle>
             </CardHeader>
@@ -338,7 +338,7 @@ export default function ServiceAlertsPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <Clock className="size-4 text-alert-upcoming" />
-                Expiring Soon
+                Upcoming
               </CardDescription>
               <CardTitle className="text-3xl">{upcomingServices.length}</CardTitle>
             </CardHeader>
@@ -354,7 +354,7 @@ export default function ServiceAlertsPage() {
           <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
             <TabsTrigger value="overdue" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <span className="size-2 rounded-full bg-alert-overdue shrink-0" />
-              <span className="hidden sm:inline">Expired </span>
+              <span className="hidden sm:inline">Overdue </span>
               <span>({overdueServices.length})</span>
             </TabsTrigger>
             <TabsTrigger value="today" className="flex items-center gap-1.5 text-xs sm:text-sm">
@@ -365,8 +365,8 @@ export default function ServiceAlertsPage() {
             </TabsTrigger>
             <TabsTrigger value="upcoming" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <span className="size-2 rounded-full bg-alert-upcoming shrink-0" />
-              <span className="hidden sm:inline">Expiring Soon </span>
-              <span className="sm:hidden">Soon </span>
+              <span className="hidden sm:inline">Upcoming </span>
+              <span className="sm:hidden">Upcoming </span>
               <span>({upcomingServices.length})</span>
             </TabsTrigger>
           </TabsList>
@@ -376,7 +376,7 @@ export default function ServiceAlertsPage() {
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : overdueServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No expired services</div>
+                <div className="text-center py-8 text-muted-foreground">No overdue services</div>
               ) : (
                 overdueServices.map((service) => (
                   <ServiceAlertCard
@@ -416,7 +416,7 @@ export default function ServiceAlertsPage() {
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : upcomingServices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No services expiring soon</div>
+                <div className="text-center py-8 text-muted-foreground">No upcoming services</div>
               ) : (
                 upcomingServices.map((service) => (
                   <ServiceAlertCard
