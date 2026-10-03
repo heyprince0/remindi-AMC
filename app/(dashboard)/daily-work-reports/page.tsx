@@ -74,7 +74,6 @@ async function downloadBlankDwr(
   const [tr, tg, tb] = hexToRgb(themeColor)
   const headerStyle = profile?.header_style ?? "single_logo"
 
-  // ── load logo ──
   let logoBase64: string | null = null
   let logoFormat: "JPEG" | "PNG" = "PNG"
   if (headerStyle !== "thumbnail" && profile?.logo_url) {
@@ -89,7 +88,6 @@ async function downloadBlankDwr(
     } catch { /* skip */ }
   }
 
-  // ── load banner ──
   let bannerBase64: string | null = null
   let bannerFormat: "JPEG" | "PNG" = "PNG"
   let bannerH = 0
@@ -112,7 +110,6 @@ async function downloadBlankDwr(
     } catch { /* skip */ }
   }
 
-  // ── load stamp (3-attempt retry, same as quotation) ──
   let stampBase64: string | null = null
   let stampFormat: "JPEG" | "PNG" = "PNG"
   const shouldStamp = includeStamp && !!profile?.stamp_url
@@ -144,13 +141,11 @@ async function downloadBlankDwr(
     year: "numeric",
   })
 
-  // blank rows with write-space height (no Material Used column)
   const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
 
   const renderBlank = (doc: jsPDF): number => {
     let y = margin
 
-    // ── company header (identical logic to detail page) ──
     if (headerStyle === "thumbnail" && bannerBase64) {
       doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
       y += bannerH + 6
@@ -185,8 +180,6 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    // ── title row ──
-    // Left: REPORT NO. label + write line
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -194,15 +187,13 @@ async function downloadBlankDwr(
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin, y + 6, margin + 50, y + 6)   // write line for report no.
+    doc.line(margin, y + 6, margin + 50, y + 6)
 
-    // Right: document title
     doc.setFontSize(15)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
     doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
 
-    // Right: DATE (fixed) + WORK ORDER NO. label + write line
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
@@ -215,7 +206,7 @@ async function downloadBlankDwr(
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)  // write line for work order
+    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)
 
     y += 24
     doc.setDrawColor(220, 220, 220)
@@ -223,7 +214,6 @@ async function downloadBlankDwr(
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── details grid with blank underlines ──
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
       doc.setFont("helvetica", "bold")
@@ -257,7 +247,6 @@ async function downloadBlankDwr(
     doc.line(margin, y, pageW - margin, y)
     y += 6
 
-    // ── work items table (blank rows) ──
     autoTable(doc, {
       startY: y,
       head: [["SR.", "Description of Work / Service", "Status"]],
@@ -285,7 +274,6 @@ async function downloadBlankDwr(
     })
     y = (doc as any).lastAutoTable.finalY + 6
 
-    // ── inspection / testing (blank) ──
     const boxY = y
     const boxH = 28
     doc.setFillColor(240, 248, 255)
@@ -312,17 +300,10 @@ async function downloadBlankDwr(
 
     y = boxY + boxH + 10
 
-    // ── signature section ──
-    //    LEFT  → Customer / Site Representative
-    //    RIGHT → Technician / Engineer
-    const sigLineW = 75    // width of each writable line
+    const sigLineW = 75
+    const leftColX  = margin
+    const rightColX = pageW - margin - sigLineW
 
-    // ⭐ Column anchors — all labels in each column start at the column's left edge,
-    //    so the user has free space to the right of the label to write in.
-    const leftColX  = margin                          // left column start (Customer)
-    const rightColX = pageW - margin - sigLineW       // right column start (Technician)
-
-    // Section labels (grey, small) — both LEFT-aligned within their column
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -331,11 +312,10 @@ async function downloadBlankDwr(
 
     y += 5
 
-    // ── Signature write area ──
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)          // left sig line
-    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)        // right sig line
+    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)
+    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)
 
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
@@ -345,7 +325,6 @@ async function downloadBlankDwr(
 
     y += 20
 
-    // ── Name write line ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -360,7 +339,6 @@ async function downloadBlankDwr(
 
     y += 11
 
-    // ── Date & Time write line ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -375,11 +353,10 @@ async function downloadBlankDwr(
 
     y += 14
 
-    // ── stamp — RIGHT side ──
     if (shouldStamp && stampBase64) {
       const stampW = 30
       const stampH = 30
-      const stampX = pageW - margin - stampW    // → right-aligned
+      const stampX = pageW - margin - stampW
 
       doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
 
@@ -395,7 +372,6 @@ async function downloadBlankDwr(
       y = y + stampH + 14
     }
 
-    // ── footer ──
     doc.setFontSize(8)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(180, 180, 180)
@@ -404,7 +380,6 @@ async function downloadBlankDwr(
     return y + 6
   }
 
-  // measure then render at exact height
   const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
   const measuredH = renderBlank(scratch)
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
@@ -426,13 +401,11 @@ export default function DailyWorkReportsPage() {
   const [profileDialog, setProfileDialog] = useState(false)
   const [checking, setChecking] = useState(false)
 
-  // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
-  const [rowCount, setRowCount] = useState(4)   // default is 4
-  const [includeStamp, setIncludeStamp] = useState(true)   // default ON
+  const [rowCount, setRowCount] = useState(4)
+  const [includeStamp, setIncludeStamp] = useState(true)
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
-  // ── Plan / subscription state ──
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
@@ -475,7 +448,6 @@ export default function DailyWorkReportsPage() {
     })
   }, [orgId])
 
-  // ── Auto-show subscription alert on page load ──
   useEffect(() => {
     if (!limitsLoading && orgId && !autoShown) {
       const blocked = checkAndShowLimitModal()
@@ -493,7 +465,6 @@ export default function DailyWorkReportsPage() {
     [reports, search]
   )
 
-  // ── Subscription check (used by both buttons + auto-show) ──
   const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
@@ -514,7 +485,6 @@ export default function DailyWorkReportsPage() {
   const checkProfile = async () => {
     if (!orgId) return
 
-    // ⭐ Subscription check first
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
       return
@@ -535,6 +505,16 @@ export default function DailyWorkReportsPage() {
     }
   }
 
+  // ⭐ Edit click with subscription check — used by the 3-dot Actions menu
+  const handleEditClick = (report: DailyWorkReport) => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+    router.push(`/daily-work-reports/${report.id}/edit`)
+  }
+
   const softDelete = async () => {
     if (!deleteReport || !orgId) return
     const { error } = await supabase
@@ -552,7 +532,6 @@ export default function DailyWorkReportsPage() {
   }
 
   const handleDownloadBlank = async () => {
-    // ⭐ Subscription check first
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
       return
@@ -575,7 +554,6 @@ export default function DailyWorkReportsPage() {
     }
   }
 
-  // ⭐ Also guard the "open dialog" click so the modal shows immediately
   const handleOpenBlankDialog = () => {
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
@@ -590,7 +568,6 @@ export default function DailyWorkReportsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
@@ -608,7 +585,6 @@ export default function DailyWorkReportsPage() {
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -684,7 +660,12 @@ export default function DailyWorkReportsPage() {
                               <ArrowUpRight className="size-4" />
                               <span className="sr-only">View Details</span>
                             </Button>
-                            <Actions report={r} onDelete={setDeleteReport} />
+                            {/* ⭐ onEdit passed so the 3-dot Edit triggers the subscription check */}
+                            <Actions
+                              report={r}
+                              onDelete={setDeleteReport}
+                              onEdit={handleEditClick}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -736,7 +717,11 @@ export default function DailyWorkReportsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <Actions report={r} onDelete={setDeleteReport} />
+                        <Actions
+                          report={r}
+                          onDelete={setDeleteReport}
+                          onEdit={handleEditClick}
+                        />
                       </div>
                     </div>
                   </CardHeader>
@@ -784,7 +769,6 @@ export default function DailyWorkReportsPage() {
           </DialogHeader>
 
           <div className="py-4 space-y-5">
-            {/* Row count */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Number of work item rows</Label>
               <div className="flex items-center gap-3">
@@ -820,7 +804,6 @@ export default function DailyWorkReportsPage() {
                 </Button>
               </div>
 
-              {/* Quick-pick presets */}
               <div className="flex gap-2 flex-wrap">
                 {[3, 4, 5, 8, 10, 15].map((n) => (
                   <Button
@@ -837,7 +820,6 @@ export default function DailyWorkReportsPage() {
               </div>
             </div>
 
-            {/* Stamp toggle — only show when stamp is uploaded */}
             {hasStamp && (
               <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -855,7 +837,6 @@ export default function DailyWorkReportsPage() {
               </div>
             )}
 
-            {/* If no stamp uploaded, show a note */}
             {!hasStamp && (
               <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-muted-foreground">
                 <Stamp className="size-4 shrink-0" />
@@ -940,7 +921,7 @@ export default function DailyWorkReportsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Unified Limit/Subscription Modal */}
+      {/* ⭐ Unified Limit/Subscription Modal */}
       <LimitReachedModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
@@ -953,12 +934,15 @@ export default function DailyWorkReportsPage() {
   )
 }
 
+// ⭐ Actions — now takes onEdit and calls it instead of using <Link>
 function Actions({
   report,
   onDelete,
+  onEdit,
 }: {
   report: DailyWorkReport
   onDelete: (r: DailyWorkReport) => void
+  onEdit: (r: DailyWorkReport) => void
 }) {
   return (
     <DropdownMenu>
@@ -980,11 +964,13 @@ function Actions({
             View
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={`/daily-work-reports/${report.id}/edit`} className="flex items-center">
-            <Edit className="mr-2 size-4" />
-            Edit
-          </Link>
+        {/* ⭐ Edit now runs the subscription check before navigating */}
+        <DropdownMenuItem
+          onClick={() => onEdit(report)}
+          className="flex items-center cursor-pointer"
+        >
+          <Edit className="mr-2 size-4" />
+          Edit
         </DropdownMenuItem>
         <DropdownMenuItem
           className="text-red-600 focus:text-red-600"
