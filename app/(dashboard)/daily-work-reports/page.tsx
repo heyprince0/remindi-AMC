@@ -183,45 +183,48 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    // ── title row (inline labels, NO underlines, all BOLD) ──
-    // Left column: REPORT NO. label (bold) + DWR- value (bold)
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")          // ← bold
+    // ── title row ──
+    // Left: REPORT NO. label + write line
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("REPORT NO.", margin, y)
 
-    doc.setFontSize(14)
-    doc.setFont("helvetica", "bold")          // ← explicitly bold
-    doc.setTextColor(0, 0, 0)
-    doc.text("DWR-", margin, y + 5)
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 6, margin + 50, y + 6)   // write line for report no.
 
-    // Right column: document title (bold)
+    // Right: document title
     doc.setFontSize(15)
-    doc.setFont("helvetica", "bold")          // ← bold
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
     doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
 
-    // Right column: DATE + WORK ORDER NO. — inline, all BOLD, no underline
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")          // ← bold
+    // Right: DATE (fixed) + WORK ORDER NO. label + write line
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text(
-      `DATE: ${todayFormatted}   WORK ORDER NO.: `,
-      pageW - margin,
-      y + 9,
-      { align: "right" }
-    )
+    doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
-    y += 22
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
+
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)  // write line for work order
+
+    y += 24
     doc.setDrawColor(220, 220, 220)
     doc.setLineWidth(0.3)
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── details grid ──
+    // ── details grid with blank underlines ──
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
-      doc.setFont("helvetica", "bold")        // ← bold for every field label
+      doc.setFont("helvetica", "bold")
       doc.setTextColor(120, 120, 120)
       doc.text(text, x, yy)
     }
@@ -261,7 +264,7 @@ async function downloadBlankDwr(
       headStyles: {
         fillColor: [tr, tg, tb],
         textColor: [255, 255, 255],
-        fontStyle: "bold",                    // ← bold table headers
+        fontStyle: "bold",
         fontSize: 9,
         halign: "left",
       },
@@ -280,19 +283,19 @@ async function downloadBlankDwr(
     })
     y = (doc as any).lastAutoTable.finalY + 6
 
-    // ── inspection / testing ──
+    // ── inspection / testing (blank) ──
     const boxY = y
     const boxH = 28
     doc.setFillColor(240, 248, 255)
     doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
 
     doc.setFontSize(10)
-    doc.setFont("helvetica", "bold")          // ← bold section title
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
     doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
 
     doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")          // ← bold field labels
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(120, 120, 120)
     doc.text("Operational test:", margin + 5, boxY + 13)
     doc.setDrawColor(180, 180, 180)
@@ -307,58 +310,62 @@ async function downloadBlankDwr(
 
     y = boxY + boxH + 10
 
-    // ── signature section ──
-    const sigLineW = 75
+    // ── signature section — SWAPPED positions ──
+    //    LEFT  → Customer / Site Representative
+    //    RIGHT → Technician / Engineer
+    const sigLineW = 75    // writeable line width for each block
+    const midX = pageW / 2  // centre divider
 
-    const leftColX  = margin
-    const rightColX = pageW - margin - sigLineW
-
+    // Section label (grey, small)
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")          // ← bold section label
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("CUSTOMER / SITE REPRESENTATIVE", leftColX, y)
-    doc.text("TECHNICIAN / ENGINEER", rightColX, y)
+    doc.text("CUSTOMER / SITE REPRESENTATIVE", margin, y)
+    doc.text("TECHNICIAN / ENGINEER", pageW - margin, y, { align: "right" })
 
     y += 5
 
+    // ── Signature write area ──
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)
-    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)
+    doc.line(margin, y + 12, margin + sigLineW, y + 12)           // left sig line
+    doc.line(pageW - margin - sigLineW, y + 12, pageW - margin, y + 12)  // right sig line
 
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(150, 150, 150)
-    doc.text("Signature", leftColX, y + 15)
-    doc.text("Signature", rightColX, y + 15)
+    doc.text("Signature", margin, y + 15)
+    doc.text("Signature", pageW - margin, y + 15, { align: "right" })
 
     y += 20
 
+    // ── Name write line ──
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")          // ← bold field label
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("NAME", leftColX, y)
-    doc.text("NAME", rightColX, y)
+    doc.text("NAME", margin, y)
+    doc.text("NAME", pageW - margin, y, { align: "right" })
 
     y += 3
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
-    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
+    doc.line(margin, y + 5, margin + sigLineW, y + 5)
+    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
 
     y += 11
 
+    // ── Date & Time write line ──
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")          // ← bold field label
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("DATE & TIME", leftColX, y)
-    doc.text("DATE & TIME", rightColX, y)
+    doc.text("DATE & TIME", margin, y)
+    doc.text("DATE & TIME", pageW - margin, y, { align: "right" })
 
     y += 3
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
-    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
+    doc.line(margin, y + 5, margin + sigLineW, y + 5)
+    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
 
     y += 14
 
@@ -374,7 +381,7 @@ async function downloadBlankDwr(
       doc.setLineWidth(0.3)
       doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
 
-      doc.setFont("helvetica", "bold")        // ← bold
+      doc.setFont("helvetica", "normal")
       doc.setFontSize(8)
       doc.setTextColor(120, 120, 120)
       doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
@@ -413,9 +420,10 @@ export default function DailyWorkReportsPage() {
   const [profileDialog, setProfileDialog] = useState(false)
   const [checking, setChecking] = useState(false)
 
+  // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
   const [rowCount, setRowCount] = useState(5)
-  const [includeStamp, setIncludeStamp] = useState(true)
+  const [includeStamp, setIncludeStamp] = useState(true)   // default ON
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
   useEffect(() => {
@@ -515,6 +523,7 @@ export default function DailyWorkReportsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
+        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
@@ -532,6 +541,7 @@ export default function DailyWorkReportsPage() {
           </div>
         </div>
 
+        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -543,6 +553,7 @@ export default function DailyWorkReportsPage() {
           />
         </div>
 
+        {/* Desktop Table */}
         <Card className="hidden md:block">
           <CardHeader>
             <CardTitle>All Reports</CardTitle>
@@ -618,6 +629,7 @@ export default function DailyWorkReportsPage() {
           </CardContent>
         </Card>
 
+        {/* Mobile Cards */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading reports...</div>
@@ -705,6 +717,7 @@ export default function DailyWorkReportsPage() {
           </DialogHeader>
 
           <div className="py-4 space-y-5">
+            {/* Row count */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Number of work item rows</Label>
               <div className="flex items-center gap-3">
@@ -740,6 +753,7 @@ export default function DailyWorkReportsPage() {
                 </Button>
               </div>
 
+              {/* Quick-pick presets */}
               <div className="flex gap-2 flex-wrap">
                 {[3, 5, 8, 10, 15].map((n) => (
                   <Button
@@ -756,13 +770,14 @@ export default function DailyWorkReportsPage() {
               </div>
             </div>
 
+            {/* Stamp toggle — only show when stamp is uploaded */}
             {hasStamp && (
               <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Stamp className="size-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Include company stamp</p>
-                    <p className="text-xs text-muted-foreground">Appears on the bottom-right of the PDF</p>
+                    <p className="text-xs text-muted-foreground">Appears on the bottom-left of the PDF</p>
                   </div>
                 </div>
                 <Switch
@@ -773,6 +788,7 @@ export default function DailyWorkReportsPage() {
               </div>
             )}
 
+            {/* If no stamp uploaded, show a note */}
             {!hasStamp && (
               <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-muted-foreground">
                 <Stamp className="size-4 shrink-0" />
@@ -819,6 +835,7 @@ export default function DailyWorkReportsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Dialog */}
       <AlertDialog open={!!deleteReport} onOpenChange={(open) => !open && setDeleteReport(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -834,6 +851,7 @@ export default function DailyWorkReportsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Profile Setup Dialog */}
       <Dialog open={profileDialog} onOpenChange={setProfileDialog}>
         <DialogContent>
           <DialogHeader>
