@@ -344,7 +344,7 @@ async function downloadBlankDwr(
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("NAME", margin, y)
-    doc.text("NAME", pageW - margin, y, { align: "right" })
+    doc.text("NAME", pageW - margin - sigLineW, y)   // left edge of the right write line
 
     y += 3
     doc.setDrawColor(180, 180, 180)
@@ -359,7 +359,7 @@ async function downloadBlankDwr(
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("DATE & TIME", margin, y)
-    doc.text("DATE & TIME", pageW - margin, y, { align: "right" })
+    doc.text("DATE & TIME", pageW - margin - sigLineW, y)   // left edge of the right write line
 
     y += 3
     doc.setDrawColor(180, 180, 180)
