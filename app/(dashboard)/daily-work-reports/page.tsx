@@ -48,6 +48,8 @@ import { Switch } from "@/components/ui/switch"
 import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { toast } from "sonner"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -426,9 +428,16 @@ export default function DailyWorkReportsPage() {
 
   // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
-  const [rowCount, setRowCount] = useState(4)   // ⭐ default is now 4
+  const [rowCount, setRowCount] = useState(4)   // default is 4
   const [includeStamp, setIncludeStamp] = useState(true)   // default ON
   const [generatingBlank, setGeneratingBlank] = useState(false)
+
+  // ── Plan / subscription state ──
+  const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+  const [autoShown, setAutoShown] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -466,6 +475,14 @@ export default function DailyWorkReportsPage() {
     })
   }, [orgId])
 
+  // ── Auto-show subscription alert on page load ──
+  useEffect(() => {
+    if (!limitsLoading && orgId && !autoShown) {
+      const blocked = checkAndShowLimitModal()
+      if (blocked) setAutoShown(true)
+    }
+  }, [limitsLoading, orgId, status, autoShown])
+
   const filtered = useMemo(
     () =>
       reports.filter((r) =>
@@ -476,8 +493,34 @@ export default function DailyWorkReportsPage() {
     [reports, search]
   )
 
+  // ── Subscription check (used by both buttons + auto-show) ──
+  const checkAndShowLimitModal = () => {
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({
+        title: `Your ${planName || 'current'} plan has expired`,
+        description: `Renew your ${planName || 'current'} plan to continue creating daily work reports.`,
+      })
+      setShowLimitModal(true)
+      return true
+    }
+    return false
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
+  }
+
   const checkProfile = async () => {
     if (!orgId) return
+
+    // ⭐ Subscription check first
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+
     setChecking(true)
     const { data, error } = await supabase
       .from("company_profile")
@@ -509,6 +552,16 @@ export default function DailyWorkReportsPage() {
   }
 
   const handleDownloadBlank = async () => {
+    // ⭐ Subscription check first
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) {
+      setBlankDialog(false)
+      return
+    }
+
     setGeneratingBlank(true)
     try {
       await downloadBlankDwr(profile, rowCount, includeStamp)
@@ -520,6 +573,16 @@ export default function DailyWorkReportsPage() {
     } finally {
       setGeneratingBlank(false)
     }
+  }
+
+  // ⭐ Also guard the "open dialog" click so the modal shows immediately
+  const handleOpenBlankDialog = () => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+    setBlankDialog(true)
   }
 
   const hasStamp = !!profile?.stamp_url
@@ -534,11 +597,11 @@ export default function DailyWorkReportsPage() {
             <p className="text-muted-foreground">Create and manage daily work completion reports</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setBlankDialog(true)}>
+            <Button variant="outline" onClick={handleOpenBlankDialog}>
               <FileDown className="mr-2 size-4" />
               Blank PDF
             </Button>
-            <Button onClick={checkProfile} disabled={checking}>
+            <Button onClick={checkProfile} disabled={checking || limitsLoading}>
               <Plus className="mr-2 size-4" />
               New Report
             </Button>
@@ -876,6 +939,16 @@ export default function DailyWorkReportsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unified Limit/Subscription Modal */}
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        type={limitModalType}
+        onUpgrade={handleUpgrade}
+        customTitle={limitModalCustom.title}
+        customDescription={limitModalCustom.description}
+      />
     </DashboardLayout>
   )
 }
