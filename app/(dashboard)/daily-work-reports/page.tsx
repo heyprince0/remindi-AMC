@@ -1,14 +1,50 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { ArrowLeft, Download, Edit, Loader2 } from "lucide-react"
+import {
+  ArrowUpRight,
+  Edit,
+  FileText,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  Settings,
+  FileDown,
+  Loader2,
+  Minus,
+  Stamp,
+} from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
@@ -16,7 +52,8 @@ import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { toast } from "sonner"
 
-const safeStr = (val: unknown) => String(val ?? "-")
+// ─── helpers ────────────────────────────────────────────────────────────────
+const safeStr = (val: unknown) => String(val ?? "")
 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -25,32 +62,382 @@ function hexToRgb(hex: string): [number, number, number] {
     : [24, 95, 165]
 }
 
-function formatDateLong(dateStr: string | null | undefined): string {
-  if (!dateStr) return "-"
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return "-"
-  return d.toLocaleDateString("en-IN", {
+// ─── blank PDF generator ────────────────────────────────────────────────────
+async function downloadBlankDwr(
+  profile: CompanyProfile | null,
+  rowCount: number,
+  includeStamp: boolean
+) {
+  const pageW = 210
+  const margin = 15
+  const themeColor = profile?.theme_color ?? "#185FA5"
+  const [tr, tg, tb] = hexToRgb(themeColor)
+  const headerStyle = profile?.header_style ?? "single_logo"
+
+  // ── load logo ──
+  let logoBase64: string | null = null
+  let logoFormat: "JPEG" | "PNG" = "PNG"
+  if (headerStyle !== "thumbnail" && profile?.logo_url) {
+    try {
+      const blob = await (await fetch(profile.logo_url)).blob()
+      logoFormat = blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
+      logoBase64 = await new Promise<string>((res) => {
+        const r = new FileReader()
+        r.onloadend = () => res(r.result as string)
+        r.readAsDataURL(blob)
+      })
+    } catch { /* skip */ }
+  }
+
+  // ── load banner ──
+  let bannerBase64: string | null = null
+  let bannerFormat: "JPEG" | "PNG" = "PNG"
+  let bannerH = 0
+  if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
+    try {
+      const blob = await (await fetch(profile.header_thumbnail_url)).blob()
+      bannerFormat = blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
+      bannerBase64 = await new Promise<string>((res) => {
+        const r = new FileReader()
+        r.onloadend = () => res(r.result as string)
+        r.readAsDataURL(blob)
+      })
+      const natural = await new Promise<{ w: number; h: number }>((res, rej) => {
+        const img = new Image()
+        img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight })
+        img.onerror = rej
+        img.src = bannerBase64 as string
+      })
+      bannerH = Math.min(60, Math.round((pageW - margin * 2) / (natural.w / natural.h)))
+    } catch { /* skip */ }
+  }
+
+  // ── load stamp (3-attempt retry, same as quotation) ──
+  let stampBase64: string | null = null
+  let stampFormat: "JPEG" | "PNG" = "PNG"
+  const shouldStamp = includeStamp && !!profile?.stamp_url
+  if (shouldStamp && profile?.stamp_url) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(profile.stamp_url, { cache: "no-store" })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        stampBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+        stampFormat = blob.type.includes("jpeg") ? "JPEG" : "PNG"
+        break
+      } catch (e) {
+        console.warn(`[Stamp] Attempt ${attempt} failed:`, e)
+        if (attempt === 3) toast.warning("Stamp image could not be loaded – skipping stamp")
+        else await new Promise((r) => setTimeout(r, 400 * attempt))
+      }
+    }
+  }
+
+  const todayFormatted = new Date().toLocaleDateString("en-IN", {
     day: "2-digit",
-    month: "long",
+    month: "2-digit",
     year: "numeric",
   })
+
+  // blank rows with write-space height (no Material Used column)
+  const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
+
+  const renderBlank = (doc: jsPDF): number => {
+    let y = margin
+
+    // ── company header (identical logic to detail page) ──
+    if (headerStyle === "thumbnail" && bannerBase64) {
+      doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
+      y += bannerH + 6
+    } else if (headerStyle === "single_logo") {
+      y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
+    } else {
+      let logoAdded = false
+      if (logoBase64) {
+        doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
+        logoAdded = true
+      }
+      const infoX = logoAdded ? margin + 24 : margin
+      doc.setFontSize(14)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(0, 0, 0)
+      doc.text(safeStr(profile?.company_name), infoX, y + 2)
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(120, 120, 120)
+      let iy = y + 8
+      if (profile?.tagline)  { doc.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
+      if (profile?.address)  { doc.text(safeStr(profile.address),  infoX, iy); iy += 4 }
+      const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
+      if (loc)               { doc.text(loc,                       infoX, iy); iy += 4 }
+      if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
+      if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
+      if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
+      y += 31
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.5)
+      doc.line(margin, y, pageW - margin, y)
+      y += 6
+    }
+
+    // ── title row ──
+    // Left: REPORT NO. label + write line
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("REPORT NO.", margin, y)
+
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 6, margin + 50, y + 6)   // write line for report no.
+
+    // Right: document title
+    doc.setFontSize(15)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(tr, tg, tb)
+    doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
+
+    // Right: DATE (fixed) + WORK ORDER NO. label + write line
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
+
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
+
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)  // write line for work order
+
+    y += 24
+    doc.setDrawColor(220, 220, 220)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y, pageW - margin, y)
+    y += 8
+
+    // ── details grid with blank underlines ──
+    const label = (text: string, x: number, yy: number) => {
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(120, 120, 120)
+      doc.text(text, x, yy)
+    }
+    const blankLine = (x: number, yy: number, w = 70) => {
+      doc.setDrawColor(180, 180, 180)
+      doc.setLineWidth(0.3)
+      doc.line(x, yy, x + w, yy)
+    }
+
+    label("TECHNICIAN / ENGINEER", margin, y)
+    blankLine(margin, y + 5)
+
+    label("CUSTOMER / SITE", margin, y + 10)
+    blankLine(margin, y + 15)
+
+    label("SITE ADDRESS", margin, y + 20)
+    blankLine(margin, y + 25)
+
+    const col2X = pageW / 2 + 10
+    label("CONTACT NO.", col2X, y)
+    blankLine(col2X, y + 5, 60)
+
+    label("NO. / EQUIPMENT ID", col2X, y + 10)
+    blankLine(col2X, y + 15, 60)
+
+    y += 32
+    doc.setDrawColor(220, 220, 220)
+    doc.line(margin, y, pageW - margin, y)
+    y += 6
+
+    // ── work items table (blank rows) ──
+    autoTable(doc, {
+      startY: y,
+      head: [["SR.", "Description of Work / Service", "Status"]],
+      body: blankBody,
+      theme: "grid",
+      headStyles: {
+        fillColor: [tr, tg, tb],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 9,
+        halign: "left",
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: [0, 0, 0],
+        minCellHeight: 10,
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 15, halign: "center" },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 30, halign: "center" },
+      },
+      margin: { left: margin, right: margin },
+    })
+    y = (doc as any).lastAutoTable.finalY + 6
+
+    // ── inspection / testing (blank) ──
+    const boxY = y
+    const boxH = 28
+    doc.setFillColor(240, 248, 255)
+    doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
+
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(tr, tg, tb)
+    doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
+
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(120, 120, 120)
+    doc.text("Operational test:", margin + 5, boxY + 13)
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin + 33, boxY + 13, margin + 80, boxY + 13)
+
+    doc.text("Safety observations:", pageW / 2, boxY + 13)
+    doc.line(pageW / 2 + 35, boxY + 13, pageW - margin - 5, boxY + 13)
+
+    doc.text("Pending recommendations:", margin + 5, boxY + 22)
+    doc.line(margin + 46, boxY + 22, pageW - margin - 5, boxY + 22)
+
+    y = boxY + boxH + 10
+
+    // ── signature section ──
+    //    LEFT  → Customer / Site Representative
+    //    RIGHT → Technician / Engineer
+    const sigLineW = 75    // width of each writable line
+
+    // ⭐ Column anchors — all labels in each column start at the column's left edge,
+    //    so the user has free space to the right of the label to write in.
+    const leftColX  = margin                          // left column start (Customer)
+    const rightColX = pageW - margin - sigLineW       // right column start (Technician)
+
+    // Section labels (grey, small) — both LEFT-aligned within their column
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("CUSTOMER / SITE REPRESENTATIVE", leftColX, y)
+    doc.text("TECHNICIAN / ENGINEER", rightColX, y)
+
+    y += 5
+
+    // ── Signature write area ──
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)          // left sig line
+    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)        // right sig line
+
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(150, 150, 150)
+    doc.text("Signature", leftColX, y + 15)
+    doc.text("Signature", rightColX, y + 15)
+
+    y += 20
+
+    // ── Name write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("NAME", leftColX, y)
+    doc.text("NAME", rightColX, y)
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
+    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
+
+    y += 11
+
+    // ── Date & Time write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("DATE & TIME", leftColX, y)
+    doc.text("DATE & TIME", rightColX, y)
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
+    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
+
+    y += 14
+
+    // ── stamp — RIGHT side ──
+    if (shouldStamp && stampBase64) {
+      const stampW = 30
+      const stampH = 30
+      const stampX = pageW - margin - stampW    // → right-aligned
+
+      doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
+
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.3)
+      doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
+
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8)
+      doc.setTextColor(120, 120, 120)
+      doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
+
+      y = y + stampH + 14
+    }
+
+    // ── footer ──
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(180, 180, 180)
+    doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
+
+    return y + 6
+  }
+
+  // measure then render at exact height
+  const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
+  const measuredH = renderBlank(scratch)
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
+  renderBlank(doc)
+  doc.save(`DWR-Blank-${rowCount}-rows.pdf`)
 }
 
-export default function DailyWorkReportDetailPage() {
+// ────────────────────────────────────────────────────────────────────────────
+
+export default function DailyWorkReportsPage() {
   const { user } = useAuth()
-  const params = useParams<{ id: string }>()
   const router = useRouter()
   const [orgId, setOrgId] = useState<string | null>(null)
-  const [report, setReport] = useState<DailyWorkReport | null>(null)
+  const [reports, setReports] = useState<DailyWorkReport[]>([])
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [pdf, setPdf] = useState(false)
+  const [search, setSearch] = useState("")
+  const [deleteReport, setDeleteReport] = useState<DailyWorkReport | null>(null)
+  const [profileDialog, setProfileDialog] = useState(false)
+  const [checking, setChecking] = useState(false)
+
+  // blank PDF dialog state
+  const [blankDialog, setBlankDialog] = useState(false)
+  const [rowCount, setRowCount] = useState(4)   // default is 4
+  const [includeStamp, setIncludeStamp] = useState(true)   // default ON
+  const [generatingBlank, setGeneratingBlank] = useState(false)
 
   // ── Plan / subscription state ──
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
+  const [autoShown, setAutoShown] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -59,7 +446,10 @@ export default function DailyWorkReportDetailPage() {
         .select("org_id")
         .eq("user_id", user.id)
         .single()
-        .then(({ data }) => setOrgId(data?.org_id || null))
+        .then(({ data, error }) => {
+          if (error) toast.error("Could not determine your organization")
+          else setOrgId(data.org_id)
+        })
     }
   }, [user?.id])
 
@@ -69,30 +459,47 @@ export default function DailyWorkReportDetailPage() {
       supabase
         .from("daily_work_reports")
         .select("*")
-        .eq("id", params.id)
         .eq("org_id", orgId)
         .is("deleted_at", null)
-        .single(),
-      supabase.from("company_profile").select("*").eq("org_id", orgId).maybeSingle(),
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("company_profile")
+        .select("*")
+        .eq("org_id", orgId)
+        .maybeSingle(),
     ]).then(([r, p]) => {
-      if (r.error || !r.data) {
-        toast.error("Failed to load report")
-        router.push("/daily-work-reports")
-      } else {
-        setReport(r.data as DailyWorkReport)
-        setProfile(p.data as CompanyProfile | null)
-      }
+      if (r.error) toast.error("Failed to load daily work reports")
+      else setReports((r.data || []) as DailyWorkReport[])
+      if (!p.error && p.data) setProfile(p.data as CompanyProfile)
       setLoading(false)
     })
-  }, [orgId, params.id, router])
+  }, [orgId])
 
-  // ── Subscription check ──
+  // ── Auto-show subscription alert on page load ──
+  useEffect(() => {
+    if (!limitsLoading && orgId && !autoShown) {
+      const blocked = checkAndShowLimitModal()
+      if (blocked) setAutoShown(true)
+    }
+  }, [limitsLoading, orgId, status, autoShown])
+
+  const filtered = useMemo(
+    () =>
+      reports.filter((r) =>
+        [r.report_no, r.customer_name, r.site_name].some((v) =>
+          (v || "").toLowerCase().includes(search.toLowerCase())
+        )
+      ),
+    [reports, search]
+  )
+
+  // ── Subscription check (used by both buttons + auto-show) ──
   const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
       setLimitModalCustom({
         title: `Your ${planName || 'current'} plan has expired`,
-        description: `Renew your ${planName || 'current'} plan to continue editing daily work reports.`,
+        description: `Renew your ${planName || 'current'} plan to continue creating daily work reports.`,
       })
       setShowLimitModal(true)
       return true
@@ -104,644 +511,434 @@ export default function DailyWorkReportDetailPage() {
     window.location.href = '/billing'
   }
 
-  // ── Edit click with subscription check ──
-  const handleEditClick = () => {
-    if (!report) return
+  const checkProfile = async () => {
+    if (!orgId) return
+
+    // ⭐ Subscription check first
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
       return
     }
     if (checkAndShowLimitModal()) return
-    router.push(`/daily-work-reports/${report.id}/edit`)
-  }
 
-  const downloadPdf = async () => {
-    if (!report) return
-    setPdf(true)
-    try {
-      const pageW = 210
-      const margin = 15
-      const themeColor = profile?.theme_color ?? "#185FA5"
-      const [tr, tg, tb] = hexToRgb(themeColor)
-      const headerStyle = profile?.header_style ?? "single_logo"
-
-      // ── Load logo via fetch (CORS-safe, same as quotation) ──
-      let logoBase64: string | null = null
-      let logoFormat: "JPEG" | "PNG" = "PNG"
-      if (headerStyle !== "thumbnail" && profile?.logo_url) {
-        try {
-          const response = await fetch(profile.logo_url)
-          const blob = await response.blob()
-          logoFormat =
-            blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
-          logoBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-        } catch (e) {
-          console.warn("[DWR PDF] Logo load failed:", e)
-        }
-      }
-
-      // ── Load banner (thumbnail header style) ──
-      let bannerBase64: string | null = null
-      let bannerFormat: "JPEG" | "PNG" = "PNG"
-      let bannerH = 0
-      if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
-        try {
-          const response = await fetch(profile.header_thumbnail_url)
-          const blob = await response.blob()
-          bannerFormat =
-            blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
-          bannerBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          const natural = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-            const img = new Image()
-            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
-            img.onerror = reject
-            img.src = bannerBase64 as string
-          })
-          const bannerW = pageW - margin * 2
-          bannerH = Math.round(bannerW / (natural.w / natural.h))
-          if (bannerH > 60) bannerH = 60
-        } catch (e) {
-          console.warn("[DWR PDF] Banner load failed:", e)
-        }
-      }
-
-      const formattedDate = report.report_date
-        ? new Date(report.report_date).toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-        : new Date().toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-
-      const renderReport = (doc: jsPDF): number => {
-        let y = margin
-
-        // ── HEADER (KEPT EXACTLY AS IS) ──
-        if (headerStyle === "thumbnail" && bannerBase64) {
-          const bannerW = pageW - margin * 2
-          doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
-          y += bannerH + 6
-        } else if (headerStyle === "single_logo") {
-          y = renderSingleLogoHeader(
-            doc,
-            profile,
-            y,
-            logoBase64,
-            pageW,
-            margin,
-            [tr, tg, tb]
-          )
-        } else {
-          // Fallback default header
-          let logoX = margin
-          let logoAdded = false
-          if (logoBase64) {
-            doc.addImage(logoBase64, logoFormat, logoX, y, 22, 22)
-            logoAdded = true
-          }
-          const infoX = logoAdded ? logoX + 24 : logoX
-          doc.setFontSize(14)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(120, 120, 120)
-          let infoY = y + 8
-          if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
-          if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
-          const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
-          if (loc) { doc.text(loc, infoX, infoY); infoY += 4 }
-          if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
-          if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-          y += 31
-          doc.setDrawColor(tr, tg, tb)
-          doc.setLineWidth(0.5)
-          doc.line(margin, y, pageW - margin, y)
-          y += 6
-        }
-
-        // ── TITLE SECTION ──
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("REPORT NO.", margin, y)
-
-        doc.setFontSize(14)
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(report.report_no), margin, y + 5)
-
-        doc.setFontSize(16)
-        doc.setTextColor(tr, tg, tb)
-        doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y, { align: "right" })
-
-        // ── DATE / WORK ORDER LINE — now solid black & bold ──
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(
-          `DATE: ${formattedDate}   WORK ORDER: ${safeStr(report.work_order_no || "-")}`,
-          pageW - margin,
-          y + 5,
-          { align: "right" }
-        )
-
-        y += 12
-        doc.setDrawColor(220, 220, 220)
-        doc.setLineWidth(0.3)
-        doc.line(margin, y, pageW - margin, y)
-        y += 8
-
-        // ── DETAILS SECTION ──
-        const detailLabel = (text: string, x: number, yPos: number) => {
-          doc.setFontSize(8)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(120, 120, 120)
-          doc.text(text, x, yPos)
-        }
-        const detailValue = (text: string, x: number, yPos: number, bold = true) => {
-          doc.setFontSize(10)
-          doc.setFont("helvetica", bold ? "bold" : "normal")
-          doc.setTextColor(0, 0, 0)
-          doc.text(text, x, yPos)
-        }
-
-        // Left column
-        detailLabel("TECHNICIAN / ENGINEER", margin, y)
-        detailValue(safeStr(report.technician_name), margin, y + 4)
-
-        detailLabel("CUSTOMER / SITE", margin, y + 10)
-        detailValue(`${safeStr(report.customer_name)} – ${safeStr(report.site_name)}`, margin, y + 14)
-
-        detailLabel("SITE ADDRESS", margin, y + 20)
-        detailValue(safeStr(report.site_address), margin, y + 24, false)
-
-        // Right column
-        const col2X = pageW / 2 + 10
-        detailLabel("CONTACT NO.", col2X, y)
-        detailValue(safeStr(report.contact_no), col2X, y + 4)
-
-        detailLabel("LIFT NO. / EQUIPMENT ID", col2X, y + 10)
-        detailValue(safeStr(report.lift_no), col2X, y + 14)
-
-        y += 32
-        doc.setDrawColor(220, 220, 220)
-        doc.line(margin, y, pageW - margin, y)
-        y += 6
-
-        // ── WORK ITEMS TABLE ──
-        const workItems = report.work_items ?? []
-        autoTable(doc, {
-          startY: y,
-          head: [["SR.", "Description of Work / Service", "Material Used", "Status"]],
-          body: workItems.map((item) => [
-            String(item.sr_no ?? ""),
-            safeStr(item.description),
-            safeStr(item.material_used),
-            safeStr(item.status),
-          ]),
-          theme: "grid",
-          headStyles: {
-            fillColor: [tr, tg, tb],
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "left",
-          },
-          bodyStyles: {
-            fontSize: 9,
-            textColor: [0, 0, 0],
-          },
-          alternateRowStyles: {
-            fillColor: [248, 250, 252],
-          },
-          columnStyles: {
-            0: { cellWidth: 15, halign: "center" },
-            1: { cellWidth: "auto" },
-            2: { cellWidth: 45, textColor: [120, 120, 120] },
-            3: { cellWidth: 25, halign: "center" },
-          },
-          didParseCell: function (data) {
-            if (data.section === 'body' && data.column.index === 3) {
-              const val = data.cell.raw;
-              if (val === 'Completed') {
-                data.cell.styles.textColor = [22, 163, 74];
-                data.cell.styles.fontStyle = 'bold';
-              } else if (val === 'Pending') {
-                data.cell.styles.textColor = [234, 88, 12];
-                data.cell.styles.fontStyle = 'bold';
-              }
-            }
-          },
-          margin: { left: margin, right: margin },
-        })
-        y = (doc as any).lastAutoTable.finalY + 6
-
-        // ── INSPECTION / TESTING BLOCK ──
-        const boxY = y
-        const boxH = 22
-        doc.setFillColor(240, 248, 255)
-        doc.rect(margin, boxY, pageW - 2 * margin, boxH, 'F')
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(tr, tg, tb)
-        doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
-
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(0, 0, 0)
-
-        doc.text(`Operational test: `, margin + 5, boxY + 12)
-        doc.setFont("helvetica", "bold")
-        doc.text(safeStr(report.operational_test_status), margin + 32, boxY + 12)
-
-        doc.setFont("helvetica", "normal")
-        doc.text(`Safety observations: `, pageW / 2, boxY + 12)
-        doc.setFont("helvetica", "bold")
-        doc.text(safeStr(report.safety_observations), pageW / 2 + 35, boxY + 12)
-
-        doc.setFont("helvetica", "normal")
-        doc.text(`Pending recommendations: `, margin + 5, boxY + 18)
-        doc.setFont("helvetica", "bold")
-        doc.text(safeStr(report.pending_recommendations), margin + 45, boxY + 18)
-
-        y = boxY + boxH + 10
-
-        // ── SIGNATURE SECTION ──
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.3)
-
-        doc.line(margin, y, margin + 65, y)
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
-        doc.text("Technician / Engineer Signature", margin, y - 2)
-
-        doc.line(pageW - margin - 65, y, pageW - margin, y)
-        doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
-
-        y += 8
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Name: ${safeStr(report.tech_sign_name)}`, margin, y)
-        doc.text(`Name: ${safeStr(report.customer_sign_name)}`, pageW - margin, y, { align: "right" })
-
-        y += 5
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(8)
-        doc.setTextColor(120, 120, 120)
-        doc.text(safeStr(report.tech_sign_datetime), margin, y)
-        doc.text(safeStr(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
-
-        y += 12
-
-        // ── OFFICE USE SECTION ──
-        doc.setDrawColor(220, 220, 220)
-        doc.setLineWidth(0.3)
-        doc.rect(margin, y, pageW - 2 * margin, 12)
-
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "italic")
-        doc.setTextColor(150, 150, 150)
-        doc.text("For office use only", margin + 4, y + 7)
-
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Status: ${safeStr(report.office_status || "Approved")}  |  Checked By: ${safeStr(report.checked_by || "Admin")}`, pageW - margin - 4, y + 7, { align: "right" })
-
-        y += 16
-
-        // ── FOOTER ──
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(180, 180, 180)
-        doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
-
-        return y + 6
-      }
-
-      const scratchDoc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [pageW, 2000],
-      })
-      const measuredHeight = renderReport(scratchDoc)
-      const finalPageHeight = Math.max(measuredHeight, 100)
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [pageW, finalPageHeight],
-      })
-      renderReport(doc)
-
-      doc.save(`DWR-${safeStr(report.report_no)}.pdf`)
-      toast.success("PDF downloaded")
-    } catch (err) {
-      console.error("[DWR PDF] error:", err)
-      toast.error(
-        "Failed to generate PDF: " + (err instanceof Error ? err.message : "Unknown error")
-      )
-    } finally {
-      setPdf(false)
+    setChecking(true)
+    const { data, error } = await supabase
+      .from("company_profile")
+      .select("company_name, address, phone")
+      .eq("org_id", orgId)
+      .maybeSingle()
+    setChecking(false)
+    if (error || !data?.company_name?.trim() || !data?.address?.trim() || !data?.phone?.trim()) {
+      setProfileDialog(true)
+    } else {
+      router.push("/daily-work-reports/new")
     }
   }
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      </DashboardLayout>
-    )
+  const softDelete = async () => {
+    if (!deleteReport || !orgId) return
+    const { error } = await supabase
+      .from("daily_work_reports")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", deleteReport.id)
+      .eq("org_id", orgId)
+    if (error) {
+      toast.error("Failed to delete report")
+    } else {
+      setReports((prev) => prev.filter((r) => r.id !== deleteReport.id))
+      toast.success("Report deleted successfully")
+    }
+    setDeleteReport(null)
   }
 
-  if (!report) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
-          <p className="text-muted-foreground">Report not found</p>
-          <Link href="/daily-work-reports">
-            <Button>Back to Reports</Button>
-          </Link>
-        </div>
-      </DashboardLayout>
-    )
+  const handleDownloadBlank = async () => {
+    // ⭐ Subscription check first
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) {
+      setBlankDialog(false)
+      return
+    }
+
+    setGeneratingBlank(true)
+    try {
+      await downloadBlankDwr(profile, rowCount, includeStamp)
+      toast.success("Blank PDF downloaded")
+      setBlankDialog(false)
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to generate blank PDF")
+    } finally {
+      setGeneratingBlank(false)
+    }
   }
 
-  const workItems = report.work_items ?? []
+  // ⭐ Also guard the "open dialog" click so the modal shows immediately
+  const handleOpenBlankDialog = () => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+    setBlankDialog(true)
+  }
+
+  const hasStamp = !!profile?.stamp_url
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-        {/* Header — same style as quotation detail */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Link href="/daily-work-reports">
-              <Button variant="outline" size="icon" className="shrink-0 mt-1">
-                <ArrowLeft className="size-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{report.report_no}</h1>
-              {report.work_order_no && (
-                <p className="text-sm text-muted-foreground">
-                  Work Order:{" "}
-                  <span className="font-medium text-foreground">{report.work_order_no}</span>
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {formatDateLong(report.report_date)}
-              </p>
-            </div>
+      <div className="flex flex-col gap-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
+            <p className="text-muted-foreground">Create and manage daily work completion reports</p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Button
-              onClick={downloadPdf}
-              disabled={pdf}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              size="sm"
-            >
-              {pdf ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Download className="mr-1.5 size-4" />
-              )}
-              Download PDF
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleOpenBlankDialog}>
+              <FileDown className="mr-2 size-4" />
+              Blank PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={handleEditClick}>
-              <Edit className="mr-1.5 size-4" />
-              Edit
+            <Button onClick={checkProfile} disabled={checking || limitsLoading}>
+              <Plus className="mr-2 size-4" />
+              New Report
             </Button>
           </div>
         </div>
 
-        {/* Company Information */}
-        {profile && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Company Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-4">
-                {profile.logo_url && (
-                  <img
-                    src={profile.logo_url}
-                    alt="Company logo"
-                    className="h-16 w-16 object-contain rounded border"
-                  />
-                )}
-                <div className="space-y-0.5">
-                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.tagline && (
-                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
-                  )}
-                  {profile.address && (
-                    <p className="text-xs text-muted-foreground">{profile.address}</p>
-                  )}
-                  {(profile.city || profile.state || profile.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
-                    </p>
-                  )}
-                  {profile.phone && (
-                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
-                  )}
-                  {profile.email && (
-                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
-                  )}
-                  {profile.gstin && (
-                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
-                  )}
-                </div>
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search by report no, customer, or site..."
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Desktop Table */}
+        <Card className="hidden md:block">
+          <CardHeader>
+            <CardTitle>All Reports</CardTitle>
+            <CardDescription>
+              You have {filtered.length} report{filtered.length === 1 ? "" : "s"} in total
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading reports...</div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {reports.length === 0
+                  ? "No daily work reports yet. Create your first report!"
+                  : "No reports matching your filters"}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Report Header */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Report Details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Report No</p>
-              <p className="font-medium">{report.report_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
-              <p className="font-medium">{formatDateLong(report.report_date)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Work Order No</p>
-              <p className="font-medium">{report.work_order_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Lift No</p>
-              <p className="font-medium">{report.lift_no ?? "-"}</p>
-            </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Report No</TableHead>
+                      <TableHead>Customer / Site</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Technician</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((r) => (
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/daily-work-reports/${r.id}`)}
+                      >
+                        <TableCell className="font-medium">{r.report_no}</TableCell>
+                        <TableCell>
+                          <div>{r.customer_name || "-"}</div>
+                          <div className="text-muted-foreground text-xs">{r.site_name || "-"}</div>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(r.report_date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </TableCell>
+                        <TableCell>{r.technician_name || "-"}</TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/daily-work-reports/${r.id}`)
+                              }}
+                              title="View details"
+                            >
+                              <ArrowUpRight className="size-4" />
+                              <span className="sr-only">View Details</span>
+                            </Button>
+                            <Actions report={r} onDelete={setDeleteReport} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Technician & Site */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Technician & Site</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician</p>
-              <p className="font-medium">{report.technician_name ?? "-"}</p>
+        {/* Mobile Cards */}
+        <div className="flex flex-col gap-4 md:hidden">
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading reports...</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              {reports.length === 0
+                ? "No daily work reports yet. Create your first report!"
+                : "No reports matching your filters"}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Contact No</p>
-              <p className="font-medium">{report.contact_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer</p>
-              <p className="font-medium">{report.customer_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site</p>
-              <p className="font-medium">{report.site_name ?? "-"}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site Address</p>
-              <p className="font-medium">{report.site_address ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Work Items */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Work Items</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-12">SR</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description of Work</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground w-40">Material Used</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-28">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center py-8 text-muted-foreground">No work items</td>
-                    </tr>
-                  ) : (
-                    workItems.map((item, i) => (
-                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr_no}</td>
-                        <td className="py-3 px-4">{item.description || "-"}</td>
-                        <td className="py-3 px-4 text-muted-foreground">{item.material_used || "—"}</td>
-                        <td className="text-center py-3 px-4">
-                          <span
-                            className={
-                              item.status === "Completed"
-                                ? "font-semibold text-green-600"
-                                : item.status === "Pending"
-                                ? "font-semibold text-orange-600"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {item.status || "-"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Inspection / Testing */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Inspection / Testing</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Operational Test</p>
-              <p className="font-medium">{report.operational_test_status ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Safety Observations</p>
-              <p className="font-medium">{report.safety_observations ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pending Recommendations</p>
-              <p className="font-medium">{report.pending_recommendations ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Acknowledgement */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Acknowledgement</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Signature</p>
-              <p className="font-medium">{report.tech_sign_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Date</p>
-              <p className="font-medium">{report.tech_sign_datetime ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Signature</p>
-              <p className="font-medium">{report.customer_sign_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Date</p>
-              <p className="font-medium">{report.customer_sign_datetime ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Office Use */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Office Use</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Office Status</p>
-              <p className="font-medium">{report.office_status ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Checked By</p>
-              <p className="font-medium">{report.checked_by ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                You have{" "}
+                <span className="font-medium text-foreground">{filtered.length}</span>{" "}
+                report{filtered.length === 1 ? "" : "s"}{" "}
+                {search ? "matching filters" : "in total"}
+              </p>
+              {filtered.map((r) => (
+                <Card
+                  key={r.id}
+                  className="relative cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => router.push(`/daily-work-reports/${r.id}`)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <FileText className="size-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm font-semibold leading-tight truncate">
+                            {r.report_no}
+                          </CardTitle>
+                          <CardDescription className="text-xs truncate mt-0.5">
+                            {r.customer_name || "No customer"}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Actions report={r} onDelete={setDeleteReport} />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Date</p>
+                        <p className="text-sm font-medium">
+                          {new Date(r.report_date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Technician</p>
+                        <p className="text-sm font-medium truncate">{r.technician_name || "—"}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground mb-0.5">Site</p>
+                        <p className="text-sm font-medium truncate">{r.site_name || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <div className="text-xs text-muted-foreground">&nbsp;</div>
+                      <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* ── Blank PDF Dialog ── */}
+      <Dialog open={blankDialog} onOpenChange={(open) => { if (!generatingBlank) setBlankDialog(open) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Download Blank Report PDF</DialogTitle>
+            <DialogDescription>
+              Choose how many work item rows to include in the blank template. You can fill them in by hand after printing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-5">
+            {/* Row count */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Number of work item rows</Label>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9 shrink-0"
+                  onClick={() => setRowCount((n) => Math.max(1, n - 1))}
+                  disabled={rowCount <= 1 || generatingBlank}
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={rowCount}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v)) setRowCount(Math.min(20, Math.max(1, v)))
+                  }}
+                  className="text-center text-lg font-semibold w-20"
+                  disabled={generatingBlank}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9 shrink-0"
+                  onClick={() => setRowCount((n) => Math.min(20, n + 1))}
+                  disabled={rowCount >= 20 || generatingBlank}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+
+              {/* Quick-pick presets */}
+              <div className="flex gap-2 flex-wrap">
+                {[3, 4, 5, 8, 10, 15].map((n) => (
+                  <Button
+                    key={n}
+                    variant={rowCount === n ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => setRowCount(n)}
+                    disabled={generatingBlank}
+                  >
+                    {n} rows
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Stamp toggle — only show when stamp is uploaded */}
+            {hasStamp && (
+              <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Stamp className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Include company stamp</p>
+                    <p className="text-xs text-muted-foreground">Appears on the bottom-right of the PDF</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={includeStamp}
+                  onCheckedChange={setIncludeStamp}
+                  disabled={generatingBlank}
+                />
+              </div>
+            )}
+
+            {/* If no stamp uploaded, show a note */}
+            {!hasStamp && (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-muted-foreground">
+                <Stamp className="size-4 shrink-0" />
+                <p className="text-xs">
+                  No stamp uploaded yet. Go to{" "}
+                  <button
+                    className="underline text-foreground font-medium"
+                    onClick={() => { setBlankDialog(false); router.push("/settings") }}
+                  >
+                    Settings
+                  </button>{" "}
+                  to add one.
+                </p>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Maximum 20 rows. The PDF includes your company header, all section labels, and blank lines ready to fill in by hand.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBlankDialog(false)}
+              disabled={generatingBlank}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleDownloadBlank} disabled={generatingBlank}>
+              {generatingBlank ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileDown className="mr-2 size-4" />
+                  Download PDF
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={!!deleteReport} onOpenChange={(open) => !open && setDeleteReport(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this report?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The report will be removed from the list. This action can be reversed by an administrator.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={softDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Profile Setup Dialog */}
+      <Dialog open={profileDialog} onOpenChange={setProfileDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Your Company Profile</DialogTitle>
+            <DialogDescription>
+              Before creating a daily work report, please add your company name, address, and contact
+              details in Settings. This information appears on your report PDF header.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => router.push("/settings")}>
+              <Settings className="mr-2 size-4" />
+              Go to Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Unified Limit/Subscription Modal */}
       <LimitReachedModal
@@ -753,5 +950,50 @@ export default function DailyWorkReportDetailPage() {
         customDescription={limitModalCustom.description}
       />
     </DashboardLayout>
+  )
+}
+
+function Actions({
+  report,
+  onDelete,
+}: {
+  report: DailyWorkReport
+  onDelete: (r: DailyWorkReport) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label={`Actions for ${report.report_no}`}
+        >
+          <MoreHorizontal className="size-4" />
+          <span className="sr-only">More actions</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
+          <Link href={`/daily-work-reports/${report.id}`} className="flex items-center">
+            <ArrowUpRight className="mr-2 size-4" />
+            View
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/daily-work-reports/${report.id}/edit`} className="flex items-center">
+            <Edit className="mr-2 size-4" />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-red-600 focus:text-red-600"
+          onClick={() => onDelete(report)}
+        >
+          <Trash2 className="mr-2 size-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
