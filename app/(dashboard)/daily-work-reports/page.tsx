@@ -183,26 +183,27 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    // ── title row (inline labels, NO underlines) ──
-    // Left column: REPORT NO. DWR-
+    // ── title row (inline labels, NO underlines, all BOLD) ──
+    // Left column: REPORT NO. label (bold) + DWR- value (bold)
     doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold
     doc.setTextColor(120, 120, 120)
     doc.text("REPORT NO.", margin, y)
 
     doc.setFontSize(14)
+    doc.setFont("helvetica", "bold")          // ← explicitly bold
     doc.setTextColor(0, 0, 0)
     doc.text("DWR-", margin, y + 5)
 
-    // Right column: document title
+    // Right column: document title (bold)
     doc.setFontSize(15)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold
     doc.setTextColor(tr, tg, tb)
     doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
 
-    // Right column: DATE + WORK ORDER — inline, plain text, no underline
+    // Right column: DATE + WORK ORDER NO. — inline, all BOLD, no underline
     doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold
     doc.setTextColor(0, 0, 0)
     doc.text(
       `DATE: ${todayFormatted}   WORK ORDER NO.: `,
@@ -220,7 +221,7 @@ async function downloadBlankDwr(
     // ── details grid ──
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
-      doc.setFont("helvetica", "bold")
+      doc.setFont("helvetica", "bold")        // ← bold for every field label
       doc.setTextColor(120, 120, 120)
       doc.text(text, x, yy)
     }
@@ -260,7 +261,7 @@ async function downloadBlankDwr(
       headStyles: {
         fillColor: [tr, tg, tb],
         textColor: [255, 255, 255],
-        fontStyle: "bold",
+        fontStyle: "bold",                    // ← bold table headers
         fontSize: 9,
         halign: "left",
       },
@@ -286,12 +287,12 @@ async function downloadBlankDwr(
     doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
 
     doc.setFontSize(10)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold section title
     doc.setTextColor(tr, tg, tb)
     doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
 
     doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
+    doc.setFont("helvetica", "bold")          // ← bold field labels
     doc.setTextColor(120, 120, 120)
     doc.text("Operational test:", margin + 5, boxY + 13)
     doc.setDrawColor(180, 180, 180)
@@ -307,15 +308,13 @@ async function downloadBlankDwr(
     y = boxY + boxH + 10
 
     // ── signature section ──
-    //    LEFT  → Customer / Site Representative
-    //    RIGHT → Technician / Engineer
     const sigLineW = 75
 
     const leftColX  = margin
     const rightColX = pageW - margin - sigLineW
 
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold section label
     doc.setTextColor(120, 120, 120)
     doc.text("CUSTOMER / SITE REPRESENTATIVE", leftColX, y)
     doc.text("TECHNICIAN / ENGINEER", rightColX, y)
@@ -336,7 +335,7 @@ async function downloadBlankDwr(
     y += 20
 
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold field label
     doc.setTextColor(120, 120, 120)
     doc.text("NAME", leftColX, y)
     doc.text("NAME", rightColX, y)
@@ -350,7 +349,7 @@ async function downloadBlankDwr(
     y += 11
 
     doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
+    doc.setFont("helvetica", "bold")          // ← bold field label
     doc.setTextColor(120, 120, 120)
     doc.text("DATE & TIME", leftColX, y)
     doc.text("DATE & TIME", rightColX, y)
@@ -375,7 +374,7 @@ async function downloadBlankDwr(
       doc.setLineWidth(0.3)
       doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
 
-      doc.setFont("helvetica", "normal")
+      doc.setFont("helvetica", "bold")        // ← bold
       doc.setFontSize(8)
       doc.setTextColor(120, 120, 120)
       doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
