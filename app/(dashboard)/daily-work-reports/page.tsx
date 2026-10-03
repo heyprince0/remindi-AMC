@@ -183,45 +183,41 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    // ── title row ──
-    // Left: REPORT NO. label + write line
-    doc.setFontSize(7)
+    // ── title row (inline labels, NO underlines) ──
+    // Left column: REPORT NO. DWR-
+    doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("REPORT NO.", margin, y)
 
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 6, margin + 50, y + 6)   // write line for report no.
+    doc.setFontSize(14)
+    doc.setTextColor(0, 0, 0)
+    doc.text("DWR-", margin, y + 5)
 
-    // Right: document title
+    // Right column: document title
     doc.setFontSize(15)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
     doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
 
-    // Right: DATE (fixed) + WORK ORDER NO. label + write line
-    doc.setFontSize(8)
+    // Right column: DATE + WORK ORDER — inline, plain text, no underline
+    doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
+    doc.text(
+      `DATE: ${todayFormatted}   WORK ORDER NO.: `,
+      pageW - margin,
+      y + 9,
+      { align: "right" }
+    )
 
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
-
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)  // write line for work order
-
-    y += 24
+    y += 22
     doc.setDrawColor(220, 220, 220)
     doc.setLineWidth(0.3)
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── details grid with blank underlines ──
+    // ── details grid ──
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
       doc.setFont("helvetica", "bold")
@@ -283,7 +279,7 @@ async function downloadBlankDwr(
     })
     y = (doc as any).lastAutoTable.finalY + 6
 
-    // ── inspection / testing (blank) ──
+    // ── inspection / testing ──
     const boxY = y
     const boxH = 28
     doc.setFillColor(240, 248, 255)
@@ -313,14 +309,11 @@ async function downloadBlankDwr(
     // ── signature section ──
     //    LEFT  → Customer / Site Representative
     //    RIGHT → Technician / Engineer
-    const sigLineW = 75    // width of each writable line
+    const sigLineW = 75
 
-    // ⭐ Column anchors — all labels in each column start at the column's left edge,
-    //    so the user has free space to the right of the label to write in.
-    const leftColX  = margin                          // left column start (Customer)
-    const rightColX = pageW - margin - sigLineW       // right column start (Technician)
+    const leftColX  = margin
+    const rightColX = pageW - margin - sigLineW
 
-    // Section labels (grey, small) — both LEFT-aligned within their column
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -329,11 +322,10 @@ async function downloadBlankDwr(
 
     y += 5
 
-    // ── Signature write area ──
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)          // left sig line
-    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)        // right sig line
+    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)
+    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)
 
     doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
@@ -343,7 +335,6 @@ async function downloadBlankDwr(
 
     y += 20
 
-    // ── Name write line ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -358,7 +349,6 @@ async function downloadBlankDwr(
 
     y += 11
 
-    // ── Date & Time write line ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -377,7 +367,7 @@ async function downloadBlankDwr(
     if (shouldStamp && stampBase64) {
       const stampW = 30
       const stampH = 30
-      const stampX = pageW - margin - stampW    // → right-aligned
+      const stampX = pageW - margin - stampW
 
       doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
 
@@ -424,10 +414,9 @@ export default function DailyWorkReportsPage() {
   const [profileDialog, setProfileDialog] = useState(false)
   const [checking, setChecking] = useState(false)
 
-  // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
   const [rowCount, setRowCount] = useState(5)
-  const [includeStamp, setIncludeStamp] = useState(true)   // default ON
+  const [includeStamp, setIncludeStamp] = useState(true)
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
   useEffect(() => {
@@ -527,7 +516,6 @@ export default function DailyWorkReportsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
@@ -545,7 +533,6 @@ export default function DailyWorkReportsPage() {
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -557,7 +544,6 @@ export default function DailyWorkReportsPage() {
           />
         </div>
 
-        {/* Desktop Table */}
         <Card className="hidden md:block">
           <CardHeader>
             <CardTitle>All Reports</CardTitle>
@@ -633,7 +619,6 @@ export default function DailyWorkReportsPage() {
           </CardContent>
         </Card>
 
-        {/* Mobile Cards */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading reports...</div>
@@ -721,7 +706,6 @@ export default function DailyWorkReportsPage() {
           </DialogHeader>
 
           <div className="py-4 space-y-5">
-            {/* Row count */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Number of work item rows</Label>
               <div className="flex items-center gap-3">
@@ -757,7 +741,6 @@ export default function DailyWorkReportsPage() {
                 </Button>
               </div>
 
-              {/* Quick-pick presets */}
               <div className="flex gap-2 flex-wrap">
                 {[3, 5, 8, 10, 15].map((n) => (
                   <Button
@@ -774,7 +757,6 @@ export default function DailyWorkReportsPage() {
               </div>
             </div>
 
-            {/* Stamp toggle — only show when stamp is uploaded */}
             {hasStamp && (
               <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -792,7 +774,6 @@ export default function DailyWorkReportsPage() {
               </div>
             )}
 
-            {/* If no stamp uploaded, show a note */}
             {!hasStamp && (
               <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-muted-foreground">
                 <Stamp className="size-4 shrink-0" />
@@ -839,7 +820,6 @@ export default function DailyWorkReportsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <AlertDialog open={!!deleteReport} onOpenChange={(open) => !open && setDeleteReport(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -855,7 +835,6 @@ export default function DailyWorkReportsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Profile Setup Dialog */}
       <Dialog open={profileDialog} onOpenChange={setProfileDialog}>
         <DialogContent>
           <DialogHeader>
