@@ -310,42 +310,66 @@ async function downloadBlankDwr(
 
     y = boxY + boxH + 10
 
-    // ── signature section — SWAPPED positions ──
+    // ── signature section ──
     //    LEFT  → Customer / Site Representative
     //    RIGHT → Technician / Engineer
-    const sigLineW = 75
-    const col2X = pageW / 2 + 10   // right column starts here (same as details grid)
+    const sigLineW = 75    // width of each writable line
 
-    // Section label above sig line (grey, small) — RIGHT label is right-aligned as a title only
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.3)
+    // ⭐ Column anchors — all labels in each column start at the column's left edge,
+    //    so the user has free space to the right of the label to write in.
+    const leftColX  = margin                          // left column start (Customer)
+    const rightColX = pageW - margin - sigLineW       // right column start (Technician)
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(120, 120, 120)
-    doc.text("Customer / Site Representative Signature", margin, y - 2)
-    doc.line(margin, y, margin + sigLineW, y)
-
-    doc.text("Technician / Engineer Signature", pageW - margin, y - 2, { align: "right" })
-    doc.line(pageW - margin - sigLineW, y, pageW - margin, y)
-
-    y += 8
-
-    // Name: — left at margin, right starts at col2X (not the corner)
-    doc.setFontSize(9)
+    // Section labels (grey, small) — both LEFT-aligned within their column
+    doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
-    doc.setTextColor(0, 0, 0)
-    doc.text("Name:", margin, y)
-    doc.text("Name:", col2X, y)
+    doc.setTextColor(120, 120, 120)
+    doc.text("CUSTOMER / SITE REPRESENTATIVE", leftColX, y)
+    doc.text("TECHNICIAN / ENGINEER", rightColX, y)
 
     y += 5
 
-    // Date & Time: — left at margin, right starts at col2X
-    doc.setFontSize(8)
+    // ── Signature write area ──
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 12, leftColX + sigLineW, y + 12)          // left sig line
+    doc.line(rightColX, y + 12, rightColX + sigLineW, y + 12)        // right sig line
+
+    doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
+    doc.setTextColor(150, 150, 150)
+    doc.text("Signature", leftColX, y + 15)
+    doc.text("Signature", rightColX, y + 15)
+
+    y += 20
+
+    // ── Name write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("Date & Time:", margin, y)
-    doc.text("Date & Time:", col2X, y)
+    doc.text("NAME", leftColX, y)
+    doc.text("NAME", rightColX, y)
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
+    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
+
+    y += 11
+
+    // ── Date & Time write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("DATE & TIME", leftColX, y)
+    doc.text("DATE & TIME", rightColX, y)
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(leftColX, y + 5, leftColX + sigLineW, y + 5)
+    doc.line(rightColX, y + 5, rightColX + sigLineW, y + 5)
 
     y += 14
 
@@ -353,7 +377,7 @@ async function downloadBlankDwr(
     if (shouldStamp && stampBase64) {
       const stampW = 30
       const stampH = 30
-      const stampX = pageW - margin - stampW
+      const stampX = pageW - margin - stampW    // → right-aligned
 
       doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
 
@@ -757,7 +781,7 @@ export default function DailyWorkReportsPage() {
                   <Stamp className="size-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Include company stamp</p>
-                    <p className="text-xs text-muted-foreground">Appears on the bottom-left of the PDF</p>
+                    <p className="text-xs text-muted-foreground">Appears on the bottom-right of the PDF</p>
                   </div>
                 </div>
                 <Switch
