@@ -184,25 +184,38 @@ async function downloadBlankDwr(
     }
 
     // ── title row ──
-    doc.setFontSize(8)
+    // Left: REPORT NO. label + write line
+    doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("REPORT NO.", margin, y)
 
-    doc.setFontSize(14)
-    doc.setTextColor(0, 0, 0)
-    doc.text("DWR-", margin, y + 5)
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 6, margin + 50, y + 6)   // write line for report no.
 
-    doc.setFontSize(16)
+    // Right: document title
+    doc.setFontSize(15)
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
-    doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y, { align: "right" })
+    doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
 
-    doc.setFontSize(9)
+    // Right: DATE (fixed) + WORK ORDER NO. label + write line
+    doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text(`DATE: ${todayFormatted}   WORK ORDER:`, pageW - margin, y + 5, { align: "right" })
+    doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
-    y += 12
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
+
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)  // write line for work order
+
+    y += 24
     doc.setDrawColor(220, 220, 220)
     doc.setLineWidth(0.3)
     doc.line(margin, y, pageW - margin, y)
@@ -234,7 +247,7 @@ async function downloadBlankDwr(
     label("CONTACT NO.", col2X, y)
     blankLine(col2X, y + 5, 60)
 
-    label("LIFT NO. / EQUIPMENT ID", col2X, y + 10)
+    label("NO. / EQUIPMENT ID", col2X, y + 10)
     blankLine(col2X, y + 15, 60)
 
     y += 32
@@ -300,54 +313,78 @@ async function downloadBlankDwr(
     // ── signature section — SWAPPED positions ──
     //    LEFT  → Customer / Site Representative
     //    RIGHT → Technician / Engineer
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.3)
+    const sigLineW = 75    // writeable line width for each block
+    const midX = pageW / 2  // centre divider
 
-    // LEFT label — Customer
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(120, 120, 120)
-    doc.text("Customer / Site Representative Signature", margin, y - 2)
-    doc.line(margin, y, margin + 65, y)
-
-    // RIGHT label — Technician
-    doc.text("Technician / Engineer Signature", pageW - margin, y - 2, { align: "right" })
-    doc.line(pageW - margin - 65, y, pageW - margin, y)
-
-    y += 8
-
-    // Name lines
-    doc.setFontSize(9)
+    // Section label (grey, small)
+    doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
-    doc.setTextColor(0, 0, 0)
-    doc.text("Name:", margin, y)
-    doc.text("Name:", pageW - margin, y, { align: "right" })
+    doc.setTextColor(120, 120, 120)
+    doc.text("CUSTOMER / SITE REPRESENTATIVE", margin, y)
+    doc.text("TECHNICIAN / ENGINEER", pageW - margin, y, { align: "right" })
 
     y += 5
 
-    // Date lines
+    // ── Signature write area ──
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 12, margin + sigLineW, y + 12)           // left sig line
+    doc.line(pageW - margin - sigLineW, y + 12, pageW - margin, y + 12)  // right sig line
+
+    doc.setFontSize(7)
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
+    doc.setTextColor(150, 150, 150)
+    doc.text("Signature", margin, y + 15)
+    doc.text("Signature", pageW - margin, y + 15, { align: "right" })
+
+    y += 20
+
+    // ── Name write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("Date & Time:", margin, y)
-    doc.text("Date & Time:", pageW - margin, y, { align: "right" })
+    doc.text("NAME", margin, y)
+    doc.text("NAME", pageW - margin, y, { align: "right" })
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 5, margin + sigLineW, y + 5)
+    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
+
+    y += 11
+
+    // ── Date & Time write line ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("DATE & TIME", margin, y)
+    doc.text("DATE & TIME", pageW - margin, y, { align: "right" })
+
+    y += 3
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 5, margin + sigLineW, y + 5)
+    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
 
     y += 14
 
-    // ── stamp — left side (replaces office use box) ──
+    // ── stamp — RIGHT side ──
     if (shouldStamp && stampBase64) {
       const stampW = 30
       const stampH = 30
-      doc.addImage(stampBase64, stampFormat, margin, y, stampW, stampH)
+      const stampX = pageW - margin - stampW
+
+      doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
 
       doc.setDrawColor(200, 200, 200)
       doc.setLineWidth(0.3)
-      doc.line(margin, y + stampH + 3, margin + stampW + 10, y + stampH + 3)
+      doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
 
       doc.setFont("helvetica", "normal")
       doc.setFontSize(8)
       doc.setTextColor(120, 120, 120)
-      doc.text("Authorized Signatory", margin, y + stampH + 8)
+      doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
 
       y = y + stampH + 14
     }
