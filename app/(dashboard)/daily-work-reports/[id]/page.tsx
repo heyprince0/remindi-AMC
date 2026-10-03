@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button"
 import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { toast } from "sonner"
 
 const safeStr = (val: unknown) => String(val ?? "-")
@@ -43,6 +45,12 @@ export default function DailyWorkReportDetailPage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [pdf, setPdf] = useState(false)
+
+  // ── Plan / subscription state ──
+  const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
+  const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -77,6 +85,35 @@ export default function DailyWorkReportDetailPage() {
       setLoading(false)
     })
   }, [orgId, params.id, router])
+
+  // ── Subscription check ──
+  const checkAndShowLimitModal = () => {
+    if (status === 'expired' || status === 'cancelled') {
+      setLimitModalType('expired')
+      setLimitModalCustom({
+        title: `Your ${planName || 'current'} plan has expired`,
+        description: `Renew your ${planName || 'current'} plan to continue editing daily work reports.`,
+      })
+      setShowLimitModal(true)
+      return true
+    }
+    return false
+  }
+
+  const handleUpgrade = () => {
+    window.location.href = '/billing'
+  }
+
+  // ⭐ Edit click with subscription check
+  const handleEditClick = () => {
+    if (!report) return
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+    router.push(`/daily-work-reports/${report.id}/edit`)
+  }
 
   const downloadPdf = async () => {
     if (!report) return
@@ -489,11 +526,10 @@ export default function DailyWorkReportDetailPage() {
               )}
               Download PDF
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/daily-work-reports/${report.id}/edit`}>
-                <Edit className="mr-1.5 size-4" />
-                Edit
-              </Link>
+            {/* ⭐ Edit now checks subscription before navigating */}
+            <Button variant="outline" size="sm" onClick={handleEditClick}>
+              <Edit className="mr-1.5 size-4" />
+              Edit
             </Button>
           </div>
         </div>
@@ -707,6 +743,16 @@ export default function DailyWorkReportDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ⭐ Unified Limit/Subscription Modal */}
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        type={limitModalType}
+        onUpgrade={handleUpgrade}
+        customTitle={limitModalCustom.title}
+        customDescription={limitModalCustom.description}
+      />
     </DashboardLayout>
   )
 }
