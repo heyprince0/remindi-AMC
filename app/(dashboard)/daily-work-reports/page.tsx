@@ -426,7 +426,7 @@ export default function DailyWorkReportsPage() {
 
   // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
-  const [rowCount, setRowCount] = useState(5)
+  const [rowCount, setRowCount] = useState(4)   // ⭐ default is now 4
   const [includeStamp, setIncludeStamp] = useState(true)   // default ON
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
@@ -759,7 +759,7 @@ export default function DailyWorkReportsPage() {
 
               {/* Quick-pick presets */}
               <div className="flex gap-2 flex-wrap">
-                {[3, 5, 8, 10, 15].map((n) => (
+                {[3, 4, 5, 8, 10, 15].map((n) => (
                   <Button
                     key={n}
                     variant={rowCount === n ? "default" : "outline"}
