@@ -313,59 +313,39 @@ async function downloadBlankDwr(
     // ── signature section — SWAPPED positions ──
     //    LEFT  → Customer / Site Representative
     //    RIGHT → Technician / Engineer
-    const sigLineW = 75    // writeable line width for each block
-    const midX = pageW / 2  // centre divider
+    const sigLineW = 75
+    const col2X = pageW / 2 + 10   // right column starts here (same as details grid)
 
-    // Section label (grey, small)
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
+    // Section label above sig line (grey, small) — RIGHT label is right-aligned as a title only
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.3)
+
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(120, 120, 120)
-    doc.text("CUSTOMER / SITE REPRESENTATIVE", margin, y)
-    doc.text("TECHNICIAN / ENGINEER", pageW - margin, y, { align: "right" })
+    doc.text("Customer / Site Representative Signature", margin, y - 2)
+    doc.line(margin, y, margin + sigLineW, y)
+
+    doc.text("Technician / Engineer Signature", pageW - margin, y - 2, { align: "right" })
+    doc.line(pageW - margin - sigLineW, y, pageW - margin, y)
+
+    y += 8
+
+    // Name: — left at margin, right starts at col2X (not the corner)
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    doc.text("Name:", margin, y)
+    doc.text("Name:", col2X, y)
 
     y += 5
 
-    // ── Signature write area ──
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 12, margin + sigLineW, y + 12)           // left sig line
-    doc.line(pageW - margin - sigLineW, y + 12, pageW - margin, y + 12)  // right sig line
-
-    doc.setFontSize(7)
+    // Date & Time: — left at margin, right starts at col2X
+    doc.setFontSize(8)
     doc.setFont("helvetica", "normal")
-    doc.setTextColor(150, 150, 150)
-    doc.text("Signature", margin, y + 15)
-    doc.text("Signature", pageW - margin, y + 15, { align: "right" })
-
-    y += 20
-
-    // ── Name write line ──
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("NAME", margin, y)
-    doc.text("NAME", pageW - margin - sigLineW, y)   // left edge of the right write line
-
-    y += 3
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 5, margin + sigLineW, y + 5)
-    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
-
-    y += 11
-
-    // ── Date & Time write line ──
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("DATE & TIME", margin, y)
-    doc.text("DATE & TIME", pageW - margin - sigLineW, y)   // left edge of the right write line
-
-    y += 3
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 5, margin + sigLineW, y + 5)
-    doc.line(pageW - margin - sigLineW, y + 5, pageW - margin, y + 5)
+    doc.text("Date & Time:", margin, y)
+    doc.text("Date & Time:", col2X, y)
 
     y += 14
 
