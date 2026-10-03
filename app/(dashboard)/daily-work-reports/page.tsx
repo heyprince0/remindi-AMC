@@ -17,6 +17,7 @@ import {
   FileDown,
   Loader2,
   Minus,
+  Stamp,
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +44,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
@@ -58,10 +60,11 @@ function hexToRgb(hex: string): [number, number, number] {
     : [24, 95, 165]
 }
 
-// ─── blank PDF generator (reuses exact same render logic as detail page) ────
+// ─── blank PDF generator ────────────────────────────────────────────────────
 async function downloadBlankDwr(
   profile: CompanyProfile | null,
-  rowCount: number
+  rowCount: number,
+  includeStamp: boolean
 ) {
   const pageW = 210
   const margin = 15
@@ -69,7 +72,7 @@ async function downloadBlankDwr(
   const [tr, tg, tb] = hexToRgb(themeColor)
   const headerStyle = profile?.header_style ?? "single_logo"
 
-  // load logo
+  // ── load logo ──
   let logoBase64: string | null = null
   let logoFormat: "JPEG" | "PNG" = "PNG"
   if (headerStyle !== "thumbnail" && profile?.logo_url) {
@@ -84,7 +87,7 @@ async function downloadBlankDwr(
     } catch { /* skip */ }
   }
 
-  // load banner
+  // ── load banner ──
   let bannerBase64: string | null = null
   let bannerFormat: "JPEG" | "PNG" = "PNG"
   let bannerH = 0
@@ -107,24 +110,45 @@ async function downloadBlankDwr(
     } catch { /* skip */ }
   }
 
+  // ── load stamp (3-attempt retry, same as quotation) ──
+  let stampBase64: string | null = null
+  let stampFormat: "JPEG" | "PNG" = "PNG"
+  const shouldStamp = includeStamp && !!profile?.stamp_url
+  if (shouldStamp && profile?.stamp_url) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(profile.stamp_url, { cache: "no-store" })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        stampBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+        stampFormat = blob.type.includes("jpeg") ? "JPEG" : "PNG"
+        break
+      } catch (e) {
+        console.warn(`[Stamp] Attempt ${attempt} failed:`, e)
+        if (attempt === 3) toast.warning("Stamp image could not be loaded – skipping stamp")
+        else await new Promise((r) => setTimeout(r, 400 * attempt))
+      }
+    }
+  }
+
   const todayFormatted = new Date().toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   })
 
-  // blank rows — each row has visible height via minCellHeight
-  const blankBody = Array.from({ length: rowCount }, (_, i) => [
-    String(i + 1),
-    "",
-    "",
-    "",
-  ])
+  // blank rows with write-space height (no Material Used column)
+  const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
 
   const renderBlank = (doc: jsPDF): number => {
     let y = margin
 
-    // ── header (identical to detail page) ──
+    // ── company header (identical logic to detail page) ──
     if (headerStyle === "thumbnail" && bannerBase64) {
       doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
       y += bannerH + 6
@@ -145,13 +169,13 @@ async function downloadBlankDwr(
       doc.setFont("helvetica", "normal")
       doc.setTextColor(120, 120, 120)
       let iy = y + 8
-      if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, iy); iy += 4 }
+      if (profile?.tagline)  { doc.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
       if (profile?.address)  { doc.text(safeStr(profile.address),  infoX, iy); iy += 4 }
       const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
-      if (loc) { doc.text(loc, infoX, iy); iy += 4 }
-      if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
-      if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
-      if (profile?.gstin)  { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
+      if (loc)               { doc.text(loc,                       infoX, iy); iy += 4 }
+      if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
+      if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
+      if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
       y += 31
       doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(0.5)
@@ -167,7 +191,7 @@ async function downloadBlankDwr(
 
     doc.setFontSize(14)
     doc.setTextColor(0, 0, 0)
-    doc.text("DWR-", margin, y + 5)           // blank report no
+    doc.text("DWR-", margin, y + 5)
 
     doc.setFontSize(16)
     doc.setTextColor(tr, tg, tb)
@@ -176,12 +200,7 @@ async function downloadBlankDwr(
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-    doc.text(
-      `DATE: ${todayFormatted}   WORK ORDER:`,
-      pageW - margin,
-      y + 5,
-      { align: "right" }
-    )
+    doc.text(`DATE: ${todayFormatted}   WORK ORDER:`, pageW - margin, y + 5, { align: "right" })
 
     y += 12
     doc.setDrawColor(220, 220, 220)
@@ -189,7 +208,7 @@ async function downloadBlankDwr(
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── details grid (blank lines) ──
+    // ── details grid with blank underlines ──
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
       doc.setFont("helvetica", "bold")
@@ -226,7 +245,7 @@ async function downloadBlankDwr(
     // ── work items table (blank rows) ──
     autoTable(doc, {
       startY: y,
-      head: [["SR.", "Description of Work / Service", "Material Used", "Status"]],
+      head: [["SR.", "Description of Work / Service", "Status"]],
       body: blankBody,
       theme: "grid",
       headStyles: {
@@ -239,14 +258,13 @@ async function downloadBlankDwr(
       bodyStyles: {
         fontSize: 9,
         textColor: [0, 0, 0],
-        minCellHeight: 10,       // gives visual write space in each blank row
+        minCellHeight: 10,
       },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 15, halign: "center" },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 45 },
-        3: { cellWidth: 25, halign: "center" },
+        2: { cellWidth: 30, halign: "center" },
       },
       margin: { left: margin, right: margin },
     })
@@ -279,61 +297,60 @@ async function downloadBlankDwr(
 
     y = boxY + boxH + 10
 
-    // ── signature section ──
+    // ── signature section — SWAPPED positions ──
+    //    LEFT  → Customer / Site Representative
+    //    RIGHT → Technician / Engineer
     doc.setDrawColor(200, 200, 200)
     doc.setLineWidth(0.3)
 
-    // Column anchors: technician starts at `margin`, customer starts at `pageW - margin - 65`
-    const leftColX = margin
-    const rightColX = pageW - margin - 65
-
-    // Signature lines + captions (above the line)
+    // LEFT label — Customer
     doc.setFontSize(8)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(120, 120, 120)
+    doc.text("Customer / Site Representative Signature", margin, y - 2)
+    doc.line(margin, y, margin + 65, y)
 
-    doc.text("Technician / Engineer Signature", leftColX, y - 2)
-    doc.line(leftColX, y, leftColX + 65, y)
-
-    doc.text("Customer / Site Representative Signature", rightColX, y - 2)
-    doc.line(rightColX, y, rightColX + 65, y)
+    // RIGHT label — Technician
+    doc.text("Technician / Engineer Signature", pageW - margin, y - 2, { align: "right" })
+    doc.line(pageW - margin - 65, y, pageW - margin, y)
 
     y += 8
+
+    // Name lines
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
-
-    // Both "Name:" labels left-aligned at their column's start
-    // → writing space extends to the right of the label (same as technician side)
-    doc.text("Name:", leftColX, y)
-    doc.text("Name:", rightColX, y)
+    doc.text("Name:", margin, y)
+    doc.text("Name:", pageW - margin, y, { align: "right" })
 
     y += 5
+
+    // Date lines
     doc.setFont("helvetica", "normal")
     doc.setFontSize(8)
     doc.setTextColor(120, 120, 120)
+    doc.text("Date & Time:", margin, y)
+    doc.text("Date & Time:", pageW - margin, y, { align: "right" })
 
-    // Both "Date & Time:" labels left-aligned at their column's start
-    doc.text("Date & Time:", leftColX, y)
-    doc.text("Date & Time:", rightColX, y)
+    y += 14
 
-    y += 12
+    // ── stamp — left side (replaces office use box) ──
+    if (shouldStamp && stampBase64) {
+      const stampW = 30
+      const stampH = 30
+      doc.addImage(stampBase64, stampFormat, margin, y, stampW, stampH)
 
-    // ── office use ──
-    doc.setDrawColor(220, 220, 220)
-    doc.setLineWidth(0.3)
-    doc.rect(margin, y, pageW - 2 * margin, 12)
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.3)
+      doc.line(margin, y + stampH + 3, margin + stampW + 10, y + stampH + 3)
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "italic")
-    doc.setTextColor(150, 150, 150)
-    doc.text("For office use only", margin + 4, y + 7)
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8)
+      doc.setTextColor(120, 120, 120)
+      doc.text("Authorized Signatory", margin, y + stampH + 8)
 
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(120, 120, 120)
-    doc.text("Status:                     |  Checked By:", pageW - margin - 4, y + 7, { align: "right" })
-
-    y += 16
+      y = y + stampH + 14
+    }
 
     // ── footer ──
     doc.setFontSize(8)
@@ -369,6 +386,7 @@ export default function DailyWorkReportsPage() {
   // blank PDF dialog state
   const [blankDialog, setBlankDialog] = useState(false)
   const [rowCount, setRowCount] = useState(5)
+  const [includeStamp, setIncludeStamp] = useState(true)   // default ON
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
   useEffect(() => {
@@ -387,7 +405,6 @@ export default function DailyWorkReportsPage() {
 
   useEffect(() => {
     if (!orgId) return
-    // load reports + company profile in parallel
     Promise.all([
       supabase
         .from("daily_work_reports")
@@ -453,7 +470,7 @@ export default function DailyWorkReportsPage() {
   const handleDownloadBlank = async () => {
     setGeneratingBlank(true)
     try {
-      await downloadBlankDwr(profile, rowCount)
+      await downloadBlankDwr(profile, rowCount, includeStamp)
       toast.success("Blank PDF downloaded")
       setBlankDialog(false)
     } catch (err) {
@@ -463,6 +480,8 @@ export default function DailyWorkReportsPage() {
       setGeneratingBlank(false)
     }
   }
+
+  const hasStamp = !!profile?.stamp_url
 
   return (
     <DashboardLayout>
@@ -474,15 +493,10 @@ export default function DailyWorkReportsPage() {
             <p className="text-muted-foreground">Create and manage daily work completion reports</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* ── Blank PDF button ── */}
-            <Button
-              variant="outline"
-              onClick={() => setBlankDialog(true)}
-            >
+            <Button variant="outline" onClick={() => setBlankDialog(true)}>
               <FileDown className="mr-2 size-4" />
               Blank PDF
             </Button>
-
             <Button onClick={checkProfile} disabled={checking}>
               <Plus className="mr-2 size-4" />
               New Report
@@ -665,63 +679,97 @@ export default function DailyWorkReportsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4 space-y-4">
-            <Label className="text-sm font-medium">Number of work item rows</Label>
-
-            {/* +/- counter */}
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-9 shrink-0"
-                onClick={() => setRowCount((n) => Math.max(1, n - 1))}
-                disabled={rowCount <= 1 || generatingBlank}
-              >
-                <Minus className="size-4" />
-              </Button>
-
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                value={rowCount}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value)
-                  if (!isNaN(v)) setRowCount(Math.min(20, Math.max(1, v)))
-                }}
-                className="text-center text-lg font-semibold w-20"
-                disabled={generatingBlank}
-              />
-
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-9 shrink-0"
-                onClick={() => setRowCount((n) => Math.min(20, n + 1))}
-                disabled={rowCount >= 20 || generatingBlank}
-              >
-                <Plus className="size-4" />
-              </Button>
-            </div>
-
-            {/* quick-pick presets */}
-            <div className="flex gap-2 flex-wrap">
-              {[3, 5, 8, 10, 15].map((n) => (
+          <div className="py-4 space-y-5">
+            {/* Row count */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Number of work item rows</Label>
+              <div className="flex items-center gap-3">
                 <Button
-                  key={n}
-                  variant={rowCount === n ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 px-3 text-xs"
-                  onClick={() => setRowCount(n)}
-                  disabled={generatingBlank}
+                  variant="outline"
+                  size="icon"
+                  className="size-9 shrink-0"
+                  onClick={() => setRowCount((n) => Math.max(1, n - 1))}
+                  disabled={rowCount <= 1 || generatingBlank}
                 >
-                  {n} rows
+                  <Minus className="size-4" />
                 </Button>
-              ))}
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={rowCount}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v)) setRowCount(Math.min(20, Math.max(1, v)))
+                  }}
+                  className="text-center text-lg font-semibold w-20"
+                  disabled={generatingBlank}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9 shrink-0"
+                  onClick={() => setRowCount((n) => Math.min(20, n + 1))}
+                  disabled={rowCount >= 20 || generatingBlank}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+
+              {/* Quick-pick presets */}
+              <div className="flex gap-2 flex-wrap">
+                {[3, 5, 8, 10, 15].map((n) => (
+                  <Button
+                    key={n}
+                    variant={rowCount === n ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => setRowCount(n)}
+                    disabled={generatingBlank}
+                  >
+                    {n} rows
+                  </Button>
+                ))}
+              </div>
             </div>
+
+            {/* Stamp toggle — only show when stamp is uploaded */}
+            {hasStamp && (
+              <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Stamp className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Include company stamp</p>
+                    <p className="text-xs text-muted-foreground">Appears on the bottom-left of the PDF</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={includeStamp}
+                  onCheckedChange={setIncludeStamp}
+                  disabled={generatingBlank}
+                />
+              </div>
+            )}
+
+            {/* If no stamp uploaded, show a note */}
+            {!hasStamp && (
+              <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-3 text-muted-foreground">
+                <Stamp className="size-4 shrink-0" />
+                <p className="text-xs">
+                  No stamp uploaded yet. Go to{" "}
+                  <button
+                    className="underline text-foreground font-medium"
+                    onClick={() => { setBlankDialog(false); router.push("/settings") }}
+                  >
+                    Settings
+                  </button>{" "}
+                  to add one.
+                </p>
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground">
-              Maximum 20 rows. The PDF will include your company header, all section labels, and blank lines ready to fill in by hand.
+              Maximum 20 rows. The PDF includes your company header, all section labels, and blank lines ready to fill in by hand.
             </p>
           </div>
 
