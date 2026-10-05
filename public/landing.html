@@ -26,7 +26,6 @@
   <meta property="og:image:height" content="630" />
 
   <!-- Twitter Card -->
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="remindi-landing.png" />
   <meta name="twitter:title" content="Remindi - AMC Management Software" />
   <meta name="twitter:description" content="Never miss a service visit again. AMC management built for Indian contractors." />
@@ -235,6 +234,35 @@
       background: var(--blue-bg);
       transform: translateY(-2px);
       box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    }
+
+    /* NEW: Hero Demo Button Styles */
+    .hero-cta-buttons {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .btn-demo-hero {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: white;
+      color: var(--blue);
+      border: 2px solid var(--blue);
+      padding: 16px 36px;
+      border-radius: 10px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, color .2s, transform .15s, box-shadow .2s;
+    }
+    .btn-demo-hero:hover {
+      background: var(--blue-bg);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(41,171,226,.15);
     }
 
     /* ─── SECTION UTILS ───────────────────────────────── */
@@ -1282,9 +1310,6 @@
       .pricing-grid { grid-template-columns: repeat(2, 1fr); max-width: 100%; }
     }
 
-    /* Laptop widths (~1024-1300px): 4 equal columns get too cramped for the
-       longer feature phrases, so drop to 2 columns here instead of jumping
-       straight from tablet to a squeezed desktop 4-col layout. */
     @media (min-width: 1025px) and (max-width: 1300px) {
       .pricing-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; max-width: 720px; margin-left: auto; margin-right: auto; }
       .pricing .container { max-width: 1200px; }
@@ -1300,6 +1325,8 @@
       .hero-visual { display: none; }
       .hero h1 { font-size: 2rem; }
       .hero-stats { gap: 20px; flex-wrap: wrap; }
+      .hero-cta-buttons { width: 100%; flex-direction: column; }
+      .btn-primary, .btn-demo-hero { width: 100%; justify-content: center; }
 
       .features-grid { grid-template-columns: 1fr; }
       .steps { grid-template-columns: 1fr; }
@@ -1318,43 +1345,8 @@
     }
 
     /* ═══════════════════════════════════════════════════
-       BOOK DEMO  —  NAV BUTTON + MODAL
+       BOOK DEMO  —  MODAL
        ═══════════════════════════════════════════════════ */
-    .nav-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .btn-demo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      background: transparent;
-      color: var(--blue);
-      border: 2px solid var(--blue);
-      padding: 8px 20px;
-      border-radius: 8px;
-      font-family: 'Poppins', sans-serif;
-      font-size: .9rem;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background .2s, color .2s, transform .15s, box-shadow .2s;
-    }
-    .btn-demo:hover {
-      background: var(--blue);
-      color: #fff;
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-blue);
-    }
-    .mobile-menu .btn-demo {
-      margin: 10px 24px 0;
-      padding: 12px 20px;
-      font-size: .95rem;
-    }
-
     body.modal-open { overflow: hidden; }
 
     .demo-overlay {
@@ -1561,7 +1553,6 @@
     </ul>
 
     <div class="nav-actions">
-      <button type="button" class="btn-demo desktop" data-open-demo>Book Demo</button>
       <a href="/signup" class="btn-nav desktop">Get Started</a>
     </div>
 
@@ -1575,7 +1566,6 @@
     <a href="#faq" onclick="closeMobileMenu()">FAQ</a>
     <a href="#install-app" onclick="closeMobileMenu()">Install App</a>
     <a href="#contact" onclick="closeMobileMenu()">Contact</a>
-    <button type="button" class="btn-demo" data-open-demo onclick="closeMobileMenu()">Book a Demo</button>
     <a href="/signup" class="btn-nav">Get Started</a>
   </div>
 </nav>
@@ -1588,7 +1578,10 @@
       <h1>Never Miss a <span>Service Visit</span> Again</h1>
       <p class="hero-sub">Manage all your AMC clients, track service dates, get automatic alerts. Built for Indian lift, AC, CCTV, RO service contractors.</p>
       <div class="hero-cta">
-        <a href="/signup" class="btn-primary">Get Started →</a>
+        <div class="hero-cta-buttons">
+          <a href="/signup" class="btn-primary">Get Started →</a>
+          <button type="button" class="btn-demo-hero" data-open-demo>Book Demo</button>
+        </div>
         <p class="hero-note">
           <span>✓ Quick setup</span>
           <span>•</span>
@@ -2266,7 +2259,6 @@
 
   // Pricing duration selector
   function switchPricingDuration(duration) {
-    // Update active tab
     document.querySelectorAll('.pricing-tab').forEach(tab => {
       tab.classList.remove('active');
       if (tab.getAttribute('data-duration') === duration) {
@@ -2274,7 +2266,6 @@
       }
     });
 
-    // Update prices for Basic and Pro plans
     document.querySelectorAll('.pricing-card[data-plan]').forEach(card => {
       const priceContainer = card.querySelector('.pricing-price');
       const amountEl = card.querySelector('.amount');
@@ -2285,12 +2276,8 @@
         const newAmount = priceContainer.getAttribute(`data-${duration}`);
         const newPeriod = periodEl.getAttribute(`data-${duration}`);
         
-        if (newAmount) {
-          amountEl.textContent = newAmount;
-        }
-        if (newPeriod) {
-          periodEl.textContent = newPeriod;
-        }
+        if (newAmount) amountEl.textContent = newAmount;
+        if (newPeriod) periodEl.textContent = newPeriod;
       }
 
       if (badgeEl) {
@@ -2309,19 +2296,26 @@
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════
-     BOOK DEMO  —  SUPABASE HANDLER
-     Replace the two constants below with your Supabase project
-     credentials (Dashboard → Project Settings → API).
+     BOOK DEMO  —  SUPABASE HANDLER (Vercel Environment Variables)
      ═══════════════════════════════════════════════════════════ -->
 <script type="module">
-  const SUPABASE_URL      = 'https://YOUR-PROJECT-REF.supabase.co';
-  const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
-
   let sbClient = null;
+
   async function getSupabase() {
     if (sbClient) return sbClient;
+
+    // 1. Fetch config from Vercel API route
+    const configRes = await fetch('/api/config');
+    if (!configRes.ok) throw new Error('Failed to load Supabase config');
+    const config = await configRes.json();
+
+    if (!config.supabaseUrl || !config.supabaseAnonKey) {
+      throw new Error('Supabase keys missing in Vercel environment variables');
+    }
+
+    // 2. Initialize Supabase client
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    sbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sbClient = createClient(config.supabaseUrl, config.supabaseAnonKey);
     return sbClient;
   }
 
@@ -2387,11 +2381,6 @@
 
     if (payload.phone.replace(/\D/g, '').length < 10) {
       showStatus('Please enter a valid 10-digit mobile number.', 'error');
-      return;
-    }
-
-    if (SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
-      showStatus('Supabase keys are not set yet — add them in the script tag.', 'error');
       return;
     }
 
