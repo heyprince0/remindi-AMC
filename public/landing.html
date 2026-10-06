@@ -1217,6 +1217,37 @@
       font-weight: 700;
     }
 
+    /* ─── INLINE DEMO CARD ────────────────────────────── */
+    .inline-demo-wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      background: var(--white);
+      border-radius: 22px;
+      box-shadow: 0 32px 90px rgba(0,0,0,.28), 0 4px 24px rgba(41,171,226,.12);
+      overflow: hidden;
+      position: relative;
+      text-align: left;
+    }
+
+    .inline-demo-wrapper .demo-header {
+      border-radius: 22px 22px 0 0;
+    }
+
+    .inline-demo-wrapper .demo-body {
+      padding: 24px 28px 28px;
+    }
+
+    .inline-demo-wrapper .demo-success {
+      padding: 44px 28px 48px;
+    }
+
+    @media (max-width: 600px) {
+      .inline-demo-wrapper { border-radius: 18px; }
+      .inline-demo-wrapper .demo-header { padding: 22px 20px 18px; }
+      .inline-demo-wrapper .demo-body { padding: 20px 20px 24px; }
+      .inline-demo-wrapper .demo-success { padding: 36px 20px 40px; }
+    }
+
     /* ─── FOOTER ──────────────────────────────────────── */
     footer {
       background: var(--gray-900);
@@ -2145,16 +2176,98 @@
   </div>
 </section>
 
-<!-- CTA -->
+<!-- ═══════════════════════════════════════════════════════════
+     INLINE DEMO BOOKING SECTION (Replaces the old CTA)
+     ═══════════════════════════════════════════════════════════ -->
 <section class="cta-section" id="contact">
   <div class="container">
-    <h2>Start Managing Your AMC Business<br>Smarter Today</h2>
-    <p>Join contractors already using remindi to stay on top of every service visit</p>
-    <a href="/signup" class="btn-white">Get Started →</a>
-    <div class="cta-checks">
-      <span>Quick setup</span>
-      <span>All features included</span>
-      <span>Works on any device</span>
+    <div class="inline-demo-wrapper">
+      <!-- Gradient header -->
+      <div class="demo-header">
+        <div class="demo-header-top">
+          <div class="demo-header-badge">📅 Free · 20 min</div>
+        </div>
+        <h3>Book a Free Demo</h3>
+        <p>Pick a slot that works for you — we'll walk you through Remindi live on a quick call.</p>
+        <div class="demo-trust">
+          <span class="demo-trust-pill">✅ No credit card</span>
+          <span class="demo-trust-pill">🔒 100% private</span>
+          <span class="demo-trust-pill">📞 We call you</span>
+        </div>
+      </div>
+
+      <!-- Success state (hidden by default) -->
+      <div class="demo-success" id="inlineDemoSuccess">
+        <div class="demo-success-ring">🎉</div>
+        <h4>You're all set!</h4>
+        <p>We got your booking and will call you on <span class="demo-success-phone" id="inlineDemoSuccessPhone"></span> to confirm the slot. See you soon!</p>
+      </div>
+
+      <!-- Form body -->
+      <div class="demo-body" id="inlineDemoBody">
+        <form class="demo-form" id="inlineDemoForm" novalidate>
+
+          <div class="demo-row">
+            <div class="demo-field">
+              <label for="inlineDemoName">Your Name <span class="req">*</span></label>
+              <input type="text" id="inlineDemoName" name="full_name" placeholder="e.g. Rajesh Kumar" maxlength="120" autocomplete="name" />
+            </div>
+            <div class="demo-field">
+              <label for="inlineDemoPhone">Phone / WhatsApp <span class="req">*</span></label>
+              <input type="tel" id="inlineDemoPhone" name="phone" placeholder="98765 43210" maxlength="20" autocomplete="tel" />
+            </div>
+          </div>
+
+          <div class="demo-row">
+            <div class="demo-field">
+              <label for="inlineDemoCompany">Company Name</label>
+              <input type="text" id="inlineDemoCompany" name="company_name" placeholder="e.g. Sharma Services" maxlength="120" autocomplete="organization" />
+            </div>
+            <div class="demo-field">
+              <label for="inlineDemoServiceType">Type of Company <span class="req">*</span></label>
+              <select id="inlineDemoServiceType" name="service_type">
+                <option value="">Select service type</option>
+                <option value="Lift / Elevator AMC">Lift / Elevator AMC</option>
+                <option value="AC / HVAC Service">AC / HVAC Service</option>
+                <option value="RO / Water Purifier">RO / Water Purifier</option>
+                <option value="CCTV &amp; Security">CCTV &amp; Security</option>
+                <option value="Pest Control">Pest Control</option>
+                <option value="Generator / DG Service">Generator / DG Service</option>
+                <option value="Fire Safety">Fire Safety</option>
+                <option value="Solar">Solar</option>
+                <option value="Electrical / Plumbing">Electrical / Plumbing</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="demo-row">
+            <div class="demo-field">
+              <label for="inlineDemoDate">Preferred Date <span class="req">*</span></label>
+              <input type="date" id="inlineDemoDate" name="preferred_date" />
+            </div>
+            <div class="demo-field">
+              <label for="inlineDemoTime">Preferred Time <span class="req">*</span></label>
+              <input type="time" id="inlineDemoTime" name="preferred_time" />
+            </div>
+          </div>
+
+          <div class="demo-field">
+            <label for="inlineDemoMessage">Anything specific you want to see? <span style="font-weight:400;color:var(--gray-400)">(optional)</span></label>
+            <textarea id="inlineDemoMessage" name="message" rows="2" maxlength="500" placeholder="e.g. I manage 200 lift contracts and want to see the alerts feature"></textarea>
+          </div>
+
+          <div class="demo-error-box" id="inlineDemoErrorBox"></div>
+
+          <button type="submit" class="btn-demo-submit" id="inlineDemoSubmitBtn">
+            <span id="inlineDemoSubmitText">Confirm Booking →</span>
+            <span class="demo-spinner" id="inlineDemoSpinner"></span>
+          </button>
+
+          <p class="demo-footnote">🔒 We'll call you to confirm the slot. No spam, ever.</p>
+
+        </form>
+      </div>
     </div>
   </div>
 </section>
@@ -2419,6 +2532,7 @@
 
 <!-- ═══════════════════════════════════════════════════════════
      BOOK DEMO  —  SUPABASE HANDLER (Vercel Environment Variables)
+     Handles BOTH the modal form and the inline form.
      ═══════════════════════════════════════════════════════════ -->
 <script type="module">
   let sbClient = null;
@@ -2441,8 +2555,14 @@
     return sbClient;
   }
 
+  const pad = n => String(n).padStart(2, '0');
+  const localDate = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  // ═══════════════════════════════════════════════════════════
+  // 1. MODAL FORM LOGIC
+  // ═══════════════════════════════════════════════════════════
   const overlay     = document.getElementById('demoOverlay');
-  const form        = document.getElementById('demoForm');
+  const modalForm   = document.getElementById('demoForm');
   const demoBody    = document.getElementById('demoBody');
   const demoSuccess = document.getElementById('demoSuccess');
   const errorBox    = document.getElementById('demoErrorBox');
@@ -2452,13 +2572,9 @@
   const dateInput   = document.getElementById('demoDate');
   const timeInput   = document.getElementById('demoTime');
 
-  const pad = n => String(n).padStart(2, '0');
-  const localDate = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
   function openDemo() {
     overlay.classList.add('open');
     document.body.classList.add('modal-open');
-    // Reset to form view each time
     demoBody.style.display = '';
     demoSuccess.classList.remove('show');
     clearError();
@@ -2507,17 +2623,17 @@
     el.addEventListener('click', e => { e.preventDefault(); openDemo(); })
   );
   document.getElementById('demoClose').addEventListener('click', closeDemo);
-  document.getElementById('demoDoneBtn').addEventListener('click', () => { closeDemo(); form.reset(); });
+  document.getElementById('demoDoneBtn').addEventListener('click', () => { closeDemo(); modalForm.reset(); });
   overlay.addEventListener('click', e => { if (e.target === overlay) closeDemo(); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && overlay.classList.contains('open')) closeDemo();
   });
 
-  form.addEventListener('submit', async e => {
+  modalForm.addEventListener('submit', async e => {
     e.preventDefault();
     clearError();
 
-    const el = form.elements;
+    const el = modalForm.elements;
     const payload = {
       full_name:      el.full_name.value.trim(),
       phone:          el.phone.value.trim(),
@@ -2529,7 +2645,6 @@
       source:         'landing_page'
     };
 
-    // Validation
     if (!payload.full_name) {
       document.getElementById('demoName').classList.add('field-error');
       showError('Please enter your name.'); return;
@@ -2554,12 +2669,10 @@
     setLoading(true);
 
     try {
-      // 1. Save to Supabase
       const client = await getSupabase();
       const { error } = await client.from('demo_bookings').insert(payload);
       if (error) throw error;
 
-      // 2. Fire notification email (non-blocking — don't await to block UX)
       fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2579,8 +2692,7 @@
         }),
       }).catch(err => console.warn('[Demo] Email notification failed silently:', err));
 
-      // 3. Show success state
-      form.reset();
+      modalForm.reset();
       showSuccess(payload.phone);
 
     } catch (err) {
@@ -2590,6 +2702,127 @@
       setLoading(false);
     }
   });
+
+
+  // ═══════════════════════════════════════════════════════════
+  // 2. INLINE FORM LOGIC
+  // ═══════════════════════════════════════════════════════════
+  const inlineForm = document.getElementById('inlineDemoForm');
+  if (inlineForm) {
+    const inlineBody         = document.getElementById('inlineDemoBody');
+    const inlineSuccess      = document.getElementById('inlineDemoSuccess');
+    const inlineSuccessPhone = document.getElementById('inlineDemoSuccessPhone');
+    const inlineErrorBox     = document.getElementById('inlineDemoErrorBox');
+    const inlineSubmitBtn    = document.getElementById('inlineDemoSubmitBtn');
+    const inlineSubmitText   = document.getElementById('inlineDemoSubmitText');
+    const inlineSpinner      = document.getElementById('inlineDemoSpinner');
+    const inlineDateInput    = document.getElementById('inlineDemoDate');
+    const inlineTimeInput    = document.getElementById('inlineDemoTime');
+
+    // Pre-fill date/time
+    inlineDateInput.min = localDate();
+    if (!inlineDateInput.value) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      inlineDateInput.value = localDate(tomorrow);
+    }
+    if (!inlineTimeInput.value) inlineTimeInput.value = '11:00';
+
+    function setInlineLoading(on) {
+      inlineSubmitBtn.disabled = on;
+      inlineSubmitText.textContent = on ? 'Booking…' : 'Confirm Booking →';
+      inlineSpinner.classList.toggle('show', on);
+    }
+
+    function showInlineError(msg) {
+      inlineErrorBox.textContent = msg;
+      inlineErrorBox.classList.add('show');
+      inlineErrorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function clearInlineError() {
+      inlineErrorBox.classList.remove('show');
+      inlineErrorBox.textContent = '';
+      document.querySelectorAll('#inlineDemoForm .field-error').forEach(el => el.classList.remove('field-error'));
+    }
+
+    inlineForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      clearInlineError();
+
+      const el = inlineForm.elements;
+      const payload = {
+        full_name:      el.full_name.value.trim(),
+        phone:          el.phone.value.trim(),
+        company_name:   el.company_name.value.trim() || null,
+        service_type:   el.service_type.value || null,
+        preferred_date: el.preferred_date.value,
+        preferred_time: el.preferred_time.value,
+        message:        el.message.value.trim() || null,
+        source:         'landing_page_inline'
+      };
+
+      if (!payload.full_name) {
+        document.getElementById('inlineDemoName').classList.add('field-error');
+        showInlineError('Please enter your name.'); return;
+      }
+      if (payload.phone.replace(/\D/g, '').length < 10) {
+        document.getElementById('inlineDemoPhone').classList.add('field-error');
+        showInlineError('Please enter a valid 10-digit mobile number.'); return;
+      }
+      if (!payload.service_type) {
+        document.getElementById('inlineDemoServiceType').classList.add('field-error');
+        showInlineError('Please select your type of company.'); return;
+      }
+      if (!payload.preferred_date) {
+        document.getElementById('inlineDemoDate').classList.add('field-error');
+        showInlineError('Please pick a preferred date.'); return;
+      }
+      if (!payload.preferred_time) {
+        document.getElementById('inlineDemoTime').classList.add('field-error');
+        showInlineError('Please pick a preferred time.'); return;
+      }
+
+      setInlineLoading(true);
+
+      try {
+        const client = await getSupabase();
+        const { error } = await client.from('demo_bookings').insert(payload);
+        if (error) throw error;
+
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'demo-booking-notification',
+            userEmail: 'prakash6977z@gmail.com',
+            data: {
+              full_name:      payload.full_name,
+              phone:          payload.phone,
+              company_name:   payload.company_name  ?? '',
+              service_type:   payload.service_type  ?? '',
+              message:        payload.message       ?? '',
+              preferred_date: payload.preferred_date,
+              preferred_time: payload.preferred_time,
+              created_at:     new Date().toISOString(),
+            },
+          }),
+        }).catch(err => console.warn('[Inline Demo] Email notification failed silently:', err));
+
+        inlineForm.reset();
+        inlineBody.style.display = 'none';
+        inlineSuccessPhone.textContent = payload.phone;
+        inlineSuccess.classList.add('show');
+
+      } catch (err) {
+        console.error('Inline demo booking failed:', err);
+        showInlineError('Something went wrong. Please try again or email support@remindi.online');
+      } finally {
+        setInlineLoading(false);
+      }
+    });
+  }
+
 </script>
 
 </body>
