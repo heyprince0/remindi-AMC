@@ -7,6 +7,7 @@ import {
   sendServiceReminderEmail,
   sendAMCExpiryReminderEmail,
   sendAMCExpiredEmail,
+  sendDemoBookingNotificationEmail,
 } from './email-service'
 
 export async function triggerWelcomeEmail(userEmail: string, userName: string) {
@@ -66,6 +67,35 @@ export async function triggerAMCExpiryReminderEmail(userEmail: string, contractN
     return { success: true, messageId: result.messageId }
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, error: msg }
+  }
+}
+
+export async function triggerDemoBookingNotificationEmail(
+  full_name: string,
+  phone: string,
+  company_name: string,
+  service_type: string,
+  message: string,
+  preferred_date: string,
+  preferred_time: string,
+  created_at: string
+) {
+  try {
+    if (!full_name || !phone) return { success: false, error: 'Missing required fields' }
+    const result = await sendDemoBookingNotificationEmail(
+      full_name, phone, company_name, service_type,
+      message, preferred_date, preferred_time, created_at
+    )
+    if (!result.success) {
+      console.error(`[Email Actions] Demo booking notification failed: ${result.error}`)
+      return { success: false, error: result.error }
+    }
+    console.log(`[Email Actions] Demo booking notification sent. ID: ${result.messageId}`)
+    return { success: true, messageId: result.messageId }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`[Email Actions] Exception in triggerDemoBookingNotificationEmail: ${msg}`)
     return { success: false, error: msg }
   }
 }
