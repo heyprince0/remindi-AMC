@@ -5,6 +5,7 @@ import {
   sendPasswordResetEmail,
   sendServiceReminderEmail,
   sendAMCExpiryReminderEmail,
+  sendDemoBookingNotificationEmail,
 } from '@/lib/email-service'
 
 /**
@@ -90,6 +91,27 @@ export async function POST(request: NextRequest) {
           )
         }
         result = await sendAMCExpiryReminderEmail(userEmail, contractName, expiryDate, customerName)
+        break
+      }
+
+      case 'demo-booking-notification': {
+        const { full_name, phone, company_name, service_type, message, preferred_date, preferred_time, created_at } = data
+        if (!full_name || !phone) {
+          return NextResponse.json(
+            { error: 'Missing required fields: full_name or phone' },
+            { status: 400 }
+          )
+        }
+        result = await sendDemoBookingNotificationEmail(
+          full_name,
+          phone,
+          company_name ?? '',
+          service_type ?? '',
+          message ?? '',
+          preferred_date ?? '',
+          preferred_time ?? '',
+          created_at ?? new Date().toISOString()
+        )
         break
       }
 
