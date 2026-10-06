@@ -111,6 +111,43 @@ export async function sendAMCExpiredEmail(userEmail: string, contractName: strin
   }
 }
 
+export async function sendDemoBookingNotificationEmail(
+  full_name: string,
+  phone: string,
+  company_name: string,
+  service_type: string,
+  message: string,
+  preferred_date: string,
+  preferred_time: string,
+  created_at: string
+): Promise<EmailResponse> {
+  try {
+    if (!resend) return { success: false, error: 'Email service is not configured.' }
+    const response = await resend.emails.send({
+      from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
+      to: 'prakash6977z@gmail.com',
+      subject: `🎉 New Demo Booking – ${full_name} (${company_name}) · ${preferred_date} at ${preferred_time}`,
+      template: {
+        id: 'demo-booking-notification',
+        variables: {
+          full_name,
+          phone,
+          company_name,
+          service_type,
+          message,
+          preferred_date,
+          preferred_time,
+          created_at,
+        },
+      },
+    })
+    if (response.error) return { success: false, error: response.error.message }
+    return { success: true, messageId: response.data?.id }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
 export async function sendInviteMemberEmail(inviteeEmail: string, inviterName: string, businessName: string, role: string, acceptLink: string): Promise<EmailResponse> {
   try {
     if (!resend) return { success: false, error: 'Email service is not configured.' }
