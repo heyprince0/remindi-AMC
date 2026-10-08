@@ -180,15 +180,6 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("CUSTOMER NAME", margin, y)
-
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 6, margin + 60, y + 6)
-
     // Title centered
     doc.setFontSize(15)
     doc.setFont("helvetica", "bold")
@@ -200,6 +191,17 @@ async function downloadBlankDwr(
     doc.setTextColor(0, 0, 0)
     doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
+    // Left side: CUSTOMER NAME (aligned with WORK ORDER NO. on the right)
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("CUSTOMER NAME", margin, y + 14)
+
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y + 19, margin + 60, y + 19)
+
+    // Right side: WORK ORDER NO.
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
