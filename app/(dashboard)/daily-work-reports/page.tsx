@@ -180,25 +180,29 @@ async function downloadBlankDwr(
       y += 6
     }
 
+    // ── CUSTOMER NAME label (left) ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("REPORT NO.", margin, y)
+    doc.text("CUSTOMER NAME", margin, y)
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
     doc.line(margin, y + 6, margin + 50, y + 6)
 
+    // ── WORK REPORT title — centered ──
     doc.setFontSize(15)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
-    doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y + 1, { align: "right" })
+    doc.text("WORK REPORT", pageW / 2, y + 1, { align: "center" })
 
+    // ── DATE right ──
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
     doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
+    // ── WORK ORDER NO. right ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -226,23 +230,11 @@ async function downloadBlankDwr(
       doc.line(x, yy, x + w, yy)
     }
 
-    label("TECHNICIAN / ENGINEER", margin, y)
+    // Only EQUIPMENT field remains in the details grid
+    label("EQUIPMENT", margin, y)
     blankLine(margin, y + 5)
 
-    label("CUSTOMER / SITE", margin, y + 10)
-    blankLine(margin, y + 15)
-
-    label("SITE ADDRESS", margin, y + 20)
-    blankLine(margin, y + 25)
-
-    const col2X = pageW / 2 + 10
-    label("CONTACT NO.", col2X, y)
-    blankLine(col2X, y + 5, 60)
-
-    label("NO. / EQUIPMENT ID", col2X, y + 10)
-    blankLine(col2X, y + 15, 60)
-
-    y += 32
+    y += 14
     doc.setDrawColor(220, 220, 220)
     doc.line(margin, y, pageW - margin, y)
     y += 6
