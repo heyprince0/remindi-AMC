@@ -191,7 +191,7 @@ async function downloadBlankDwr(
     doc.setTextColor(0, 0, 0)
     doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
-    // Left side: CUSTOMER NAME (aligned with WORK ORDER NO. on the right)
+    // Left side: CUSTOMER NAME
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -199,7 +199,7 @@ async function downloadBlankDwr(
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin, y + 19, margin + 60, y + 19)
+    doc.line(margin, y + 24, margin + 60, y + 24)
 
     // Right side: WORK ORDER NO.
     doc.setFontSize(7)
@@ -209,12 +209,10 @@ async function downloadBlankDwr(
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 19, pageW - margin, y + 19)
+    doc.line(pageW - margin - 50, y + 24, pageW - margin, y + 24)
 
-    y += 24
-    doc.setDrawColor(220, 220, 220)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y, pageW - margin, y)
+    y += 30
+
     y += 8
 
     const label = (text: string, x: number, yy: number) => {
@@ -231,12 +229,9 @@ async function downloadBlankDwr(
 
     // Only Equipment field remains
     label("EQUIPMENT", margin, y)
-    blankLine(margin, y + 5, 100)
+    blankLine(margin, y + 12, 100)
 
-    y += 12
-    doc.setDrawColor(220, 220, 220)
-    doc.line(margin, y, pageW - margin, y)
-    y += 6
+    y += 18
 
     autoTable(doc, {
       startY: y,
