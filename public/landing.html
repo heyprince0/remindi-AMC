@@ -1547,8 +1547,48 @@
       border: none;
     }
 
+    .demo-video-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    .btn-white-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      color: var(--blue);
+      border: 2px solid var(--blue);
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background .2s, color .2s, transform .15s, box-shadow .2s;
+      font-family: 'Poppins', sans-serif;
+    }
+    .btn-white-outline:hover {
+      background: var(--blue);
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-blue);
+    }
+
+    .demo-video-cta-note {
+      width: 100%;
+      font-size: 0.82rem;
+      color: var(--gray-500);
+      margin-top: 4px;
+    }
+
     @media (max-width: 768px) {
       .demo-video-section { padding: 56px 0; }
+      .demo-video-cta { flex-direction: column; }
+      .btn-white-outline { width: 100%; max-width: 320px; justify-content: center; }
     }
 
     .demo-trust {
@@ -1763,7 +1803,7 @@
     </ul>
 
     <div class="nav-actions">
-      <a href="/signup" class="btn-nav desktop">Get Started</a>
+      <a href="/signup" class="btn-nav desktop">Get Free Trial</a>
     </div>
 
     <button class="hamburger" id="hamburger" aria-label="Toggle menu">
@@ -1776,7 +1816,7 @@
     <a href="#faq" onclick="closeMobileMenu()">FAQ</a>
     <a href="#install-app" onclick="closeMobileMenu()">Install App</a>
     <a href="#contact" onclick="closeMobileMenu()">Contact</a>
-    <a href="/signup" class="btn-nav">Get Started</a>
+    <a href="/signup" class="btn-nav">Get Free Trail Started</a>
   </div>
 </nav>
 
@@ -1789,8 +1829,8 @@
       <p class="hero-sub">Manage all your AMC clients, track service dates, get automatic alerts. Built for Indian lift, AC, CCTV, RO service contractors.</p>
       <div class="hero-cta">
         <div class="hero-cta-buttons">
-          <a href="/signup" class="btn-primary">Get Started →</a>
-          <button type="button" class="btn-demo-hero" data-open-demo>Book Demo</button>
+          <a href="/signup" class="btn-primary">Get Free Trial →</a>
+          <button type="button" class="btn-demo-hero" data-open-demo>Book a Demo</button>
         </div>
         <p class="hero-note">
           <span>✓ Quick setup</span>
@@ -1947,7 +1987,7 @@
   <div class="container text-center">
     <div class="section-badge reveal">Watch Demo</div>
     <h2 class="section-title reveal">See Remindi in <span style="color:var(--blue)">Action</span></h2>
-    <p class="section-subtitle reveal">Watch how contractors manage their entire AMC business in minutes.</p>
+    <p class="section-subtitle reveal">Watch how contractors manage their entire AMC business in minutes — contracts, alerts, invoices, and more.</p>
     <div class="demo-video-wrapper reveal">
       <div class="loom-embed-container">
         <iframe
@@ -1956,6 +1996,15 @@
           allowfullscreen
           allow="autoplay; fullscreen"
         ></iframe>
+      </div>
+      <div class="demo-video-cta reveal">
+        <a href="https://app.remindi.online/register" class="btn-primary">
+          🚀 Get 14-days Free Trial
+        </a>
+        <a href="#" class="btn-white-outline" data-open-demo>
+          📅 Book a Demo Meeting
+        </a>
+        <p class="demo-video-cta-note">No credit card required &nbsp;·&nbsp; 14-day free trial &nbsp;·&nbsp; Setup in 5 minutes</p>
       </div>
     </div>
   </div>
