@@ -51,8 +51,6 @@ export function DailyWorkReportForm({ edit = false }: Props) {
     tech_sign_datetime: "",
     customer_sign_name: "",
     customer_sign_datetime: "",
-    office_status: "Approved",
-    checked_by: "",
   })
 
   const [items, setItems] = useState<DailyWorkItem[]>([emptyItem(1)])
@@ -104,8 +102,6 @@ export function DailyWorkReportForm({ edit = false }: Props) {
           tech_sign_datetime: r.tech_sign_datetime || "",
           customer_sign_name: r.customer_sign_name || "",
           customer_sign_datetime: r.customer_sign_datetime || "",
-          office_status: r.office_status || "Approved",
-          checked_by: r.checked_by || "",
         })
         setItems(r.work_items?.length ? r.work_items : [emptyItem(1)])
         setLoading(false)
@@ -470,40 +466,6 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                   onChange={(e) => setField("customer_sign_datetime", e.target.value)}
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Office Use */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Office Use</CardTitle>
-            <CardDescription>Internal review details</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="office-status">Office Status</Label>
-              <Select
-                value={form.office_status}
-                onValueChange={(v) => setField("office_status", v)}
-              >
-                <SelectTrigger id="office-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Approved">Approved</SelectItem>
-                  <SelectItem value="Follow-up Required">Follow-up Required</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="checked-by">Checked By</Label>
-              <Input
-                id="checked-by"
-                value={form.checked_by}
-                onChange={(e) => setField("checked_by", e.target.value)}
-                placeholder="Enter name"
-              />
             </div>
           </CardContent>
         </Card>
