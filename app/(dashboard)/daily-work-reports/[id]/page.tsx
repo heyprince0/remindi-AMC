@@ -235,73 +235,69 @@ export default function DailyWorkReportDetailPage() {
           y += 6
         }
 
-        // ── TITLE SECTION ──
+        // ── TITLE SECTION (matches blank PDF layout) ──
+        // Centered title
+        doc.setFontSize(15)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(tr, tg, tb)
+        doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
+
+        // Date on the right
+        doc.setFontSize(8)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(`DATE: ${formattedDate}`, pageW - margin, y + 8, { align: "right" })
+
+        // ── CUSTOMER NAME (left) ──
+        doc.setFontSize(7)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(120, 120, 120)
+        doc.text("CUSTOMER NAME", margin, y + 14)
+
+        // Value on the line
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(report.customer_name), margin, y + 23)
+
+        doc.setDrawColor(180, 180, 180)
+        doc.setLineWidth(0.3)
+        doc.line(margin, y + 24, margin + 60, y + 24)
+
+        // ── WORK ORDER NO. (right) ──
+        doc.setFontSize(7)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(120, 120, 120)
+        doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
+
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(report.work_order_no || "-"), pageW - margin, y + 23, { align: "right" })
+
+        doc.setDrawColor(180, 180, 180)
+        doc.setLineWidth(0.3)
+        doc.line(pageW - margin - 50, y + 24, pageW - margin, y + 24)
+
+        y += 30
+        y += 8
+
+        // ── EQUIPMENT ──
         doc.setFontSize(8)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(120, 120, 120)
-        doc.text("REPORT NO.", margin, y)
+        doc.text("EQUIPMENT", margin, y)
 
-        doc.setFontSize(14)
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(report.report_no), margin, y + 5)
-
-        doc.setFontSize(16)
-        doc.setTextColor(tr, tg, tb)
-        doc.text("DAILY WORK COMPLETION REPORT", pageW - margin, y, { align: "right" })
-
-        // ── DATE / WORK ORDER LINE — now solid black & bold ──
-        doc.setFontSize(9)
+        doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        doc.text(
-          `DATE: ${formattedDate}   WORK ORDER: ${safeStr(report.work_order_no || "-")}`,
-          pageW - margin,
-          y + 5,
-          { align: "right" }
-        )
+        doc.text(safeStr(report.lift_no || "-"), margin, y + 11)
 
-        y += 12
-        doc.setDrawColor(220, 220, 220)
+        doc.setDrawColor(180, 180, 180)
         doc.setLineWidth(0.3)
-        doc.line(margin, y, pageW - margin, y)
-        y += 8
+        doc.line(margin, y + 12, margin + 100, y + 12)
 
-        // ── DETAILS SECTION ──
-        const detailLabel = (text: string, x: number, yPos: number) => {
-          doc.setFontSize(8)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(120, 120, 120)
-          doc.text(text, x, yPos)
-        }
-        const detailValue = (text: string, x: number, yPos: number, bold = true) => {
-          doc.setFontSize(10)
-          doc.setFont("helvetica", bold ? "bold" : "normal")
-          doc.setTextColor(0, 0, 0)
-          doc.text(text, x, yPos)
-        }
-
-        // Left column
-        detailLabel("TECHNICIAN / ENGINEER", margin, y)
-        detailValue(safeStr(report.technician_name), margin, y + 4)
-
-        detailLabel("CUSTOMER / SITE", margin, y + 10)
-        detailValue(`${safeStr(report.customer_name)} – ${safeStr(report.site_name)}`, margin, y + 14)
-
-        detailLabel("SITE ADDRESS", margin, y + 20)
-        detailValue(safeStr(report.site_address), margin, y + 24, false)
-
-        // Right column
-        const col2X = pageW / 2 + 10
-        detailLabel("CONTACT NO.", col2X, y)
-        detailValue(safeStr(report.contact_no), col2X, y + 4)
-
-        detailLabel("LIFT NO. / EQUIPMENT ID", col2X, y + 10)
-        detailValue(safeStr(report.lift_no), col2X, y + 14)
-
-        y += 32
-        doc.setDrawColor(220, 220, 220)
-        doc.line(margin, y, pageW - margin, y)
-        y += 6
+        y += 18
 
         // ── WORK ITEMS TABLE ──
         const workItems = report.work_items ?? []
@@ -577,56 +573,27 @@ export default function DailyWorkReportDetailPage() {
           </Card>
         )}
 
-        {/* Report Header */}
+        {/* Report Details (matches new PDF layout) */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Report Details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Report No</p>
-              <p className="font-medium">{report.report_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
-              <p className="font-medium">{formatDateLong(report.report_date)}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Name</p>
+              <p className="font-medium">{report.customer_name ?? "-"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Work Order No</p>
               <p className="font-medium">{report.work_order_no ?? "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Lift No</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
+              <p className="font-medium">{formatDateLong(report.report_date)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Equipment</p>
               <p className="font-medium">{report.lift_no ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Technician & Site */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Technician & Site</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician</p>
-              <p className="font-medium">{report.technician_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Contact No</p>
-              <p className="font-medium">{report.contact_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer</p>
-              <p className="font-medium">{report.customer_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site</p>
-              <p className="font-medium">{report.site_name ?? "-"}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Site Address</p>
-              <p className="font-medium">{report.site_address ?? "-"}</p>
             </div>
           </CardContent>
         </Card>
