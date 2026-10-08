@@ -1517,6 +1517,40 @@
     }
 
     /* ── Trust strip ──────────────────────────────────── */
+    /* ─── DEMO VIDEO ─────────────────────────────────────── */
+    .demo-video-section {
+      padding: 80px 0;
+      background: var(--gray-50);
+    }
+
+    .demo-video-wrapper {
+      margin-top: 40px;
+    }
+
+    .loom-embed-container {
+      position: relative;
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      padding-bottom: 56.25%;
+      height: 0;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .loom-embed-container iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    @media (max-width: 768px) {
+      .demo-video-section { padding: 56px 0; }
+    }
+
     .demo-trust {
       display: flex;
       align-items: center;
@@ -1903,6 +1937,25 @@
         </div>
         <span class="client-logo-name">Owns Lift PVT.LTD</span>
         <span class="client-logo-tag">Lift & Elevator AMC</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO VIDEO -->
+<section class="demo-video-section">
+  <div class="container text-center">
+    <div class="section-badge reveal">Watch Demo</div>
+    <h2 class="section-title reveal">See Remindi in <span style="color:var(--blue)">Action</span></h2>
+    <p class="section-subtitle reveal">Watch how contractors manage their entire AMC business in minutes — contracts, alerts, invoices, and more.</p>
+    <div class="demo-video-wrapper reveal">
+      <div class="loom-embed-container">
+        <iframe
+          src="https://www.loom.com/embed/6642867ce2e3479ea73118609e9522a7?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true"
+          frameborder="0"
+          allowfullscreen
+          allow="autoplay; fullscreen"
+        ></iframe>
       </div>
     </div>
   </div>
