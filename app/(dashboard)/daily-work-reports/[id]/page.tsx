@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { ArrowLeft, Download, Edit, Loader2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Download, Edit, Loader2, Save, Upload } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,14 @@ import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
 import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const safeStr = (val: unknown) => String(val ?? "-")
 
@@ -45,6 +53,13 @@ export default function DailyWorkReportDetailPage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [pdf, setPdf] = useState(false)
+
+  // ── Stamp toggle state ──
+  const [includeStamp, setIncludeStamp] = useState(false)
+  const [showStampUploadDialog, setShowStampUploadDialog] = useState(false)
+  const [stampFile, setStampFile] = useState<File | null>(null)
+  const [stampPreview, setStampPreview] = useState<string | null>(null)
+  const [uploadingStamp, setUploadingStamp] = useState(false)
 
   // ── Plan / subscription state ──
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
@@ -86,6 +101,58 @@ export default function DailyWorkReportDetailPage() {
     })
   }, [orgId, params.id, router])
 
+  // Load saved stamp toggle preference
+  useEffect(() => {
+    const saved = localStorage.getItem(`stamp_toggle_dwr_${params.id}`)
+    if (saved === "true") setIncludeStamp(true)
+  }, [params.id])
+
+  const handleStampToggle = () => {
+    if (!profile?.stamp_url) {
+      setShowStampUploadDialog(true)
+      return
+    }
+    const newVal = !includeStamp
+    setIncludeStamp(newVal)
+    localStorage.setItem(`stamp_toggle_dwr_${params.id}`, String(newVal))
+  }
+
+  const handleUploadStamp = async () => {
+    if (!stampFile || !orgId) return
+    setUploadingStamp(true)
+    try {
+      const fileName = `stamp-${orgId}-${Date.now()}.png`
+      const { error: uploadError } = await supabase.storage
+        .from("company-assets")
+        .upload(fileName, stampFile, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(fileName)
+      const publicUrl = urlData.publicUrl
+
+      const { error: updateError } = await supabase
+        .from("company_profile")
+        .update({ stamp_url: publicUrl })
+        .eq("org_id", orgId)
+
+      if (updateError) throw updateError
+
+      setProfile((prev) => (prev ? { ...prev, stamp_url: publicUrl } : null))
+      setIncludeStamp(true)
+      localStorage.setItem(`stamp_toggle_dwr_${params.id}`, "true")
+      toast.success("Stamp uploaded successfully")
+      setShowStampUploadDialog(false)
+      setStampFile(null)
+      setStampPreview(null)
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to upload stamp")
+    } finally {
+      setUploadingStamp(false)
+    }
+  }
+
   // ── Subscription check ──
   const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
@@ -104,7 +171,6 @@ export default function DailyWorkReportDetailPage() {
     window.location.href = '/billing'
   }
 
-  // ⭐ Edit click with subscription check
   const handleEditClick = () => {
     if (!report) return
     if (limitsLoading) {
@@ -125,7 +191,9 @@ export default function DailyWorkReportDetailPage() {
       const [tr, tg, tb] = hexToRgb(themeColor)
       const headerStyle = profile?.header_style ?? "single_logo"
 
-      // ── Load logo via fetch (CORS-safe, same as quotation) ──
+      const shouldIncludeStamp = includeStamp && !!profile?.stamp_url
+
+      // ── Load logo ──
       let logoBase64: string | null = null
       let logoFormat: "JPEG" | "PNG" = "PNG"
       if (headerStyle !== "thumbnail" && profile?.logo_url) {
@@ -144,7 +212,7 @@ export default function DailyWorkReportDetailPage() {
         }
       }
 
-      // ── Load banner (thumbnail header style) ──
+      // ── Load banner ──
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
       let bannerH = 0
@@ -173,6 +241,35 @@ export default function DailyWorkReportDetailPage() {
         }
       }
 
+      // ── Load stamp (with retry) ──
+      let stampBase64: string | null = null
+      let stampFormat: "JPEG" | "PNG" = "PNG"
+      if (shouldIncludeStamp && profile?.stamp_url) {
+        const MAX_STAMP_ATTEMPTS = 3
+        for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
+          try {
+            const res = await fetch(profile.stamp_url, { cache: "no-store" })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const blob = await res.blob()
+            stampBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onloadend = () => resolve(reader.result as string)
+              reader.onerror = reject
+              reader.readAsDataURL(blob)
+            })
+            stampFormat = blob.type.includes("jpeg") ? "JPEG" : "PNG"
+            break
+          } catch (e) {
+            console.warn(`[DWR Stamp] Attempt ${attempt} failed:`, e)
+            if (attempt === MAX_STAMP_ATTEMPTS) {
+              toast.warning("Stamp image could not be loaded – skipping stamp")
+            } else {
+              await new Promise((r) => setTimeout(r, 400 * attempt))
+            }
+          }
+        }
+      }
+
       const formattedDate = report.report_date
         ? new Date(report.report_date).toLocaleDateString("en-IN", {
             day: "2-digit",
@@ -188,7 +285,7 @@ export default function DailyWorkReportDetailPage() {
       const renderReport = (doc: jsPDF): number => {
         let y = margin
 
-        // ── HEADER (KEPT EXACTLY AS IS) ──
+        // ── HEADER ──
         if (headerStyle === "thumbnail" && bannerBase64) {
           const bannerW = pageW - margin * 2
           doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
@@ -204,7 +301,6 @@ export default function DailyWorkReportDetailPage() {
             [tr, tg, tb]
           )
         } else {
-          // Fallback default header
           let logoX = margin
           let logoAdded = false
           if (logoBase64) {
@@ -235,14 +331,12 @@ export default function DailyWorkReportDetailPage() {
           y += 6
         }
 
-        // ── TITLE SECTION (matches blank PDF layout) ──
-        // Centered title
+        // ── TITLE SECTION ──
         doc.setFontSize(15)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(tr, tg, tb)
         doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
 
-        // Date on the right
         doc.setFontSize(8)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
@@ -254,7 +348,6 @@ export default function DailyWorkReportDetailPage() {
         doc.setTextColor(120, 120, 120)
         doc.text("CUSTOMER NAME", margin, y + 14)
 
-        // Value on the line
         doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
@@ -332,14 +425,14 @@ export default function DailyWorkReportDetailPage() {
             3: { cellWidth: 25, halign: "center" },
           },
           didParseCell: function (data) {
-            if (data.section === 'body' && data.column.index === 3) {
-              const val = data.cell.raw;
-              if (val === 'Completed') {
-                data.cell.styles.textColor = [22, 163, 74];
-                data.cell.styles.fontStyle = 'bold';
-              } else if (val === 'Pending') {
-                data.cell.styles.textColor = [234, 88, 12];
-                data.cell.styles.fontStyle = 'bold';
+            if (data.section === "body" && data.column.index === 3) {
+              const val = data.cell.raw
+              if (val === "Completed") {
+                data.cell.styles.textColor = [22, 163, 74]
+                data.cell.styles.fontStyle = "bold"
+              } else if (val === "Pending") {
+                data.cell.styles.textColor = [234, 88, 12]
+                data.cell.styles.fontStyle = "bold"
               }
             }
           },
@@ -351,7 +444,7 @@ export default function DailyWorkReportDetailPage() {
         const boxY = y
         const boxH = 22
         doc.setFillColor(240, 248, 255)
-        doc.rect(margin, boxY, pageW - 2 * margin, boxH, 'F')
+        doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
 
         doc.setFontSize(10)
         doc.setFont("helvetica", "bold")
@@ -407,23 +500,28 @@ export default function DailyWorkReportDetailPage() {
 
         y += 12
 
-        // ── OFFICE USE SECTION ──
-        doc.setDrawColor(220, 220, 220)
-        doc.setLineWidth(0.3)
-        doc.rect(margin, y, pageW - 2 * margin, 12)
+        // ── STAMP (bottom-right, if enabled) ──
+        if (shouldIncludeStamp && stampBase64) {
+          const stampW = 30
+          const stampH = 30
+          const stampX = pageW - margin - stampW
 
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "italic")
-        doc.setTextColor(150, 150, 150)
-        doc.text("For office use only", margin + 4, y + 7)
+          doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
 
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(`Status: ${safeStr(report.office_status || "Approved")}  |  Checked By: ${safeStr(report.checked_by || "Admin")}`, pageW - margin - 4, y + 7, { align: "right" })
+          doc.setDrawColor(200, 200, 200)
+          doc.setLineWidth(0.3)
+          doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
 
-        y += 16
+          doc.setFont("helvetica", "normal")
+          doc.setFontSize(8)
+          doc.setTextColor(120, 120, 120)
+          doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
+
+          y = y + stampH + 14
+        }
 
         // ── FOOTER ──
+        y += 6
         doc.setFontSize(8)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(180, 180, 180)
@@ -486,7 +584,7 @@ export default function DailyWorkReportDetailPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-        {/* Header — same style as quotation detail */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
             <Link href="/daily-work-reports">
@@ -509,6 +607,24 @@ export default function DailyWorkReportDetailPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {/* ⭐ Stamp toggle */}
+            <Button
+              onClick={handleStampToggle}
+              disabled={pdf}
+              variant="outline"
+              size="sm"
+              className={
+                includeStamp
+                  ? "border-green-600 bg-green-50 text-green-700 hover:bg-green-100"
+                  : ""
+              }
+            >
+              <CheckCircle2
+                className={"mr-1.5 size-4 " + (includeStamp ? "" : "opacity-40")}
+              />
+              Stamp: {includeStamp ? "ON" : "OFF"}
+            </Button>
+
             <Button
               onClick={downloadPdf}
               disabled={pdf}
@@ -522,7 +638,6 @@ export default function DailyWorkReportDetailPage() {
               )}
               Download PDF
             </Button>
-            {/* ⭐ Edit now checks subscription before navigating */}
             <Button variant="outline" size="sm" onClick={handleEditClick}>
               <Edit className="mr-1.5 size-4" />
               Edit
@@ -573,7 +688,7 @@ export default function DailyWorkReportDetailPage() {
           </Card>
         )}
 
-        {/* Report Details (matches new PDF layout) */}
+        {/* Report Details */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Report Details</CardTitle>
@@ -692,26 +807,9 @@ export default function DailyWorkReportDetailPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Office Use */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Office Use</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Office Status</p>
-              <p className="font-medium">{report.office_status ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Checked By</p>
-              <p className="font-medium">{report.checked_by ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* ⭐ Unified Limit/Subscription Modal */}
+      {/* Subscription Limit Modal */}
       <LimitReachedModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
@@ -720,6 +818,92 @@ export default function DailyWorkReportDetailPage() {
         customTitle={limitModalCustom.title}
         customDescription={limitModalCustom.description}
       />
+
+      {/* Stamp Upload Dialog */}
+      <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Stamp / Signature</DialogTitle>
+            <DialogDescription>
+              You haven't added a stamp or signature yet. Upload one now to enable it on your
+              work report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+              {stampPreview || profile?.stamp_url ? (
+                <div className="relative">
+                  <img
+                    src={stampPreview || profile?.stamp_url || ""}
+                    alt="Stamp preview"
+                    className="max-h-32 object-contain"
+                    onError={() => toast.error("Failed to load image. Check bucket permissions.")}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                    onClick={() => {
+                      setStampFile(null)
+                      setStampPreview(null)
+                    }}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ) : (
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                  <Upload className="size-8 text-muted-foreground" />
+                  <span className="text-sm font-medium">Click to upload stamp</span>
+                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <input
+                    id="stamp-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.error("File size must be less than 2MB")
+                        return
+                      }
+                      setStampFile(file)
+                      const reader = new FileReader()
+                      reader.onload = (ev) => setStampPreview(ev.target?.result as string)
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowStampUploadDialog(false)
+                setStampFile(null)
+                setStampPreview(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUploadStamp}
+              disabled={!stampFile || uploadingStamp}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {uploadingStamp ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 size-4" />
+              )}
+              Save Stamp
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
