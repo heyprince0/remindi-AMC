@@ -44,6 +44,20 @@ function formatDateLong(dateStr: string | null | undefined): string {
   })
 }
 
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  })
+}
+
 export default function DailyWorkReportDetailPage() {
   const { user } = useAuth()
   const params = useParams<{ id: string }>()
@@ -495,8 +509,8 @@ export default function DailyWorkReportDetailPage() {
         doc.setFont("helvetica", "normal")
         doc.setFontSize(8)
         doc.setTextColor(120, 120, 120)
-        doc.text(safeStr(report.tech_sign_datetime), margin, y)
-        doc.text(safeStr(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
+        doc.text(formatDateTime(report.tech_sign_datetime), margin, y)
+        doc.text(formatDateTime(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
 
         y += 12
 
@@ -795,7 +809,7 @@ export default function DailyWorkReportDetailPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Date</p>
-              <p className="font-medium">{report.tech_sign_datetime ?? "-"}</p>
+              <p className="font-medium">{formatDateTime(report.tech_sign_datetime)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Signature</p>
@@ -803,7 +817,7 @@ export default function DailyWorkReportDetailPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Date</p>
-              <p className="font-medium">{report.customer_sign_datetime ?? "-"}</p>
+              <p className="font-medium">{formatDateTime(report.customer_sign_datetime)}</p>
             </div>
           </CardContent>
         </Card>
