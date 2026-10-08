@@ -180,7 +180,6 @@ async function downloadBlankDwr(
       y += 6
     }
 
-    // ── CUSTOMER NAME label (left) ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -188,21 +187,19 @@ async function downloadBlankDwr(
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin, y + 6, margin + 50, y + 6)
+    doc.line(margin, y + 6, margin + 60, y + 6)
 
-    // ── WORK REPORT title — centered ──
+    // Title centered
     doc.setFontSize(15)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(tr, tg, tb)
-    doc.text("WORK REPORT", pageW / 2, y + 1, { align: "center" })
+    doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
 
-    // ── DATE right ──
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(0, 0, 0)
     doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
 
-    // ── WORK ORDER NO. right ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -230,11 +227,11 @@ async function downloadBlankDwr(
       doc.line(x, yy, x + w, yy)
     }
 
-    // Only EQUIPMENT field remains in the details grid
+    // Only Equipment field remains
     label("EQUIPMENT", margin, y)
-    blankLine(margin, y + 5)
+    blankLine(margin, y + 5, 100)
 
-    y += 14
+    y += 12
     doc.setDrawColor(220, 220, 220)
     doc.line(margin, y, pageW - margin, y)
     y += 6
