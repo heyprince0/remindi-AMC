@@ -137,8 +137,8 @@ export function DailyWorkReportForm({ edit = false }: Props) {
   const handleSave = async () => {
     if (!user?.id || !orgId) return
 
-    if (!form.customer_name.trim() || !form.technician_name.trim() || !form.report_date) {
-      toast.error("Please complete the customer, technician, and report date fields")
+    if (!form.customer_name.trim() || !form.report_date) {
+      toast.error("Please complete the customer and report date fields")
       return
     }
     if (items.some((item) => !item.description.trim())) {
@@ -224,7 +224,7 @@ export function DailyWorkReportForm({ edit = false }: Props) {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-foreground">
-              {edit ? "Edit Daily Work Report" : "Create Daily Work Report"}
+              {edit ? "Edit Work Report" : "Create Work Report"}
             </h1>
             <p className="text-muted-foreground">
               Record completed work and site acknowledgement
@@ -244,14 +244,25 @@ export function DailyWorkReportForm({ edit = false }: Props) {
               <Input id="report-no" value={report?.report_no || "Generated on save"} readOnly />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="report-date">Report Date*</Label>
-              <Input
-                id="report-date"
-                type="date"
-                value={form.report_date}
-                onChange={(e) => setField("report_date", e.target.value)}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="customer-name">Customer Name*</Label>
+                <Input
+                  id="customer-name"
+                  value={form.customer_name}
+                  onChange={(e) => setField("customer_name", e.target.value)}
+                  placeholder="Enter customer name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="report-date">Report Date*</Label>
+                <Input
+                  id="report-date"
+                  type="date"
+                  value={form.report_date}
+                  onChange={(e) => setField("report_date", e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -268,74 +279,14 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="lift-no">Lift No</Label>
+                <Label htmlFor="equipment">Equipment</Label>
                 <Input
-                  id="lift-no"
+                  id="equipment"
                   value={form.lift_no}
                   onChange={(e) => setField("lift_no", e.target.value)}
                   placeholder="e.g. LIFT-04"
                 />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Technician & Site */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Technician &amp; Site</CardTitle>
-            <CardDescription>Enter the technician and site details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="technician-name">Technician Name*</Label>
-              <Input
-                id="technician-name"
-                value={form.technician_name}
-                onChange={(e) => setField("technician_name", e.target.value)}
-                placeholder="Enter technician name"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact-no">Contact No</Label>
-              <Input
-                id="contact-no"
-                value={form.contact_no}
-                onChange={(e) => setField("contact_no", e.target.value)}
-                placeholder="e.g. +91 90000 12345"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="customer-name">Customer Name*</Label>
-              <Input
-                id="customer-name"
-                value={form.customer_name}
-                onChange={(e) => setField("customer_name", e.target.value)}
-                placeholder="Enter customer name"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="site-name">Site Name</Label>
-              <Input
-                id="site-name"
-                value={form.site_name}
-                onChange={(e) => setField("site_name", e.target.value)}
-                placeholder="e.g. Sunrise Towers – Tower B"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="site-address">Site Address</Label>
-              <Textarea
-                id="site-address"
-                value={form.site_address}
-                onChange={(e) => setField("site_address", e.target.value)}
-                placeholder="Enter site address"
-                rows={2}
-              />
             </div>
           </CardContent>
         </Card>
