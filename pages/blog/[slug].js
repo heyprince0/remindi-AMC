@@ -1,10 +1,26 @@
 import Head from "next/head"
 import Link from "next/link"
+import Image from "next/image"
 import fs from "fs"
 import path from "path"
 import matter from "gray-matter"
 import { serialize } from "next-mdx-remote/serialize"
 import { MDXRemote } from "next-mdx-remote"
+
+function BlogImage({ src, alt = "", ...props }) {
+  const imageSrc = src.startsWith("/") ? src : `/blog-images/${src}`
+
+  return (
+    <Image
+      src={imageSrc}
+      alt={alt}
+      width={1200}
+      height={675}
+      sizes="(max-width: 760px) 100vw, 760px"
+      {...props}
+    />
+  )
+}
 
 export default function BlogPost({ source, frontmatter }) {
   return (
@@ -25,7 +41,7 @@ export default function BlogPost({ source, frontmatter }) {
             <h1>{frontmatter.title}</h1>
             <p>{frontmatter.description}</p>
           </header>
-          <article className="prose"><MDXRemote {...source} /></article>
+          <article className="prose"><MDXRemote {...source} components={{ img: BlogImage }} /></article>
           <aside className="cta">
             <p className="eyebrow">READY TO GET STARTED?</p>
             <h2>Keep your service business moving.</h2>
@@ -46,6 +62,7 @@ export default function BlogPost({ source, frontmatter }) {
         .prose :global(h3) { color: #f6f7fb; font-size: 22px; margin: 34px 0 10px; }
         .prose :global(p) { margin: 0 0 22px; }
         .prose :global(strong) { color: #f6f7fb; }
+        .prose :global(img) { border-radius: 14px; display: block; height: auto; margin: 34px 0; width: 100%; }
         .prose :global(ul), .prose :global(ol) { padding-left: 24px; }
         .prose :global(li) { margin: 8px 0; }
         .cta { background: #151923; border: 1px solid #2b3242; border-radius: 16px; padding: 34px; }
