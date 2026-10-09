@@ -25,7 +25,6 @@ const emptyItem = (sr_no: number): DailyWorkItem => ({
   status: "Completed",
 })
 
-// Convert ISO timestamp -> datetime-local input value ("YYYY-MM-DDTHH:mm")
 function toDatetimeLocal(iso: string | null | undefined): string {
   if (!iso) return ""
   const d = new Date(iso)
@@ -34,7 +33,6 @@ function toDatetimeLocal(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// Convert datetime-local value -> ISO string (or null for empty)
 function fromDatetimeLocal(value: string | null | undefined): string | null {
   if (!value || !value.trim()) return null
   const d = new Date(value)
@@ -178,12 +176,22 @@ export function DailyWorkReportForm({ edit = false }: Props) {
       }
 
       const payload = {
-        ...form,
-        // Convert datetime-local values back to ISO (or null for empty)
+        report_date: form.report_date,
+        work_order_no: form.work_order_no || null,
+        lift_no: form.lift_no || null,
+        technician_name: form.technician_name || null,
+        contact_no: form.contact_no || null,
+        customer_name: form.customer_name,
+        site_name: form.site_name || null,
+        site_address: form.site_address || null,
+        operational_test_status: form.operational_test_status || null,
+        safety_observations: form.safety_observations || null,
+        pending_recommendations: form.pending_recommendations || null,
+        tech_sign_name: form.tech_sign_name || null,
         tech_sign_datetime: fromDatetimeLocal(form.tech_sign_datetime),
+        customer_sign_name: form.customer_sign_name || null,
         customer_sign_datetime: fromDatetimeLocal(form.customer_sign_datetime),
         report_no: reportNo,
-        report_date: form.report_date,
         work_items: items.map((item, i) => ({ ...item, sr_no: i + 1 })),
         org_id: orgId,
         user_id: user.id,
@@ -303,6 +311,57 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                   placeholder="e.g. LIFT-04"
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Technician & Site */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Technician &amp; Site</CardTitle>
+            <CardDescription>Who performed the work and where</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="technician-name">Technician Name</Label>
+                <Input
+                  id="technician-name"
+                  value={form.technician_name}
+                  onChange={(e) => setField("technician_name", e.target.value)}
+                  placeholder="Enter technician name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-no">Contact No</Label>
+                <Input
+                  id="contact-no"
+                  value={form.contact_no}
+                  onChange={(e) => setField("contact_no", e.target.value)}
+                  placeholder="e.g. +91 90000 12345"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="site-name">Site Name</Label>
+              <Input
+                id="site-name"
+                value={form.site_name}
+                onChange={(e) => setField("site_name", e.target.value)}
+                placeholder="e.g. Sunrise Towers – Tower B"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="site-address">Site Address</Label>
+              <Textarea
+                id="site-address"
+                value={form.site_address}
+                onChange={(e) => setField("site_address", e.target.value)}
+                placeholder="Enter site address"
+                rows={2}
+              />
             </div>
           </CardContent>
         </Card>
