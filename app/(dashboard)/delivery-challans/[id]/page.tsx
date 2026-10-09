@@ -143,7 +143,7 @@ export default function DeliveryChallanDetailPage() {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // PDF generation — original layout, labels bolded
+  // PDF generation
   // ────────────────────────────────────────────────────────────────────────
   const downloadPdf = async () => {
     if (!challan) return
@@ -169,7 +169,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] logo:", e) }
       }
 
-      // ── load banner (thumbnail style) ──
+      // ── load banner ──
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
       let bannerH = 0
@@ -191,7 +191,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] banner:", e) }
       }
 
-      // ── load stamp — 3-attempt retry ──
+      // ── load stamp ──
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
       if (shouldStamp && profile?.stamp_url) {
@@ -216,7 +216,6 @@ export default function DeliveryChallanDetailPage() {
         }
       }
 
-      // ── render function (called twice: measure then final) ──
       const renderChallan = (doc: jsPDF): number => {
         let y = margin
 
@@ -246,12 +245,12 @@ export default function DeliveryChallanDetailPage() {
           y += 6
         }
 
-        // TITLE — right-aligned, large, theme color
+        // TITLE
         doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
         doc.text("DELIVERY CHALLAN", pageW - margin, y, { align: "right" })
         y += 8
 
-        // DC NO. (left) + DATE + SLIP NO. (right) — all labels bold
+        // DC NO. + DATE + SLIP NO.
         doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 30, 30)
         doc.text(`DC NO.: ${safeStr(challan.challan_no)}`, margin, y)
         doc.setFontSize(10)
@@ -266,7 +265,7 @@ export default function DeliveryChallanDetailPage() {
         doc.line(margin, y, pageW - margin, y)
         y += 8
 
-        // TO, — bold label
+        // TO,
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
         doc.text("TO,", margin, y)
         y += 5
@@ -278,7 +277,7 @@ export default function DeliveryChallanDetailPage() {
         doc.text(addrLines, margin, y)
         y += (addrLines.length * 5) + 6
 
-        // Sub: — already bold
+        // Sub:
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(`Sub: ${safeStr(challan.subject)}`, margin, y)
         y += 7
@@ -321,66 +320,57 @@ export default function DeliveryChallanDetailPage() {
         })
         y = (doc as any).lastAutoTable.finalY + 10
 
-        // Transport — labels bold, values normal
-        const vNo = challan.vehicle_no || "___________________"
-        const tMode = challan.transport_mode || "By Hand / Courier / Vehicle"
-        const ewayNo = challan.eway_bill_no || "___________________"
-        const driverName = challan.driver_name || "___________________"
+        // ── Transport section — fixed X positions, not glued to corner ──
+        const vNo        = challan.vehicle_no     || "___________________"
+        const tMode      = challan.transport_mode || "By Hand / Courier / Vehicle"
+        const ewayNo     = challan.eway_bill_no   || "___________________"
+        const driverName = challan.driver_name    || "___________________"
+
+        // Right column starts at fixed X (middle-right, not far right edge)
+        const rightLabelX = pageW / 2 + 5
+        const rightValueOffset = 35
 
         doc.setFontSize(9)
 
-        // LEFT: Vehicle No:
+        // LEFT — Vehicle No:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("Vehicle No:", margin, y)
-        const vLabelW = doc.getTextWidth("Vehicle No: ")
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(vNo, margin + vLabelW, y)
+        doc.text(vNo, margin + 22, y)
 
-        // RIGHT: Transport Mode:
+        // RIGHT — Transport Mode: (fixed X, right label aligned to fixed column)
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
-        const tmLabel = "Transport Mode: "
-        const tmLabelW = doc.getTextWidth(tmLabel)
+        doc.text("Transport Mode:", rightLabelX, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        const tmValW = doc.getTextWidth(tMode)
-        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
-        doc.text(tmLabel, pageW - margin - tmValW - tmLabelW, y)
-        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(tMode, pageW - margin - tmValW, y)
+        doc.text(tMode, rightLabelX + rightValueOffset, y)
 
-        y += 7
+        y += 8
 
-        // LEFT: E-way Bill No:
+        // LEFT — E-way Bill No:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("E-way Bill No:", margin, y)
-        const evLabelW = doc.getTextWidth("E-way Bill No: ")
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(ewayNo, margin + evLabelW, y)
+        doc.text(ewayNo, margin + 25, y)
 
-        // RIGHT: Driver Name:
+        // RIGHT — Driver Name:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
-        const dnLabel = "Driver Name: "
-        const dnLabelW = doc.getTextWidth(dnLabel)
+        doc.text("Driver Name:", rightLabelX, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        const dnValW = doc.getTextWidth(driverName)
-        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
-        doc.text(dnLabel, pageW - margin - dnValW - dnLabelW, y)
-        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(driverName, pageW - margin - dnValW, y)
+        doc.text(driverName, rightLabelX + rightValueOffset, y)
 
-        y += 5
+        y += 6
 
         doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100)
         doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
-        y += 10
+        y += 12
 
-        // NOTES: — bold label
+        // NOTES:
         if (challan.notes) {
-          doc.setFontSize(8); doc.setTextColor(60, 60, 60)
-          doc.setFont("helvetica", "bold")
+          doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
           doc.text("NOTES:", margin, y)
           const noteLabelW = doc.getTextWidth("NOTES: ")
-          doc.setFont("helvetica", "normal")
-          const noteLines = doc.splitTextToSize(safeStr(challan.notes), pageW - margin - noteLabelW)
+          doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60)
+          const noteLines = doc.splitTextToSize(safeStr(challan.notes), pageW - margin - margin - noteLabelW)
           doc.text(noteLines[0] || "", margin + noteLabelW, y)
           for (let i = 1; i < noteLines.length; i++) {
             y += 4.5
@@ -400,7 +390,7 @@ export default function DeliveryChallanDetailPage() {
         doc.text("(Name, Date & Company Seal)", margin, y)
         y += 20
 
-        // Stamp — bottom right
+        // Stamp
         if (shouldStamp && stampBase64) {
           const stampW = 30; const stampH = 30
           const stampX = pageW - margin - stampW
@@ -423,7 +413,6 @@ export default function DeliveryChallanDetailPage() {
         return y + 6
       }
 
-      // Measure then render at exact height
       const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
       const measuredH = renderChallan(scratch)
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
@@ -438,9 +427,6 @@ export default function DeliveryChallanDetailPage() {
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────
-  // Render
-  // ────────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -466,7 +452,6 @@ export default function DeliveryChallanDetailPage() {
     <DashboardLayout>
       <div className="flex flex-col gap-6 max-w-4xl mx-auto">
 
-        {/* ── Page header ── */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
             <Link href="/delivery-challans">
@@ -507,7 +492,6 @@ export default function DeliveryChallanDetailPage() {
           </div>
         </div>
 
-        {/* ── Company info card ── */}
         {profile && (
           <Card>
             <CardHeader><CardTitle className="text-base">Company</CardTitle></CardHeader>
@@ -534,7 +518,6 @@ export default function DeliveryChallanDetailPage() {
           </Card>
         )}
 
-        {/* ── Challan details ── */}
         <Card>
           <CardHeader><CardTitle className="text-base">Challan Details</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -568,7 +551,6 @@ export default function DeliveryChallanDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── Items table ── */}
         <Card>
           <CardHeader><CardTitle className="text-base">Items</CardTitle></CardHeader>
           <CardContent className="p-0">
@@ -605,7 +587,6 @@ export default function DeliveryChallanDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── Transport ── */}
         <Card>
           <CardHeader><CardTitle className="text-base">Transport & Notes</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -636,7 +617,6 @@ export default function DeliveryChallanDetailPage() {
 
       </div>
 
-      {/* ── Stamp upload dialog ── */}
       <Dialog open={showStampDialog} onOpenChange={setShowStampDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
