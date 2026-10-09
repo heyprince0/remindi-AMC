@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, Loader2, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, buildReminderMessage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
 
@@ -81,7 +81,6 @@ export default function ContractDetailPage() {
   const { user, role } = useAuth()
   const isAdmin = role === "admin"
   const contractId = params.id as string
-  const [testing, setTesting] = useState(false)
 
   const [contract, setContract] = useState<ContractDisplay | null>(null)
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -199,37 +198,6 @@ export default function ContractDetailPage() {
       toast.error('Failed to load contract details')
     } finally {
       setLoading(false)
-    }
-  }
-
-  // Sends the "soon_service" template to the contractor right now
-  const handleTestReminder = async () => {
-    if (!contract || testing) return
-    setTesting(true)
-    const toastId = toast.loading("Sending test reminder...")
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error("Please log in again")
-
-      const res = await fetch("/api/whatsapp/test-contract-reminder", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ contractId: contract.id }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || "Failed to send test reminder")
-
-      toast.success(
-        `Reminder sent to ${data.sentTo?.name ?? "contractor"} (${data.sentTo?.phone ?? ""})`,
-        { id: toastId }
-      )
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to send test reminder", { id: toastId })
-    } finally {
-      setTesting(false)
     }
   }
 
@@ -387,12 +355,6 @@ export default function ContractDetailPage() {
                 WhatsApp
               </Button>
             )}
-            {isAdmin && (
-              <Button variant="outline" size="sm" onClick={handleTestReminder} disabled={testing} className="gap-1.5">
-                {testing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                Test Reminder
-              </Button>
-            )}
           </div>
         </div>
 
@@ -434,11 +396,6 @@ export default function ContractDetailPage() {
             >
               <MessageSquare className="size-4" />
               WhatsApp
-            </Button>
-          )}
-          {isAdmin && (
-            <Button variant="outline" className="h-10 px-3" onClick={handleTestReminder} disabled={testing}>
-              {testing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             </Button>
           )}
         </div>
