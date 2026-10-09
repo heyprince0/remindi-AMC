@@ -50,15 +50,13 @@ export function DailyWorkReportForm({ edit = false }: Props) {
   const [saving, setSaving] = useState(false)
   const [report, setReport] = useState<DailyWorkReport | null>(null)
 
+  // ⭐ Only columns that ACTUALLY exist in daily_work_reports
   const [form, setForm] = useState({
     report_date: today(),
     work_order_no: "",
     lift_no: "",
     technician_name: "",
-    contact_no: "",
     customer_name: "",
-    site_name: "",
-    site_address: "",
     operational_test_status: "Yes",
     safety_observations: "",
     pending_recommendations: "",
@@ -106,10 +104,7 @@ export function DailyWorkReportForm({ edit = false }: Props) {
           work_order_no: r.work_order_no || "",
           lift_no: r.lift_no || "",
           technician_name: r.technician_name || "",
-          contact_no: r.contact_no || "",
           customer_name: r.customer_name || "",
-          site_name: r.site_name || "",
-          site_address: r.site_address || "",
           operational_test_status: r.operational_test_status || "Yes",
           safety_observations: r.safety_observations || "",
           pending_recommendations: r.pending_recommendations || "",
@@ -175,15 +170,13 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         reportNo = `DWR-${String(max + 1).padStart(3, "0")}`
       }
 
+      // ⭐ Explicitly list only valid DB columns
       const payload = {
         report_date: form.report_date,
         work_order_no: form.work_order_no || null,
         lift_no: form.lift_no || null,
         technician_name: form.technician_name || null,
-        contact_no: form.contact_no || null,
         customer_name: form.customer_name,
-        site_name: form.site_name || null,
-        site_address: form.site_address || null,
         operational_test_status: form.operational_test_status || null,
         safety_observations: form.safety_observations || null,
         pending_recommendations: form.pending_recommendations || null,
@@ -312,55 +305,14 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Technician & Site */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Technician &amp; Site</CardTitle>
-            <CardDescription>Who performed the work and where</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="technician-name">Technician Name</Label>
-                <Input
-                  id="technician-name"
-                  value={form.technician_name}
-                  onChange={(e) => setField("technician_name", e.target.value)}
-                  placeholder="Enter technician name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contact-no">Contact No</Label>
-                <Input
-                  id="contact-no"
-                  value={form.contact_no}
-                  onChange={(e) => setField("contact_no", e.target.value)}
-                  placeholder="e.g. +91 90000 12345"
-                />
-              </div>
-            </div>
 
             <div className="space-y-2">
-              <Label htmlFor="site-name">Site Name</Label>
+              <Label htmlFor="technician-name">Technician Name</Label>
               <Input
-                id="site-name"
-                value={form.site_name}
-                onChange={(e) => setField("site_name", e.target.value)}
-                placeholder="e.g. Sunrise Towers – Tower B"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="site-address">Site Address</Label>
-              <Textarea
-                id="site-address"
-                value={form.site_address}
-                onChange={(e) => setField("site_address", e.target.value)}
-                placeholder="Enter site address"
-                rows={2}
+                id="technician-name"
+                value={form.technician_name}
+                onChange={(e) => setField("technician_name", e.target.value)}
+                placeholder="Enter technician name"
               />
             </div>
           </CardContent>
