@@ -59,7 +59,7 @@ async function downloadBlankDc(
     } catch { /* skip */ }
   }
 
-  // ── load banner (thumbnail style) ──
+  // ── load banner ──
   let bannerBase64: string | null = null
   let bannerFormat: "JPEG" | "PNG" = "PNG"
   let bannerH = 0
@@ -82,7 +82,7 @@ async function downloadBlankDc(
     } catch { /* skip */ }
   }
 
-  // ── load stamp with retry ──
+  // ── load stamp ──
   let stampBase64: string | null = null
   let stampFormat: "JPEG" | "PNG" = "PNG"
   const shouldStamp = includeStamp && !!profile?.stamp_url
@@ -155,7 +155,10 @@ async function downloadBlankDc(
     doc.text("DELIVERY CHALLAN", pageW - margin, y, { align: "right" })
     y += 10
 
-    // ── DC No (left) + DATE + Slip No (right) as blank fields ──
+    // ── DC No (left) + DATE (right) — bold labels ──
+    const rightColX = pageW - margin - 55
+    const rightColEnd = pageW - margin - 5
+
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -168,22 +171,23 @@ async function downloadBlankDc(
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("DATE", pageW - margin - 55, y)
+    doc.text("DATE", rightColX, y)
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 55, y + 6, pageW - margin - 5, y + 6)
+    doc.line(rightColX, y + 6, rightColEnd, y + 6)
 
-    y += 10
+    y += 12
 
+    // ── SLIP NO (right) — bold label ──
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("SLIP NO.", pageW - margin, y, { align: "right" })
+    doc.text("SLIP NO.", rightColX, y)
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 45, y + 6, pageW - margin, y + 6)
+    doc.line(rightColX, y + 6, rightColEnd, y + 6)
 
     y += 12
 
@@ -193,26 +197,22 @@ async function downloadBlankDc(
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── TO block (blank fields) ──
+    // ── TO block — bold label ──
     doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("TO,", margin, y)
-    y += 7
+    y += 8
 
-    // Customer name blank line
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
     doc.line(margin, y + 3, pageW - margin, y + 3)
-    y += 12
+    y += 14
 
-    // Customer address blank lines (2)
     doc.line(margin, y + 3, pageW - margin, y + 3)
-    y += 8
-    doc.line(margin, y + 3, pageW - margin, y + 3)
-    y += 12
+    y += 14
 
-    // ── Subject blank line ──
+    // ── Subject — bold label ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -258,10 +258,10 @@ async function downloadBlankDc(
     })
     y = (doc as any).lastAutoTable.finalY + 10
 
-    // ── TRANSPORT section (blank fields) ──
+    // ── TRANSPORT section — bold labels ──
     doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(80, 80, 80)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(60, 60, 60)
 
     doc.text("Vehicle No:", margin, y)
     doc.setDrawColor(180, 180, 180)
@@ -280,11 +280,12 @@ async function downloadBlankDc(
     y += 8
 
     doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(140, 140, 140)
     doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
     y += 12
 
-    // ── NOTES blank lines ──
+    // ── NOTES — bold label ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -299,17 +300,18 @@ async function downloadBlankDc(
 
     // ── SIGNATURE section ──
     doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
+    doc.setFont("helvetica", "bold")
     doc.setTextColor(80, 80, 80)
     doc.text("Receiver's Signature & Stamp", margin, y)
     doc.text(`For ${safeStr(profile?.company_name) || "Company"}`, pageW - margin, y, { align: "right" })
     y += 5
     doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
     doc.setTextColor(140, 140, 140)
     doc.text("(Name, Date & Company Seal)", margin, y)
     y += 20
 
-    // ── STAMP (bottom-right if enabled) ──
+    // ── STAMP ──
     if (shouldStamp && stampBase64) {
       const stampW = 30
       const stampH = 30
@@ -365,7 +367,6 @@ export default function DeliveryChallansPage() {
   const [profileDialog, setProfileDialog] = useState(false)
   const [deleteRow, setDeleteRow] = useState<DeliveryChallan | null>(null)
 
-  // ── blank PDF dialog state ──
   const [blankDialog, setBlankDialog] = useState(false)
   const [rowCount, setRowCount] = useState(5)
   const [includeStamp, setIncludeStamp] = useState(true)
