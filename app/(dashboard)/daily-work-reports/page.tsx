@@ -135,12 +135,6 @@ async function downloadBlankDwr(
     }
   }
 
-  const todayFormatted = new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-
   const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
 
   const renderBlank = (doc: jsPDF): number => {
@@ -186,33 +180,37 @@ async function downloadBlankDwr(
     doc.setTextColor(tr, tg, tb)
     doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
 
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(0, 0, 0)
-    doc.text(`DATE: ${todayFormatted}`, pageW - margin, y + 8, { align: "right" })
-
-    // Left side: CUSTOMER NAME
+    // ── DATE (right) — blank field for hand-filling ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("CUSTOMER NAME", margin, y + 14)
+    doc.text("DATE", pageW - margin, y + 10, { align: "right" })
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin, y + 24, margin + 60, y + 24)
+    doc.line(pageW - margin - 50, y + 15, pageW - margin, y + 15)
 
-    // Right side: WORK ORDER NO.
+    // ── CUSTOMER NAME (left) — blank field ──
     doc.setFontSize(7)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
+    doc.text("CUSTOMER NAME", margin, y + 22)
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 24, pageW - margin, y + 24)
+    doc.line(margin, y + 32, margin + 60, y + 32)
 
-    y += 30
+    // ── WORK ORDER NO. (right) — blank field ──
+    doc.setFontSize(7)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(120, 120, 120)
+    doc.text("WORK ORDER NO.", pageW - margin, y + 22, { align: "right" })
 
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.3)
+    doc.line(pageW - margin - 50, y + 32, pageW - margin, y + 32)
+
+    y += 38
     y += 8
 
     const label = (text: string, x: number, yy: number) => {
