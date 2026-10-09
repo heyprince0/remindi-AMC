@@ -197,10 +197,9 @@ async function downloadBlankDc(
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── TO block — SHORT LINES (broken form) ──
-    const toLineW1 = 105       // customer name line — up to ~120mm total
-    const toLineW2 = 85        // address line — shorter
-    const subLineW  = 100      // subject line — shorter than full page
+    // ── TO block — SHORT LINES ONLY HERE ──
+    const toLineW1 = 105
+    const toLineW2 = 85
 
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
@@ -208,30 +207,30 @@ async function downloadBlankDc(
     doc.text("TO,", margin, y)
     y += 8
 
-    // Name line (medium length)
+    // Name line (broken length)
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
     doc.line(margin, y + 3, margin + toLineW1, y + 3)
     y += 14
 
-    // Address line (shorter)
+    // Address line (broken, shorter)
     doc.line(margin, y + 3, margin + toLineW2, y + 3)
     y += 14
 
-    // ── Subject — short line ──
+    // ── Subject — FULL WIDTH ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
     doc.text("Sub:", margin, y)
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin + 12, y + 3, margin + 12 + subLineW, y + 3)
+    doc.line(margin + 12, y + 3, pageW - margin, y + 3)
     y += 12
 
-    // ── Body text blank lines (2, shorter) ──
-    doc.line(margin, y, margin + 150, y)
+    // ── Body text blank lines (FULL WIDTH) ──
+    doc.line(margin, y, pageW - margin, y)
     y += 8
-    doc.line(margin, y, margin + 130, y)
+    doc.line(margin, y, pageW - margin, y)
     y += 12
 
     // ── ITEMS TABLE ──
@@ -291,7 +290,7 @@ async function downloadBlankDc(
     doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
     y += 12
 
-    // ── NOTES — shorter lines too ──
+    // ── NOTES — FULL WIDTH ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -299,9 +298,9 @@ async function downloadBlankDc(
     y += 6
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
-    doc.line(margin, y, margin + 150, y)
+    doc.line(margin, y, pageW - margin, y)
     y += 8
-    doc.line(margin, y, margin + 130, y)
+    doc.line(margin, y, pageW - margin, y)
     y += 14
 
     // ── SIGNATURE section ──
