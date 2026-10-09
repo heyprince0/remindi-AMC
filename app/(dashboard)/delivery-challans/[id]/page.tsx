@@ -143,7 +143,7 @@ export default function DeliveryChallanDetailPage() {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // PDF generation — matches the blank PDF layout with real values
+  // PDF generation — original layout, labels bolded
   // ────────────────────────────────────────────────────────────────────────
   const downloadPdf = async () => {
     if (!challan) return
@@ -169,7 +169,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] logo:", e) }
       }
 
-      // ── load banner ──
+      // ── load banner (thumbnail style) ──
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
       let bannerH = 0
@@ -191,7 +191,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] banner:", e) }
       }
 
-      // ── load stamp ──
+      // ── load stamp — 3-attempt retry ──
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
       if (shouldStamp && profile?.stamp_url) {
@@ -216,10 +216,11 @@ export default function DeliveryChallanDetailPage() {
         }
       }
 
+      // ── render function (called twice: measure then final) ──
       const renderChallan = (doc: jsPDF): number => {
         let y = margin
 
-        // ── HEADER ──
+        // HEADER
         if (headerStyle === "thumbnail" && bannerBase64) {
           doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
           y += bannerH + 6
@@ -245,128 +246,50 @@ export default function DeliveryChallanDetailPage() {
           y += 6
         }
 
-        // ── TITLE — right, large, theme color ──
-        doc.setFontSize(18)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(tr, tg, tb)
+        // TITLE — right-aligned, large, theme color
+        doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
         doc.text("DELIVERY CHALLAN", pageW - margin, y, { align: "right" })
+        y += 8
+
+        // DC NO. (left) + DATE + SLIP NO. (right) — all labels bold
+        doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 30, 30)
+        doc.text(`DC NO.: ${safeStr(challan.challan_no)}`, margin, y)
+        doc.setFontSize(10)
+        doc.text(`DATE: ${fmtDateShort(challan.challan_date)}`, pageW - margin, y, { align: "right" })
+        y += 6
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
+        doc.text(`SLIP NO.: ${safeStr(challan.slip_no)}`, pageW - margin, y, { align: "right" })
         y += 10
 
-        // ── DC NO. (left) + DATE (right) — bold labels, value on the line ──
-        const rightColX = pageW - margin - 55
-        const rightColEnd = pageW - margin - 5
-
-        // DC NO.
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("DC NO.", margin, y)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(challan.challan_no), margin, y + 5)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
-        doc.line(margin, y + 6, margin + 45, y + 6)
-
-        // DATE
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("DATE", rightColX, y)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(fmtDateShort(challan.challan_date), rightColX, y + 5)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
-        doc.line(rightColX, y + 6, rightColEnd, y + 6)
-
-        y += 12
-
-        // ── SLIP NO. (right) ──
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("SLIP NO.", rightColX, y)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(challan.slip_no), rightColX, y + 5)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
-        doc.line(rightColX, y + 6, rightColEnd, y + 6)
-
-        y += 12
-
-        // ── Divider ──
-        doc.setDrawColor(220, 220, 220)
-        doc.setLineWidth(0.3)
+        // Divider
+        doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
         doc.line(margin, y, pageW - margin, y)
         y += 8
 
-        // ── TO, block — bold label + short broken lines with values ──
-        const toLineW1 = 105
-        const toLineW2 = 85
-
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
+        // TO, — bold label
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
         doc.text("TO,", margin, y)
+        y += 5
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(challan.customer_name), margin, y)
+        y += 5
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60)
+        const addrLines = doc.splitTextToSize(safeStr(challan.customer_address), pageW - margin * 2)
+        doc.text(addrLines, margin, y)
+        y += (addrLines.length * 5) + 6
+
+        // Sub: — already bold
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
+        doc.text(`Sub: ${safeStr(challan.subject)}`, margin, y)
         y += 7
 
-        // Customer name with underline
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(challan.customer_name), margin, y + 4)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
-        doc.line(margin, y + 5, margin + toLineW1, y + 5)
-        y += 12
-
-        // Customer address with shorter underline
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(60, 60, 60)
-        const addrLines = doc.splitTextToSize(safeStr(challan.customer_address), toLineW2)
-        doc.text(addrLines, margin, y + 4)
-        const addrUnderlineY = y + 5 + (addrLines.length - 1) * 4
-        doc.line(margin, addrUnderlineY, margin + toLineW2, addrUnderlineY)
-        y = addrUnderlineY + 10
-
-        // ── Sub: — bold label, full width ──
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("Sub:", margin, y)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(challan.subject), margin + 12, y)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
-        doc.line(margin + 12, y + 1.5, pageW - margin, y + 1.5)
-        y += 12
-
-        // ── Body text ──
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(60, 60, 60)
+        // Body text
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60)
         const bodyLines = doc.splitTextToSize(safeStr(challan.body_text), pageW - margin * 2)
         doc.text(bodyLines, margin, y)
-        y += bodyLines.length * 5 + 6
+        y += (bodyLines.length * 5) + 8
 
-        // ── Items table ──
+        // Items table
         const items = (challan.items || [])
         autoTable(doc, {
           startY: y,
@@ -384,9 +307,8 @@ export default function DeliveryChallanDetailPage() {
             textColor: [255, 255, 255],
             fontStyle: "bold",
             fontSize: 9,
-            halign: "center",
           },
-          bodyStyles: { fontSize: 9, textColor: [0, 0, 0], minCellHeight: 9 },
+          bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
           alternateRowStyles: { fillColor: [248, 250, 252] },
           columnStyles: {
             0: { cellWidth: 18, halign: "center" },
@@ -399,88 +321,86 @@ export default function DeliveryChallanDetailPage() {
         })
         y = (doc as any).lastAutoTable.finalY + 10
 
-        // ── Transport section — bold labels, normal values ──
+        // Transport — labels bold, values normal
         const vNo = challan.vehicle_no || "___________________"
-        const tMode = challan.transport_mode || "___________________"
+        const tMode = challan.transport_mode || "By Hand / Courier / Vehicle"
         const ewayNo = challan.eway_bill_no || "___________________"
         const driverName = challan.driver_name || "___________________"
 
         doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(60, 60, 60)
 
+        // LEFT: Vehicle No:
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("Vehicle No:", margin, y)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(30, 30, 30)
-        doc.text(vNo, margin + 22, y)
+        const vLabelW = doc.getTextWidth("Vehicle No: ")
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        doc.text(vNo, margin + vLabelW, y)
 
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(60, 60, 60)
-        doc.text("Transport Mode:", pageW / 2 + 5, y)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(30, 30, 30)
-        doc.text(tMode, pageW / 2 + 35, y)
-        y += 10
+        // RIGHT: Transport Mode:
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
+        const tmLabel = "Transport Mode: "
+        const tmLabelW = doc.getTextWidth(tmLabel)
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        const tmValW = doc.getTextWidth(tMode)
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
+        doc.text(tmLabel, pageW - margin - tmValW - tmLabelW, y)
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        doc.text(tMode, pageW - margin - tmValW, y)
 
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(60, 60, 60)
+        y += 7
+
+        // LEFT: E-way Bill No:
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("E-way Bill No:", margin, y)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(30, 30, 30)
-        doc.text(ewayNo, margin + 25, y)
+        const evLabelW = doc.getTextWidth("E-way Bill No: ")
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        doc.text(ewayNo, margin + evLabelW, y)
 
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(60, 60, 60)
-        doc.text("Driver Name:", pageW / 2 + 5, y)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(30, 30, 30)
-        doc.text(driverName, pageW / 2 + 28, y)
-        y += 8
+        // RIGHT: Driver Name:
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
+        const dnLabel = "Driver Name: "
+        const dnLabelW = doc.getTextWidth(dnLabel)
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        const dnValW = doc.getTextWidth(driverName)
+        doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
+        doc.text(dnLabel, pageW - margin - dnValW - dnLabelW, y)
+        doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
+        doc.text(driverName, pageW - margin - dnValW, y)
 
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(140, 140, 140)
-        doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
-        y += 12
-
-        // ── NOTES — bold label + values ──
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
-        doc.text("NOTES", margin, y)
-        y += 6
-
-        if (challan.notes) {
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(60, 60, 60)
-          const noteLines = doc.splitTextToSize(safeStr(challan.notes), pageW - margin * 2)
-          doc.text(noteLines, margin, y)
-          y += noteLines.length * 4.5 + 14
-        } else {
-          doc.setDrawColor(180, 180, 180)
-          doc.setLineWidth(0.3)
-          doc.line(margin, y, pageW - margin, y)
-          y += 8
-          doc.line(margin, y, pageW - margin, y)
-          y += 14
-        }
-
-        // ── SIGNATURE section — both labels bold ──
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(60, 60, 60)
-        doc.text("Receiver's Signature & Stamp", margin, y)
-        doc.text(`For ${safeStr(profile?.company_name) || "Company"}`, pageW - margin, y, { align: "right" })
         y += 5
 
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(140, 140, 140)
+        doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100)
+        doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
+        y += 10
+
+        // NOTES: — bold label
+        if (challan.notes) {
+          doc.setFontSize(8); doc.setTextColor(60, 60, 60)
+          doc.setFont("helvetica", "bold")
+          doc.text("NOTES:", margin, y)
+          const noteLabelW = doc.getTextWidth("NOTES: ")
+          doc.setFont("helvetica", "normal")
+          const noteLines = doc.splitTextToSize(safeStr(challan.notes), pageW - margin - noteLabelW)
+          doc.text(noteLines[0] || "", margin + noteLabelW, y)
+          for (let i = 1; i < noteLines.length; i++) {
+            y += 4.5
+            doc.text(noteLines[i], margin, y)
+          }
+          y += (noteLines.length * 4.5) + 10
+        } else {
+          y += 10
+        }
+
+        // Signature — bold labels
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(50, 50, 50)
+        doc.text("Receiver's Signature & Stamp", margin, y)
+        doc.text(`For ${safeStr(profile?.company_name)}`, pageW - margin, y, { align: "right" })
+        y += 5
+        doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100)
         doc.text("(Name, Date & Company Seal)", margin, y)
         y += 20
 
-        // ── STAMP ──
+        // Stamp — bottom right
         if (shouldStamp && stampBase64) {
           const stampW = 30; const stampH = 30
           const stampX = pageW - margin - stampW
@@ -491,19 +411,19 @@ export default function DeliveryChallanDetailPage() {
           doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
           y = y + stampH + 14
         } else {
-          doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60)
+          doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(50, 50, 50)
           doc.text("Authorized Signatory", pageW - margin, y, { align: "right" })
           y += 8
         }
 
-        // ── FOOTER ──
+        // Footer
         y += 6
         doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(180, 180, 180)
         doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
         return y + 6
       }
 
-      // Measure then render
+      // Measure then render at exact height
       const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
       const measuredH = renderChallan(scratch)
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
