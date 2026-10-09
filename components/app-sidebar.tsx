@@ -43,6 +43,7 @@ const memberNavItems = [
   { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Customers", icon: Users, href: "/customers" },
   { title: "Quotations", icon: FileCheck, href: "/quotations" },
+  { title: "Delivery Challans", icon: FileText, href: "/delivery-challans" },
   { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Daily Work Reports", icon: ClipboardList, href: "/daily-work-reports" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },

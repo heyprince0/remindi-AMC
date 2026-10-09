@@ -69,10 +69,8 @@ export const calculateNextServiceDate = (
 export type Customer = {
   id: string
   user_id: string
-  org_id?: string
   name: string
   phone: string
-  email?: string
   address: string
   created_at: string
 }
@@ -88,8 +86,6 @@ export type Contract = {
   status: string
   notes: string
   contracts_price: number | null
-  duration_years?: number
-  contract_type?: 'new' | 'old'
   created_at: string
 }
 
@@ -107,31 +103,10 @@ export type ServiceHistory = {
   id: string
   contract_id: string
   technician_id: string
-  org_id?: string
   service_date: string
-  service_end_date?: string
   status: string
   notes: string
-  photo_url: string | null
   price: number | null
-  source?: 'manual' | 'service_alert'
-  created_at: string
-}
-
-export type TechnicianJob = {
-  id: string
-  org_id: string
-  technician_id: string
-  customer_id: string | null
-  contract_id: string | null
-  title: string
-  notes: string | null
-  photo_url: string | null
-  assigned_date: string
-  due_date: string | null
-  status: 'pending' | 'completed'
-  source: 'manual' | 'service_alert'
-  completed_at: string | null
   created_at: string
 }
 
@@ -160,45 +135,6 @@ export const getAuthUser = async () => {
   return user
 }
 
-export type DailyWorkItem = {
-  sr_no: number
-  description: string
-  material_used: string
-  status: "Completed" | "Pending"
-}
-
-export type DailyWorkReport = {
-  id: string
-  org_id: string
-  user_id: string
-  report_no: string
-  report_date: string
-  work_order_no: string | null
-  lift_no: string | null
-  site_address: string | null
-  customer_id: string | null
-  technician_id: string | null
-  contract_id: string | null
-  customer_name: string | null
-  site_name: string | null
-  technician_name: string | null
-  contact_no: string | null
-  work_items: DailyWorkItem[]
-  operational_test_status: "Yes" | "No" | "Not Applicable" | null
-  safety_observations: string | null
-  pending_recommendations: string | null
-  tech_sign_name: string | null
-  tech_sign_datetime: string | null
-  customer_sign_name: string | null
-  customer_sign_datetime: string | null
-  office_status: "Approved" | "Follow-up Required" | null
-  checked_by: string | null
-  status: string | null
-  deleted_at: string | null
-  created_at: string
-  updated_at: string
-}
-
 // Quotations
 export type QuotationItem = {
   id: string
@@ -223,9 +159,6 @@ export type Quotation = {
   body_text: string | null
   items: QuotationItem[]
   subtotal: number
-  discount_type?: "percentage" | "fixed" | null
-  discount_value?: number | null
-  discount_amount?: number | null
   sgst: number
   cgst: number
   grand_total: number
@@ -269,7 +202,6 @@ export type CompanyProfile = {
 export type Invoice = {
   id: string
   user_id: string
-  org_id: string
   quotation_id: string | null
   invoice_no: string
   order_no: string | null
@@ -288,17 +220,12 @@ export type Invoice = {
   body_text: string | null
   items: QuotationItem[]
   subtotal: number
-  discount_type?: "percentage" | "fixed" | null   // new
-  discount_value?: number | null                  // new
-  discount_amount?: number | null                 // new
   sgst: number
   cgst: number
   grand_total: number
   include_gst: boolean
-  gst_rate: number
   created_at: string
   updated_at: string
-  client_gstin?: string
 }
 
 // Team Management Types
@@ -333,3 +260,6 @@ export type Invite = {
 // TODO: Add org-scoped queries for memberships and invites
 // Example: const getMembersForOrg = async (orgId: string) => { ... filter by org_id ... }
 // Example: const getInvitesForOrg = async (orgId: string) => { ... filter by org_id ... }
+
+export type DeliveryChallanItem = { sr_no: number; particulars: string; hsn_sac: string; qty: number; unit: string }
+export type DeliveryChallan = { id: string; user_id: string; org_id: string; challan_no: string; slip_no: string; challan_date: string; customer_id?: string | null; customer_name: string; customer_address: string | null; subject: string | null; body_text: string | null; items: DeliveryChallanItem[]; vehicle_no: string | null; transport_mode: string | null; eway_bill_no: string | null; driver_name: string | null; notes: string | null; status: string; deleted_at: string | null; created_at: string; updated_at: string }
