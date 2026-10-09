@@ -25,6 +25,23 @@ const emptyItem = (sr_no: number): DailyWorkItem => ({
   status: "Completed",
 })
 
+// Convert ISO timestamp -> datetime-local input value ("YYYY-MM-DDTHH:mm")
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Convert datetime-local value -> ISO string (or null for empty)
+function fromDatetimeLocal(value: string | null | undefined): string | null {
+  if (!value || !value.trim()) return null
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
 export function DailyWorkReportForm({ edit = false }: Props) {
   const router = useRouter()
   const params = useParams<{ id?: string }>()
@@ -99,9 +116,9 @@ export function DailyWorkReportForm({ edit = false }: Props) {
           safety_observations: r.safety_observations || "",
           pending_recommendations: r.pending_recommendations || "",
           tech_sign_name: r.tech_sign_name || "",
-          tech_sign_datetime: r.tech_sign_datetime || "",
+          tech_sign_datetime: toDatetimeLocal(r.tech_sign_datetime),
           customer_sign_name: r.customer_sign_name || "",
-          customer_sign_datetime: r.customer_sign_datetime || "",
+          customer_sign_datetime: toDatetimeLocal(r.customer_sign_datetime),
         })
         setItems(r.work_items?.length ? r.work_items : [emptyItem(1)])
         setLoading(false)
@@ -162,6 +179,9 @@ export function DailyWorkReportForm({ edit = false }: Props) {
 
       const payload = {
         ...form,
+        // Convert datetime-local values back to ISO (or null for empty)
+        tech_sign_datetime: fromDatetimeLocal(form.tech_sign_datetime),
+        customer_sign_datetime: fromDatetimeLocal(form.customer_sign_datetime),
         report_no: reportNo,
         report_date: form.report_date,
         work_items: items.map((item, i) => ({ ...item, sr_no: i + 1 })),
