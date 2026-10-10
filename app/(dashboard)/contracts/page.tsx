@@ -1103,8 +1103,8 @@ export default function ContractsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Contract Name</TableHead>
                       <TableHead>Customer</TableHead>
+                      <TableHead>Contract Name</TableHead>
                       <TableHead>Frequency</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Contract End</TableHead>
