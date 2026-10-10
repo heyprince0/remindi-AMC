@@ -1124,8 +1124,8 @@ export default function ContractsPage() {
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => router.push(`/contracts/${contract.id}`)}
                         >
-                          <TableCell className="font-medium">{contract.contract_name}</TableCell>
                           <TableCell>{contract.customerName}</TableCell>
+                          <TableCell className="font-medium">{contract.contract_name}</TableCell>
                           <TableCell>{frequencyMonths} months</TableCell>
                           <TableCell>
                             {contract.contracts_price != null
