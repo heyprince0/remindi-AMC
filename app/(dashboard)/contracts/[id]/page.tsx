@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context"
 import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, buildReminderMessage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
+import { MarkCompleteModal } from "@/components/mark-complete-modal"
 
 interface ContractDisplay extends Contract {
   daysUntilService: number
@@ -80,6 +81,7 @@ export default function ContractDetailPage() {
   const params = useParams()
   const { user, role } = useAuth()
   const isAdmin = role === "admin"
+  const isTechnician = role === "technician"
   const contractId = params.id as string
 
   const [contract, setContract] = useState<ContractDisplay | null>(null)
@@ -91,6 +93,7 @@ export default function ContractDetailPage() {
   const [langDialogOpen, setLangDialogOpen] = useState(false)
   const [defaultLang, setDefaultLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
   const [selectedLang, setSelectedLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
+  const [renewModalOpen, setRenewModalOpen] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -344,15 +347,15 @@ export default function ContractDetailPage() {
                 </Button>
               </a>
             )}
-            {customer?.phone && (
+            {!isTechnician && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSendWhatsApp}
-                className="gap-1.5 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+                className="gap-1.5"
+                onClick={() => setRenewModalOpen(true)}
               >
-                <MessageSquare className="size-4" />
-                WhatsApp
+                <RefreshCw className="size-4" />
+                Renew
               </Button>
             )}
           </div>
@@ -388,14 +391,14 @@ export default function ContractDetailPage() {
               </Button>
             </a>
           )}
-          {customer?.phone && (
+          {!isTechnician && (
             <Button
               variant="outline"
-              className="flex-1 gap-2 h-10 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
-              onClick={handleSendWhatsApp}
+              className="flex-1 gap-2 h-10"
+              onClick={() => setRenewModalOpen(true)}
             >
-              <MessageSquare className="size-4" />
-              WhatsApp
+              <RefreshCw className="size-4" />
+              Renew
             </Button>
           )}
         </div>
@@ -671,6 +674,20 @@ export default function ContractDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── Renew Contract Modal ── */}
+        <MarkCompleteModal
+          open={renewModalOpen}
+          onOpenChange={setRenewModalOpen}
+          contract={contract}
+          userId={user?.id ?? ""}
+          orgId={currentOrgId ?? ""}
+          customerId={contract?.customer_id}
+          onSuccess={() => {
+            setRenewModalOpen(false)
+            loadContractDetails()
+          }}
+        />
 
         {/* Language selection dialog for WhatsApp message */}
         <Dialog open={langDialogOpen} onOpenChange={setLangDialogOpen}>
