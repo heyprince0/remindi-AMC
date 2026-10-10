@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,7 +20,7 @@ import { supabase, type CompanyProfile, type DeliveryChallan } from "@/lib/supab
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 import { toast } from "sonner"
-import { FileDown, FileText, Loader2, Minus, MoreHorizontal, Pencil, Plus, Search, Stamp, Trash2 } from "lucide-react"
+import { ArrowUpRight, FileDown, FileText, Loader2, Minus, MoreHorizontal, Pencil, Plus, Search, Stamp, Trash2 } from "lucide-react"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const safeStr = (val: unknown) => String(val ?? "")
@@ -197,7 +197,7 @@ async function downloadBlankDc(
     doc.line(margin, y, pageW - margin, y)
     y += 8
 
-    // ── TO block — SHORT LINES ONLY HERE ──
+    // ── TO block ──
     const toLineW1 = 105
     const toLineW2 = 85
 
@@ -207,17 +207,15 @@ async function downloadBlankDc(
     doc.text("TO,", margin, y)
     y += 8
 
-    // Name line (broken length)
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
     doc.line(margin, y + 3, margin + toLineW1, y + 3)
     y += 14
 
-    // Address line (broken, shorter)
     doc.line(margin, y + 3, margin + toLineW2, y + 3)
     y += 14
 
-    // ── Subject — FULL WIDTH ──
+    // ── Subject ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -227,7 +225,7 @@ async function downloadBlankDc(
     doc.line(margin + 12, y + 3, pageW - margin, y + 3)
     y += 12
 
-    // ── Body text blank lines (FULL WIDTH) ──
+    // ── Body text blank lines ──
     doc.line(margin, y, pageW - margin, y)
     y += 8
     doc.line(margin, y, pageW - margin, y)
@@ -290,7 +288,7 @@ async function downloadBlankDc(
     doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
     y += 12
 
-    // ── NOTES — FULL WIDTH ──
+    // ── NOTES ──
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
@@ -504,9 +502,13 @@ export default function DeliveryChallansPage() {
           />
         </div>
 
-        <Card>
+        {/* ── Desktop Table ── */}
+        <Card className="hidden md:block">
           <CardHeader>
             <CardTitle>All Challans</CardTitle>
+            <CardDescription>
+              You have {filtered.length} challan{filtered.length === 1 ? "" : "s"} in total
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -514,86 +516,144 @@ export default function DeliveryChallansPage() {
             ) : filtered.length === 0 ? (
               <p className="py-8 text-center text-muted-foreground">No delivery challans found.</p>
             ) : (
-              <>
-                <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Challan No</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Challan No</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead className="w-[100px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/delivery-challans/${row.id}`)}
+                      >
+                        <TableCell className="font-medium">{row.challan_no}</TableCell>
+                        <TableCell>{row.customer_name}</TableCell>
+                        <TableCell>
+                          {new Date(row.challan_date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </TableCell>
+                        <TableCell>{row.subject || "-"}</TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/delivery-challans/${row.id}`)
+                              }}
+                              title="View details"
+                            >
+                              <ArrowUpRight className="size-4" />
+                              <span className="sr-only">View Details</span>
+                            </Button>
+                            <ChallanActions
+                              row={row}
+                              onDelete={setDeleteRow}
+                            />
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="cursor-pointer"
-                          onClick={() => router.push(`/delivery-challans/${row.id}`)}
-                        >
-                          <TableCell className="font-medium">{row.challan_no}</TableCell>
-                          <TableCell>{row.customer_name}</TableCell>
-                          <TableCell>{new Date(row.challan_date).toLocaleDateString("en-IN")}</TableCell>
-                          <TableCell>{row.subject || "-"}</TableCell>
-                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label="Actions">
-                                  <MoreHorizontal />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => router.push(`/delivery-challans/${row.id}`)}>
-                                  <FileText className="mr-2 size-4" />
-                                  View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push(`/delivery-challans/${row.id}/edit`)}>
-                                  <Pencil className="mr-2 size-4" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => setDeleteRow(row)}
-                                >
-                                  <Trash2 className="mr-2 size-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex flex-col gap-3 md:hidden">
-                  {filtered.map((row) => (
-                    <Card
-                      key={row.id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/delivery-challans/${row.id}`)}
-                    >
-                      <CardContent className="flex items-start justify-between gap-3 p-4">
-                        <div>
-                          <p className="font-semibold">{row.challan_no}</p>
-                          <p>{row.customer_name}</p>
-                          <p className="text-sm text-muted-foreground">{row.subject || "No subject"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {new Date(row.challan_date).toLocaleDateString("en-IN")}
-                          </p>
-                        </div>
-                        <Badge variant="secondary">{row.status || "draft"}</Badge>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
+
+        {/* ── Mobile Cards (matches DWR style) ── */}
+        <div className="flex flex-col gap-4 md:hidden">
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading delivery challans...</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              {rows.length === 0
+                ? "No delivery challans yet. Create your first challan!"
+                : "No challans matching your filters"}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                You have{" "}
+                <span className="font-medium text-foreground">{filtered.length}</span>{" "}
+                challan{filtered.length === 1 ? "" : "s"}{" "}
+                {search ? "matching filters" : "in total"}
+              </p>
+              {filtered.map((row) => (
+                <Card
+                  key={row.id}
+                  className="relative cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => router.push(`/delivery-challans/${row.id}`)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <FileText className="size-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm font-semibold leading-tight truncate">
+                            {row.challan_no}
+                          </CardTitle>
+                          <CardDescription className="text-xs truncate mt-0.5">
+                            {row.customer_name || "No customer"}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <ChallanActions
+                          row={row}
+                          onDelete={setDeleteRow}
+                        />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Date</p>
+                        <p className="text-sm font-medium">
+                          {new Date(row.challan_date).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Slip No</p>
+                        <p className="text-sm font-medium truncate">{row.slip_no || "—"}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground mb-0.5">Subject</p>
+                        <p className="text-sm font-medium truncate">{row.subject || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <Badge variant="secondary" className="capitalize text-xs">
+                        {row.status || "draft"}
+                      </Badge>
+                      <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Blank PDF Dialog ── */}
@@ -757,5 +817,51 @@ export default function DeliveryChallansPage() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Actions dropdown — shared by desktop table and mobile cards
+// ────────────────────────────────────────────────────────────────────────────
+function ChallanActions({
+  row,
+  onDelete,
+}: {
+  row: DeliveryChallan
+  onDelete: (r: DeliveryChallan) => void
+}) {
+  const router = useRouter()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label={`Actions for ${row.challan_no}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+          <span className="sr-only">More actions</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => router.push(`/delivery-challans/${row.id}`)}>
+          <FileText className="mr-2 size-4" />
+          View
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push(`/delivery-challans/${row.id}/edit`)}>
+          <Pencil className="mr-2 size-4" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onClick={() => onDelete(row)}
+        >
+          <Trash2 className="mr-2 size-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
