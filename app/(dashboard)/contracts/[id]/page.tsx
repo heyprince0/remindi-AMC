@@ -347,11 +347,21 @@ export default function ContractDetailPage() {
                 </Button>
               </a>
             )}
-            {!isTechnician && (
+            {customer?.phone && (
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5"
+                onClick={handleSendWhatsApp}
+                className="gap-1.5 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+              >
+                <MessageSquare className="size-4" />
+                Remind
+              </Button>
+            )}
+            {!isTechnician && (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => setRenewModalOpen(true)}
               >
                 <RefreshCw className="size-4" />
@@ -393,8 +403,7 @@ export default function ContractDetailPage() {
           )}
           {!isTechnician && (
             <Button
-              variant="outline"
-              className="flex-1 gap-2 h-10"
+              className="flex-1 gap-2 h-10 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setRenewModalOpen(true)}
             >
               <RefreshCw className="size-4" />
