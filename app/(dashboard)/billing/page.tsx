@@ -5,17 +5,17 @@ import { DashboardLayout } from '@/components/dashboard-layout';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText, Users, Wrench, UserCheck, Package, FileCheck, Receipt, TrendingUp, CreditCard, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 import CurrentPlanCard from '@/components/billing/current-plan-card';
 import PaymentHistoryTable from '@/components/billing/payment-history-table';
 import PlanSelectionModal from '@/components/billing/PlanSelectionModal';
 import LimitReachedModal, { LimitModalType } from '@/components/billing/limit-reached-modal';
-import { BillingCycle, Plan, PaymentTransaction } from '@/lib/billing-types';
+import { PaymentTransaction } from '@/lib/billing-types';
 import { usePlanLimits } from '@/lib/hooks/use-plan-limits';
 
 // Helper to compute billing month start from subscription start date
@@ -30,6 +30,88 @@ function getBillingMonthStart(startDate: string | null): Date | null {
   }
   billingStart.setHours(0, 0, 0, 0);
   return billingStart;
+}
+
+// Returns tailwind color classes based on usage percentage
+function getUsageColor(current: number, max: number) {
+  if (max === 999999) return { bar: 'bg-primary', text: 'text-primary', bg: 'bg-primary/10', icon: 'text-primary' }
+  const pct = (current / max) * 100
+  if (pct >= 90) return { bar: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-500/10', icon: 'text-red-500' }
+  if (pct >= 70) return { bar: 'bg-amber-500', text: 'text-amber-600', bg: 'bg-amber-500/10', icon: 'text-amber-500' }
+  return { bar: 'bg-emerald-500', text: 'text-emerald-600', bg: 'bg-emerald-500/10', icon: 'text-emerald-500' }
+}
+
+interface UsageItemProps {
+  label: string
+  sublabel?: string
+  current: number
+  max: number
+  icon: React.ReactNode
+}
+
+function UsageItem({ label, sublabel, current, max, icon }: UsageItemProps) {
+  const isUnlimited = max === 999999
+  const pct = isUnlimited ? 0 : Math.min((current / max) * 100, 100)
+  const color = getUsageColor(current, max)
+  const isNearLimit = !isUnlimited && pct >= 70
+  const isAtLimit = !isUnlimited && pct >= 100
+
+  return (
+    <div className={cn(
+      'rounded-xl border p-3.5 transition-colors',
+      isAtLimit
+        ? 'border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10'
+        : isNearLimit
+        ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-900/10'
+        : 'bg-card'
+    )}>
+      {/* Top row: icon + label + percentage */}
+      <div className="flex items-start justify-between gap-2 mb-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={cn('flex size-7 shrink-0 items-center justify-center rounded-md', color.bg)}>
+            <span className={color.icon}>{icon}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium leading-tight truncate">{label}</p>
+            {sublabel && (
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sublabel}</p>
+            )}
+          </div>
+        </div>
+        {isUnlimited ? (
+          <span className="text-[10px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5 shrink-0">
+            Unlimited
+          </span>
+        ) : (
+          <span className={cn('text-xs font-bold tabular-nums shrink-0', color.text)}>
+            {Math.round(pct)}%
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden mb-1.5">
+        {isUnlimited ? (
+          <div className="h-full w-full rounded-full bg-primary/20" />
+        ) : (
+          <div
+            className={cn('h-full rounded-full transition-all', color.bar)}
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+
+      {/* Bottom: used / max */}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">
+          {isAtLimit ? '⚠ Limit reached' : isNearLimit ? '↑ Near limit' : 'Used'}
+        </span>
+        <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+          {current}{isUnlimited ? '' : ` / ${max}`}
+        </span>
+      </div>
+    </div>
+  )
 }
 
 export default function BillingPage() {
@@ -134,8 +216,18 @@ export default function BillingPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <div className="flex flex-col gap-5 pb-20 md:pb-0">
+          <div className="space-y-1.5">
+            <div className="h-7 bg-muted rounded w-48 animate-pulse" />
+            <div className="h-4 bg-muted rounded w-72 animate-pulse" />
+          </div>
+          <div className="h-32 rounded-xl bg-muted animate-pulse" />
+          <div className="h-6 bg-muted rounded w-32 animate-pulse" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {[1,2,3,4,5,6,7].map(i => (
+              <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />
+            ))}
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -143,208 +235,173 @@ export default function BillingPage() {
 
   const hasSubscription = !!subscription;
 
+  // Detect any near/at-limit items to show upgrade nudge
+  const nearLimitItems = hasSubscription ? [
+    limits.maxContracts !== 999999 && limits.maxContracts > 0 && (limits.currentContractCount / limits.maxContracts) >= 0.7,
+    limits.maxCustomers !== 999999 && limits.maxCustomers > 0 && (limits.currentCustomerCount / limits.maxCustomers) >= 0.7,
+    limits.maxInventory !== 999999 && limits.maxInventory > 0 && (limits.currentInventoryCount / limits.maxInventory) >= 0.7,
+    limits.maxQuotationsMonthly !== 999999 && limits.maxQuotationsMonthly > 0 && (limits.currentQuotationsThisMonth / limits.maxQuotationsMonthly) >= 0.7,
+  ].some(Boolean) : false;
+
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Billing & Subscription</h1>
-          <p className="mt-2 text-muted-foreground">Manage your subscription, view usage, and payment history</p>
+      <div className="flex flex-col gap-5 md:gap-8 pb-20 md:pb-6">
+
+        {/* ── Page Header ── */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl md:text-3xl font-bold text-foreground leading-tight">
+              Billing & Subscription
+            </h1>
+            <p className="mt-1 text-sm md:text-base text-muted-foreground">
+              Manage your plan, usage, and payment history
+            </p>
+          </div>
+          {hasSubscription && !isTrial && (
+            <Button size="sm" onClick={handleUpgrade} className="shrink-0 gap-1.5 hidden md:flex">
+              <Zap className="size-4" />
+              Upgrade
+            </Button>
+          )}
         </div>
 
+        {/* ── Current Plan Card ── */}
         <section>
           {hasSubscription ? (
-            <CurrentPlanCard
-              subscription={subscription}
-              onUpgrade={handleUpgrade}
-            />
+            <CurrentPlanCard subscription={subscription} onUpgrade={handleUpgrade} />
           ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>No Active Subscription</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-4">
-                  You don't have a subscription yet. Choose a plan to get started.
-                </p>
-                <Button onClick={handleUpgrade}>Choose a Plan</Button>
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-10 gap-4 text-center">
+                <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+                  <CreditCard className="size-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">No active subscription</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Choose a plan to unlock all features
+                  </p>
+                </div>
+                <Button onClick={handleUpgrade} className="gap-2">
+                  <Zap className="size-4" />
+                  Choose a Plan
+                </Button>
               </CardContent>
             </Card>
           )}
         </section>
 
-        {/* Usage & Limits Section */}
+        {/* ── Usage & Limits ── */}
         {hasSubscription && (
           <section>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Usage & Limits</CardTitle>
-                  {isTrial && (
-                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                      Free Trial
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {resetLabel}
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Contracts */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Contracts</span>
-                      <span className="text-muted-foreground">
-                        {limits.currentContractCount} / {limits.maxContracts === 999999 ? '∞' : limits.maxContracts}
-                      </span>
-                    </div>
-                    {limits.maxContracts !== 999999 && limits.maxContracts > 0 ? (
-                      <Progress
-                        value={(limits.currentContractCount / limits.maxContracts) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="font-semibold text-foreground flex items-center gap-2">
+                  <TrendingUp className="size-4 text-muted-foreground" />
+                  Usage & Limits
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{resetLabel}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {isTrial && (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                    Free Trial
+                  </Badge>
+                )}
+                {nearLimitItems && (
+                  <Button size="sm" variant="outline" onClick={handleUpgrade} className="h-7 px-2.5 text-xs gap-1 text-amber-600 border-amber-300 hover:bg-amber-50 dark:border-amber-800 dark:hover:bg-amber-900/20">
+                    <Zap className="size-3" />
+                    Upgrade
+                  </Button>
+                )}
+              </div>
+            </div>
 
-                  {/* Customers */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Customers</span>
-                      <span className="text-muted-foreground">
-                        {limits.currentCustomerCount} / {limits.maxCustomers === 999999 ? '∞' : limits.maxCustomers}
-                      </span>
-                    </div>
-                    {limits.maxCustomers !== 999999 && limits.maxCustomers > 0 ? (
-                      <Progress
-                        value={(limits.currentCustomerCount / limits.maxCustomers) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <UsageItem
+                label="Contracts"
+                current={limits.currentContractCount}
+                max={limits.maxContracts}
+                icon={<FileText className="size-3.5" />}
+              />
+              <UsageItem
+                label="Customers"
+                current={limits.currentCustomerCount}
+                max={limits.maxCustomers}
+                icon={<Users className="size-3.5" />}
+              />
+              <UsageItem
+                label="Technicians"
+                current={limits.currentTechnicianCount}
+                max={limits.maxTechnicians}
+                icon={<Wrench className="size-3.5" />}
+              />
+              <UsageItem
+                label="Team Seats"
+                current={limits.currentTeamSeats}
+                max={limits.maxTeamSeats}
+                icon={<UserCheck className="size-3.5" />}
+              />
+              <UsageItem
+                label="Inventory"
+                current={limits.currentInventoryCount}
+                max={limits.maxInventory}
+                icon={<Package className="size-3.5" />}
+              />
+              <UsageItem
+                label="Quotations"
+                sublabel={isTrial ? 'Trial total' : 'This month'}
+                current={limits.currentQuotationsThisMonth}
+                max={limits.maxQuotationsMonthly}
+                icon={<FileCheck className="size-3.5" />}
+              />
+              <UsageItem
+                label="Invoices"
+                sublabel={isTrial ? 'Trial total' : 'This month'}
+                current={limits.currentInvoicesThisMonth}
+                max={limits.maxInvoicesMonthly}
+                icon={<Receipt className="size-3.5" />}
+              />
+            </div>
 
-                  {/* Technicians */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Technicians</span>
-                      <span className="text-muted-foreground">
-                        {limits.currentTechnicianCount} / {limits.maxTechnicians === 999999 ? '∞' : limits.maxTechnicians}
-                      </span>
-                    </div>
-                    {limits.maxTechnicians !== 999999 && limits.maxTechnicians > 0 ? (
-                      <Progress
-                        value={(limits.currentTechnicianCount / limits.maxTechnicians) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
-
-                  {/* Team Seats */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Team Seats</span>
-                      <span className="text-muted-foreground">
-                        {limits.currentTeamSeats} / {limits.maxTeamSeats === 999999 ? '∞' : limits.maxTeamSeats}
-                      </span>
-                    </div>
-                    {limits.maxTeamSeats !== 999999 && limits.maxTeamSeats > 0 ? (
-                      <Progress
-                        value={(limits.currentTeamSeats / limits.maxTeamSeats) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
-
-                  {/* Inventory */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Inventory Items</span>
-                      <span className="text-muted-foreground">
-                        {limits.currentInventoryCount} / {limits.maxInventory === 999999 ? '∞' : limits.maxInventory}
-                      </span>
-                    </div>
-                    {limits.maxInventory !== 999999 && limits.maxInventory > 0 ? (
-                      <Progress
-                        value={(limits.currentInventoryCount / limits.maxInventory) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
-
-                  {/* Quotations */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">
-                        {isTrial ? 'Quotations (trial – total)' : 'Quotations (this month)'}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {limits.currentQuotationsThisMonth} / {limits.maxQuotationsMonthly === 999999 ? '∞' : limits.maxQuotationsMonthly}
-                      </span>
-                    </div>
-                    {limits.maxQuotationsMonthly !== 999999 && limits.maxQuotationsMonthly > 0 ? (
-                      <Progress
-                        value={(limits.currentQuotationsThisMonth / limits.maxQuotationsMonthly) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
-
-                  {/* Invoices */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">
-                        {isTrial ? 'Invoices (trial – total)' : 'Invoices (this month)'}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {limits.currentInvoicesThisMonth} / {limits.maxInvoicesMonthly === 999999 ? '∞' : limits.maxInvoicesMonthly}
-                      </span>
-                    </div>
-                    {limits.maxInvoicesMonthly !== 999999 && limits.maxInvoicesMonthly > 0 ? (
-                      <Progress
-                        value={(limits.currentInvoicesThisMonth / limits.maxInvoicesMonthly) * 100}
-                        className="h-2"
-                      />
-                    ) : (
-                      <div className="h-2 rounded-full bg-muted/20" />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Mobile upgrade CTA when near limit */}
+            {nearLimitItems && (
+              <button
+                onClick={handleUpgrade}
+                className="md:hidden mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10 py-3 text-sm font-medium text-amber-700 dark:text-amber-400 active:scale-[0.99] transition-all"
+              >
+                <Zap className="size-4" />
+                You're near a limit — Upgrade your plan
+              </button>
+            )}
           </section>
         )}
 
+        {/* ── Payment History ── */}
         <section>
+          <div className="mb-3">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <CreditCard className="size-4 text-muted-foreground" />
+              Payment History
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Your recent transactions</p>
+          </div>
           <PaymentHistoryTable transactions={paymentHistory} />
         </section>
 
-        <PlanSelectionModal
-          isOpen={showUpgradeModal}
-          onClose={() => setShowUpgradeModal(false)}
-          orgId={orgId || undefined}
-          onSuccess={() => {
-            fetchData();
-          }}
-        />
-        <LimitReachedModal
-          isOpen={showLimitModal}
-          onClose={() => setShowLimitModal(false)}
-          type={limitModalType}
-          onUpgrade={handleUpgrade}
-        />
       </div>
+
+      <PlanSelectionModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        orgId={orgId || undefined}
+        onSuccess={() => fetchData()}
+      />
+      <LimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        type={limitModalType}
+        onUpgrade={handleUpgrade}
+      />
     </DashboardLayout>
   );
 }
