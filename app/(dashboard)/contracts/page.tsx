@@ -1124,8 +1124,8 @@ export default function ContractsPage() {
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => router.push(`/contracts/${contract.id}`)}
                         >
-                          <TableCell>{contract.customerName}</TableCell>
-                          <TableCell className="font-medium">{contract.contract_name}</TableCell>
+                          <TableCell className="font-medium">{contract.customerName}</TableCell>
+                          <TableCell>{contract.contract_name}</TableCell>
                           <TableCell>{frequencyMonths} months</TableCell>
                           <TableCell>
                             {contract.contracts_price != null
@@ -1309,10 +1309,10 @@ export default function ContractsPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold leading-tight break-words text-foreground">
-                              {contract.contract_name}
+                              {contract.customerName}
                             </p>
                             <p className="text-xs text-muted-foreground break-words mt-0.5">
-                              {contract.customerName}
+                              {contract.contract_name}
                             </p>
                           </div>
                         </div>
