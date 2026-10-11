@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { supabase, type Quotation, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
@@ -17,6 +16,7 @@ import {
   CheckCircle2,
   Upload,
   Save,
+  Stamp,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -326,7 +326,6 @@ export default function ViewQuotationPage() {
     }))
   }
 
-  // --- totals: return separate sgst and cgst ---
   const getTotals = () => {
     if (!quotation) return { subtotal: 0, discountAmount: 0, discountType: null, discountValue: 0, sgst: 0, cgst: 0, grandTotal: 0 }
     const subtotal = quotation.subtotal || 0
@@ -340,7 +339,6 @@ export default function ViewQuotationPage() {
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!quotation) return
 
-    // If stamp is requested but missing, just proceed without it
     const shouldIncludeStamp = stampToggle && (!!profile?.stamp_url || !!profile?.signature_url)
 
     setGeneratingPdf(true)
@@ -396,7 +394,6 @@ export default function ViewQuotationPage() {
       let stampFormat: "JPEG" | "PNG" = "PNG"
       if (shouldIncludeStamp && profile?.stamp_url) {
         const stampPublicUrl = profile.stamp_url
-
         const MAX_STAMP_ATTEMPTS = 3
         for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
           try {
@@ -581,7 +578,6 @@ export default function ViewQuotationPage() {
 
         y = (doc as any).lastAutoTable.finalY + 8
 
-        // ---- TOTALS SECTION ----
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
@@ -735,11 +731,13 @@ export default function ViewQuotationPage() {
     }
   }
 
+  // ─── Loading & not-found states ──────────────────────────────────────────────
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
@@ -748,10 +746,14 @@ export default function ViewQuotationPage() {
   if (!quotation) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
+          <FileText className="size-10 text-muted-foreground/40" />
           <p className="text-muted-foreground">Quotation not found</p>
           <Link href="/quotations">
-            <Button>Back to Quotations</Button>
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="mr-1.5 size-3.5" />
+              Back to Quotations
+            </Button>
           </Link>
         </div>
       </DashboardLayout>
@@ -761,278 +763,361 @@ export default function ViewQuotationPage() {
   const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
   const includeGst = quotation.include_gst ?? true
   const mappedItems = getMappedItems()
+  const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+
+        {/* ── Action bar ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href="/quotations">
-              <Button variant="outline" size="icon" className="shrink-0 mt-1">
+              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {quotation.quote_no ?? ("QT-" + quotation.id)}
-              </h1>
-              {quotation.order_no && (
-                <p className="text-sm text-muted-foreground">
-                  Order No: <span className="font-medium text-foreground">{quotation.order_no}</span>
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {formatDate(quotation.created_at)}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-semibold leading-tight">
+                  {quotation.quote_no ?? ("QT-" + quotation.id)}
+                </h1>
+                {quotation.invoice_id ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full dark:bg-green-950 dark:text-green-400 dark:border-green-800">
+                    <CheckCircle2 className="size-3" />
+                    Invoice raised
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {quotation.client_name} · {formatDate(quotation.created_at)}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Stamp toggle */}
             <Button
               onClick={handleStampToggle}
               disabled={generatingPdf}
               variant="outline"
               size="sm"
-              className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
+              className={
+                includeStamp
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700"
+                  : "text-muted-foreground"
+              }
             >
-              {includeStamp ? (
-                <CheckCircle2 className="mr-1.5 size-4" />
-              ) : (
-                <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
-              )}
-              Stamp: {includeStamp ? 'ON' : 'OFF'}
+              <Stamp className="size-3.5 mr-1.5" />
+              {includeStamp ? "Stamp on" : "Stamp off"}
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={handleEditClick}>
+              <Edit className="size-3.5 mr-1.5" />
+              Edit
             </Button>
 
             <Button
               onClick={() => handleDownloadPdf(includeStamp)}
               disabled={generatingPdf}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              variant="outline"
               size="sm"
             >
               {generatingPdf ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Download className="mr-1.5 size-4" />
+                <Download className="size-3.5 mr-1.5" />
               )}
               Download PDF
             </Button>
+
             {quotation.invoice_id ? (
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white"
                 size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => router.push(`/invoices/${quotation.invoice_id}`)}
               >
-                <FileText className="mr-1.5 size-4" />
+                <FileText className="size-3.5 mr-1.5" />
                 View Invoice
               </Button>
             ) : (
               <Button
+                size="sm"
                 onClick={handleOpenConvertModal}
-                className="bg-purple-600 hover:bg-purple-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <FileText className="mr-2 size-4" />
+                <FileText className="size-3.5 mr-1.5" />
                 Convert to Invoice
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={handleEditClick}>
-              <Edit className="mr-1.5 size-4" />
-              Edit
-            </Button>
           </div>
         </div>
 
-        {profile && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Company Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-4">
-                {profile.logo_url && (
-                  <img
-                    src={profile.logo_url}
-                    alt="Company logo"
-                    className="h-16 w-16 object-contain rounded border"
-                  />
+        {/* ── Quotation document card ────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+
+          {/* Coloured accent line */}
+          <div className="h-1 bg-blue-600" />
+
+          {/* From / To */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
+            {/* From — company */}
+            <div className="flex gap-3 p-5">
+              {profile?.logo_url && (
+                <img
+                  src={profile.logo_url}
+                  alt="Logo"
+                  className="h-11 w-11 object-contain rounded shrink-0 mt-0.5"
+                />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
+                <p className="font-semibold text-sm leading-snug">{profile?.company_name ?? "-"}</p>
+                {profile?.tagline && (
+                  <p className="text-xs text-muted-foreground">{profile.tagline}</p>
                 )}
-                <div className="space-y-0.5">
-                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.tagline && (
-                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
-                  )}
-                  {profile.address && (
-                    <p className="text-xs text-muted-foreground">{profile.address}</p>
-                  )}
-                  {(profile.city || profile.state || profile.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
-                    </p>
-                  )}
-                  {profile.phone && (
-                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
-                  )}
-                  {profile.email && (
-                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
-                  )}
-                  {profile.gstin && (
-                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
-                  )}
-                </div>
+                {profile?.address && (
+                  <p className="text-xs text-muted-foreground">{profile.address}</p>
+                )}
+                {(profile?.city || profile?.state || profile?.zip_code) && (
+                  <p className="text-xs text-muted-foreground">
+                    {[profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")}
+                  </p>
+                )}
+                {profile?.phone && (
+                  <p className="text-xs text-muted-foreground">{profile.phone}</p>
+                )}
+                {profile?.gstin && (
+                  <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Customer Information</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
-              <p className="font-medium">{quotation.client_name ?? "-"}</p>
+            {/* To — client */}
+            <div className="p-5 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">TO</p>
+              <p className="font-semibold text-sm leading-snug">{quotation.client_name ?? "-"}</p>
+              {quotation.client_address && (
+                <p className="text-xs text-muted-foreground">{quotation.client_address}</p>
+              )}
+              {(quotation.client_district || quotation.client_state || quotation.client_pin_code) && (
+                <p className="text-xs text-muted-foreground">
+                  {[quotation.client_district, quotation.client_state, quotation.client_pin_code]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
             </div>
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
-              <p className="font-medium">{quotation.client_address ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">District</p>
-              <p className="font-medium">{quotation.client_district ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">State</p>
-              <p className="font-medium">{quotation.client_state ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pin Code</p>
-              <p className="font-medium">{quotation.client_pin_code ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Items</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-12">SR</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-16">Qty</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground w-28">Rate</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground w-28">Amount</th>
+          {/* Quote meta strip */}
+          <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Quote No</p>
+              <p className="text-sm font-semibold">{quotation.quote_no ?? ("QT-" + quotation.id)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Date</p>
+              <p className="text-sm font-semibold">{formatDate(quotation.created_at)}</p>
+            </div>
+            {(quotation as any).valid_till && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Valid Till</p>
+                <p className="text-sm font-semibold text-amber-600">{formatDate((quotation as any).valid_till)}</p>
+              </div>
+            )}
+            {quotation.order_no && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Order No</p>
+                <p className="text-sm font-semibold">{quotation.order_no}</p>
+              </div>
+            )}
+            {quotation.payment_terms && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Payment Terms</p>
+                <p className="text-sm font-semibold">{quotation.payment_terms}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Subject + body */}
+          {(quotation.subject || quotation.body_text) && (
+            <div className="px-5 py-4 border-b border-border space-y-1.5">
+              {quotation.subject && (
+                <p className="text-sm font-semibold">Sub: {quotation.subject}</p>
+              )}
+              {quotation.body_text && (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {quotation.body_text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Items table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-10">#</th>
+                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-16">Qty</th>
+                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Rate</th>
+                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {mappedItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                      No items added
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {mappedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-muted-foreground">No items</td>
+                ) : (
+                  mappedItems.map((item, i) => (
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr}</td>
+                      <td className="py-3 px-4 font-medium text-sm">{item.description}</td>
+                      <td className="text-center py-3 px-4 text-sm text-muted-foreground">{item.qty}</td>
+                      <td className="text-right py-3 px-4 text-sm text-muted-foreground">
+                        ₹{Number(item.rate).toLocaleString("en-IN")}
+                      </td>
+                      <td className="text-right py-3 px-4 text-sm font-semibold">
+                        ₹{Number(item.amount).toLocaleString("en-IN")}
+                      </td>
                     </tr>
-                  ) : (
-                    mappedItems.map((item, i) => (
-                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr}</td>
-                        <td className="py-3 px-4">{item.description}</td>
-                        <td className="text-center py-3 px-4">{item.qty}</td>
-                        <td className="text-right py-3 px-4">₹{Number(item.rate).toLocaleString("en-IN")}</td>
-                        <td className="text-right py-3 px-4 font-medium">₹{Number(item.amount).toLocaleString("en-IN")}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-end gap-3 max-w-xs ml-auto">
-              <div className="flex justify-between w-full text-sm">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span className="font-medium">₹{subtotal.toLocaleString("en-IN")}</span>
-              </div>
+          {/* Totals + Notes row */}
+          <div className="border-t border-border">
+            <div className="flex flex-col sm:flex-row">
 
-              {discountAmount > 0 && (
-                <div className="flex justify-between w-full text-sm">
-                  <span className="text-muted-foreground">
-                    Discount {discountType === "percentage" ? `(${discountValue}%)` : `(₹${discountValue})`}:
-                  </span>
-                  <span className="font-medium text-red-600">- ₹{discountAmount.toLocaleString("en-IN")}</span>
+              {/* Notes / T&C — left */}
+              {quotation.notes ? (
+                <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                    {quotation.notes}
+                  </p>
                 </div>
+              ) : (
+                <div className="flex-1" />
               )}
 
-              {includeGst && (
-                <>
-                  <div className="flex justify-between w-full text-sm">
-                    <span className="text-muted-foreground">SGST (9%):</span>
-                    <span className="font-medium">₹{sgst.toLocaleString("en-IN")}</span>
+              {/* Totals — right */}
+              <div className="p-5 sm:w-64 shrink-0">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between w-full text-sm">
-                    <span className="text-muted-foreground">CGST (9%):</span>
-                    <span className="font-medium">₹{cgst.toLocaleString("en-IN")}</span>
-                  </div>
-                </>
-              )}
 
-              <div className="border-t border-border pt-2 mt-1 flex justify-between w-full">
-                <span className="text-lg font-bold">Total:</span>
-                <span className="text-lg font-bold text-blue-600">
-                  ₹{grandTotal.toLocaleString("en-IN")}
-                </span>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Discount
+                        {discountType === "percentage" ? ` (${discountValue}%)` : ""}
+                      </span>
+                      <span className="text-red-500">
+                        −₹{discountAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+
+                  {includeGst && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">SGST (9%)</span>
+                        <span>₹{sgst.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">CGST (9%)</span>
+                        <span>₹{cgst.toLocaleString("en-IN")}</span>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="border-t border-border pt-2.5 flex justify-between items-baseline gap-2">
+                    <span className="font-semibold text-sm">Total</span>
+                    <span className="font-bold text-xl text-blue-600">
+                      ₹{grandTotal.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Rupees {toWords(Math.round(grandTotal))} Only
+                  </p>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {quotation.notes && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quotation.notes}</p>
-            </CardContent>
-          </Card>
-        )}
+            {/* Bank details strip */}
+            {hasBankDetails && (
+              <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
+                {profile?.bank_name && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Bank:</span> {profile.bank_name}
+                  </span>
+                )}
+                {profile?.account_no && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">A/C:</span> {profile.account_no}
+                  </span>
+                )}
+                {profile?.ifsc_code && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">IFSC:</span> {profile.ifsc_code}
+                  </span>
+                )}
+                {profile?.upi_id && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">UPI:</span> {profile.upi_id}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* ── Convert to Invoice dialog ─────────────────────────────────────────── */}
       <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Convert to Invoice</DialogTitle>
             {quotation && (
-              <p className="text-xs text-muted-foreground mt-1">From {quotation.quote_no}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">From {quotation.quote_no}</p>
             )}
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="order-no">Order Number (Optional)</Label>
-              <Input
-                id="order-no"
-                value={orderNo}
-                onChange={(e) => setOrderNo(e.target.value)}
-                placeholder="e.g. PO-2026-001"
-              />
+          <div className="space-y-4 pt-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="order-no" className="text-xs">Order Number (Optional)</Label>
+                <Input
+                  id="order-no"
+                  value={orderNo}
+                  onChange={(e) => setOrderNo(e.target.value)}
+                  placeholder="PO-2026-001"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="order-date" className="text-xs">Order Date (Optional)</Label>
+                <Input
+                  id="order-date"
+                  type="date"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="order-date">Order Date (Optional)</Label>
-              <Input
-                id="order-date"
-                type="date"
-                value={orderDate}
-                onChange={(e) => setOrderDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="invoice-no">Invoice Number</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="invoice-no" className="text-xs">Invoice Number</Label>
               <Input
                 id="invoice-no"
                 value={invoiceNo}
@@ -1041,28 +1126,29 @@ export default function ViewQuotationPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="invoice-date">Invoice Date</Label>
-              <Input
-                id="invoice-date"
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="invoice-date" className="text-xs">Invoice Date</Label>
+                <Input
+                  id="invoice-date"
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="due-date" className="text-xs">Valid Till</Label>
+                <Input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="due-date">Valid till</Label>
-              <Input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="payment-terms">Payment Terms</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="payment-terms" className="text-xs">Payment Terms</Label>
               <Select value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
                 <SelectTrigger id="payment-terms">
                   <SelectValue placeholder="Select payment terms" />
@@ -1078,118 +1164,121 @@ export default function ViewQuotationPage() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="invoice-notes">Terms and Conditions</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="invoice-notes" className="text-xs">Terms and Conditions</Label>
               <Textarea
                 id="invoice-notes"
                 value={invoiceNotes}
                 onChange={(e) => setInvoiceNotes(e.target.value)}
                 placeholder="e.g. Please transfer to bank account..."
-                className="min-h-[80px] resize-none"
+                className="min-h-[72px] resize-none text-sm"
               />
             </div>
 
+            {/* Summary preview */}
             {quotation && (
-              <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Client:</span> {quotation.client_name}
-                </p>
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Subtotal:</span> ₹{quotation.subtotal.toLocaleString("en-IN")}
-                </p>
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Client</span>
+                  <span className="font-medium">{quotation.client_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>₹{quotation.subtotal.toLocaleString("en-IN")}</span>
+                </div>
                 {quotation.discount_amount && quotation.discount_amount > 0 && (
-                  <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">Discount:</span> -₹{quotation.discount_amount.toLocaleString("en-IN")}
-                  </p>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Discount</span>
+                    <span className="text-red-500">−₹{quotation.discount_amount.toLocaleString("en-IN")}</span>
+                  </div>
                 )}
                 {quotation.include_gst && (
                   <>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">SGST (9%):</span> ₹{quotation.sgst.toLocaleString("en-IN")}
-                    </p>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">CGST (9%):</span> ₹{quotation.cgst.toLocaleString("en-IN")}
-                    </p>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">SGST (9%)</span>
+                      <span>₹{quotation.sgst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">CGST (9%)</span>
+                      <span>₹{quotation.cgst.toLocaleString("en-IN")}</span>
+                    </div>
                   </>
                 )}
-                <p className="text-foreground font-semibold border-t border-border pt-2">
-                  Total: ₹{quotation.grand_total.toLocaleString("en-IN")}
-                </p>
+                <div className="flex justify-between border-t border-border pt-1.5 font-semibold">
+                  <span>Total</span>
+                  <span className="text-blue-600">₹{quotation.grand_total.toLocaleString("en-IN")}</span>
+                </div>
               </div>
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 pt-1">
             <Button variant="outline" onClick={() => setShowConvertModal(false)}>
               Cancel
             </Button>
             <Button
               onClick={handleConvertToInvoice}
               disabled={convertLoading || !invoiceNo}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {convertLoading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                "Generate Invoice"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Subscription Alert Modal */}
-      <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Subscription Alert</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Your {planName || 'current'} plan has expired. Renew your plan to edit this quotation.
-          </p>
-          <DialogFooter>
-            <Button onClick={() => setSubscriptionAlertOpen(false)}>
-              OK
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : null}
+              Generate Invoice
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Stamp Upload Dialog */}
+      {/* ── Subscription alert ───────────────────────────────────────────────── */}
+      <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Plan expired</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Your {planName || 'current'} plan has expired. Renew to edit this quotation.
+          </p>
+          <DialogFooter>
+            <Button onClick={() => setSubscriptionAlertOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Stamp upload ─────────────────────────────────────────────────────── */}
       <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Stamp / Signature</DialogTitle>
             <DialogDescription>
-              You haven't added a stamp or signature yet. Upload one now to enable it on your quotation.
+              Upload a stamp or signature to include it on downloaded PDFs.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+
+          <div className="py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
               {(stampPreview || profile?.stamp_url) ? (
                 <div className="relative">
-                  <img 
-                    src={stampPreview || profile?.stamp_url || ''} 
-                    alt="Stamp preview" 
-                    className="max-h-32 object-contain"
-                    onError={() => toast.error("Failed to load image. Check bucket permissions.")}
+                  <img
+                    src={stampPreview || profile?.stamp_url || ''}
+                    alt="Stamp preview"
+                    className="max-h-28 object-contain"
+                    onError={() => toast.error("Failed to load image")}
                   />
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                    onClick={() => { setStampFile(null); setStampPreview(null); }}
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-50 text-red-500 hover:bg-red-100 border border-red-200"
+                    onClick={() => { setStampFile(null); setStampPreview(null) }}
                   >
                     ×
                   </Button>
                 </div>
               ) : (
-                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload className="size-8 text-muted-foreground" />
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2 text-center">
+                  <Upload className="size-7 text-muted-foreground" />
                   <span className="text-sm font-medium">Click to upload stamp</span>
-                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <span className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB</span>
                   <input
                     id="stamp-upload"
                     type="file"
@@ -1199,7 +1288,7 @@ export default function ViewQuotationPage() {
                       const file = e.target.files?.[0]
                       if (!file) return
                       if (file.size > 2 * 1024 * 1024) {
-                        toast.error("File size must be less than 2MB")
+                        toast.error("File must be under 2 MB")
                         return
                       }
                       setStampFile(file)
@@ -1212,8 +1301,12 @@ export default function ViewQuotationPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null); }}>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null) }}
+            >
               Cancel
             </Button>
             <Button
@@ -1222,9 +1315,9 @@ export default function ViewQuotationPage() {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {uploadingStamp ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
-                <Save className="mr-2 size-4" />
+                <Save className="mr-1.5 size-4" />
               )}
               Save Stamp
             </Button>
