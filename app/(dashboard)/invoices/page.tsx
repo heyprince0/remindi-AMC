@@ -44,7 +44,7 @@ import { supabase, type Invoice } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Eye, Trash2, Settings, MoreHorizontal, FileText } from "lucide-react"
+import { Plus, Search, Eye, Trash2, Settings, MoreHorizontal, FileText, ArrowUpRight } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -304,7 +304,7 @@ export default function InvoicesPage() {
             ) : filteredInvoices.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-4">
-                  {invoices.length === 0 
+                  {invoices.length === 0
                     ? "No invoices yet. Accept a quotation and convert it to generate your first invoice."
                     : "No invoices matching your filters"}
                 </p>
@@ -325,7 +325,7 @@ export default function InvoicesPage() {
                       <TableHead>Valid Till</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Payment Status</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -389,13 +389,13 @@ export default function InvoicesPage() {
         </Card>
 
         {/* ── MOBILE: Cards outside the table card ── */}
-        <div className="flex flex-col gap-4 md:hidden">
+        <div className="flex flex-col gap-4 md:hidden pb-44">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
           ) : filteredInvoices.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-4">
-                {invoices.length === 0 
+                {invoices.length === 0
                   ? "No invoices yet. Accept a quotation and convert it to generate your first invoice."
                   : "No invoices matching your filters"}
               </p>
@@ -479,7 +479,7 @@ export default function InvoicesPage() {
                     </div>
                     <div className="flex items-center justify-between border-t border-border pt-2">
                       <span className="text-xs text-muted-foreground">Invoice</span>
-                      {/* View button removed – card itself is clickable; View is also inside the 3-dot menu */}
+                      <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                     </div>
                   </CardContent>
                 </Card>
@@ -487,6 +487,17 @@ export default function InvoicesPage() {
             </>
           )}
         </div>
+
+        {/* ── MOBILE FAB — New Invoice ── */}
+        <button
+          className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+          onClick={handleNewInvoiceClick}
+          disabled={checkingProfile || limitsLoading}
+          aria-label="New Invoice"
+        >
+          <Plus className="size-4" />
+          New Invoice
+        </button>
 
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
