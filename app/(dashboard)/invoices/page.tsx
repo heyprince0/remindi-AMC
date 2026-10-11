@@ -261,7 +261,7 @@ export default function InvoicesPage() {
           <Button
             onClick={handleNewInvoiceClick}
             disabled={checkingProfile || limitsLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="hidden md:inline-flex bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="mr-2 size-4" />
             New Invoice
