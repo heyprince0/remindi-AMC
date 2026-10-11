@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth-context"
 import { supabase, type Profile, signOut } from "@/lib/supabase"
 import {
   Save, LogOut, Languages, Building2, SlidersHorizontal,
-  User, ChevronRight, CheckCircle2, Loader2, AlertCircle
+  User, ChevronRight, ChevronLeft, CheckCircle2, Loader2, AlertCircle
 } from "lucide-react"
 import { toast } from "sonner"
 import { CompanyProfileSettings } from "./company-profile"
@@ -29,31 +29,47 @@ const SERVICE_TYPES = [
 
 type Tab = "company" | "preferences" | "account"
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode; description: string }[] = [
+const TABS: {
+  id: Tab
+  label: string
+  description: string
+  icon: React.ReactNode
+  iconBg: string
+  iconColor: string
+}[] = [
   {
     id: "company",
     label: "Company",
-    icon: <Building2 className="size-4" />,
     description: "Profile, logo & stamp",
+    icon: <Building2 className="size-5" />,
+    iconBg: "bg-blue-100 dark:bg-blue-900/30",
+    iconColor: "text-blue-600 dark:text-blue-400",
   },
   {
     id: "preferences",
     label: "Preferences",
-    icon: <SlidersHorizontal className="size-4" />,
-    description: "Language & services",
+    description: "WhatsApp language & service types",
+    icon: <SlidersHorizontal className="size-5" />,
+    iconBg: "bg-green-100 dark:bg-green-900/30",
+    iconColor: "text-green-600 dark:text-green-400",
   },
   {
     id: "account",
     label: "Account",
-    icon: <User className="size-4" />,
     description: "Personal info & logout",
+    icon: <User className="size-5" />,
+    iconBg: "bg-purple-100 dark:bg-purple-900/30",
+    iconColor: "text-purple-600 dark:text-purple-400",
   },
 ]
 
 export default function SettingsPage() {
   const router = useRouter()
   const { user, role, loading: authLoading, orgId } = useAuth()
-  const [activeTab, setActiveTab] = useState<Tab>("company")
+
+  // Desktop: activeTab always set. Mobile: null = show menu list
+  const [activeTab, setActiveTab] = useState<Tab | null>(null)
+
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState("")
   const [companyName, setCompanyName] = useState("")
@@ -67,6 +83,12 @@ export default function SettingsPage() {
   const [savingLang, setSavingLang] = useState(false)
   const [savingServices, setSavingServices] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // Set desktop default on mount only (avoids SSR mismatch)
+  useEffect(() => {
+    const isDesktop = window.innerWidth >= 768
+    if (isDesktop) setActiveTab("company")
+  }, [])
 
   // Redirect non-admin users
   useEffect(() => {
@@ -218,60 +240,373 @@ export default function SettingsPage() {
 
   if (role !== "admin") return null
 
+  // ── Tab content (shared between mobile & desktop) ──
+  const renderTabContent = (tab: Tab) => {
+    if (tab === "company") {
+      return (
+        <>
+          <CompanyProfileSettings />
+          <StampSignatureSettings />
+        </>
+      )
+    }
+
+    if (tab === "preferences") {
+      return (
+        <div className="flex flex-col gap-6">
+          {/* WhatsApp Language */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                  <Languages className="size-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">WhatsApp Language</CardTitle>
+                  <CardDescription className="text-xs mt-0.5">
+                    Language for reminder messages sent to customers
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {WHATSAPP_LANGUAGES.map(l => (
+                  <button
+                    key={l.value}
+                    type="button"
+                    onClick={() => setWaLanguage(l.value)}
+                    className={cn(
+                      "relative flex flex-col items-start px-3 py-3 rounded-xl border text-sm font-medium transition-all",
+                      waLanguage === l.value
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border bg-background active:bg-secondary text-foreground"
+                    )}
+                  >
+                    {waLanguage === l.value && (
+                      <CheckCircle2 className="absolute top-2 right-2 size-3.5 text-primary" />
+                    )}
+                    <span className="text-lg leading-none mb-1">{l.native}</span>
+                    <span className="text-xs text-muted-foreground font-normal">{l.label ?? l.value}</span>
+                  </button>
+                ))}
+              </div>
+              <Button onClick={handleSaveLanguage} disabled={savingLang} className="w-full sm:w-auto">
+                {savingLang ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                {savingLang ? 'Saving…' : 'Save Language'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Service Types */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                  <SlidersHorizontal className="size-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Service Types</CardTitle>
+                  <CardDescription className="text-xs mt-0.5">
+                    Which services does your business offer?
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isOwner ? (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-secondary/60 text-sm text-muted-foreground">
+                  <AlertCircle className="size-4 mt-0.5 shrink-0" />
+                  <span>Only the organization owner can update service types.</span>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {SERVICE_TYPES.map(service => (
+                      <button
+                        key={service}
+                        type="button"
+                        onClick={() => toggleService(service)}
+                        className={cn(
+                          "relative px-3 py-3 rounded-xl border text-sm font-medium transition-all text-left",
+                          selectedServices.includes(service)
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border bg-background active:bg-secondary text-foreground"
+                        )}
+                      >
+                        {selectedServices.includes(service) && (
+                          <CheckCircle2 className="absolute top-2 right-2 size-3 text-primary" />
+                        )}
+                        {service}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedServices.length === 0
+                      ? 'No services selected'
+                      : `${selectedServices.length} service${selectedServices.length > 1 ? 's' : ''} selected`}
+                  </p>
+                  <Button onClick={handleSaveServices} disabled={savingServices} className="w-full sm:w-auto">
+                    {savingServices ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                    {savingServices ? 'Saving…' : 'Save Services'}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    if (tab === "account") {
+      return (
+        <div className="flex flex-col gap-6">
+          {isOwner ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                    <User className="size-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Personal Information</CardTitle>
+                    <CardDescription className="text-xs mt-0.5">
+                      Visible to your team members
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="full-name" className="text-sm">Your Name</Label>
+                  <Input
+                    id="full-name"
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    placeholder="Your full name"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-name" className="text-sm">Company Name</Label>
+                  <Input
+                    id="company-name"
+                    value={companyName}
+                    onChange={e => setCompanyName(e.target.value)}
+                    placeholder="Your company name"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm flex items-center gap-1.5">
+                    Email
+                    <span className="text-xs text-muted-foreground font-normal">(not editable)</span>
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={user?.email || ""}
+                    disabled
+                    className="h-11 bg-secondary/60 cursor-not-allowed"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      placeholder="+91 XXXXX XXXXX"
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-sm">City</Label>
+                    <Input
+                      id="city"
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      placeholder="Nashik"
+                      className="h-11"
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleSaveProfile} disabled={saving} className="w-full sm:w-auto">
+                  {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-6">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="size-4 mt-0.5 shrink-0" />
+                  <span>Personal information settings are only available to the organization owner.</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Danger Zone */}
+          <Card className="border-destructive/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
+              <CardDescription className="text-xs">
+                Actions here affect your access immediately
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border border-destructive/20 bg-destructive/5">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Sign out of your account</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    You will be redirected to the login page
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="w-full sm:w-auto h-11 sm:h-9"
+                >
+                  {loggingOut
+                    ? <Loader2 className="mr-2 size-4 animate-spin" />
+                    : <LogOut className="mr-2 size-4" />}
+                  {loggingOut ? 'Logging out…' : 'Log Out'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+  }
+
+  const activeTabMeta = TABS.find(t => t.id === activeTab)
+
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto flex flex-col gap-6">
+      <div className="max-w-5xl mx-auto">
 
-        {/* Page header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Manage your business profile and preferences
-          </p>
+        {/* ════════════════════════════════════════
+            MOBILE LAYOUT
+            ════════════════════════════════════════ */}
+        <div className="md:hidden">
+
+          {/* Mobile — Menu list (no tab selected) */}
+          {activeTab === null && (
+            <div className="flex flex-col gap-1">
+              <div className="mb-4">
+                <h1 className="text-xl font-bold text-foreground">Settings</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Manage your business profile and preferences
+                </p>
+              </div>
+
+              {/* Settings menu rows — iOS-style */}
+              <div className="rounded-xl border border-border overflow-hidden divide-y divide-border bg-card">
+                {TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-secondary transition-colors"
+                  >
+                    {/* Icon */}
+                    <div className={cn(
+                      "size-10 rounded-xl flex items-center justify-center shrink-0",
+                      tab.iconBg
+                    )}>
+                      <span className={tab.iconColor}>{tab.icon}</span>
+                    </div>
+
+                    {/* Text */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{tab.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{tab.description}</p>
+                    </div>
+
+                    {/* Chevron */}
+                    <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile — Tab content view (tab selected) */}
+          {activeTab !== null && (
+            <div className="flex flex-col gap-4">
+              {/* Back header */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(null)}
+                  className="flex items-center gap-1 text-primary text-sm font-medium py-1 -ml-1"
+                >
+                  <ChevronLeft className="size-4" />
+                  Settings
+                </button>
+              </div>
+
+              {/* Section title */}
+              <div className="flex items-center gap-3 pb-2">
+                {activeTabMeta && (
+                  <div className={cn(
+                    "size-10 rounded-xl flex items-center justify-center shrink-0",
+                    activeTabMeta.iconBg
+                  )}>
+                    <span className={activeTabMeta.iconColor}>{activeTabMeta.icon}</span>
+                  </div>
+                )}
+                <h1 className="text-xl font-bold text-foreground">{activeTabMeta?.label}</h1>
+              </div>
+
+              {/* Content */}
+              {renderTabContent(activeTab)}
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* ════════════════════════════════════════
+            DESKTOP LAYOUT
+            ════════════════════════════════════════ */}
+        <div className="hidden md:block">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Manage your business profile and preferences
+            </p>
+          </div>
 
-          {/* ── Sidebar nav ── */}
-          <nav className="w-full md:w-56 shrink-0">
-            {/* Mobile: horizontal scroll row */}
-            <div className="flex md:hidden gap-1 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex gap-6 items-start">
+            {/* Desktop sidebar */}
+            <nav className="w-56 shrink-0 flex flex-col gap-1">
               {TABS.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors w-full group",
                     activeTab === tab.id
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                 >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Desktop: vertical list */}
-            <div className="hidden md:flex flex-col gap-1">
-              {TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors w-full group",
+                  <div className={cn(
+                    "size-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                     activeTab === tab.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <span className={cn(
-                    "shrink-0",
-                    activeTab === tab.id ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                      ? "bg-white/20"
+                      : tab.iconBg
                   )}>
-                    {tab.icon}
-                  </span>
+                    <span className={cn(
+                      activeTab === tab.id ? "text-white" : tab.iconColor
+                    )}>
+                      {tab.icon}
+                    </span>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className={cn(
                       "text-sm font-medium leading-none",
@@ -287,265 +622,20 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <ChevronRight className={cn(
-                    "size-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity",
-                    activeTab === tab.id && "opacity-100"
+                    "size-3.5 shrink-0 transition-opacity",
+                    activeTab === tab.id ? "opacity-100 text-primary-foreground" : "opacity-0 group-hover:opacity-60"
                   )} />
                 </button>
               ))}
+            </nav>
+
+            {/* Desktop content */}
+            <div className="flex-1 min-w-0 flex flex-col gap-6">
+              {activeTab && renderTabContent(activeTab)}
             </div>
-          </nav>
-
-          {/* ── Tab content ── */}
-          <div className="flex-1 min-w-0 flex flex-col gap-6">
-
-            {/* ── COMPANY TAB ── */}
-            {activeTab === "company" && (
-              <>
-                <CompanyProfileSettings />
-                <StampSignatureSettings />
-              </>
-            )}
-
-            {/* ── PREFERENCES TAB ── */}
-            {activeTab === "preferences" && (
-              <div className="flex flex-col gap-6">
-
-                {/* WhatsApp Language */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <div className="size-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
-                        <Languages className="size-4 text-green-600 dark:text-green-400" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">WhatsApp Message Language</CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
-                          Default language for reminder messages sent to customers
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {WHATSAPP_LANGUAGES.map(l => (
-                        <button
-                          key={l.value}
-                          type="button"
-                          onClick={() => setWaLanguage(l.value)}
-                          className={cn(
-                            "relative flex flex-col items-start px-3 py-2.5 rounded-lg border text-sm font-medium transition-all",
-                            waLanguage === l.value
-                              ? "border-primary bg-primary/5 text-primary"
-                              : "border-border bg-background hover:bg-secondary text-foreground"
-                          )}
-                        >
-                          {waLanguage === l.value && (
-                            <CheckCircle2 className="absolute top-1.5 right-1.5 size-3.5 text-primary" />
-                          )}
-                          <span className="text-base leading-none mb-1">{l.native}</span>
-                          <span className="text-xs text-muted-foreground font-normal">{l.label ?? l.value}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <Button onClick={handleSaveLanguage} disabled={savingLang} size="sm">
-                      {savingLang ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Save className="mr-2 size-3.5" />}
-                      {savingLang ? 'Saving…' : 'Save Language'}
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Service Types — visible to owner only, or show info */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <div className="size-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                        <SlidersHorizontal className="size-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Service Types</CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
-                          Which services does your business offer?
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {!isOwner ? (
-                      <div className="flex items-start gap-2 p-3 rounded-lg bg-secondary/60 text-sm text-muted-foreground">
-                        <AlertCircle className="size-4 mt-0.5 shrink-0" />
-                        <span>Only the organization owner can update service types.</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-3 gap-2">
-                          {SERVICE_TYPES.map(service => (
-                            <button
-                              key={service}
-                              type="button"
-                              onClick={() => toggleService(service)}
-                              className={cn(
-                                "relative px-2 py-2.5 rounded-lg border text-sm font-medium transition-all text-center",
-                                selectedServices.includes(service)
-                                  ? "border-primary bg-primary/5 text-primary"
-                                  : "border-border bg-background hover:bg-secondary text-foreground"
-                              )}
-                            >
-                              {selectedServices.includes(service) && (
-                                <span className="absolute top-1 right-1">
-                                  <CheckCircle2 className="size-3 text-primary" />
-                                </span>
-                              )}
-                              {service}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedServices.length === 0
-                            ? 'No services selected'
-                            : `${selectedServices.length} service${selectedServices.length > 1 ? 's' : ''} selected`}
-                        </p>
-                        <Button onClick={handleSaveServices} disabled={savingServices} size="sm">
-                          {savingServices ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Save className="mr-2 size-3.5" />}
-                          {savingServices ? 'Saving…' : 'Save Services'}
-                        </Button>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* ── ACCOUNT TAB ── */}
-            {activeTab === "account" && (
-              <div className="flex flex-col gap-6">
-
-                {/* Personal info — owner only */}
-                {isOwner ? (
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <div className="size-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
-                          <User className="size-4 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-base">Personal Information</CardTitle>
-                          <CardDescription className="text-xs mt-0.5">
-                            Visible to your team members
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="full-name" className="text-sm">Your Name</Label>
-                        <Input
-                          id="full-name"
-                          value={fullName}
-                          onChange={e => setFullName(e.target.value)}
-                          placeholder="Your full name"
-                        />
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="company-name" className="text-sm">Company Name</Label>
-                          <Input
-                            id="company-name"
-                            value={companyName}
-                            onChange={e => setCompanyName(e.target.value)}
-                            placeholder="Your company name"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email" className="text-sm">
-                            Email
-                            <span className="ml-1.5 text-xs text-muted-foreground font-normal">(not editable)</span>
-                          </Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={user?.email || ""}
-                            disabled
-                            className="bg-secondary/60 cursor-not-allowed"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="phone" className="text-sm">Phone Number</Label>
-                          <Input
-                            id="phone"
-                            value={phone}
-                            onChange={e => setPhone(e.target.value)}
-                            placeholder="+91 XXXXX XXXXX"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="city" className="text-sm">City</Label>
-                          <Input
-                            id="city"
-                            value={city}
-                            onChange={e => setCity(e.target.value)}
-                            placeholder="Nashik"
-                          />
-                        </div>
-                      </div>
-
-                      <Button onClick={handleSaveProfile} disabled={saving} size="sm">
-                        {saving ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Save className="mr-2 size-3.5" />}
-                        {saving ? 'Saving…' : 'Save Changes'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card>
-                    <CardContent className="py-6">
-                      <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <AlertCircle className="size-4 mt-0.5 shrink-0" />
-                        <span>Personal information settings are only available to the organization owner.</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Danger zone */}
-                <Card className="border-destructive/30">
-                  <CardHeader>
-                    <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
-                    <CardDescription className="text-xs">
-                      Actions here cannot be easily undone
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-destructive/20 bg-destructive/5">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Sign out of your account</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          You will be redirected to the login page
-                        </p>
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleLogout}
-                        disabled={loggingOut}
-                        className="shrink-0"
-                      >
-                        {loggingOut
-                          ? <Loader2 className="mr-2 size-3.5 animate-spin" />
-                          : <LogOut className="mr-2 size-3.5" />}
-                        {loggingOut ? 'Logging out…' : 'Log Out'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-              </div>
-            )}
-
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   )
