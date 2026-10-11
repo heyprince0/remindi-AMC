@@ -7,18 +7,17 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import {
   ArrowLeft,
-  CheckCircle2,
   Download,
   Edit,
   Loader2,
   Save,
+  Share2,
+  Stamp,
   Upload,
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -58,6 +57,13 @@ function fmtDateShort(val: string | null | undefined) {
     : d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
+function statusColor(status: string) {
+  const s = (status || "").toLowerCase()
+  if (s === "delivered") return "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800"
+  if (s === "in transit") return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800"
+  if (s === "cancelled") return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800"
+  return "bg-muted text-muted-foreground border-border"
+}
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function DeliveryChallanDetailPage() {
@@ -65,27 +71,26 @@ export default function DeliveryChallanDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
 
-  const [orgId, setOrgId]       = useState<string | null>(null)
-  const [challan, setChallan]   = useState<DeliveryChallan | null>(null)
-  const [profile, setProfile]   = useState<CompanyProfile | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [pdf, setPdf]           = useState(false)
+  const [orgId, setOrgId]         = useState<string | null>(null)
+  const [challan, setChallan]     = useState<DeliveryChallan | null>(null)
+  const [profile, setProfile]     = useState<CompanyProfile | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [pdf, setPdf]             = useState(false)
+  const [sharingPdf, setSharingPdf] = useState(false)
 
-  // ── stamp toggle ──
-  const [includeStamp, setIncludeStamp]               = useState(false)
-  const [showStampDialog, setShowStampDialog]         = useState(false)
-  const [stampFile, setStampFile]                     = useState<File | null>(null)
-  const [stampPreview, setStampPreview]               = useState<string | null>(null)
-  const [uploadingStamp, setUploadingStamp]           = useState(false)
+  // stamp
+  const [includeStamp, setIncludeStamp]       = useState(false)
+  const [showStampDialog, setShowStampDialog] = useState(false)
+  const [stampFile, setStampFile]             = useState<File | null>(null)
+  const [stampPreview, setStampPreview]       = useState<string | null>(null)
+  const [uploadingStamp, setUploadingStamp]   = useState(false)
 
-  // ── load org ──
   useEffect(() => {
     if (user?.id)
       supabase.from("memberships").select("org_id").eq("user_id", user.id).single()
         .then(({ data }) => setOrgId(data?.org_id ?? null))
   }, [user?.id])
 
-  // ── load challan + profile ──
   useEffect(() => {
     if (!orgId) return
     Promise.all([
@@ -103,7 +108,6 @@ export default function DeliveryChallanDetailPage() {
     })
   }, [orgId, id, router])
 
-  // ── persist stamp preference per challan ──
   useEffect(() => {
     const saved = localStorage.getItem(`stamp_toggle_dc_${id}`)
     if (saved === "true") setIncludeStamp(true)
@@ -142,12 +146,10 @@ export default function DeliveryChallanDetailPage() {
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────
-  // PDF generation
-  // ────────────────────────────────────────────────────────────────────────
-  const downloadPdf = async () => {
-    if (!challan) return
-    setPdf(true)
+  // ── Shared PDF builder ─────────────────────────────────────────────────────
+  const buildPdfDoc = async (): Promise<{ doc: jsPDF; filename: string } | null> => {
+    if (!challan) return null
+
     try {
       const pageW      = 210
       const margin     = 15
@@ -156,7 +158,7 @@ export default function DeliveryChallanDetailPage() {
       const headerStyle  = profile?.header_style ?? "single_logo"
       const shouldStamp  = includeStamp && !!profile?.stamp_url
 
-      // ── load logo ──
+      // load logo
       let logoBase64: string | null = null
       let logoFormat: "JPEG" | "PNG" = "PNG"
       if (headerStyle !== "thumbnail" && profile?.logo_url) {
@@ -169,7 +171,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] logo:", e) }
       }
 
-      // ── load banner ──
+      // load banner
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
       let bannerH = 0
@@ -191,7 +193,7 @@ export default function DeliveryChallanDetailPage() {
         } catch (e) { console.warn("[DC PDF] banner:", e) }
       }
 
-      // ── load stamp ──
+      // load stamp
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
       if (shouldStamp && profile?.stamp_url) {
@@ -219,7 +221,6 @@ export default function DeliveryChallanDetailPage() {
       const renderChallan = (doc: jsPDF): number => {
         let y = margin
 
-        // HEADER
         if (headerStyle === "thumbnail" && bannerBase64) {
           doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
           y += bannerH + 6
@@ -245,12 +246,10 @@ export default function DeliveryChallanDetailPage() {
           y += 6
         }
 
-        // TITLE
         doc.setFontSize(18); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
         doc.text("DELIVERY CHALLAN", pageW - margin, y, { align: "right" })
         y += 8
 
-        // DC NO. + DATE + SLIP NO.
         doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(30, 30, 30)
         doc.text(`DC NO.: ${safeStr(challan.challan_no)}`, margin, y)
         doc.setFontSize(10)
@@ -260,12 +259,10 @@ export default function DeliveryChallanDetailPage() {
         doc.text(`SLIP NO.: ${safeStr(challan.slip_no)}`, pageW - margin, y, { align: "right" })
         y += 10
 
-        // Divider
         doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
         doc.line(margin, y, pageW - margin, y)
         y += 8
 
-        // TO,
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
         doc.text("TO,", margin, y)
         y += 5
@@ -277,18 +274,15 @@ export default function DeliveryChallanDetailPage() {
         doc.text(addrLines, margin, y)
         y += (addrLines.length * 5) + 6
 
-        // Sub:
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(`Sub: ${safeStr(challan.subject)}`, margin, y)
         y += 7
 
-        // Body text
         doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60)
         const bodyLines = doc.splitTextToSize(safeStr(challan.body_text), pageW - margin * 2)
         doc.text(bodyLines, margin, y)
         y += (bodyLines.length * 5) + 8
 
-        // Items table
         const items = (challan.items || [])
         autoTable(doc, {
           startY: y,
@@ -308,7 +302,6 @@ export default function DeliveryChallanDetailPage() {
             fontSize: 9,
           },
           bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
-          alternateRowStyles: { fillColor: [248, 250, 252] },
           columnStyles: {
             0: { cellWidth: 18, halign: "center" },
             1: { cellWidth: "auto" },
@@ -320,51 +313,36 @@ export default function DeliveryChallanDetailPage() {
         })
         y = (doc as any).lastAutoTable.finalY + 10
 
-        // ── Transport section — fixed X positions, not glued to corner ──
-        const vNo        = challan.vehicle_no     || "___________________"
-        const tMode      = challan.transport_mode || "By Hand / Courier / Vehicle"
-        const ewayNo     = challan.eway_bill_no   || "___________________"
-        const driverName = challan.driver_name    || "___________________"
-
-        // Right column starts at fixed X (middle-right, not far right edge)
-        const rightLabelX = pageW / 2 + 5
+        const rightLabelX    = pageW / 2 + 5
         const rightValueOffset = 35
-
         doc.setFontSize(9)
 
-        // LEFT — Vehicle No:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("Vehicle No:", margin, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(vNo, margin + 22, y)
+        doc.text(challan.vehicle_no || "___________________", margin + 22, y)
 
-        // RIGHT — Transport Mode: (fixed X, right label aligned to fixed column)
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("Transport Mode:", rightLabelX, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(tMode, rightLabelX + rightValueOffset, y)
-
+        doc.text(challan.transport_mode || "By Hand / Courier / Vehicle", rightLabelX + rightValueOffset, y)
         y += 8
 
-        // LEFT — E-way Bill No:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("E-way Bill No:", margin, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(ewayNo, margin + 25, y)
+        doc.text(challan.eway_bill_no || "___________________", margin + 25, y)
 
-        // RIGHT — Driver Name:
         doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
         doc.text("Driver Name:", rightLabelX, y)
         doc.setFont("helvetica", "normal"); doc.setTextColor(30, 30, 30)
-        doc.text(driverName, rightLabelX + rightValueOffset, y)
-
+        doc.text(challan.driver_name || "___________________", rightLabelX + rightValueOffset, y)
         y += 6
 
         doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100)
         doc.text("(E-way bill mandatory if goods value exceeds applicable threshold)", margin, y)
         y += 12
 
-        // NOTES:
         if (challan.notes) {
           doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(60, 60, 60)
           doc.text("NOTES:", margin, y)
@@ -381,7 +359,6 @@ export default function DeliveryChallanDetailPage() {
           y += 10
         }
 
-        // Signature — bold labels
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(50, 50, 50)
         doc.text("Receiver's Signature & Stamp", margin, y)
         doc.text(`For ${safeStr(profile?.company_name)}`, pageW - margin, y, { align: "right" })
@@ -390,7 +367,6 @@ export default function DeliveryChallanDetailPage() {
         doc.text("(Name, Date & Company Seal)", margin, y)
         y += 20
 
-        // Stamp
         if (shouldStamp && stampBase64) {
           const stampW = 30; const stampH = 30
           const stampX = pageW - margin - stampW
@@ -406,7 +382,6 @@ export default function DeliveryChallanDetailPage() {
           y += 8
         }
 
-        // Footer
         y += 6
         doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(180, 180, 180)
         doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
@@ -417,21 +392,74 @@ export default function DeliveryChallanDetailPage() {
       const measuredH = renderChallan(scratch)
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
       renderChallan(doc)
-      doc.save(`DC-${safeStr(challan.challan_no)}.pdf`)
-      toast.success("PDF downloaded")
+
+      const filename = `DC-${safeStr(challan.challan_no)}.pdf`
+      return { doc, filename }
     } catch (err) {
       console.error("[DC PDF]", err)
+      throw err
+    }
+  }
+
+  const downloadPdf = async () => {
+    setPdf(true)
+    try {
+      const result = await buildPdfDoc()
+      if (!result) return
+      result.doc.save(result.filename)
+      toast.success("PDF downloaded")
+    } catch (err) {
       toast.error("Failed to generate PDF: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setPdf(false)
     }
   }
 
+  const handleWhatsAppShare = async () => {
+    setSharingPdf(true)
+    try {
+      const result = await buildPdfDoc()
+      if (!result) return
+      const { doc, filename } = result
+
+      const pdfBlob = doc.output("blob")
+      const file = new File([pdfBlob], filename, { type: "application/pdf" })
+
+      // Mobile: native OS share sheet
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: `Delivery Challan ${challan?.challan_no ?? ""}`,
+          text: `Hi, please find the delivery challan from ${profile?.company_name ?? "us"}.`,
+        })
+      } else {
+        // Desktop fallback: download + open WhatsApp Web with pre-filled text
+        doc.save(filename)
+        const waText = encodeURIComponent(
+          `Hi, please find the delivery challan *${challan?.challan_no ?? ""}* from *${profile?.company_name ?? ""}*.\n\nKindly acknowledge receipt.`
+        )
+        window.open(`https://wa.me/?text=${waText}`, "_blank")
+        toast.info("PDF saved. Open WhatsApp and attach it there.")
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return
+      console.error("Share error:", err)
+      toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setSharingPdf(false)
+    }
+  }
+
+  // ─── Loading & not-found ─────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
@@ -440,217 +468,333 @@ export default function DeliveryChallanDetailPage() {
   if (!challan) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
           <p className="text-muted-foreground">Delivery challan not found</p>
-          <Link href="/delivery-challans"><Button>Back to Challans</Button></Link>
+          <Link href="/delivery-challans">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="mr-1.5 size-3.5" />
+              Back to Challans
+            </Button>
+          </Link>
         </div>
       </DashboardLayout>
     )
   }
 
+  const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
+  const hasTransport   = challan.vehicle_no || challan.transport_mode || challan.eway_bill_no || challan.driver_name
+
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+      <div className="flex flex-col gap-4 max-w-4xl mx-auto">
 
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
+        {/* ── Action bar ──────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href="/delivery-challans">
-              <Button variant="outline" size="icon" className="shrink-0 mt-1">
+              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{challan.challan_no}</h1>
-              <p className="text-sm text-muted-foreground">Slip No: {challan.slip_no}</p>
-              <p className="text-sm text-muted-foreground mt-0.5">{fmtDate(challan.challan_date)}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-semibold leading-tight">{challan.challan_no}</h1>
+                <span
+                  className={
+                    "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border capitalize " +
+                    statusColor(challan.status || "draft")
+                  }
+                >
+                  {challan.status || "draft"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {challan.customer_name} · {fmtDate(challan.challan_date)}
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Badge variant="secondary" className="capitalize">{challan.status || "draft"}</Badge>
-
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Stamp toggle */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleStampToggle}
-              disabled={pdf}
-              className={includeStamp ? "border-green-600 bg-green-50 text-green-700 hover:bg-green-100" : ""}
+              disabled={pdf || sharingPdf}
+              className={
+                includeStamp
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700"
+                  : "text-muted-foreground"
+              }
             >
-              <CheckCircle2 className={"mr-1.5 size-4 " + (includeStamp ? "" : "opacity-40")} />
-              Stamp: {includeStamp ? "ON" : "OFF"}
+              <Stamp className="size-3.5 mr-1.5" />
+              {includeStamp ? "Stamp on" : "Stamp off"}
             </Button>
 
-            <Button onClick={downloadPdf} disabled={pdf} size="sm">
-              {pdf ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <Download className="mr-1.5 size-4" />}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/delivery-challans/${challan.id}/edit`)}
+            >
+              <Edit className="size-3.5 mr-1.5" />
+              Edit
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadPdf}
+              disabled={pdf || sharingPdf}
+            >
+              {pdf
+                ? <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                : <Download className="size-3.5 mr-1.5" />
+              }
               Download PDF
             </Button>
 
-            <Button variant="outline" size="sm" onClick={() => router.push(`/delivery-challans/${challan.id}/edit`)}>
-              <Edit className="mr-1.5 size-4" />
-              Edit
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleWhatsAppShare}
+              disabled={sharingPdf || pdf}
+              className="border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/40"
+            >
+              {sharingPdf
+                ? <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                : <Share2 className="size-3.5 mr-1.5" />
+              }
+              Share via WhatsApp
             </Button>
           </div>
         </div>
 
-        {profile && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Company</CardTitle></CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-4">
-                {profile.logo_url && (
-                  <img src={profile.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded border" />
+        {/* ── Delivery Challan document card ──────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+
+          {/* Accent line */}
+          <div className="h-1 bg-blue-600" />
+
+          {/* From / To */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
+
+            {/* From — company */}
+            <div className="flex gap-3 p-5">
+              {profile?.logo_url && (
+                <img
+                  src={profile.logo_url}
+                  alt="Logo"
+                  className="h-11 w-11 object-contain rounded shrink-0 mt-0.5"
+                />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
+                <p className="font-semibold text-sm leading-snug">{profile?.company_name ?? "-"}</p>
+                {profile?.tagline && <p className="text-xs text-muted-foreground">{profile.tagline}</p>}
+                {profile?.address && <p className="text-xs text-muted-foreground">{profile.address}</p>}
+                {(profile?.city || profile?.state || profile?.zip_code) && (
+                  <p className="text-xs text-muted-foreground">
+                    {[profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")}
+                  </p>
                 )}
-                <div className="space-y-0.5">
-                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.tagline  && <p className="text-xs text-muted-foreground">{profile.tagline}</p>}
-                  {profile.address  && <p className="text-xs text-muted-foreground">{profile.address}</p>}
-                  {(profile.city || profile.state || profile.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
-                    </p>
+                {profile?.phone && <p className="text-xs text-muted-foreground">{profile.phone}</p>}
+                {profile?.gstin && <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>}
+              </div>
+            </div>
+
+            {/* To — customer */}
+            <div className="p-5 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">TO</p>
+              <p className="font-semibold text-sm leading-snug">{challan.customer_name ?? "-"}</p>
+              {challan.customer_address && (
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {challan.customer_address}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Challan meta strip */}
+          <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Challan No</p>
+              <p className="text-sm font-semibold">{challan.challan_no}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Slip No</p>
+              <p className="text-sm font-semibold">{challan.slip_no || "-"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Date</p>
+              <p className="text-sm font-semibold">{fmtDate(challan.challan_date)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Status</p>
+              <p className="text-sm font-semibold capitalize">{challan.status || "draft"}</p>
+            </div>
+          </div>
+
+          {/* Subject + body */}
+          {(challan.subject || challan.body_text) && (
+            <div className="px-5 py-4 border-b border-border space-y-1.5">
+              {challan.subject && (
+                <p className="text-sm font-semibold">Sub: {challan.subject}</p>
+              )}
+              {challan.body_text && (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {challan.body_text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Items table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-12">#</th>
+                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Particulars</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-24">HSN/SAC</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-20">Qty</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-20">Unit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {(challan.items || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                      No items added
+                    </td>
+                  </tr>
+                ) : (
+                  (challan.items || []).map((item, i) => (
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr_no}</td>
+                      <td className="py-3 px-4 font-medium">{item.particulars}</td>
+                      <td className="text-center py-3 px-4 text-muted-foreground">{item.hsn_sac || "-"}</td>
+                      <td className="text-center py-3 px-4">{item.qty}</td>
+                      <td className="text-center py-3 px-4 text-muted-foreground">{item.unit}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Transport + Notes */}
+          {(hasTransport || challan.notes) && (
+            <div className="border-t border-border">
+              {hasTransport && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 px-5 py-4 border-b border-border">
+                  {challan.vehicle_no && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Vehicle No</p>
+                      <p className="text-sm font-medium">{challan.vehicle_no}</p>
+                    </div>
                   )}
-                  {profile.phone && <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>}
-                  {profile.email && <p className="text-xs text-muted-foreground">Email: {profile.email}</p>}
-                  {profile.gstin && <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>}
+                  {challan.transport_mode && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Transport Mode</p>
+                      <p className="text-sm font-medium">{challan.transport_mode}</p>
+                    </div>
+                  )}
+                  {challan.eway_bill_no && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">E-way Bill No</p>
+                      <p className="text-sm font-medium">{challan.eway_bill_no}</p>
+                    </div>
+                  )}
+                  {challan.driver_name && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Driver Name</p>
+                      <p className="text-sm font-medium">{challan.driver_name}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              )}
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Challan Details</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Challan No</p>
-              <p className="font-semibold">{challan.challan_no}</p>
+              {challan.notes && (
+                <div className="px-5 py-4">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Notes</p>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                    {challan.notes}
+                  </p>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Slip No</p>
-              <p className="font-semibold">{challan.slip_no}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
-              <p className="font-medium">{fmtDate(challan.challan_date)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
-              <p className="font-medium">{challan.subject || "-"}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer</p>
-              <p className="font-semibold">{challan.customer_name}</p>
-              <p className="text-sm whitespace-pre-wrap mt-0.5">{challan.customer_address || "-"}</p>
-            </div>
-            {challan.body_text && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Description</p>
-                <p className="text-sm whitespace-pre-wrap">{challan.body_text}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Items</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16 text-center">Sr. No</TableHead>
-                    <TableHead>Particulars</TableHead>
-                    <TableHead className="w-24 text-center">HSN/SAC</TableHead>
-                    <TableHead className="w-20 text-center">Qty.</TableHead>
-                    <TableHead className="w-20 text-center">Unit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(challan.items || []).length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No items</TableCell>
-                    </TableRow>
-                  ) : (
-                    (challan.items || []).map((item, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-center">{item.sr_no}</TableCell>
-                        <TableCell>{item.particulars}</TableCell>
-                        <TableCell className="text-center">{item.hsn_sac || "-"}</TableCell>
-                        <TableCell className="text-center">{item.qty}</TableCell>
-                        <TableCell className="text-center">{item.unit}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+          {/* Bank details strip */}
+          {hasBankDetails && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
+              {profile?.bank_name && (
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Bank:</span> {profile.bank_name}
+                </span>
+              )}
+              {profile?.account_no && (
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">A/C:</span> {profile.account_no}
+                </span>
+              )}
+              {profile?.ifsc_code && (
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">IFSC:</span> {profile.ifsc_code}
+                </span>
+              )}
+              {profile?.upi_id && (
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">UPI:</span> {profile.upi_id}
+                </span>
+              )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle className="text-base">Transport & Notes</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Vehicle No</p>
-              <p>{challan.vehicle_no || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Transport Mode</p>
-              <p>{challan.transport_mode || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">E-way Bill No</p>
-              <p>{challan.eway_bill_no || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Driver Name</p>
-              <p>{challan.driver_name || "-"}</p>
-            </div>
-            {challan.notes && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Notes</p>
-                <p className="text-sm whitespace-pre-wrap">{challan.notes}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
+          )}
+        </div>
       </div>
 
+      {/* ── Stamp upload dialog ──────────────────────────────────────────────── */}
       <Dialog open={showStampDialog} onOpenChange={setShowStampDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Stamp / Signature</DialogTitle>
             <DialogDescription>
-              No stamp uploaded yet. Upload one now to enable it on your PDF.
+              Upload a stamp or signature to include it on downloaded PDFs.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+
+          <div className="py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
               {stampPreview || profile?.stamp_url ? (
                 <div className="relative">
                   <img
                     src={stampPreview || profile?.stamp_url || ""}
                     alt="Stamp preview"
-                    className="max-h-32 object-contain"
+                    className="max-h-28 object-contain"
                   />
                   <Button
-                    variant="ghost" size="sm"
-                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-50 text-red-500 hover:bg-red-100 border border-red-200"
                     onClick={() => { setStampFile(null); setStampPreview(null) }}
-                  >×</Button>
+                  >
+                    ×
+                  </Button>
                 </div>
               ) : (
-                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload className="size-8 text-muted-foreground" />
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2 text-center">
+                  <Upload className="size-7 text-muted-foreground" />
                   <span className="text-sm font-medium">Click to upload stamp</span>
-                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <span className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB</span>
                   <input
-                    id="stamp-upload" type="file" accept="image/png,image/jpeg" className="hidden"
+                    id="stamp-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
                     onChange={e => {
                       const file = e.target.files?.[0]
                       if (!file) return
-                      if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return }
+                      if (file.size > 2 * 1024 * 1024) { toast.error("Max 2 MB"); return }
                       setStampFile(file)
                       const reader = new FileReader()
                       reader.onload = ev => setStampPreview(ev.target?.result as string)
@@ -661,12 +805,23 @@ export default function DeliveryChallanDetailPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowStampDialog(false); setStampFile(null); setStampPreview(null) }}>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowStampDialog(false); setStampFile(null); setStampPreview(null) }}
+            >
               Cancel
             </Button>
-            <Button onClick={handleUploadStamp} disabled={!stampFile || uploadingStamp}>
-              {uploadingStamp ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+            <Button
+              onClick={handleUploadStamp}
+              disabled={!stampFile || uploadingStamp}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {uploadingStamp
+                ? <Loader2 className="mr-1.5 size-4 animate-spin" />
+                : <Save className="mr-1.5 size-4" />
+              }
               Save Stamp
             </Button>
           </DialogFooter>
