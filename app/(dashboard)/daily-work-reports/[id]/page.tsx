@@ -5,16 +5,18 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { ArrowLeft, CheckCircle2, Download, Edit, Loader2, Save, Upload } from "lucide-react"
+import {
+  ArrowLeft,
+  Download,
+  Edit,
+  Loader2,
+  Save,
+  Share2,
+  Stamp,
+  Upload,
+} from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth-context"
-import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
-import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
-import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { supabase, type CompanyProfile, type DailyWorkReport } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
+import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
+import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import LimitReachedModal from "@/components/billing/limit-reached-modal"
+import { toast } from "sonner"
 
+// ─── helpers ────────────────────────────────────────────────────────────────
 const safeStr = (val: unknown) => String(val ?? "-")
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -37,11 +46,14 @@ function formatDateLong(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return "-"
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  })
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
 function formatDateTime(dateStr: string | null | undefined): string {
@@ -58,50 +70,50 @@ function formatDateTime(dateStr: string | null | undefined): string {
   })
 }
 
+function statusColor(status: string) {
+  const s = (status || "").toLowerCase()
+  if (s === "completed") return "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800"
+  if (s === "pending") return "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-800"
+  if (s === "in progress") return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800"
+  return "bg-muted text-muted-foreground border-border"
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function DailyWorkReportDetailPage() {
   const { user } = useAuth()
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [report, setReport] = useState<DailyWorkReport | null>(null)
+
+  const [orgId, setOrgId]     = useState<string | null>(null)
+  const [report, setReport]   = useState<DailyWorkReport | null>(null)
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [pdf, setPdf] = useState(false)
+  const [pdf, setPdf]         = useState(false)
+  const [sharingPdf, setSharingPdf] = useState(false)
 
-  // ── Stamp toggle state ──
-  const [includeStamp, setIncludeStamp] = useState(false)
-  const [showStampUploadDialog, setShowStampUploadDialog] = useState(false)
-  const [stampFile, setStampFile] = useState<File | null>(null)
-  const [stampPreview, setStampPreview] = useState<string | null>(null)
-  const [uploadingStamp, setUploadingStamp] = useState(false)
+  // ── stamp state ──
+  const [includeStamp, setIncludeStamp]         = useState(false)
+  const [showStampDialog, setShowStampDialog]   = useState(false)
+  const [stampFile, setStampFile]               = useState<File | null>(null)
+  const [stampPreview, setStampPreview]         = useState<string | null>(null)
+  const [uploadingStamp, setUploadingStamp]     = useState(false)
 
-  // ── Plan / subscription state ──
+  // ── plan / subscription ──
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
 
   useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data }) => setOrgId(data?.org_id || null))
-    }
+    if (user?.id)
+      supabase.from("memberships").select("org_id").eq("user_id", user.id).single()
+        .then(({ data }) => setOrgId(data?.org_id ?? null))
   }, [user?.id])
 
   useEffect(() => {
     if (!orgId) return
     Promise.all([
-      supabase
-        .from("daily_work_reports")
-        .select("*")
-        .eq("id", params.id)
-        .eq("org_id", orgId)
-        .is("deleted_at", null)
-        .single(),
+      supabase.from("daily_work_reports").select("*").eq("id", params.id).eq("org_id", orgId).is("deleted_at", null).single(),
       supabase.from("company_profile").select("*").eq("org_id", orgId).maybeSingle(),
     ]).then(([r, p]) => {
       if (r.error || !r.data) {
@@ -109,26 +121,23 @@ export default function DailyWorkReportDetailPage() {
         router.push("/daily-work-reports")
       } else {
         setReport(r.data as DailyWorkReport)
-        setProfile(p.data as CompanyProfile | null)
       }
+      setProfile(p.data as CompanyProfile | null)
       setLoading(false)
     })
   }, [orgId, params.id, router])
 
-  // Load saved stamp toggle preference
   useEffect(() => {
     const saved = localStorage.getItem(`stamp_toggle_dwr_${params.id}`)
     if (saved === "true") setIncludeStamp(true)
   }, [params.id])
 
+  // ── stamp toggle ──
   const handleStampToggle = () => {
-    if (!profile?.stamp_url) {
-      setShowStampUploadDialog(true)
-      return
-    }
-    const newVal = !includeStamp
-    setIncludeStamp(newVal)
-    localStorage.setItem(`stamp_toggle_dwr_${params.id}`, String(newVal))
+    if (!profile?.stamp_url) { setShowStampDialog(true); return }
+    const next = !includeStamp
+    setIncludeStamp(next)
+    localStorage.setItem(`stamp_toggle_dwr_${params.id}`, String(next))
   }
 
   const handleUploadStamp = async () => {
@@ -136,38 +145,28 @@ export default function DailyWorkReportDetailPage() {
     setUploadingStamp(true)
     try {
       const fileName = `stamp-${orgId}-${Date.now()}.png`
-      const { error: uploadError } = await supabase.storage
-        .from("company-assets")
-        .upload(fileName, stampFile, { upsert: true })
-
-      if (uploadError) throw uploadError
+      const { error: upErr } = await supabase.storage
+        .from("company-assets").upload(fileName, stampFile, { upsert: true })
+      if (upErr) throw upErr
 
       const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(fileName)
-      const publicUrl = urlData.publicUrl
+      const { error: dbErr } = await supabase.from("company_profile")
+        .update({ stamp_url: urlData.publicUrl }).eq("org_id", orgId)
+      if (dbErr) throw dbErr
 
-      const { error: updateError } = await supabase
-        .from("company_profile")
-        .update({ stamp_url: publicUrl })
-        .eq("org_id", orgId)
-
-      if (updateError) throw updateError
-
-      setProfile((prev) => (prev ? { ...prev, stamp_url: publicUrl } : null))
+      setProfile(prev => prev ? { ...prev, stamp_url: urlData.publicUrl } : null)
       setIncludeStamp(true)
       localStorage.setItem(`stamp_toggle_dwr_${params.id}`, "true")
       toast.success("Stamp uploaded successfully")
-      setShowStampUploadDialog(false)
-      setStampFile(null)
-      setStampPreview(null)
+      setShowStampDialog(false); setStampFile(null); setStampPreview(null)
     } catch (err) {
-      console.error(err)
-      toast.error("Failed to upload stamp")
+      console.error(err); toast.error("Failed to upload stamp")
     } finally {
       setUploadingStamp(false)
     }
   }
 
-  // ── Subscription check ──
+  // ── subscription check ──
   const checkAndShowLimitModal = () => {
     if (status === 'expired' || status === 'cancelled') {
       setLimitModalType('expired')
@@ -181,9 +180,7 @@ export default function DailyWorkReportDetailPage() {
     return false
   }
 
-  const handleUpgrade = () => {
-    window.location.href = '/billing'
-  }
+  const handleUpgrade = () => { window.location.href = '/billing' }
 
   const handleEditClick = () => {
     if (!report) return
@@ -195,72 +192,58 @@ export default function DailyWorkReportDetailPage() {
     router.push(`/daily-work-reports/${report.id}/edit`)
   }
 
-  const downloadPdf = async () => {
-    if (!report) return
-    setPdf(true)
+  // ── Shared PDF builder ─────────────────────────────────────────────────────
+  const buildPdfDoc = async (): Promise<{ doc: jsPDF; filename: string } | null> => {
+    if (!report) return null
+
     try {
-      const pageW = 210
-      const margin = 15
-      const themeColor = profile?.theme_color ?? "#185FA5"
+      const pageW        = 210
+      const margin       = 15
+      const themeColor   = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
-      const headerStyle = profile?.header_style ?? "single_logo"
+      const headerStyle  = profile?.header_style ?? "single_logo"
+      const shouldStamp  = includeStamp && !!profile?.stamp_url
 
-      const shouldIncludeStamp = includeStamp && !!profile?.stamp_url
-
-      // ── Load logo ──
+      // load logo
       let logoBase64: string | null = null
       let logoFormat: "JPEG" | "PNG" = "PNG"
       if (headerStyle !== "thumbnail" && profile?.logo_url) {
         try {
-          const response = await fetch(profile.logo_url)
-          const blob = await response.blob()
-          logoFormat =
-            blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
-          logoBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
+          const blob = await (await fetch(profile.logo_url)).blob()
+          logoFormat = blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
+          logoBase64 = await new Promise<string>(res => {
+            const r = new FileReader(); r.onloadend = () => res(r.result as string); r.readAsDataURL(blob)
           })
-        } catch (e) {
-          console.warn("[DWR PDF] Logo load failed:", e)
-        }
+        } catch (e) { console.warn("[DWR PDF] logo:", e) }
       }
 
-      // ── Load banner ──
+      // load banner
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
       let bannerH = 0
       if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
         try {
-          const response = await fetch(profile.header_thumbnail_url)
-          const blob = await response.blob()
-          bannerFormat =
-            blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
-          bannerBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
+          const blob = await (await fetch(profile.header_thumbnail_url)).blob()
+          bannerFormat = blob.type.includes("jpeg") || blob.type.includes("jpg") ? "JPEG" : "PNG"
+          bannerBase64 = await new Promise<string>(res => {
+            const r = new FileReader(); r.onloadend = () => res(r.result as string); r.readAsDataURL(blob)
           })
-          const natural = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+          const nat = await new Promise<{ w: number; h: number }>((res, rej) => {
             const img = new Image()
-            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
-            img.onerror = reject
+            img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight })
+            img.onerror = rej
             img.src = bannerBase64 as string
           })
-          const bannerW = pageW - margin * 2
-          bannerH = Math.round(bannerW / (natural.w / natural.h))
-          if (bannerH > 60) bannerH = 60
-        } catch (e) {
-          console.warn("[DWR PDF] Banner load failed:", e)
-        }
+          const bW = pageW - margin * 2
+          bannerH = Math.min(60, Math.round(bW / (nat.w / nat.h)))
+        } catch (e) { console.warn("[DWR PDF] banner:", e) }
       }
 
-      // ── Load stamp (with retry) ──
+      // load stamp
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
-      if (shouldIncludeStamp && profile?.stamp_url) {
-        const MAX_STAMP_ATTEMPTS = 3
-        for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
+      if (shouldStamp && profile?.stamp_url) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             const res = await fetch(profile.stamp_url, { cache: "no-store" })
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -268,32 +251,25 @@ export default function DailyWorkReportDetailPage() {
             stampBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader()
               reader.onloadend = () => resolve(reader.result as string)
-              reader.onerror = reject
+              reader.onerror   = reject
               reader.readAsDataURL(blob)
             })
             stampFormat = blob.type.includes("jpeg") ? "JPEG" : "PNG"
             break
           } catch (e) {
-            console.warn(`[DWR Stamp] Attempt ${attempt} failed:`, e)
-            if (attempt === MAX_STAMP_ATTEMPTS) {
-              toast.warning("Stamp image could not be loaded – skipping stamp")
-            } else {
-              await new Promise((r) => setTimeout(r, 400 * attempt))
-            }
+            console.warn(`[DWR Stamp] attempt ${attempt}:`, e)
+            if (attempt === 3) toast.warning("Stamp could not be loaded — skipping")
+            else await new Promise(r => setTimeout(r, 400 * attempt))
           }
         }
       }
 
       const formattedDate = report.report_date
         ? new Date(report.report_date).toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
+            day: "2-digit", month: "2-digit", year: "numeric",
           })
         : new Date().toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
+            day: "2-digit", month: "2-digit", year: "numeric",
           })
 
       const renderReport = (doc: jsPDF): number => {
@@ -301,109 +277,61 @@ export default function DailyWorkReportDetailPage() {
 
         // ── HEADER ──
         if (headerStyle === "thumbnail" && bannerBase64) {
-          const bannerW = pageW - margin * 2
-          doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
+          doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
           y += bannerH + 6
         } else if (headerStyle === "single_logo") {
-          y = renderSingleLogoHeader(
-            doc,
-            profile,
-            y,
-            logoBase64,
-            pageW,
-            margin,
-            [tr, tg, tb]
-          )
+          y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
         } else {
-          let logoX = margin
-          let logoAdded = false
-          if (logoBase64) {
-            doc.addImage(logoBase64, logoFormat, logoX, y, 22, 22)
-            logoAdded = true
-          }
-          const infoX = logoAdded ? logoX + 24 : logoX
-          doc.setFontSize(14)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
+          if (logoBase64) doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
+          const infoX = logoBase64 ? margin + 24 : margin
+          doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
           doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(120, 120, 120)
-          let infoY = y + 8
-          if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
-          if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
+          doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
+          let iy = y + 8
+          if (profile?.tagline)  { doc.text(safeStr(profile.tagline), infoX, iy); iy += 4 }
+          if (profile?.address)  { doc.text(safeStr(profile.address), infoX, iy); iy += 4 }
           const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
-          if (loc) { doc.text(loc, infoX, infoY); infoY += 4 }
-          if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
-          if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
+          if (loc)               { doc.text(loc, infoX, iy); iy += 4 }
+          if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
+          if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
+          if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
           y += 31
-          doc.setDrawColor(tr, tg, tb)
-          doc.setLineWidth(0.5)
+          doc.setDrawColor(tr, tg, tb); doc.setLineWidth(0.5)
           doc.line(margin, y, pageW - margin, y)
           y += 6
         }
 
-        // ── TITLE SECTION ──
-        doc.setFontSize(15)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(tr, tg, tb)
+        // ── TITLE ──
+        doc.setFontSize(15); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
         doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
-
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(`DATE: ${formattedDate}`, pageW - margin, y + 8, { align: "right" })
 
-        // ── CUSTOMER NAME (left) ──
-        doc.setFontSize(7)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
+        // customer (left)
+        doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120)
         doc.text("CUSTOMER NAME", margin, y + 14)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.customer_name), margin, y + 23)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
+        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
         doc.line(margin, y + 24, margin + 60, y + 24)
 
-        // ── WORK ORDER NO. (right) ──
-        doc.setFontSize(7)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
+        // work order (right)
+        doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120)
         doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.work_order_no || "-"), pageW - margin, y + 23, { align: "right" })
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
+        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
         doc.line(pageW - margin - 50, y + 24, pageW - margin, y + 24)
 
-        y += 30
-        y += 8
+        y += 38
 
         // ── EQUIPMENT ──
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(120, 120, 120)
+        doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120)
         doc.text("EQUIPMENT", margin, y)
-
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.lift_no || "-"), margin, y + 11)
-
-        doc.setDrawColor(180, 180, 180)
-        doc.setLineWidth(0.3)
+        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
         doc.line(margin, y + 12, margin + 100, y + 12)
-
         y += 18
 
         // ── WORK ITEMS TABLE ──
@@ -411,7 +339,7 @@ export default function DailyWorkReportDetailPage() {
         autoTable(doc, {
           startY: y,
           head: [["SR.", "Description of Work / Service", "Material Used", "Status"]],
-          body: workItems.map((item) => [
+          body: workItems.map(item => [
             String(item.sr_no ?? ""),
             safeStr(item.description),
             safeStr(item.material_used),
@@ -421,160 +349,164 @@ export default function DailyWorkReportDetailPage() {
           headStyles: {
             fillColor: [tr, tg, tb],
             textColor: [255, 255, 255],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "left",
+            fontStyle: "bold", fontSize: 9, halign: "left",
           },
-          bodyStyles: {
-            fontSize: 9,
-            textColor: [0, 0, 0],
-          },
-          alternateRowStyles: {
-            fillColor: [248, 250, 252],
-          },
+          bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
           columnStyles: {
             0: { cellWidth: 15, halign: "center" },
             1: { cellWidth: "auto" },
             2: { cellWidth: 45, textColor: [120, 120, 120] },
             3: { cellWidth: 25, halign: "center" },
           },
-          didParseCell: function (data) {
+          didParseCell: (data) => {
             if (data.section === "body" && data.column.index === 3) {
               const val = data.cell.raw
-              if (val === "Completed") {
-                data.cell.styles.textColor = [22, 163, 74]
-                data.cell.styles.fontStyle = "bold"
-              } else if (val === "Pending") {
-                data.cell.styles.textColor = [234, 88, 12]
-                data.cell.styles.fontStyle = "bold"
-              }
+              if (val === "Completed") { data.cell.styles.textColor = [22, 163, 74]; data.cell.styles.fontStyle = "bold" }
+              else if (val === "Pending") { data.cell.styles.textColor = [234, 88, 12]; data.cell.styles.fontStyle = "bold" }
             }
           },
           margin: { left: margin, right: margin },
         })
         y = (doc as any).lastAutoTable.finalY + 6
 
-        // ── INSPECTION / TESTING BLOCK ──
-        const boxY = y
-        const boxH = 22
+        // ── INSPECTION / TESTING ──
+        const boxY = y; const boxH = 22
         doc.setFillColor(240, 248, 255)
         doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
 
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(tr, tg, tb)
+        doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
         doc.text("INSPECTION / TESTING", margin + 5, boxY + 6)
 
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(0, 0, 0)
-
-        doc.text(`Operational test: `, margin + 5, boxY + 12)
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(0, 0, 0)
+        doc.text("Operational test: ", margin + 5, boxY + 12)
         doc.setFont("helvetica", "bold")
         doc.text(safeStr(report.operational_test_status), margin + 32, boxY + 12)
 
         doc.setFont("helvetica", "normal")
-        doc.text(`Safety observations: `, pageW / 2, boxY + 12)
+        doc.text("Safety observations: ", pageW / 2, boxY + 12)
         doc.setFont("helvetica", "bold")
         doc.text(safeStr(report.safety_observations), pageW / 2 + 35, boxY + 12)
 
         doc.setFont("helvetica", "normal")
-        doc.text(`Pending recommendations: `, margin + 5, boxY + 18)
+        doc.text("Pending recommendations: ", margin + 5, boxY + 18)
         doc.setFont("helvetica", "bold")
         doc.text(safeStr(report.pending_recommendations), margin + 45, boxY + 18)
 
         y = boxY + boxH + 10
 
-        // ── SIGNATURE SECTION ──
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.3)
-
+        // ── SIGNATURES ──
+        doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3)
         doc.line(margin, y, margin + 65, y)
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
+        doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
         doc.text("Technician / Engineer Signature", margin, y - 2)
 
         doc.line(pageW - margin - 65, y, pageW - margin, y)
         doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
 
         y += 8
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(`Name: ${safeStr(report.tech_sign_name)}`, margin, y)
         doc.text(`Name: ${safeStr(report.customer_sign_name)}`, pageW - margin, y, { align: "right" })
 
         y += 5
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(8)
-        doc.setTextColor(120, 120, 120)
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
         doc.text(formatDateTime(report.tech_sign_datetime), margin, y)
         doc.text(formatDateTime(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
-
         y += 12
 
-        // ── STAMP (bottom-right, if enabled) ──
-        if (shouldIncludeStamp && stampBase64) {
-          const stampW = 30
-          const stampH = 30
+        // ── STAMP ──
+        if (shouldStamp && stampBase64) {
+          const stampW = 30; const stampH = 30
           const stampX = pageW - margin - stampW
-
           doc.addImage(stampBase64, stampFormat, stampX, y, stampW, stampH)
-
-          doc.setDrawColor(200, 200, 200)
-          doc.setLineWidth(0.3)
+          doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3)
           doc.line(stampX - 10, y + stampH + 3, pageW - margin, y + stampH + 3)
-
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(8)
-          doc.setTextColor(120, 120, 120)
+          doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
           doc.text("Authorized Signatory", pageW - margin, y + stampH + 8, { align: "right" })
-
           y = y + stampH + 14
         }
 
         // ── FOOTER ──
         y += 6
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(180, 180, 180)
+        doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(180, 180, 180)
         doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
-
         return y + 6
       }
 
-      const scratchDoc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [pageW, 2000],
-      })
-      const measuredHeight = renderReport(scratchDoc)
-      const finalPageHeight = Math.max(measuredHeight, 100)
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [pageW, finalPageHeight],
-      })
+      const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
+      const measuredH = renderReport(scratch)
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
       renderReport(doc)
 
-      doc.save(`DWR-${safeStr(report.report_no)}.pdf`)
+      const filename = `DWR-${safeStr(report.report_no)}.pdf`
+      return { doc, filename }
+    } catch (err) {
+      console.error("[DWR PDF]", err)
+      throw err
+    }
+  }
+
+  const downloadPdf = async () => {
+    setPdf(true)
+    try {
+      const result = await buildPdfDoc()
+      if (!result) return
+      result.doc.save(result.filename)
       toast.success("PDF downloaded")
     } catch (err) {
-      console.error("[DWR PDF] error:", err)
-      toast.error(
-        "Failed to generate PDF: " + (err instanceof Error ? err.message : "Unknown error")
-      )
+      toast.error("Failed to generate PDF: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setPdf(false)
     }
   }
 
+  // ── WhatsApp share ────────────────────────────────────────────────────────
+  const handleWhatsAppShare = async () => {
+    setSharingPdf(true)
+    try {
+      const result = await buildPdfDoc()
+      if (!result) return
+      const { doc, filename } = result
+
+      const pdfBlob = doc.output("blob")
+      const file = new File([pdfBlob], filename, { type: "application/pdf" })
+
+      // Mobile: native share sheet
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: `Work Report ${report?.report_no ?? ""}`,
+          text: `Hi, please find the work report from ${profile?.company_name ?? "us"}.`,
+        })
+      } else {
+        // Desktop fallback: download + open WhatsApp Web with pre-filled text
+        doc.save(filename)
+        const waText = encodeURIComponent(
+          `Hi, please find the work report *${report?.report_no ?? ""}* from *${profile?.company_name ?? ""}*.\n\nKindly acknowledge receipt.`
+        )
+        window.open(`https://wa.me/?text=${waText}`, "_blank")
+        toast.info("PDF saved. Open WhatsApp and attach it there.")
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return
+      console.error("Share error:", err)
+      toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setSharingPdf(false)
+    }
+  }
+
+  // ─── Loading & not-found ────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
@@ -583,10 +515,13 @@ export default function DailyWorkReportDetailPage() {
   if (!report) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
           <p className="text-muted-foreground">Report not found</p>
           <Link href="/daily-work-reports">
-            <Button>Back to Reports</Button>
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="mr-1.5 size-3.5" />
+              Back to Reports
+            </Button>
           </Link>
         </div>
       </DashboardLayout>
@@ -597,230 +532,236 @@ export default function DailyWorkReportDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+
+        {/* ── Action bar ─────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href="/daily-work-reports">
-              <Button variant="outline" size="icon" className="shrink-0 mt-1">
+              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{report.report_no}</h1>
-              {report.work_order_no && (
-                <p className="text-sm text-muted-foreground">
-                  Work Order:{" "}
-                  <span className="font-medium text-foreground">{report.work_order_no}</span>
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {formatDateLong(report.report_date)}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-semibold leading-tight">{report.report_no}</h1>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {report.customer_name} · {formatDateLong(report.report_date)}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {/* ⭐ Stamp toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Stamp toggle */}
             <Button
-              onClick={handleStampToggle}
-              disabled={pdf}
               variant="outline"
               size="sm"
+              onClick={handleStampToggle}
+              disabled={pdf || sharingPdf}
               className={
                 includeStamp
-                  ? "border-green-600 bg-green-50 text-green-700 hover:bg-green-100"
-                  : ""
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700"
+                  : "text-muted-foreground"
               }
             >
-              <CheckCircle2
-                className={"mr-1.5 size-4 " + (includeStamp ? "" : "opacity-40")}
-              />
-              Stamp: {includeStamp ? "ON" : "OFF"}
+              <Stamp className="size-3.5 mr-1.5" />
+              {includeStamp ? "Stamp on" : "Stamp off"}
             </Button>
 
             <Button
-              onClick={downloadPdf}
-              disabled={pdf}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              variant="outline"
               size="sm"
+              onClick={handleEditClick}
             >
-              {pdf ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Download className="mr-1.5 size-4" />
-              )}
+              <Edit className="size-3.5 mr-1.5" />
+              Edit
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadPdf}
+              disabled={pdf || sharingPdf}
+            >
+              {pdf
+                ? <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                : <Download className="size-3.5 mr-1.5" />
+              }
               Download PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={handleEditClick}>
-              <Edit className="mr-1.5 size-4" />
-              Edit
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleWhatsAppShare}
+              disabled={sharingPdf || pdf}
+              className="border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/40"
+            >
+              {sharingPdf
+                ? <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                : <Share2 className="size-3.5 mr-1.5" />
+              }
+              Share via WhatsApp
             </Button>
           </div>
         </div>
 
-        {/* Company Information */}
-        {profile && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Company Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-4">
-                {profile.logo_url && (
-                  <img
-                    src={profile.logo_url}
-                    alt="Company logo"
-                    className="h-16 w-16 object-contain rounded border"
-                  />
+        {/* ── Work Report document card ──────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+
+          {/* Accent line */}
+          <div className="h-1 bg-blue-600" />
+
+          {/* From / To */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
+
+            {/* From — company */}
+            <div className="flex gap-3 p-5">
+              {profile?.logo_url && (
+                <img
+                  src={profile.logo_url}
+                  alt="Logo"
+                  className="h-11 w-11 object-contain rounded shrink-0 mt-0.5"
+                />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
+                <p className="font-semibold text-sm leading-snug">{profile?.company_name ?? "-"}</p>
+                {profile?.tagline && <p className="text-xs text-muted-foreground">{profile.tagline}</p>}
+                {profile?.address && <p className="text-xs text-muted-foreground">{profile.address}</p>}
+                {(profile?.city || profile?.state || profile?.zip_code) && (
+                  <p className="text-xs text-muted-foreground">
+                    {[profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")}
+                  </p>
                 )}
-                <div className="space-y-0.5">
-                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.tagline && (
-                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
-                  )}
-                  {profile.address && (
-                    <p className="text-xs text-muted-foreground">{profile.address}</p>
-                  )}
-                  {(profile.city || profile.state || profile.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
-                    </p>
-                  )}
-                  {profile.phone && (
-                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
-                  )}
-                  {profile.email && (
-                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
-                  )}
-                  {profile.gstin && (
-                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
-                  )}
-                </div>
+                {profile?.phone && <p className="text-xs text-muted-foreground">{profile.phone}</p>}
+                {profile?.gstin && <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
 
-        {/* Report Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Report Details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Name</p>
-              <p className="font-medium">{report.customer_name ?? "-"}</p>
+            {/* To — customer */}
+            <div className="p-5 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">CUSTOMER</p>
+              <p className="font-semibold text-sm leading-snug">{report.customer_name ?? "-"}</p>
+              {report.work_order_no && (
+                <p className="text-xs text-muted-foreground">Work Order: {report.work_order_no}</p>
+              )}
+              {report.lift_no && (
+                <p className="text-xs text-muted-foreground">Equipment: {report.lift_no}</p>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Work Order No</p>
-              <p className="font-medium">{report.work_order_no ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Date</p>
-              <p className="font-medium">{formatDateLong(report.report_date)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Equipment</p>
-              <p className="font-medium">{report.lift_no ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Work Items */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Work Items</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-12">SR</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description of Work</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground w-40">Material Used</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground w-28">Status</th>
+          {/* Report meta strip */}
+          <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Report No</p>
+              <p className="text-sm font-semibold">{report.report_no}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Date</p>
+              <p className="text-sm font-semibold">{formatDateLong(report.report_date)}</p>
+            </div>
+            {report.work_order_no && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Work Order</p>
+                <p className="text-sm font-semibold">{report.work_order_no}</p>
+              </div>
+            )}
+            {report.lift_no && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Equipment</p>
+                <p className="text-sm font-semibold">{report.lift_no}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Work items table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-12">SR</th>
+                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description of Work</th>
+                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs w-40">Material Used</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {workItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="text-center py-10 text-sm text-muted-foreground">
+                      No work items
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {workItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="text-center py-8 text-muted-foreground">No work items</td>
+                ) : (
+                  workItems.map((item, i) => (
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr_no}</td>
+                      <td className="py-3 px-4 font-medium">{item.description || "-"}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{item.material_used || "—"}</td>
+                      <td className="text-center py-3 px-4">
+                        <span
+                          className={
+                            "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border capitalize " +
+                            statusColor(item.status || "")
+                          }
+                        >
+                          {item.status || "-"}
+                        </span>
+                      </td>
                     </tr>
-                  ) : (
-                    workItems.map((item, i) => (
-                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr_no}</td>
-                        <td className="py-3 px-4">{item.description || "-"}</td>
-                        <td className="py-3 px-4 text-muted-foreground">{item.material_used || "—"}</td>
-                        <td className="text-center py-3 px-4">
-                          <span
-                            className={
-                              item.status === "Completed"
-                                ? "font-semibold text-green-600"
-                                : item.status === "Pending"
-                                ? "font-semibold text-orange-600"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {item.status || "-"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Inspection / Testing */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Inspection / Testing</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Operational Test</p>
-              <p className="font-medium">{report.operational_test_status ?? "-"}</p>
+          {/* Inspection / Testing */}
+          <div className="border-t border-border">
+            <div className="px-5 py-3 bg-muted/30 border-b border-border">
+              <p className="text-xs font-semibold text-muted-foreground">INSPECTION / TESTING</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Safety Observations</p>
-              <p className="font-medium">{report.safety_observations ?? "-"}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 px-5 py-4">
+              <div>
+                <p className="text-[10px] text-muted-foreground">Operational Test</p>
+                <p className="text-sm font-medium">{report.operational_test_status ?? "-"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Safety Observations</p>
+                <p className="text-sm font-medium">{report.safety_observations ?? "-"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Pending Recommendations</p>
+                <p className="text-sm font-medium">{report.pending_recommendations ?? "-"}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pending Recommendations</p>
-              <p className="font-medium">{report.pending_recommendations ?? "-"}</p>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Acknowledgement */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Acknowledgement</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Signature</p>
-              <p className="font-medium">{report.tech_sign_name ?? "-"}</p>
+          {/* Acknowledgement */}
+          <div className="border-t border-border">
+            <div className="px-5 py-3 bg-muted/30 border-b border-border">
+              <p className="text-xs font-semibold text-muted-foreground">ACKNOWLEDGEMENT</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Technician Date</p>
-              <p className="font-medium">{formatDateTime(report.tech_sign_datetime)}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 px-5 py-4">
+              <div>
+                <p className="text-[10px] text-muted-foreground">Technician Signature</p>
+                <p className="text-sm font-medium">{report.tech_sign_name ?? "-"}</p>
+                {report.tech_sign_datetime && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(report.tech_sign_datetime)}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Customer Signature</p>
+                <p className="text-sm font-medium">{report.customer_sign_name ?? "-"}</p>
+                {report.customer_sign_datetime && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(report.customer_sign_datetime)}</p>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Signature</p>
-              <p className="font-medium">{report.customer_sign_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Customer Date</p>
-              <p className="font-medium">{formatDateTime(report.customer_sign_datetime)}</p>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Subscription Limit Modal */}
@@ -834,57 +775,50 @@ export default function DailyWorkReportDetailPage() {
       />
 
       {/* Stamp Upload Dialog */}
-      <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
-        <DialogContent className="max-w-md">
+      <Dialog open={showStampDialog} onOpenChange={setShowStampDialog}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Stamp / Signature</DialogTitle>
             <DialogDescription>
-              You haven't added a stamp or signature yet. Upload one now to enable it on your
-              work report.
+              Upload a stamp or signature to include it on downloaded PDFs.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
+
+          <div className="py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
               {stampPreview || profile?.stamp_url ? (
                 <div className="relative">
                   <img
                     src={stampPreview || profile?.stamp_url || ""}
                     alt="Stamp preview"
-                    className="max-h-32 object-contain"
-                    onError={() => toast.error("Failed to load image. Check bucket permissions.")}
+                    className="max-h-28 object-contain"
                   />
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                    onClick={() => {
-                      setStampFile(null)
-                      setStampPreview(null)
-                    }}
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-50 text-red-500 hover:bg-red-100 border border-red-200"
+                    onClick={() => { setStampFile(null); setStampPreview(null) }}
                   >
                     ×
                   </Button>
                 </div>
               ) : (
-                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload className="size-8 text-muted-foreground" />
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2 text-center">
+                  <Upload className="size-7 text-muted-foreground" />
                   <span className="text-sm font-medium">Click to upload stamp</span>
-                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <span className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB</span>
                   <input
                     id="stamp-upload"
                     type="file"
                     accept="image/png,image/jpeg"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={e => {
                       const file = e.target.files?.[0]
                       if (!file) return
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast.error("File size must be less than 2MB")
-                        return
-                      }
+                      if (file.size > 2 * 1024 * 1024) { toast.error("Max 2 MB"); return }
                       setStampFile(file)
                       const reader = new FileReader()
-                      reader.onload = (ev) => setStampPreview(ev.target?.result as string)
+                      reader.onload = ev => setStampPreview(ev.target?.result as string)
                       reader.readAsDataURL(file)
                     }}
                   />
@@ -892,14 +826,11 @@ export default function DailyWorkReportDetailPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
-              onClick={() => {
-                setShowStampUploadDialog(false)
-                setStampFile(null)
-                setStampPreview(null)
-              }}
+              onClick={() => { setShowStampDialog(false); setStampFile(null); setStampPreview(null) }}
             >
               Cancel
             </Button>
@@ -908,11 +839,10 @@ export default function DailyWorkReportDetailPage() {
               disabled={!stampFile || uploadingStamp}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {uploadingStamp ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 size-4" />
-              )}
+              {uploadingStamp
+                ? <Loader2 className="mr-1.5 size-4 animate-spin" />
+                : <Save className="mr-1.5 size-4" />
+              }
               Save Stamp
             </Button>
           </DialogFooter>
