@@ -250,7 +250,11 @@ export default function QuotationsPage() {
             <h1 className="text-2xl font-bold text-foreground">Quotation</h1>
             <p className="text-muted-foreground">Create and manage customers quotations</p>
           </div>
-          <Button onClick={handleNewQuotationClick} disabled={checkingProfile || limitsLoading}>
+          <Button
+            onClick={handleNewQuotationClick}
+            disabled={checkingProfile || limitsLoading}
+            className="hidden md:inline-flex"
+          >
             <Plus className="mr-2 size-4" />
             New Quotation
           </Button>
@@ -371,7 +375,7 @@ export default function QuotationsPage() {
         </Card>
 
         {/* Mobile: Quotation Cards */}
-        <div className="flex flex-col gap-4 md:hidden">
+        <div className="flex flex-col gap-4 md:hidden pb-44">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading quotations...</div>
           ) : filteredQuotations.length === 0 ? (
@@ -485,6 +489,17 @@ export default function QuotationsPage() {
             </>
           )}
         </div>
+
+        {/* ── MOBILE FAB — New Quotation ── */}
+        <button
+          className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+          onClick={handleNewQuotationClick}
+          disabled={checkingProfile || limitsLoading}
+          aria-label="New Quotation"
+        >
+          <Plus className="size-4" />
+          New Quotation
+        </button>
       </div>
 
       {/* Delete Dialog */}
