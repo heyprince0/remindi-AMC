@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import {
   Bell,
   FileCheck,
@@ -12,6 +13,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
 
 interface NavigationItem {
   href: string
@@ -34,6 +37,32 @@ function isActiveRoute(pathname: string, href: string): boolean {
 
 export function MobileBottomNav() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [roleLoaded, setRoleLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setRoleLoaded(true)
+      return
+    }
+    supabase
+      .from("memberships")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data?.role) {
+          setUserRole(data.role)
+        }
+        setRoleLoaded(true)
+      })
+  }, [user?.id])
+
+  // Hide the entire nav for technicians
+  if (roleLoaded && userRole === "technician") {
+    return null
+  }
 
   return (
     <nav
