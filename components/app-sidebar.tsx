@@ -56,7 +56,7 @@ const memberNavItems = [
 const adminOnlyNavItems = [
   { title: "Settings", icon: Settings, href: "/settings" },
   { title: "Team", icon: UsersRound, href: "/team" },
-  { title: "Billing", icon: CreditCard, href: "/billing" },
+  { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
 const technicianNavItems: typeof memberNavItems = []
