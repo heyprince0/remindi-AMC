@@ -17,6 +17,7 @@ import {
   Upload,
   Save,
   Stamp,
+  Share2,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -79,6 +80,7 @@ export default function ViewQuotationPage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [sharingPdf, setSharingPdf] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [includeStamp, setIncludeStamp] = useState<boolean>(false)
@@ -336,12 +338,13 @@ export default function ViewQuotationPage() {
     return { subtotal, discountAmount, discountType: quotation.discount_type, discountValue: quotation.discount_value || 0, sgst, cgst, grandTotal }
   }
 
-  const handleDownloadPdf = async (stampToggle: boolean = false) => {
-    if (!quotation) return
+  // ── Shared PDF builder ─────────────────────────────────────────────────────
+  // Returns { doc, filename } so both download and share can call the same logic.
+  const buildPdfDoc = async (stampToggle: boolean = false): Promise<{ doc: jsPDF; filename: string } | null> => {
+    if (!quotation) return null
 
     const shouldIncludeStamp = stampToggle && (!!profile?.stamp_url || !!profile?.signature_url)
 
-    setGeneratingPdf(true)
     try {
       const pageW = 210
       const margin = 15
@@ -721,13 +724,63 @@ export default function ViewQuotationPage() {
       renderQuotation(doc)
 
       const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
-      doc.save(filename)
+      return { doc, filename }
+    } catch (err) {
+      console.error("PDF build error:", err)
+      throw err
+    }
+  }
+
+  const handleDownloadPdf = async (stampToggle: boolean = false) => {
+    setGeneratingPdf(true)
+    try {
+      const result = await buildPdfDoc(stampToggle)
+      if (!result) return
+      result.doc.save(result.filename)
       toast.success("PDF downloaded")
     } catch (err) {
-      console.error("PDF error:", err)
       toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setGeneratingPdf(false)
+    }
+  }
+
+  const handleWhatsAppShare = async () => {
+    setSharingPdf(true)
+    try {
+      const result = await buildPdfDoc(includeStamp)
+      if (!result) return
+      const { doc, filename } = result
+
+      const pdfBlob = doc.output("blob")
+      const file = new File([pdfBlob], filename, { type: "application/pdf" })
+
+      // Mobile (Android Chrome, iOS Safari 15.1+): native share sheet
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: `Quotation ${quotation?.quote_no ?? ""}`,
+          text: `Hi, please find the quotation from ${profile?.company_name ?? "us"}. Total: ₹${(quotation?.grand_total ?? 0).toLocaleString("en-IN")}.`,
+        })
+      } else {
+        // Desktop fallback: save PDF + open WhatsApp Web with pre-filled text
+        doc.save(filename)
+        const waText = encodeURIComponent(
+          `Hi, please find the quotation *${quotation?.quote_no ?? ""}* from *${profile?.company_name ?? ""}*.\nAmount: ₹${(quotation?.grand_total ?? 0).toLocaleString("en-IN")}\n\nKindly review and confirm.`
+        )
+        window.open(`https://wa.me/?text=${waText}`, "_blank")
+        toast.info("PDF saved. Open WhatsApp and attach it there.")
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return // user dismissed the share sheet — not an error
+      console.error("Share error:", err)
+      toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setSharingPdf(false)
     }
   }
 
@@ -819,7 +872,7 @@ export default function ViewQuotationPage() {
 
             <Button
               onClick={() => handleDownloadPdf(includeStamp)}
-              disabled={generatingPdf}
+              disabled={generatingPdf || sharingPdf}
               variant="outline"
               size="sm"
             >
@@ -829,6 +882,21 @@ export default function ViewQuotationPage() {
                 <Download className="size-3.5 mr-1.5" />
               )}
               Download PDF
+            </Button>
+
+            <Button
+              onClick={handleWhatsAppShare}
+              disabled={sharingPdf || generatingPdf}
+              variant="outline"
+              size="sm"
+              className="border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/40"
+            >
+              {sharingPdf ? (
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Share2 className="size-3.5 mr-1.5" />
+              )}
+              Share via WhatsApp
             </Button>
 
             {quotation.invoice_id ? (
