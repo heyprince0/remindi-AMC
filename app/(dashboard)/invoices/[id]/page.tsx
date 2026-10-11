@@ -1,35 +1,28 @@
+// app/invoices/[id]/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { supabase, type Invoice, type CompanyProfile } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import {
   ArrowLeft,
   Download,
-  MessageCircle,
   Edit,
-  ChevronDown,
   Loader2,
+  FileText,
   CheckCircle2,
   Upload,
   Save,
+  Stamp,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -38,14 +31,17 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 
 const safeStr = (val: any) => String(val ?? "-")
-const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
 const safeDate = (val: any) =>
   val ? new Date(val).toLocaleDateString("en-IN") : "-"
 
@@ -60,16 +56,8 @@ function formatDate(dateStr: string | null | undefined): string {
   })
 }
 
-function getPaymentStatusBadge(status: string) {
-  const s = (status ?? "unpaid").toLowerCase()
-  if (s === "unpaid") return <Badge className="bg-red-100 text-red-700 border-0">Unpaid</Badge>
-  if (s === "partial") return <Badge className="bg-yellow-100 text-yellow-700 border-0">Partial</Badge>
-  if (s === "paid") return <Badge className="bg-green-100 text-green-700 border-0">Paid</Badge>
-  return <Badge className="bg-slate-100 text-slate-700 border-0">{status}</Badge>
-}
-
 function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-fd]{2})$/i.exec(hex)
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
     ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
     : [24, 95, 165]
@@ -87,6 +75,17 @@ function toWords(n: number): string {
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
 }
 
+function getPaymentStatusBadge(status: string) {
+  const statusLower = (status || "").toLowerCase()
+  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+    unpaid: { bg: "bg-red-100 dark:bg-red-950/40", text: "text-red-700 dark:text-red-400", label: "Unpaid" },
+    partial: { bg: "bg-yellow-100 dark:bg-yellow-950/40", text: "text-yellow-700 dark:text-yellow-400", label: "Partial" },
+    paid: { bg: "bg-green-100 dark:bg-green-950/40", text: "text-green-700 dark:text-green-400", label: "Paid" },
+  }
+  const config = statusConfig[statusLower] || statusConfig.unpaid
+  return <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
+}
+
 export default function ViewInvoicePage() {
   const params = useParams()
   const router = useRouter()
@@ -95,19 +94,8 @@ export default function ViewInvoicePage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [generatingPdf, setGeneratingPdf] = useState(false)
-  const [updating, setUpdating] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editLoading, setEditLoading] = useState(false)
-  const [editInvoiceNo, setEditInvoiceNo] = useState("")
-  const [editOrderNo, setEditOrderNo] = useState("")
-  const [editOrderDate, setEditOrderDate] = useState("")
-  const [editInvoiceDate, setEditInvoiceDate] = useState("")
-  const [editDueDate, setEditDueDate] = useState("")
-  const [editPaymentTerms, setEditPaymentTerms] = useState("")
+  const [updatingStatus, setUpdatingStatus] = useState(false)
   const [includeStamp, setIncludeStamp] = useState<boolean>(false)
-  const [editNotes, setEditNotes] = useState("")
-  const [editClientGstin, setEditClientGstin] = useState("")
-  const [quotationData, setQuotationData] = useState<{ quote_no: string } | null>(null)
   const id = params.id as string
 
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
@@ -131,6 +119,7 @@ export default function ViewInvoicePage() {
         .then(({ data, error }) => {
           if (error) {
             console.error("Failed to fetch organization:", error)
+            toast.error("Could not determine your organization")
           } else if (data?.org_id) {
             setCurrentOrgId(data.org_id)
           }
@@ -140,7 +129,7 @@ export default function ViewInvoicePage() {
 
   useEffect(() => {
     const saved = localStorage.getItem(`stamp_toggle_inv_${id}`)
-    if (saved === 'true') setIncludeStamp(true)
+    if (saved === "true") setIncludeStamp(true)
   }, [id])
 
   const handleStampToggle = () => {
@@ -177,18 +166,8 @@ export default function ViewInvoicePage() {
         .eq("org_id", currentOrgId)
         .single()
 
-      const invoiceData = iData as Invoice
-      setInvoice(invoiceData)
+      setInvoice(iData as Invoice)
       if (pData) setProfile(pData as CompanyProfile)
-
-      if (invoiceData.quotation_id) {
-        const { data: quotData } = await supabase
-          .from("quotations")
-          .select("quote_no")
-          .eq("id", invoiceData.quotation_id)
-          .single()
-        if (quotData) setQuotationData(quotData)
-      }
     } catch (err) {
       console.error(err)
       toast.error("Failed to load invoice")
@@ -233,26 +212,6 @@ export default function ViewInvoicePage() {
     }
   }
 
-  const handleUpdatePaymentStatus = async (newStatus: string) => {
-    if (!invoice || !currentOrgId) return
-    setUpdating(true)
-    try {
-      const { error } = await supabase
-        .from("invoices")
-        .update({ payment_status: newStatus })
-        .eq("id", invoice.id)
-        .eq("org_id", currentOrgId)
-      if (error) throw error
-      setInvoice({ ...invoice, payment_status: newStatus as Invoice["payment_status"] })
-      toast.success(`Payment status updated to ${newStatus}`)
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to update payment status")
-    } finally {
-      setUpdating(false)
-    }
-  }
-
   const handleEditClick = () => {
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
@@ -265,48 +224,25 @@ export default function ViewInvoicePage() {
     router.push(`/invoices/${id}/edit`)
   }
 
-  const handleOpenEditModal = () => {
-    if (!invoice) return
-    setEditInvoiceNo(invoice.invoice_no || "")
-    setEditOrderNo(invoice.order_no || "")
-    setEditOrderDate(invoice.order_date || "")
-    setEditInvoiceDate(invoice.invoice_date || "")
-    setEditDueDate(invoice.due_date || "")
-    setEditPaymentTerms(invoice.payment_terms || "")
-    setEditNotes(invoice.notes || "")
-    setEditClientGstin(invoice.client_gstin || "")
-    setShowEditModal(true)
-  }
-
-  const handleSaveChanges = async () => {
-    if (!invoice || !user?.id || !currentOrgId) return
-    setEditLoading(true)
+  const handlePaymentStatusChange = async (newStatus: string) => {
+    if (!invoice || !currentOrgId) return
+    setUpdatingStatus(true)
+    const prev = invoice.payment_status
+    setInvoice({ ...invoice, payment_status: newStatus })
     try {
       const { error } = await supabase
         .from("invoices")
-        .update({
-          invoice_no: editInvoiceNo,
-          order_no: editOrderNo || null,
-          order_date: editOrderDate || null,
-          invoice_date: editInvoiceDate,
-          due_date: editDueDate,
-          payment_terms: editPaymentTerms,
-          notes: editNotes,
-          client_gstin: editClientGstin || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ payment_status: newStatus })
         .eq("id", invoice.id)
         .eq("org_id", currentOrgId)
-      
       if (error) throw error
-      toast.success("Invoice updated successfully")
-      setShowEditModal(false)
-      loadData()
+      toast.success("Payment status updated")
     } catch (err) {
       console.error(err)
-      toast.error("Failed to update invoice")
+      toast.error("Failed to update payment status")
+      setInvoice({ ...invoice, payment_status: prev })
     } finally {
-      setEditLoading(false)
+      setUpdatingStatus(false)
     }
   }
 
@@ -330,42 +266,6 @@ export default function ViewInvoicePage() {
     return { subtotal, discountAmount, discountType: invoice.discount_type, discountValue: invoice.discount_value || 0, sgst, cgst, grandTotal }
   }
 
-  const handleWhatsApp = () => {
-    if (!invoice) return
-    const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
-    const items = invoice.items ?? []
-    const includeGst = invoice.include_gst ?? true
-    let msg =
-      `*Invoice - ${safeStr(profile?.company_name)}\n` +
-      `Invoice No: ${safeStr(invoice.invoice_no)}\n` +
-      `Date: ${safeDate(invoice.invoice_date)}\n` +
-      `Due Date: ${safeDate(invoice.due_date)}\n\n` +
-      `*Customer:* ${safeStr(invoice.client_name)}\n\n` +
-      `─────────────────────\n` +
-      `*Services:*\n` +
-      items.map((i: any) =>
-        `• ${i.particulars ?? i.description ?? i.name ?? "-"} - Rs.${Number(i.amount ?? 0).toLocaleString("en-IN")}`
-      ).join("\n") + "\n" +
-      `─────────────────────\n` +
-      `*Subtotal:* Rs.${subtotal.toLocaleString("en-IN")}\n`
-    if (discountAmount > 0) {
-      const discountVal = Number(discountValue).toString()
-      const label = discountType === "percentage" ? `${discountVal}%` : `₹${discountVal}`
-      msg += `*Discount (${label}):* -Rs.${discountAmount.toLocaleString("en-IN")}\n`
-    }
-    if (includeGst) {
-      msg += `*SGST (9%):* Rs.${sgst.toLocaleString("en-IN")}\n*CGST (9%):* Rs.${cgst.toLocaleString("en-IN")}\n`
-    }
-    msg += `*Total:* Rs.${grandTotal.toLocaleString("en-IN")}\n` +
-      `─────────────────────\n\n` +
-      `To confirm please reply or call ${safeStr(profile?.company_phone)}\n\n` +
-      `_Powered by Remindi_`
-    window.open("https://wa.me/?text=" + encodeURIComponent(msg))
-  }
-
-  // =============================================
-  // PDF GENERATION
-  // =============================================
   const handleDownloadPdf = async (stampToggle: boolean = false) => {
     if (!invoice) return
 
@@ -378,7 +278,6 @@ export default function ViewInvoicePage() {
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
 
-      // ===== PRE-FETCH IMAGES =====
       const headerStyle = profile?.header_style ?? "single_logo"
       let bannerBase64: string | null = null
       let bannerFormat: "JPEG" | "PNG" = "PNG"
@@ -393,9 +292,17 @@ export default function ViewInvoicePage() {
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
+          const naturalSize = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+            img.onerror = reject
+            img.src = bannerBase64 as string
+          })
           const bannerW = pageW - (margin * 2)
-          bannerH = Math.round(bannerW / (1462 / 396))
-        } catch (e) { /* skip banner silently */ }
+          bannerH = Math.round(bannerW / (naturalSize.w / naturalSize.h))
+          const maxBannerH = 60
+          if (bannerH > maxBannerH) bannerH = maxBannerH
+        } catch (e) { /* skip banner */ }
       }
 
       let logoBase64: string | null = null
@@ -410,19 +317,18 @@ export default function ViewInvoicePage() {
             reader.onloadend = () => resolve(reader.result as string)
             reader.readAsDataURL(blob)
           })
-        } catch (e) { /* skip logo silently */ }
+        } catch (e) { /* skip logo */ }
       }
 
       let stampBase64: string | null = null
       let stampFormat: "JPEG" | "PNG" = "PNG"
       if (shouldIncludeStamp && profile?.stamp_url) {
         const stampPublicUrl = profile.stamp_url
-
         const MAX_STAMP_ATTEMPTS = 3
         for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
           try {
             const stampResponse = await fetch(stampPublicUrl, { cache: 'no-store' })
-            if (!stampResponse.ok) throw new Error('Failed to fetch stamp image')
+            if (!stampResponse.ok) throw new Error(`HTTP ${stampResponse.status}`)
             const stampBlob = await stampResponse.blob()
             stampBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader()
@@ -433,8 +339,10 @@ export default function ViewInvoicePage() {
             stampFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
             break
           } catch (e) {
-            console.error(`Error loading stamp for PDF (attempt ${attempt}):`, e)
-            if (attempt < MAX_STAMP_ATTEMPTS) {
+            console.warn(`[Stamp] Attempt ${attempt} failed:`, e)
+            if (attempt === MAX_STAMP_ATTEMPTS) {
+              toast.warning('Stamp image could not be loaded – skipping stamp')
+            } else {
               await new Promise(res => setTimeout(res, 400 * attempt))
             }
           }
@@ -444,26 +352,22 @@ export default function ViewInvoicePage() {
       const items = invoice.items ?? []
       const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
 
-      // ===== SINGLE RENDER FUNCTION =====
-      const renderInvoice = (doc: jsPDF, pageH: number): number => {
+      const renderInvoice = (doc: jsPDF): number => {
         let y = margin
 
-        // HEADER
         if (headerStyle === "thumbnail" && bannerBase64) {
           const bannerW = pageW - (margin * 2)
           doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
-          y += bannerH +6
+          y += bannerH + 6
         } else if (headerStyle === "single_logo") {
           y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
         } else {
-          // Legacy header
           let logoX = margin
           let logoAdded = false
           if (logoBase64) {
             doc.addImage(logoBase64, logoFormat, logoX, y, 22, 22)
             logoAdded = true
           }
-
           const infoX = logoAdded ? logoX + 24 : logoX
           doc.setFontSize(14)
           doc.setFont("helvetica", "bold")
@@ -474,7 +378,6 @@ export default function ViewInvoicePage() {
           doc.setFont("helvetica", "normal")
           doc.setTextColor(120, 120, 120)
           let infoY = y + 8
-
           if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
           if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
           if (profile?.city || profile?.state || profile?.zip_code) {
@@ -484,7 +387,6 @@ export default function ViewInvoicePage() {
           if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
           if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
           if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-
           y += 31
 
           doc.setDrawColor(tr, tg, tb)
@@ -509,15 +411,16 @@ export default function ViewInvoicePage() {
         doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
 
         y += 5
-        doc.setFontSize(9)
-        doc.setTextColor(220, 38, 38)
-        doc.text('Valid Till:' + safeDate(invoice.due_date), pageW - margin, y, { align: 'right' })
-
-        y += 5
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(0, 0, 0)
+        if (invoice.due_date) {
+          doc.setFontSize(9)
+          doc.setTextColor(220, 38, 38)
+          doc.text('Due Date: ' + safeDate(invoice.due_date), pageW - margin, y, { align: 'right' })
+          y += 5
+        }
         if (invoice.order_no) {
+          doc.setFontSize(9)
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(0, 0, 0)
           doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
           y += 5
         }
@@ -530,21 +433,18 @@ export default function ViewInvoicePage() {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(150, 150, 150)
-        doc.text("BILL TO:", margin, y)
+        doc.text("TO,", margin, y)
         y += 5
-
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text(safeStr(invoice.client_name).toUpperCase(), margin, y)
         y += 5
-
         doc.setFont("helvetica", "normal")
         doc.setTextColor(40, 40, 40)
         if (invoice.client_address) {
           doc.text(safeStr(invoice.client_address), margin, y)
           y += 5
         }
-
         const cityStateZip = [
           invoice.client_district,
           invoice.client_state,
@@ -554,16 +454,23 @@ export default function ViewInvoicePage() {
           doc.text(cityStateZip, margin, y)
           y += 5
         }
-
-        if (invoice.client_gstin) {
-          doc.text(`GSTIN: ${invoice.client_gstin}`, margin, y)
-          y += 5
-        }
-
         y += 3
 
-        // ITEMS TABLE
-        const tableBody = items.map((item, idx) => [
+        if (invoice.subject) {
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
+          doc.text('Sub: ' + safeStr(invoice.subject), margin, y)
+          y += 5
+        }
+        if (invoice.body_text) {
+          doc.setFont("helvetica", "normal")
+          doc.setTextColor(80, 80, 80)
+          const bodyLines = doc.splitTextToSize(safeStr(invoice.body_text), pageW - 2 * margin)
+          doc.text(bodyLines, margin, y)
+          y += (bodyLines.length * 4) + 3
+        }
+
+        const tableBody = items.map((item: any, idx: number) => [
           String(idx + 1),
           safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
           String(item.qty ?? item.quantity ?? 1),
@@ -601,7 +508,6 @@ export default function ViewInvoicePage() {
 
         y = (doc as any).lastAutoTable.finalY + 8
 
-        // ---- TOTALS ----
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
@@ -611,8 +517,9 @@ export default function ViewInvoicePage() {
         y += 4
 
         if (discountAmount > 0) {
-          const discountVal = Number(discountValue).toString()
-          const discountLabel = discountType === "percentage" ? `${discountVal}%` : `Rs. ${discountVal}`
+          const discountLabel = discountType === "percentage"
+            ? `${discountValue}%`
+            : `₹${discountValue}`
           doc.text(`Discount (${discountLabel}):`, 160, y, { align: 'right' })
           doc.setTextColor(200, 0, 0)
           doc.text('- Rs. ' + discountAmount.toLocaleString('en-IN'), 195, y, { align: 'right' })
@@ -636,11 +543,6 @@ export default function ViewInvoicePage() {
           doc.text('Total:', 160, y, { align: 'right' })
           doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
         } else {
-          y += 3
-          doc.setDrawColor(0, 0, 0)
-          doc.setLineWidth(0.3)
-          doc.line(140, y, 195, y)
-          y += 4
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(10)
           doc.text('Total:', 160, y, { align: 'right' })
@@ -651,16 +553,10 @@ export default function ViewInvoicePage() {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
-        const inWordsAmount = grandTotal
-        doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
+        doc.text(('RUPEES ' + toWords(Math.round(grandTotal)) + ' ONLY').toUpperCase(), margin, y)
         y += 20
 
-        // ---- PAYMENT DETAILS ----
-        // Use invoice payment terms if available, otherwise fall back to profile payment terms
-        const resolvedPaymentTerms = invoice.payment_terms || profile?.payment_terms || "";
-
-        // Only show if at least one payment detail exists
-        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || resolvedPaymentTerms) {
+        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || invoice.payment_terms) {
           y += 10
           doc.setFontSize(9)
           doc.setFont("helvetica", "bold")
@@ -669,30 +565,13 @@ export default function ViewInvoicePage() {
           y += 5
           doc.setFont("helvetica", "normal")
           doc.setTextColor(40, 40, 40)
-
-          if (profile?.bank_name) {
-            doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y)
-            y += 4
-          }
-          if (profile?.account_no) {
-            doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y)
-            y += 4
-          }
-          if (profile?.ifsc_code) {
-            doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y)
-            y += 4
-          }
-          if (profile?.upi_id) {
-            doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y)
-            y += 4
-          }
-          if (resolvedPaymentTerms) {
-            doc.text(`${safeStr(resolvedPaymentTerms)}`, margin, y)
-            y += 4
-          }
+          if (profile?.bank_name) { doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y); y += 4 }
+          if (profile?.account_no) { doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y); y += 4 }
+          if (profile?.ifsc_code) { doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y); y += 4 }
+          if (profile?.upi_id) { doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y); y += 4 }
+          if (invoice.payment_terms) { doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y); y += 4 }
         }
 
-        // TAX INFORMATION
         if (invoice.include_gst) {
           y += 6
           doc.setFontSize(9)
@@ -702,22 +581,13 @@ export default function ViewInvoicePage() {
           y += 5
           doc.setFont("helvetica", "normal")
           doc.setTextColor(40, 40, 40)
-
-          if (profile?.gstin) {
-            doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y)
-            y += 4
-          }
-          if (profile?.pan_number) {
-            doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y)
-            y += 4
-          }
-
+          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
+          if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
           doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
           y += 4
           y += 6
         }
 
-        // NOTES
         if (invoice.notes) {
           y += 3
           doc.setFontSize(9)
@@ -732,7 +602,6 @@ export default function ViewInvoicePage() {
           y += (noteLines.length * 4)
         }
 
-        // FOOTER
         y += 10
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
@@ -744,7 +613,6 @@ export default function ViewInvoicePage() {
 
         let contentBottom = y + 12
 
-        // STAMP
         if (shouldIncludeStamp && stampBase64) {
           let stampY = y + 18
           const stampW = 30
@@ -766,7 +634,6 @@ export default function ViewInvoicePage() {
           contentBottom = Math.max(contentBottom, stampY)
         }
 
-        // BOTTOM LINE
         const footerY = contentBottom + 12
         doc.setFontSize(8)
         doc.setTextColor(150, 150, 150)
@@ -776,14 +643,11 @@ export default function ViewInvoicePage() {
         return footerY + 8
       }
 
-      // PASS 1: measure
       const scratchDoc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
-      const measuredHeight = renderInvoice(scratchDoc, 2000)
-
-      // PASS 2: final
+      const measuredHeight = renderInvoice(scratchDoc)
       const finalPageHeight = Math.max(measuredHeight, 100)
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, finalPageHeight] })
-      renderInvoice(doc, finalPageHeight)
+      renderInvoice(doc)
 
       const filename = `Invoice-${safeStr(invoice.invoice_no ?? invoice.id)}-${safeStr(invoice.client_name ?? "Client")}.pdf`
       doc.save(filename)
@@ -796,12 +660,13 @@ export default function ViewInvoicePage() {
     }
   }
 
-  // ========== RENDER ==========
+  // ─── Loading & not-found states ──────────────────────────────────────────────
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     )
@@ -810,533 +675,401 @@ export default function ViewInvoicePage() {
   if (!invoice) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="flex flex-col items-center justify-center h-96 gap-3">
+          <FileText className="size-10 text-muted-foreground/40" />
           <p className="text-muted-foreground">Invoice not found</p>
           <Link href="/invoices">
-            <Button>Back to Invoices</Button>
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="mr-1.5 size-3.5" />
+              Back to Invoices
+            </Button>
           </Link>
         </div>
       </DashboardLayout>
     )
   }
 
-  const mappedItems = getMappedItems()
   const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
   const includeGst = invoice.include_gst ?? true
-  
-  // Resolve payment terms for UI display as well
-  const resolvedPaymentTerms = invoice.payment_terms || profile?.payment_terms || "";
+  const mappedItems = getMappedItems()
+  const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+      <div className="flex flex-col gap-4 max-w-4xl mx-auto">
 
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-start gap-3">
+        {/* ── Action bar ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
             <Link href="/invoices">
-              <Button variant="outline" size="icon" className="shrink-0 mt-1">
+              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {invoice.invoice_no ?? ("INV-" + invoice.id)}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {formatDate(invoice.invoice_date)}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-semibold leading-tight">
+                  {invoice.invoice_no ?? ("INV-" + invoice.id)}
+                </h1>
+                {getPaymentStatusBadge(invoice.payment_status)}
+                {invoice.quotation_id ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
+                    <CheckCircle2 className="size-3" />
+                    From quotation
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {invoice.client_name} · {formatDate(invoice.invoice_date)}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            {getPaymentStatusBadge(invoice.payment_status)}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Payment status quick-change */}
+            <Select
+              value={(invoice.payment_status || "Unpaid").toLowerCase()}
+              onValueChange={handlePaymentStatusChange}
+              disabled={updatingStatus}
+            >
+              <SelectTrigger className="h-9 w-[120px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+              </SelectContent>
+            </Select>
 
+            {/* Stamp toggle */}
             <Button
               onClick={handleStampToggle}
               disabled={generatingPdf}
               variant="outline"
               size="sm"
-              className={includeStamp ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100' : ''}
+              className={
+                includeStamp
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700"
+                  : "text-muted-foreground"
+              }
             >
-              {includeStamp ? (
-                <CheckCircle2 className="mr-1.5 size-4" />
-              ) : (
-                <CheckCircle2 className="mr-1.5 size-4 opacity-40" />
-              )}
-              Stamp: {includeStamp ? 'ON' : 'OFF'}
+              <Stamp className="size-3.5 mr-1.5" />
+              {includeStamp ? "Stamp on" : "Stamp off"}
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={handleEditClick}>
+              <Edit className="size-3.5 mr-1.5" />
+              Edit
             </Button>
 
             <Button
               onClick={() => handleDownloadPdf(includeStamp)}
               disabled={generatingPdf}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              variant="outline"
               size="sm"
             >
               {generatingPdf ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Download className="mr-1.5 size-4" />
+                <Download className="size-3.5 mr-1.5" />
               )}
               Download PDF
             </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={updating}>
-                  {updating ? (
-                    <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  ) : (
-                    <ChevronDown className="mr-1.5 size-4" />
-                  )}
-                  Payment Status
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Unpaid")}>
-                  <span className="size-2 rounded-full bg-red-500 mr-2 inline-block" />
-                  Unpaid
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Partial")}>
-                  <span className="size-2 rounded-full bg-yellow-500 mr-2 inline-block" />
-                  Partial
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUpdatePaymentStatus("Paid")}>
-                  <span className="size-2 rounded-full bg-green-500 mr-2 inline-block" />
-                  Paid
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditClick}
-            >
-              <Edit className="mr-1.5 size-4" />
-              Edit
-            </Button>
+            {invoice.quotation_id && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => router.push(`/quotations/${invoice.quotation_id}`)}
+              >
+                <FileText className="size-3.5 mr-1.5" />
+                View Quotation
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* COMPANY INFO */}
-        {profile && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Company Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-4">
-                {profile.logo_url && (
-                  <img
-                    src={profile.logo_url}
-                    alt="Company logo"
-                    className="h-16 w-16 object-contain rounded border"
-                  />
+        {/* ── Invoice document card ─────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+
+          {/* Coloured accent line */}
+          <div className="h-1 bg-blue-600" />
+
+          {/* From / To */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
+            {/* From — company */}
+            <div className="flex gap-3 p-5">
+              {profile?.logo_url && (
+                <img
+                  src={profile.logo_url}
+                  alt="Logo"
+                  className="h-11 w-11 object-contain rounded shrink-0 mt-0.5"
+                />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
+                <p className="font-semibold text-sm leading-snug">{profile?.company_name ?? "-"}</p>
+                {profile?.tagline && (
+                  <p className="text-xs text-muted-foreground">{profile.tagline}</p>
                 )}
-                <div className="space-y-0.5 flex-1">
-                  <p className="font-bold text-lg">{profile.company_name ?? "-"}</p>
-                  {profile.tagline && (
-                    <p className="text-xs text-muted-foreground">{profile.tagline}</p>
-                  )}
-                  {profile.address && (
-                    <p className="text-xs text-muted-foreground">{profile.address}</p>
-                  )}
-                  {(profile.city || profile.state || profile.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")}
-                    </p>
-                  )}
-                  {profile.phone && (
-                    <p className="text-xs text-muted-foreground">Phone: {profile.phone}</p>
-                  )}
-                  {profile.email && (
-                    <p className="text-xs text-muted-foreground">Email: {profile.email}</p>
-                  )}
-                  {profile.gstin && (
-                    <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
-                  )}
-                </div>
-              </div>
-              
-              {(profile.bank_name || profile.account_no || profile.ifsc_code || profile.upi_id) && (
-                <div className="border-t border-border mt-4 pt-4">
-                  <p className="font-semibold text-sm mb-2">Bank Details</p>
-                  <div className="text-xs space-y-1 text-muted-foreground">
-                    {profile.bank_name && <p>Bank: {profile.bank_name}</p>}
-                    {profile.account_no && <p>Account No: {profile.account_no}</p>}
-                    {profile.ifsc_code && <p>IFSC: {profile.ifsc_code}</p>}
-                    {profile.upi_id && <p>UPI: {profile.upi_id}</p>}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* CUSTOMER INFORMATION */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Billed To</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Name</p>
-              <p className="font-medium">{invoice.client_name ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Invoice Date</p>
-              <p className="font-medium">{formatDate(invoice.invoice_date)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Valid till</p>
-              <p className="font-medium">{invoice.due_date ? formatDate(invoice.due_date) : "-"}</p>
-            </div>
-            {invoice.order_no && (
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Order No</p>
-                <p className="font-medium">{invoice.order_no}</p>
-              </div>
-            )}
-            {resolvedPaymentTerms && (
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Payment Terms</p>
-                <p className="font-medium text-sm">{resolvedPaymentTerms}</p>
-              </div>
-            )}
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Address</p>
-              <p className="font-medium">{invoice.client_address ?? "-"}</p>
-            </div>
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client GSTIN</p>
-              <p className="font-medium">{invoice.client_gstin || "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client District</p>
-              <p className="font-medium">{invoice.client_district ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client State</p>
-              <p className="font-medium">{invoice.client_state ?? "-"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Client Pin Code</p>
-              <p className="font-medium">{invoice.client_pin_code ?? "-"}</p>
-            </div>
-            {invoice.subject && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Subject</p>
-                <p className="font-medium">{invoice.subject}</p>
-              </div>
-            )}
-            {invoice.quotation_id && (
-              <div className="sm:col-span-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Linked Quotation</p>
-                <Link href={`/quotations/${invoice.quotation_id}`} className="text-blue-600 hover:underline text-sm font-medium">
-                  View Quotation
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ITEMS TABLE */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Items</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="text-center py-3 px-4 font-semibold w-12">SR.</th>
-                    <th className="text-left py-3 px-4 font-semibold">Description</th>
-                    <th className="text-center py-3 px-4 font-semibold w-16">Qty</th>
-                    <th className="text-right py-3 px-4 font-semibold w-32">Unit Price</th>
-                    <th className="text-right py-3 px-4 font-semibold w-32">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mappedItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                        No items found
-                      </td>
-                    </tr>
-                  ) : (
-                    mappedItems.map((item, i) => (
-                      <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                        <td className="text-center py-3 px-4 text-muted-foreground">{item.sr}</td>
-                        <td className="py-3 px-4">{item.description}</td>
-                        <td className="text-center py-3 px-4">{item.qty}</td>
-                        <td className="text-right py-3 px-4">₹{Number(item.rate).toLocaleString("en-IN")}</td>
-                        <td className="text-right py-3 px-4 font-medium">₹{Number(item.amount).toLocaleString("en-IN")}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* TOTALS */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-end gap-3 max-w-xs ml-auto">
-              <div className="flex justify-between w-full text-sm">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span className="font-medium">₹{subtotal.toLocaleString("en-IN")}</span>
-              </div>
-
-              {discountAmount > 0 && (
-                <div className="flex justify-between w-full text-sm">
-                  <span className="text-muted-foreground">
-                    Discount {discountType === "percentage" ? `(${Number(discountValue).toString()}%)` : `(₹${Number(discountValue).toString()})`}:
-                  </span>
-                  <span className="font-medium text-red-600">- ₹{discountAmount.toLocaleString("en-IN")}</span>
-                </div>
-              )}
-
-              {includeGst ? (
-                <>
-                  <div className="flex justify-between w-full text-sm">
-                    <span className="text-muted-foreground">SGST (9%):</span>
-                    <span className="font-medium">₹{sgst.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between w-full text-sm">
-                    <span className="text-muted-foreground">CGST (9%):</span>
-                    <span className="font-medium">₹{cgst.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="border-t border-border pt-2 mt-1 flex justify-between w-full">
-                    <span className="text-lg font-bold">Total:</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      ₹{grandTotal.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex justify-between w-full">
-                  <span className="text-lg font-bold">Total:</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    ₹{grandTotal.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* NOTES */}
-        {invoice.notes && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Terms & Conditions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{invoice.notes}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Edit Invoice Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Invoice</DialogTitle>
-            {quotationData && (
-              <p className="text-xs text-muted-foreground mt-1">From {quotationData.quote_no}</p>
-            )}
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-order-no">Order Number (Optional)</Label>
-              <Input
-                id="edit-order-no"
-                value={editOrderNo}
-                onChange={(e) => setEditOrderNo(e.target.value)}
-                placeholder="e.g. PO-2026-001"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-order-date">Order Date (Optional)</Label>
-              <Input
-                id="edit-order-date"
-                type="date"
-                value={editOrderDate}
-                onChange={(e) => setEditOrderDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-invoice-no">Invoice Number</Label>
-              <Input
-                id="edit-invoice-no"
-                value={editInvoiceNo}
-                onChange={(e) => setEditInvoiceNo(e.target.value)}
-                placeholder="INV-001"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-invoice-date">Invoice Date</Label>
-              <Input
-                id="edit-invoice-date"
-                type="date"
-                value={editInvoiceDate}
-                onChange={(e) => setEditInvoiceDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-due-date">Valid till</Label>
-              <Input
-                id="edit-due-date"
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-payment-terms">Payment Terms</Label>
-              <Select value={editPaymentTerms} onValueChange={setEditPaymentTerms}>
-                <SelectTrigger id="edit-payment-terms">
-                  <SelectValue placeholder="Select payment terms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="100% advance along with work order">100% advance along with work order</SelectItem>
-                  <SelectItem value="50% advance, balance on completion">50% advance, balance on completion</SelectItem>
-                  <SelectItem value="Net 7 days">Net 7 days</SelectItem>
-                  <SelectItem value="Net 14 days">Net 14 days</SelectItem>
-                  <SelectItem value="Net 30 days">Net 30 days</SelectItem>
-                  <SelectItem value="On completion">On completion</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-client-gstin">Client GSTIN (Optional)</Label>
-              <Input
-                id="edit-client-gstin"
-                value={editClientGstin}
-                onChange={(e) => setEditClientGstin(e.target.value)}
-                placeholder="GSTIN"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-invoice-notes">Terms & Conditions</Label>
-              <Textarea
-                id="edit-invoice-notes"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="e.g. Please transfer to bank account..."
-                className="min-h-[80px] resize-none"
-              />
-            </div>
-
-            {invoice && (
-              <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Client:</span> {invoice.client_name}
-                </p>
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Subtotal:</span> ₹{invoice.subtotal.toLocaleString("en-IN")}
-                </p>
-                {invoice.discount_amount && invoice.discount_amount > 0 && (
-                  <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">Discount:</span> -₹{invoice.discount_amount.toLocaleString("en-IN")}
+                {profile?.address && (
+                  <p className="text-xs text-muted-foreground">{profile.address}</p>
+                )}
+                {(profile?.city || profile?.state || profile?.zip_code) && (
+                  <p className="text-xs text-muted-foreground">
+                    {[profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")}
                   </p>
                 )}
-                {invoice.include_gst && (
-                  <>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">SGST 9%:</span> ₹{invoice.sgst.toLocaleString("en-IN")}
-                    </p>
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">CGST 9%:</span> ₹{invoice.cgst.toLocaleString("en-IN")}
-                    </p>
-                  </>
+                {profile?.phone && (
+                  <p className="text-xs text-muted-foreground">{profile.phone}</p>
                 )}
-                <p className="text-foreground font-semibold border-t border-border pt-2">
-                  Total: ₹{invoice.grand_total.toLocaleString("en-IN")}
+                {profile?.gstin && (
+                  <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
+                )}
+              </div>
+            </div>
+
+            {/* To — client */}
+            <div className="p-5 space-y-0.5">
+              <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">TO</p>
+              <p className="font-semibold text-sm leading-snug">{invoice.client_name ?? "-"}</p>
+              {invoice.client_address && (
+                <p className="text-xs text-muted-foreground">{invoice.client_address}</p>
+              )}
+              {(invoice.client_district || invoice.client_state || invoice.client_pin_code) && (
+                <p className="text-xs text-muted-foreground">
+                  {[invoice.client_district, invoice.client_state, invoice.client_pin_code]
+                    .filter(Boolean)
+                    .join(", ")}
                 </p>
+              )}
+            </div>
+          </div>
+
+          {/* Invoice meta strip */}
+          <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Invoice No</p>
+              <p className="text-sm font-semibold">{invoice.invoice_no ?? ("INV-" + invoice.id)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Date</p>
+              <p className="text-sm font-semibold">{formatDate(invoice.invoice_date)}</p>
+            </div>
+            {invoice.due_date && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Due Date</p>
+                <p className="text-sm font-semibold text-amber-600">{formatDate(invoice.due_date)}</p>
+              </div>
+            )}
+            {invoice.order_no && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Order No</p>
+                <p className="text-sm font-semibold">{invoice.order_no}</p>
+              </div>
+            )}
+            {invoice.payment_terms && (
+              <div>
+                <p className="text-[10px] text-muted-foreground">Payment Terms</p>
+                <p className="text-sm font-semibold">{invoice.payment_terms}</p>
               </div>
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveChanges}
-              disabled={editLoading || !editInvoiceNo}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {editLoading ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
+          {/* Subject + body */}
+          {(invoice.subject || invoice.body_text) && (
+            <div className="px-5 py-4 border-b border-border space-y-1.5">
+              {invoice.subject && (
+                <p className="text-sm font-semibold">Sub: {invoice.subject}</p>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Subscription Alert Modal */}
+              {invoice.body_text && (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {invoice.body_text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Items table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-10">#</th>
+                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-16">Qty</th>
+                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Rate</th>
+                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {mappedItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                      No items added
+                    </td>
+                  </tr>
+                ) : (
+                  mappedItems.map((item, i) => (
+                    <tr key={i} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr}</td>
+                      <td className="py-3 px-4 font-medium text-sm">{item.description}</td>
+                      <td className="text-center py-3 px-4 text-sm text-muted-foreground">{item.qty}</td>
+                      <td className="text-right py-3 px-4 text-sm text-muted-foreground">
+                        ₹{Number(item.rate).toLocaleString("en-IN")}
+                      </td>
+                      <td className="text-right py-3 px-4 text-sm font-semibold">
+                        ₹{Number(item.amount).toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals + Notes row */}
+          <div className="border-t border-border">
+            <div className="flex flex-col sm:flex-row">
+
+              {/* Notes / T&C — left */}
+              {invoice.notes ? (
+                <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                    {invoice.notes}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
+
+              {/* Totals — right */}
+              <div className="p-5 sm:w-64 shrink-0">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Discount
+                        {discountType === "percentage" ? ` (${discountValue}%)` : ""}
+                      </span>
+                      <span className="text-red-500">
+                        −₹{discountAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+
+                  {includeGst && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">SGST (9%)</span>
+                        <span>₹{sgst.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">CGST (9%)</span>
+                        <span>₹{cgst.toLocaleString("en-IN")}</span>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="border-t border-border pt-2.5 flex justify-between items-baseline gap-2">
+                    <span className="font-semibold text-sm">Total</span>
+                    <span className="font-bold text-xl text-blue-600">
+                      ₹{grandTotal.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Rupees {toWords(Math.round(grandTotal))} Only
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank details strip */}
+            {hasBankDetails && (
+              <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
+                {profile?.bank_name && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Bank:</span> {profile.bank_name}
+                  </span>
+                )}
+                {profile?.account_no && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">A/C:</span> {profile.account_no}
+                  </span>
+                )}
+                {profile?.ifsc_code && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">IFSC:</span> {profile.ifsc_code}
+                  </span>
+                )}
+                {profile?.upi_id && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">UPI:</span> {profile.upi_id}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Subscription alert ───────────────────────────────────────────────── */}
       <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Subscription Alert</DialogTitle>
+            <DialogTitle>Plan expired</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Your {planName || 'current'} plan has expired. Renew your plan to edit this invoice.
+            Your {planName || 'current'} plan has expired. Renew to edit this invoice.
           </p>
           <DialogFooter>
-            <Button onClick={() => setSubscriptionAlertOpen(false)}>
-              OK
-            </Button>
+            <Button onClick={() => setSubscriptionAlertOpen(false)}>OK</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Stamp Upload Dialog - Only shown if user doesn't have a stamp yet */}
+      {/* ── Stamp upload ─────────────────────────────────────────────────────── */}
       <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Stamp / Signature</DialogTitle>
             <DialogDescription>
-              You haven't added a stamp or signature yet. Upload one now to enable it on your invoice.
+              Upload a stamp or signature to include it on downloaded PDFs.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-secondary/30">
-              {stampPreview ? (
+
+          <div className="py-2">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
+              {(stampPreview || profile?.stamp_url) ? (
                 <div className="relative">
-                  <img src={stampPreview} alt="Stamp preview" className="max-h-32 object-contain" />
+                  <img
+                    src={stampPreview || profile?.stamp_url || ''}
+                    alt="Stamp preview"
+                    className="max-h-28 object-contain"
+                    onError={() => toast.error("Failed to load image")}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                    onClick={() => { setStampFile(null); setStampPreview(null); }}
+                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-50 text-red-500 hover:bg-red-100 border border-red-200"
+                    onClick={() => { setStampFile(null); setStampPreview(null) }}
                   >
                     ×
                   </Button>
                 </div>
               ) : (
-                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload className="size-8 text-muted-foreground" />
+                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2 text-center">
+                  <Upload className="size-7 text-muted-foreground" />
                   <span className="text-sm font-medium">Click to upload stamp</span>
-                  <span className="text-xs text-muted-foreground">PNG, JPG (Max 2MB)</span>
+                  <span className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB</span>
                   <input
                     id="stamp-upload"
                     type="file"
@@ -1346,7 +1079,7 @@ export default function ViewInvoicePage() {
                       const file = e.target.files?.[0]
                       if (!file) return
                       if (file.size > 2 * 1024 * 1024) {
-                        toast.error("File size must be less than 2MB")
+                        toast.error("File must be under 2 MB")
                         return
                       }
                       setStampFile(file)
@@ -1359,8 +1092,12 @@ export default function ViewInvoicePage() {
               )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null); }}>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null) }}
+            >
               Cancel
             </Button>
             <Button
@@ -1369,9 +1106,9 @@ export default function ViewInvoicePage() {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {uploadingStamp ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
-                <Save className="mr-2 size-4" />
+                <Save className="mr-1.5 size-4" />
               )}
               Save Stamp
             </Button>
