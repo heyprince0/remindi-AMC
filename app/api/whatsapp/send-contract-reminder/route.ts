@@ -44,7 +44,9 @@ interface ReminderBody {
   //   not_completed      → service_notcompleted  (service T-0 & T+3, uses next_service_date)
   //   expired            → service_notcompleted  (test button + service T+3 alias)
   //   due                → soon_service          (legacy fallback)
-  type: 'due' | 'upcoming' | 'not_completed' | 'expired'
+  //   contract_ending_soon → contract_ending_soon (AMC expiry T-30 days)
+  //   contract_end         → contract_end          (AMC expiry T-0 days)
+  type: 'due' | 'upcoming' | 'not_completed' | 'expired' | 'contract_ending_soon' | 'contract_end'
   dedupKey?: string
 }
 
@@ -139,13 +141,37 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Template mapping ──
-    //   not_completed | expired → service_notcompleted  ("⚠️ Service Visit Not Completed")
-    //   upcoming                → soon_service          ("🛠️ Upcoming Service Visit")
-    //   due                     → soon_service          (fallback)
+    const isContractExpiry = type === 'contract_ending_soon' || type === 'contract_end';
+    
     const templateName =
       (type === 'not_completed' || type === 'expired') ? 'service_notcompleted' :
+      (type === 'contract_ending_soon')                ? 'contract_ending_soon' :
+      (type === 'contract_end')                        ? 'contract_end' :
       type === 'upcoming'                              ? 'soon_service' :
                                                          'soon_service'
+
+    // Prepare components based on template type
+    // For AMC contract templates (from preview): 
+    //   {{1}} = Customer Name, {{2}} = Contractor Name, {{5}} = Contractor Phone
+    // For Service templates (existing): 
+    //   {{1}} = Contractor Name, {{2}} = Customer Name, {{5}} = Customer Phone
+    const components = isContractExpiry 
+      ? {
+          body_1: { type: 'text', value: clean(customerName, 'Customer') },
+          body_2: { type: 'text', value: clean(contractorName, 'Contractor') },
+          body_3: { type: 'text', value: clean(serviceType, 'Service') },
+          body_4: { type: 'text', value: clean(date) },
+          body_5: { type: 'text', value: clean(contractorPhone, 'Not available') },
+          button_1: { subtype: 'url', type: 'text', value: contractId },
+        }
+      : {
+          body_1: { type: 'text', value: clean(contractorName, 'there') },
+          body_2: { type: 'text', value: clean(customerName) },
+          body_3: { type: 'text', value: clean(serviceType, 'Service') },
+          body_4: { type: 'text', value: clean(date) },
+          body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
+          button_1: { subtype: 'url', type: 'text', value: contractId },
+        };
 
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
@@ -171,18 +197,7 @@ export async function POST(request: NextRequest) {
               to_and_components: [
                 {
                   to: [cleanContractorPhone],
-                  components: {
-                    body_1: { type: 'text', value: clean(contractorName, 'there') },
-                    body_2: { type: 'text', value: clean(customerName) },
-                    body_3: { type: 'text', value: clean(serviceType, 'Service') },
-                    body_4: { type: 'text', value: clean(date) },
-                    body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
-                    button_1: {
-                      subtype: 'url',
-                      type: 'text',
-                      value: contractId,
-                    },
-                  },
+                  components,
                 },
               ],
             },
@@ -211,7 +226,6 @@ export async function POST(request: NextRequest) {
       whatsapp_response: result,
     })
     if (logError) {
-      // Do not hide this: without a log row, dedup cannot work
       console.error('reminders_log insert failed:', logError.message)
     }
 
