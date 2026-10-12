@@ -1,265 +1,303 @@
+export const runtime = 'nodejs'
+
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import {
+  sendServiceReminderEmail,
+  sendAMCExpiryReminderEmail,
+  sendAMCExpiredEmail,
+} from '@/lib/email-service'
 
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-export const maxDuration = 60
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-// ───────────── Settings (change here) ─────────────
-// Send "service not completed" on the service day itself (in addition to +3 days)?
-// Set to false if you think it is too early in the day to say "not completed".
-const NOTIFY_ON_SERVICE_DAY = true
-// Send contract expiry notices? (now fires the service_notcompleted template)
-const ENABLE_CONTRACT_END = true
-const CONTRACT_END_DAYS_BEFORE = 7
-// ───────────────────────────────────────────────────
+const NOTIFY_AT_DAYS = [3, 0, -1, -3, -7]
+const CONTRACT_EXPIRY_NOTIFY_DAYS = [30, 0] // 30 days before, and on the day of expiry
 
-type ReminderType = 'upcoming' | 'not_completed'
-
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceRoleKey) throw new Error('Supabase configuration is missing')
-  return createClient(url, serviceRoleKey)
-}
-
-// Today's date in India (YYYY-MM-DD), whatever timezone the server uses
-function istToday(): string {
-  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
-  return ist.toISOString().split('T')[0]
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().split('T')[0]
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-}
-
-function maskPhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  return d.length > 4 ? `******${d.slice(-4)}` : '****'
-}
-
-async function sendReminder(params: {
-  orgId: string
-  contractorPhone: string
-  contractorName: string
-  customerName: string
-  customerPhone: string
-  serviceType: string
-  date: string
-  contractId: string
-  type: ReminderType
-  dedupKey: string
-}): Promise<boolean> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://remindi.online'
+export async function GET() {
   try {
-    const res = await fetch(`${appUrl}/api/whatsapp/send-contract-reminder`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': process.env.CRON_SECRET || '',
-      },
-      body: JSON.stringify(params),
-    })
-    return res.ok
-  } catch (err) {
-    console.error('sendReminder fetch failed:', err)
-    return false
-  }
-}
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-const CONTRACT_SELECT = `
-  id, contract_name, contract_type, next_service_date, end_date, org_id, status,
-  customers ( id, name, phone ),
-  organizations ( id, name, owner_id )
-`
+    // ─────────────────────────────────────────────────────────────
+    // 1. SERVICE REMINDERS (Existing Logic - Do Not Touch)
+    // ─────────────────────────────────────────────────────────────
+    const in7Days = new Date(today)
+    in7Days.setDate(today.getDate() + 7)
 
-type Job = { contract: any; type: ReminderType; dateStr: string }
+    const ago30Days = new Date(today)
+    ago30Days.setDate(today.getDate() - 30)
 
-export async function GET(req: Request) {
-  // ── Auth ──
-  const secret = process.env.CRON_SECRET
-  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+    const in7DaysStr = in7Days.toISOString().split('T')[0]
+    const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
-  // ?dryRun=1 → show what would be sent, send nothing
-  const dryRun = new URL(req.url).searchParams.get('dryRun') === '1'
-
-  const supabase = getSupabaseAdmin()
-
-  // ── Target dates (India time) ──
-  const today = istToday()
-  const tMinus3 = addDays(today, 3)   // service in 3 days   → "upcoming"
-  const tZero = today                 // service today       → "not_completed"
-  const tPlus3 = addDays(today, -3)   // service was 3 days ago → "not_completed"
-  const contractEndTarget = addDays(today, CONTRACT_END_DAYS_BEFORE)
-
-  const serviceDates = [tMinus3, tPlus3]
-  if (NOTIFY_ON_SERVICE_DAY) serviceDates.push(tZero)
-
-  // ── Find contracts ──
-  const jobs: Job[] = []
-
-  const { data: serviceContracts, error: serviceErr } = await supabase
-    .from('contracts')
-    .select(CONTRACT_SELECT)
-    .eq('status', 'active')
-    .in('next_service_date', serviceDates)
-
-  if (serviceErr) {
-    console.error('cron: contracts query failed:', serviceErr.message)
-    return NextResponse.json({ error: 'Contracts query failed' }, { status: 500 })
-  }
-
-  for (const c of serviceContracts || []) {
-    const d = c.next_service_date as string
-    const type: ReminderType = d === tMinus3 ? 'upcoming' : 'not_completed'
-    jobs.push({ contract: c, type, dateStr: d })
-  }
-
-  if (ENABLE_CONTRACT_END) {
-    const { data: endingContracts, error: endErr } = await supabase
+    const { data: contracts, error: dbError } = await supabase
       .from('contracts')
-      .select(CONTRACT_SELECT)
+      .select(`
+        *,
+        customers(name)
+      `)
+      .gte('next_service_date', ago30DaysStr)
+      .lte('next_service_date', in7DaysStr)
       .eq('status', 'active')
-      .eq('end_date', contractEndTarget)
 
-    if (endErr) console.error('cron: contract_end query failed:', endErr.message)
-    for (const c of endingContracts || []) {
-      jobs.push({ contract: c, type: 'not_completed', dateStr: c.end_date as string })
-    }
-  }
-
-  // ── One query: which reminders were already sent successfully ──
-  const contractIds = [...new Set(jobs.map((j) => j.contract.id as string))]
-  const sentSet = new Set<string>()
-  if (contractIds.length) {
-    const { data: logs } = await supabase
-      .from('reminders_log')
-      .select('contract_id, message_type')
-      .in('contract_id', contractIds)
-      .eq('status', 'sent')
-      .like('message_type', 'whatsapp_%')
-    for (const l of logs || []) sentSet.add(`${l.contract_id}|${l.message_type}`)
-  }
-
-  // ── One query: contractor profiles ──
-  const ownerIds = [
-    ...new Set(
-      jobs
-        .map((j) => (j.contract.organizations as any)?.owner_id as string | undefined)
-        .filter(Boolean) as string[]
-    ),
-  ]
-  const profileMap = new Map<string, any>()
-  if (ownerIds.length) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, phone, whatsapp_number, full_name, company_name')
-      .in('id', ownerIds)
-    for (const p of profiles || []) profileMap.set(p.id, p)
-  }
-
-  // ── Process ──
-  let sent = 0
-  let skipped = 0
-  let skippedNoPhone = 0
-  let failed = 0
-  const details: Record<string, unknown>[] = []
-
-  for (const { contract, type, dateStr } of jobs) {
-    const dedupKey = `${type}_${dateStr}`
-    const base = {
-      contractId: contract.id,
-      contract: contract.contract_name,
-      type,
-      date: dateStr,
+    if (dbError) {
+      console.error('DB error fetching contracts:', dbError)
+      return NextResponse.json({ error: 'DB query failed', detail: dbError.message }, { status: 500 })
     }
 
-    if (sentSet.has(`${contract.id}|whatsapp_${dedupKey}`)) {
-      skipped++
-      details.push({ ...base, result: 'skipped_already_sent' })
-      continue
+    let sent = 0
+    let skipped = 0
+    const errors: string[] = []
+
+    if (contracts?.length) {
+      const orgIds = [...new Set(contracts.map(c => c.org_id).filter(Boolean))]
+
+      const { data: orgs, error: orgError } = await supabase
+        .from('organizations')
+        .select('id, owner_id')
+        .in('id', orgIds)
+
+      if (orgError) {
+        console.error('Error fetching organizations:', orgError)
+      } else {
+        const orgOwnerMap: Record<string, string> = {}
+        for (const org of orgs || []) {
+          if (org.owner_id) orgOwnerMap[org.id] = org.owner_id
+        }
+
+        const ownerIds = Object.values(orgOwnerMap).filter(Boolean)
+        const ownerEmailMap: Record<string, string> = {}
+
+        if (ownerIds.length) {
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .in('id', ownerIds)
+
+          if (!profilesError && profiles) {
+            for (const p of profiles) {
+              if (p.email) ownerEmailMap[p.id] = p.email
+            }
+          }
+        }
+
+        const missingIds = ownerIds.filter(id => !ownerEmailMap[id])
+        if (missingIds.length) {
+          const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+          if (!usersError && users) {
+            for (const u of users) {
+              if (missingIds.includes(u.id) && u.email) {
+                ownerEmailMap[u.id] = u.email
+              }
+            }
+          }
+        }
+
+        for (const contract of contracts) {
+          const nextDate = new Date(contract.next_service_date)
+          nextDate.setHours(0, 0, 0, 0)
+          const daysUntil = Math.round(
+            (nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          )
+
+          if (!NOTIFY_AT_DAYS.includes(daysUntil)) {
+            skipped++
+            continue
+          }
+
+          const customerName = contract.customers?.name || 'Unknown'
+          const ownerId = orgOwnerMap[contract.org_id]
+
+          if (!ownerId) {
+            skipped++
+            continue
+          }
+
+          const userEmail = ownerEmailMap[ownerId]
+          if (!userEmail) {
+            skipped++
+            continue
+          }
+
+          let result
+          if (daysUntil < 0) {
+            result = await sendAMCExpiredEmail(
+              userEmail,
+              contract.contract_name,
+              contract.next_service_date,
+              customerName
+            )
+          } else if (daysUntil === 0) {
+            result = await sendServiceReminderEmail(
+              userEmail,
+              contract.contract_name,
+              contract.next_service_date,
+              customerName
+            )
+          } else {
+            result = await sendAMCExpiryReminderEmail(
+              userEmail,
+              contract.contract_name,
+              contract.next_service_date,
+              customerName
+            )
+          }
+
+          if (result.success) {
+            sent++
+          } else {
+            errors.push(`Contract ${contract.id}: ${result.error}`)
+          }
+        }
+      }
     }
 
-    const org = contract.organizations as any
-    const customer = contract.customers as any
-    const profile = org?.owner_id ? profileMap.get(org.owner_id) : null
-    const contractorPhone: string | undefined = profile?.whatsapp_number || profile?.phone
+    // ─────────────────────────────────────────────────────────────
+    // 2. AMC CONTRACT EXPIRY WHATSAPP REMINDERS (New Logic)
+    // ─────────────────────────────────────────────────────────────
+    const in30Days = new Date(today)
+    in30Days.setDate(today.getDate() + 30)
+    const in30DaysStr = in30Days.toISOString().split('T')[0]
 
-    if (!contractorPhone) {
-      skipped++
-      skippedNoPhone++
-      details.push({ ...base, result: 'skipped_no_contractor_phone' })
-      continue
+    const { data: amcContracts, error: amcError } = await supabase
+      .from('contracts')
+      .select(`
+        *,
+        customers(name, phone)
+      `)
+      .lte('end_date', in30DaysStr) // Fetch contracts ending within 30 days
+      .eq('status', 'active')
+
+    if (amcError) {
+      console.error('DB error fetching AMC contracts:', amcError)
     }
 
-    const contractorName = profile.full_name || profile.company_name || 'there'
-    const customerName = customer?.name || 'your customer'
+    let amcSent = 0
+    let amcSkipped = 0
 
-    if (dryRun) {
-      details.push({
-        ...base,
-        result: 'would_send',
-        contractor: contractorName,
-        contractorPhone: maskPhone(contractorPhone),
-        customer: customerName,
-      })
-      continue
+    if (amcContracts?.length) {
+      const amcOrgIds = [...new Set(amcContracts.map(c => c.org_id).filter(Boolean))]
+      const { data: amcOrgs } = await supabase
+        .from('organizations')
+        .select('id, owner_id')
+        .in('id', amcOrgIds)
+
+      const amcOrgOwnerMap: Record<string, string> = {}
+      for (const org of amcOrgs || []) {
+        if (org.owner_id) amcOrgOwnerMap[org.id] = org.owner_id
+      }
+
+      const amcOwnerIds = Object.values(amcOrgOwnerMap).filter(Boolean)
+      const amcOwnerPhoneMap: Record<string, string> = {}
+      const amcOwnerNameMap: Record<string, string> = {}
+
+      if (amcOwnerIds.length) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, phone, full_name')
+          .in('id', amcOwnerIds)
+
+        for (const p of profiles || []) {
+          if (p.phone) amcOwnerPhoneMap[p.id] = p.phone
+          if (p.full_name) amcOwnerNameMap[p.id] = p.full_name
+        }
+      }
+
+      // Fallback to auth.users for missing phones/names
+      const missingAmcOwnerIds = amcOwnerIds.filter(id => !amcOwnerPhoneMap[id] || !amcOwnerNameMap[id])
+      if (missingAmcOwnerIds.length) {
+        const { data: { users } } = await supabase.auth.admin.listUsers()
+        for (const u of users || []) {
+          if (missingAmcOwnerIds.includes(u.id)) {
+            if (!amcOwnerPhoneMap[u.id] && u.phone) amcOwnerPhoneMap[u.id] = u.phone
+            if (!amcOwnerNameMap[u.id] && u.user_metadata?.full_name) {
+              amcOwnerNameMap[u.id] = u.user_metadata.full_name
+            }
+          }
+        }
+      }
+
+      for (const contract of amcContracts) {
+        if (!contract.end_date) continue
+
+        const endDate = new Date(contract.end_date)
+        endDate.setHours(0, 0, 0, 0)
+        const daysUntilEnd = Math.round(
+          (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        )
+
+        if (!CONTRACT_EXPIRY_NOTIFY_DAYS.includes(daysUntilEnd)) {
+          amcSkipped++
+          continue
+        }
+
+        const ownerId = amcOrgOwnerMap[contract.org_id]
+        if (!ownerId) {
+          amcSkipped++
+          continue
+        }
+
+        const contractorPhone = amcOwnerPhoneMap[ownerId]
+        const contractorName = amcOwnerNameMap[ownerId] || 'Contractor'
+
+        if (!contractorPhone) {
+          amcSkipped++
+          console.warn(`No phone for owner ${ownerId}, contract ${contract.id}`)
+          continue
+        }
+
+        const customerName = contract.customers?.name || 'Customer'
+        const customerPhone = contract.customers?.phone || 'Not available'
+        const serviceType = contract.contract_name || 'Service'
+        
+        const reminderType = daysUntilEnd === 30 ? 'contract_ending_soon' : 'contract_end'
+        const dedupKey = `${reminderType}_${contract.id}`
+
+        try {
+          const waRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/send-contract-reminder`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-internal-secret': process.env.CRON_SECRET || ''
+            },
+            body: JSON.stringify({
+              orgId: contract.org_id,
+              contractorPhone: contractorPhone,
+              contractorName: contractorName,
+              customerName: customerName,
+              customerPhone: customerPhone,
+              serviceType: serviceType,
+              date: contract.end_date,
+              contractId: contract.id,
+              type: reminderType,
+              dedupKey: dedupKey
+            })
+          })
+
+          if (waRes.ok) {
+            amcSent++
+          } else {
+            const errData = await waRes.json().catch(() => ({}))
+            console.error(`Failed to send WA for contract ${contract.id}:`, errData)
+          }
+        } catch (err) {
+          console.error(`Error triggering WA for contract ${contract.id}:`, err)
+        }
+      }
     }
 
-    const ok = await sendReminder({
-      orgId: contract.org_id,
-      contractorPhone,
-      contractorName,
-      customerName,
-      customerPhone: customer?.phone || 'Not available',
-      serviceType: contract.contract_name || contract.contract_type || 'Service',
-      date: formatDate(dateStr),
-      contractId: contract.id,
-      type,
-      dedupKey,
+    return NextResponse.json({ 
+      sent, 
+      skipped, 
+      amcSent,
+      amcSkipped,
+      errors: errors.length ? errors : undefined 
     })
-
-    if (ok) sent++
-    else failed++
-    details.push({
-      ...base,
-      result: ok ? 'sent' : 'failed',
-      contractor: contractorName,
-      contractorPhone: maskPhone(contractorPhone),
-    })
+  } catch (error) {
+    console.error('check-contracts error:', error)
+    return NextResponse.json({ error: 'Failed', detail: String(error) }, { status: 500 })
   }
-
-  const summary = {
-    success: true,
-    dryRun,
-    todayIST: today,
-    sent,
-    skipped,
-    skippedNoPhone,
-    failed,
-    matched: jobs.length,
-    targets: {
-      tMinus3,
-      tZero: NOTIFY_ON_SERVICE_DAY ? tZero : null,
-      tPlus3,
-      contractEnd: ENABLE_CONTRACT_END ? contractEndTarget : null,
-    },
-    details,
-  }
-
-  console.log('cron service reminders:', JSON.stringify({ ...summary, details: undefined }))
-  return NextResponse.json(summary)
 }
