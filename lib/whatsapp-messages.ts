@@ -1,5 +1,3 @@
-// Shared WhatsApp (wa.me) reminder messages in English, Marathi and Hindi
-
 export type WhatsAppLanguage = "en" | "mr" | "hi"
 
 export const DEFAULT_WHATSAPP_LANGUAGE: WhatsAppLanguage = "en"
@@ -36,23 +34,25 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
 
   // ───────────── MARATHI ─────────────
   if (lang === "mr") {
+    // OVERDUE — days < 0
     if (days < 0) {
+      const overdueDays = Math.abs(days)
       return (
         `प्रिय ${customerName},\n\n` +
-        `*सेवा स्मरणपत्र - कृपया लक्ष द्या*\n\n` +
-        `*${from}* सोबतची तुमची *${contractName}* ची AMC सेवा लवकरच येत आहे.\n\n` +
+        `*सेवा थकीत - तातडीने कृती आवश्यक*\n\n` +
+        `*${from}* सोबतची तुमची *${contractName}* ची AMC सेवा ${overdueDays} दिवसांपूर्वी थकीत झाली आहे.\n\n` +
         `*सेवा तपशील:*\n` +
         `- मागील सेवा: ${lastService}\n` +
         `- नियोजित सेवा तारीख: ${nextService}\n\n` +
-        `सेवेत खंड पडू नये म्हणून कृपया तुमची उपलब्धता लवकरात लवकर कळवा.\n\n` +
-        `तुमची पुढील सेवा नियोजित करण्यासाठी आता आमच्याशी संपर्क साधा.\n\n` +
+        `सेवेत आणखी विलंब होऊ नये म्हणून कृपया आजच आमच्याशी संपर्क साधा आणि भेटीची वेळ निश्चित करा.\n\n` +
         `*${from}* निवडल्याबद्दल धन्यवाद.`
       )
     }
+    // TODAY — days === 0
     if (days === 0) {
       return (
         `प्रिय ${customerName},\n\n` +
-        `*आज सेवा*\n\n` +
+        `*आज सेवा आहे*\n\n` +
         `तुमची *${contractName}* ची AMC सेवा आज नियोजित आहे, याची ही आठवण.\n\n` +
         `*सेवा तपशील:*\n` +
         `- मागील सेवा: ${lastService}\n` +
@@ -62,11 +62,12 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
         `*${from}* निवडल्याबद्दल धन्यवाद.`
       )
     }
+    // UPCOMING — days 1–3
     if (days <= 3) {
       return (
         `प्रिय ${customerName},\n\n` +
         `*येणारी सेवा स्मरणपत्र - ${days} दिवस बाकी*\n\n` +
-        `तुमची ${contractName} ची पुढील AMC सेवा ${days} दिवसांत येत आहे.\n\n` +
+        `तुमची *${contractName}* ची पुढील AMC सेवा ${days} दिवसांत येत आहे.\n\n` +
         `*सेवा तपशील:*\n` +
         `- मागील सेवा: ${lastService}\n` +
         `- येणारी सेवा तारीख: ${nextService}\n\n` +
@@ -75,6 +76,7 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
         `*${from}* निवडल्याबद्दल धन्यवाद.`
       )
     }
+    // FUTURE — days > 3
     return (
       `प्रिय ${customerName},\n\n` +
       `*सेवा स्मरणपत्र - ${contractName}*\n\n` +
@@ -89,23 +91,25 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
 
   // ───────────── HINDI ─────────────
   if (lang === "hi") {
+    // OVERDUE — days < 0
     if (days < 0) {
+      const overdueDays = Math.abs(days)
       return (
         `प्रिय ${customerName},\n\n` +
-        `*सेवा अनुस्मारक - कृपया ध्यान दें*\n\n` +
-        `*${from}* के साथ आपके *${contractName}* की AMC सेवा जल्द ही आने वाली है।\n\n` +
+        `*सेवा बकाया - तुरंत कार्रवाई आवश्यक*\n\n` +
+        `*${from}* के साथ आपके *${contractName}* की AMC सेवा ${overdueDays} दिन पहले बकाया हो गई है।\n\n` +
         `*सेवा विवरण:*\n` +
         `- पिछली सेवा: ${lastService}\n` +
         `- निर्धारित सेवा तिथि: ${nextService}\n\n` +
-        `सेवा में किसी रुकावट से बचने के लिए कृपया अपनी उपलब्धता जल्द से जल्द बताएं।\n\n` +
-        `अपनी अगली सेवा निर्धारित करने के लिए अभी हमसे संपर्क करें।\n\n` +
+        `आगे की देरी से बचने के लिए कृपया आज ही हमसे संपर्क करें और अपनी अपॉइंटमेंट बुक करें।\n\n` +
         `*${from}* को चुनने के लिए धन्यवाद।`
       )
     }
+    // TODAY — days === 0
     if (days === 0) {
       return (
         `प्रिय ${customerName},\n\n` +
-        `*आज सेवा*\n\n` +
+        `*आज सेवा है*\n\n` +
         `यह आपको याद दिलाने के लिए है कि आपके *${contractName}* की AMC सेवा आज निर्धारित है।\n\n` +
         `*सेवा विवरण:*\n` +
         `- पिछली सेवा: ${lastService}\n` +
@@ -115,11 +119,12 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
         `*${from}* को चुनने के लिए धन्यवाद।`
       )
     }
+    // UPCOMING — days 1–3
     if (days <= 3) {
       return (
         `प्रिय ${customerName},\n\n` +
         `*आगामी सेवा अनुस्मारक - ${days} दिन शेष*\n\n` +
-        `आपके ${contractName} की अगली AMC सेवा ${days} दिन में आने वाली है।\n\n` +
+        `आपके *${contractName}* की अगली AMC सेवा ${days} दिन में आने वाली है।\n\n` +
         `*सेवा विवरण:*\n` +
         `- पिछली सेवा: ${lastService}\n` +
         `- आगामी सेवा तिथि: ${nextService}\n\n` +
@@ -128,6 +133,7 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
         `*${from}* को चुनने के लिए धन्यवाद।`
       )
     }
+    // FUTURE — days > 3
     return (
       `प्रिय ${customerName},\n\n` +
       `*सेवा अनुस्मारक - ${contractName}*\n\n` +
@@ -141,23 +147,25 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
   }
 
   // ───────────── ENGLISH ─────────────
+  // OVERDUE — days < 0
   if (days < 0) {
+    const overdueDays = Math.abs(days)
     return (
       `Dear ${customerName},\n\n` +
-      `*Service Reminder - Action Required*\n\n` +
-      `Your AMC service for *${contractName}* with *${from}* is coming soon.\n\n` +
+      `*Service Overdue - Immediate Attention Required*\n\n` +
+      `Your AMC service for *${contractName}* with *${from}* was due ${overdueDays} day${overdueDays > 1 ? "s" : ""} ago and has not been completed yet.\n\n` +
       `*Service Details:*\n` +
       `- Last Service: ${lastService}\n` +
       `- Scheduled Service Date: ${nextService}\n\n` +
-      `To avoid any service disruption, please confirm your availability at the earliest.\n\n` +
-      `Contact us now to get your next service scheduled.\n\n` +
+      `To avoid any further delay, please contact us today to book your service appointment.\n\n` +
       `Thank you for choosing *${from}*.`
     )
   }
+  // TODAY — days === 0
   if (days === 0) {
     return (
       `Dear ${customerName},\n\n` +
-      `*Today Servicing*\n\n` +
+      `*Today's Service*\n\n` +
       `This is a reminder that your AMC service for *${contractName}* is scheduled for today.\n\n` +
       `*Service Details:*\n` +
       `- Last Service: ${lastService}\n` +
@@ -167,11 +175,12 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
       `Thank you for choosing *${from}*.`
     )
   }
+  // UPCOMING — days 1–3
   if (days <= 3) {
     return (
       `Dear ${customerName},\n\n` +
       `*Upcoming Service Reminder - ${days} Day${days > 1 ? "s" : ""} Left*\n\n` +
-      `Your next AMC service for ${contractName} is coming in ${days} day${days > 1 ? "s" : ""}.\n\n` +
+      `Your next AMC service for *${contractName}* is coming up in ${days} day${days > 1 ? "s" : ""}.\n\n` +
       `*Service Details:*\n` +
       `- Last Service: ${lastService}\n` +
       `- Upcoming Service Date: ${nextService}\n\n` +
@@ -180,6 +189,7 @@ export function buildReminderMessage(input: ReminderMessageInput): string {
       `Thank you for choosing *${from}*.`
     )
   }
+  // FUTURE — days > 3
   return (
     `Dear ${customerName},\n\n` +
     `*Service Reminder - ${contractName}*\n\n` +
