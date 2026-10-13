@@ -87,6 +87,16 @@ function getPaymentStatusBadge(status: string) {
   return <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
 }
 
+// Helper — pull the company GST stored on the invoice row,
+// regardless of which column name it uses.
+function getInvoiceGst(invoice: any): string | null {
+  if (!invoice) return null
+  const v = invoice.gstin ?? invoice.company_gstin ?? invoice.company_gst ?? null
+  if (v === null || v === undefined) return null
+  const s = String(v).trim()
+  return s.length > 0 ? s : null
+}
+
 export default function ViewInvoicePage() {
   const params = useParams()
   const router = useRouter()
@@ -354,6 +364,7 @@ export default function ViewInvoicePage() {
 
       const items = invoice.items ?? []
       const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
+      const invoiceGstin = getInvoiceGst(invoice)
 
       const renderInvoice = (doc: jsPDF): number => {
         let y = margin
@@ -458,11 +469,11 @@ export default function ViewInvoicePage() {
           y += 5
         }
 
-        // ✅ Company GSTIN shown below the customer's address
-        if (profile?.gstin) {
+        // ✅ GST stored on the invoice — shown under customer address, only if present
+        if (invoiceGstin) {
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
-          doc.text('GSTIN: ' + safeStr(profile.gstin), margin, y)
+          doc.text('GSTIN: ' + invoiceGstin, margin, y)
           y += 5
         }
         y += 3
@@ -754,6 +765,7 @@ export default function ViewInvoicePage() {
   const includeGst = invoice.include_gst ?? true
   const mappedItems = getMappedItems()
   const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
+  const invoiceGstin = getInvoiceGst(invoice)
 
   return (
     <DashboardLayout>
@@ -920,10 +932,10 @@ export default function ViewInvoicePage() {
                     .join(", ")}
                 </p>
               )}
-              {/* ✅ Company GSTIN shown below customer address in the preview too */}
-              {profile?.gstin && (
+              {/* ✅ GST stored on this invoice — shown under customer address, only if present */}
+              {invoiceGstin && (
                 <p className="text-xs text-muted-foreground font-medium">
-                  GSTIN: {profile.gstin}
+                  GSTIN: {invoiceGstin}
                 </p>
               )}
             </div>
