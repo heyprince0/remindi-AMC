@@ -1197,5 +1197,5 @@ export default function ViewInvoicePage() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
-    }
-}
+  )
+            }
