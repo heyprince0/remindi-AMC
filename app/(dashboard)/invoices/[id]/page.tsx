@@ -87,11 +87,15 @@ function getPaymentStatusBadge(status: string) {
   return <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
 }
 
-// Helper — pull the company GST stored on the invoice row,
-// regardless of which column name it uses.
+// ✅ GST stored on the invoice row — checks every possible column name
 function getInvoiceGst(invoice: any): string | null {
   if (!invoice) return null
-  const v = invoice.gstin ?? invoice.company_gstin ?? invoice.company_gst ?? null
+  const v =
+    invoice.client_gstin ??       // ← the column your Edit page writes to
+    invoice.gstin ??
+    invoice.company_gstin ??
+    invoice.company_gst ??
+    null
   if (v === null || v === undefined) return null
   const s = String(v).trim()
   return s.length > 0 ? s : null
@@ -200,7 +204,7 @@ export default function ViewInvoicePage() {
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(fileName)
-      const publicUrl = urlData.publicUrl
+      const publicUrl = data.publicUrl
 
       const { error: updateError } = await supabase
         .from('company_profile')
@@ -279,7 +283,6 @@ export default function ViewInvoicePage() {
   }
 
   // ── Shared PDF builder ─────────────────────────────────────────────────────
-  // Returns { doc, filename } — used by both download and WhatsApp share.
   const buildPdfDoc = async (stampToggle: boolean = false): Promise<{ doc: jsPDF; filename: string } | null> => {
     if (!invoice) return null
 
@@ -469,7 +472,7 @@ export default function ViewInvoicePage() {
           y += 5
         }
 
-        // ✅ GST stored on the invoice — shown under customer address, only if present
+        // ✅ GST from invoice details — shown under customer address, only if present
         if (invoiceGstin) {
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
@@ -703,7 +706,6 @@ export default function ViewInvoicePage() {
       const pdfBlob = doc.output("blob")
       const file = new File([pdfBlob], filename, { type: "application/pdf" })
 
-      // Mobile (Android Chrome, iOS Safari 15.1+): native OS share sheet
       if (
         typeof navigator.share === "function" &&
         typeof navigator.canShare === "function" &&
@@ -715,7 +717,6 @@ export default function ViewInvoicePage() {
           text: `Hi, please find the invoice from ${profile?.company_name ?? "us"}. Total: ₹${(invoice?.grand_total ?? 0).toLocaleString("en-IN")}.`,
         })
       } else {
-        // Desktop fallback: download PDF + open WhatsApp Web with pre-filled text
         doc.save(filename)
         const waText = encodeURIComponent(
           `Hi, please find the invoice *${invoice?.invoice_no ?? ""}* from *${profile?.company_name ?? ""}*.\nAmount: ₹${(invoice?.grand_total ?? 0).toLocaleString("en-IN")}\n\nKindly clear the payment at your earliest convenience.`
@@ -724,15 +725,13 @@ export default function ViewInvoicePage() {
         toast.info("PDF saved. Open WhatsApp and attach it there.")
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") return // user dismissed the share sheet
+      if (err?.name === "AbortError") return
       console.error("Share error:", err)
       toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setSharingPdf(false)
     }
   }
-
-  // ─── Loading & not-found states ──────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -799,7 +798,6 @@ export default function ViewInvoicePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Payment status quick-change */}
             <Select
               value={(invoice.payment_status || "Unpaid").toLowerCase()}
               onValueChange={handlePaymentStatusChange}
@@ -815,7 +813,6 @@ export default function ViewInvoicePage() {
               </SelectContent>
             </Select>
 
-            {/* Stamp toggle */}
             <Button
               onClick={handleStampToggle}
               disabled={generatingPdf}
@@ -881,10 +878,8 @@ export default function ViewInvoicePage() {
         {/* ── Invoice document card ─────────────────────────────────────────── */}
         <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
 
-          {/* Coloured accent line */}
           <div className="h-1 bg-blue-600" />
 
-          {/* From / To */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
             {/* From — company */}
             <div className="flex gap-3 p-5">
@@ -932,7 +927,6 @@ export default function ViewInvoicePage() {
                     .join(", ")}
                 </p>
               )}
-              {/* ✅ GST stored on this invoice — shown under customer address, only if present */}
               {invoiceGstin && (
                 <p className="text-xs text-muted-foreground font-medium">
                   GSTIN: {invoiceGstin}
@@ -941,7 +935,6 @@ export default function ViewInvoicePage() {
             </div>
           </div>
 
-          {/* Invoice meta strip */}
           <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
             <div>
               <p className="text-[10px] text-muted-foreground">Invoice No</p>
@@ -971,7 +964,6 @@ export default function ViewInvoicePage() {
             )}
           </div>
 
-          {/* Subject + body */}
           {(invoice.subject || invoice.body_text) && (
             <div className="px-5 py-4 border-b border-border space-y-1.5">
               {invoice.subject && (
@@ -985,7 +977,6 @@ export default function ViewInvoicePage() {
             </div>
           )}
 
-          {/* Items table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1023,11 +1014,9 @@ export default function ViewInvoicePage() {
             </table>
           </div>
 
-          {/* Totals + Notes row */}
           <div className="border-t border-border">
             <div className="flex flex-col sm:flex-row">
 
-              {/* Notes / T&C — left */}
               {invoice.notes ? (
                 <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
                   <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
@@ -1039,7 +1028,6 @@ export default function ViewInvoicePage() {
                 <div className="flex-1" />
               )}
 
-              {/* Totals — right */}
               <div className="p-5 sm:w-64 shrink-0">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
@@ -1086,7 +1074,6 @@ export default function ViewInvoicePage() {
               </div>
             </div>
 
-            {/* Bank details strip */}
             {hasBankDetails && (
               <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
                 {profile?.bank_name && (
@@ -1210,5 +1197,5 @@ export default function ViewInvoicePage() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
-  )
+    }
 }
