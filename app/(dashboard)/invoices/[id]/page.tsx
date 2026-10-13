@@ -457,6 +457,14 @@ export default function ViewInvoicePage() {
           doc.text(cityStateZip, margin, y)
           y += 5
         }
+
+        // ✅ Company GSTIN shown below the customer's address
+        if (profile?.gstin) {
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
+          doc.text('GSTIN: ' + safeStr(profile.gstin), margin, y)
+          y += 5
+        }
         y += 3
 
         if (invoice.subject) {
@@ -910,6 +918,12 @@ export default function ViewInvoicePage() {
                   {[invoice.client_district, invoice.client_state, invoice.client_pin_code]
                     .filter(Boolean)
                     .join(", ")}
+                </p>
+              )}
+              {/* ✅ Company GSTIN shown below customer address in the preview too */}
+              {profile?.gstin && (
+                <p className="text-xs text-muted-foreground font-medium">
+                  GSTIN: {profile.gstin}
                 </p>
               )}
             </div>
