@@ -2985,4 +2985,350 @@
   const installBtn = document.getElementById('pwa-install-btn');
   const fallbackText = document.getElementById('install-fallback');
 
-  window.addEventListener('beforeinstall
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        fallbackText.style.display = 'block';
+        return;
+      }
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    });
+  }
+
+  window.addEventListener('appinstalled', () => {
+    if (installBtn) installBtn.style.display = 'none';
+  });
+
+  // Pricing duration selector
+  function switchPricingDuration(duration) {
+    document.querySelectorAll('.pricing-tab').forEach(tab => {
+      tab.classList.remove('active');
+      if (tab.getAttribute('data-duration') === duration) {
+        tab.classList.add('active');
+      }
+    });
+
+    document.querySelectorAll('.pricing-card[data-plan]').forEach(card => {
+      const priceContainer = card.querySelector('.pricing-price');
+      const amountEl = card.querySelector('.amount');
+      const periodEl = card.querySelector('.period');
+      const badgeEl = card.querySelector('.pricing-discount-badge');
+
+      if (priceContainer && amountEl && periodEl) {
+        const newAmount = priceContainer.getAttribute(`data-${duration}`);
+        const newPeriod = periodEl.getAttribute(`data-${duration}`);
+        
+        if (newAmount) amountEl.textContent = newAmount;
+        if (newPeriod) periodEl.textContent = newPeriod;
+      }
+
+      if (badgeEl) {
+        const badgeText = badgeEl.getAttribute(`data-${duration}`);
+        if (badgeText) {
+          badgeEl.textContent = badgeText;
+          badgeEl.classList.add('show');
+        } else {
+          badgeEl.textContent = '';
+          badgeEl.classList.remove('show');
+        }
+      }
+    });
+  }
+
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     BOOK DEMO  —  SUPABASE HANDLER
+     ═══════════════════════════════════════════════════════════ -->
+<script type="module">
+  let sbClient = null;
+
+  async function getSupabase() {
+    if (sbClient) return sbClient;
+
+    const configRes = await fetch('/api/config');
+    if (!configRes.ok) throw new Error('Failed to load Supabase config');
+    const config = await configRes.json();
+
+    if (!config.supabaseUrl || !config.supabaseAnonKey) {
+      throw new Error('Supabase keys missing in Vercel environment variables');
+    }
+
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    sbClient = createClient(config.supabaseUrl, config.supabaseAnonKey);
+    return sbClient;
+  }
+
+  const pad = n => String(n).padStart(2, '0');
+  const localDate = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const overlay     = document.getElementById('demoOverlay');
+  const modalForm   = document.getElementById('demoForm');
+  const demoBody    = document.getElementById('demoBody');
+  const demoSuccess = document.getElementById('demoSuccess');
+  const errorBox    = document.getElementById('demoErrorBox');
+  const submitBtn   = document.getElementById('demoSubmitBtn');
+  const submitText  = document.getElementById('demoSubmitText');
+  const spinner     = document.getElementById('demoSpinner');
+  const dateInput   = document.getElementById('demoDate');
+  const timeInput   = document.getElementById('demoTime');
+
+  function openDemo() {
+    overlay.classList.add('open');
+    document.body.classList.add('modal-open');
+    demoBody.style.display = '';
+    demoSuccess.classList.remove('show');
+    clearError();
+
+    dateInput.min = localDate();
+    if (!dateInput.value) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      dateInput.value = localDate(tomorrow);
+    }
+    if (!timeInput.value) timeInput.value = '11:00';
+
+    setTimeout(() => document.getElementById('demoName').focus(), 260);
+  }
+
+  function closeDemo() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+
+  function showSuccess(phone) {
+    demoBody.style.display = 'none';
+    document.getElementById('demoSuccessPhone').textContent = phone;
+    demoSuccess.classList.add('show');
+  }
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+    submitText.textContent = on ? 'Booking…' : 'Confirm Booking →';
+    spinner.classList.toggle('show', on);
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function clearError() {
+    errorBox.classList.remove('show');
+    errorBox.textContent = '';
+    document.querySelectorAll('.field-error').forEach(el => el.classList.remove('field-error'));
+  }
+
+  document.querySelectorAll('[data-open-demo]').forEach(el =>
+    el.addEventListener('click', e => { e.preventDefault(); openDemo(); })
+  );
+  document.getElementById('demoClose').addEventListener('click', closeDemo);
+  document.getElementById('demoDoneBtn').addEventListener('click', () => { closeDemo(); modalForm.reset(); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeDemo(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) closeDemo();
+  });
+
+  modalForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    clearError();
+
+    const el = modalForm.elements;
+    const payload = {
+      full_name:      el.full_name.value.trim(),
+      phone:          el.phone.value.trim(),
+      company_name:   el.company_name.value.trim() || null,
+      service_type:   el.service_type.value || null,
+      preferred_date: el.preferred_date.value,
+      preferred_time: el.preferred_time.value,
+      message:        el.message.value.trim() || null,
+      source:         'landing_page'
+    };
+
+    if (!payload.full_name) {
+      document.getElementById('demoName').classList.add('field-error');
+      showError('Please enter your name.'); return;
+    }
+    if (payload.phone.replace(/\D/g, '').length < 10) {
+      document.getElementById('demoPhone').classList.add('field-error');
+      showError('Please enter a valid 10-digit mobile number.'); return;
+    }
+    if (!payload.service_type) {
+      document.getElementById('demoServiceType').classList.add('field-error');
+      showError('Please select your type of company.'); return;
+    }
+    if (!payload.preferred_date) {
+      document.getElementById('demoDate').classList.add('field-error');
+      showError('Please pick a preferred date.'); return;
+    }
+    if (!payload.preferred_time) {
+      document.getElementById('demoTime').classList.add('field-error');
+      showError('Please pick a preferred time.'); return;
+    }
+
+    setLoading(true);
+
+    try {
+      const client = await getSupabase();
+      const { error } = await client.from('demo_bookings').insert(payload);
+      if (error) throw error;
+
+      fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'demo-booking-notification',
+          userEmail: 'prakash6977z@gmail.com',
+          data: {
+            full_name:      payload.full_name,
+            phone:          payload.phone,
+            company_name:   payload.company_name  ?? '',
+            service_type:   payload.service_type  ?? '',
+            message:        payload.message       ?? '',
+            preferred_date: payload.preferred_date,
+            preferred_time: payload.preferred_time,
+            created_at:     new Date().toISOString(),
+          },
+        }),
+      }).catch(err => console.warn('[Demo] Email notification failed silently:', err));
+
+      modalForm.reset();
+      showSuccess(payload.phone);
+
+    } catch (err) {
+      console.error('Demo booking failed:', err);
+      showError('Something went wrong. Please try again or email support@remindi.online');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+
+  // ─── Inline Form Logic ───
+  const inlineForm = document.getElementById('inlineDemoForm');
+  if (inlineForm) {
+    const inlineBody         = document.getElementById('inlineDemoBody');
+    const inlineSuccess      = document.getElementById('inlineDemoSuccess');
+    const inlineSuccessPhone = document.getElementById('inlineDemoSuccessPhone');
+    const inlineErrorBox     = document.getElementById('inlineDemoErrorBox');
+    const inlineSubmitBtn    = document.getElementById('inlineDemoSubmitBtn');
+    const inlineSubmitText   = document.getElementById('inlineDemoSubmitText');
+    const inlineSpinner      = document.getElementById('inlineDemoSpinner');
+    const inlineDateInput    = document.getElementById('inlineDemoDate');
+    const inlineTimeInput    = document.getElementById('inlineDemoTime');
+
+    inlineDateInput.min = localDate();
+    if (!inlineDateInput.value) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      inlineDateInput.value = localDate(tomorrow);
+    }
+    if (!inlineTimeInput.value) inlineTimeInput.value = '11:00';
+
+    function setInlineLoading(on) {
+      inlineSubmitBtn.disabled = on;
+      inlineSubmitText.textContent = on ? 'Booking…' : 'Confirm Booking →';
+      inlineSpinner.classList.toggle('show', on);
+    }
+
+    function showInlineError(msg) {
+      inlineErrorBox.textContent = msg;
+      inlineErrorBox.classList.add('show');
+      inlineErrorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function clearInlineError() {
+      inlineErrorBox.classList.remove('show');
+      inlineErrorBox.textContent = '';
+      document.querySelectorAll('#inlineDemoForm .field-error').forEach(el => el.classList.remove('field-error'));
+    }
+
+    inlineForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      clearInlineError();
+
+      const el = inlineForm.elements;
+      const payload = {
+        full_name:      el.full_name.value.trim(),
+        phone:          el.phone.value.trim(),
+        company_name:   el.company_name.value.trim() || null,
+        service_type:   el.service_type.value || null,
+        preferred_date: el.preferred_date.value,
+        preferred_time: el.preferred_time.value,
+        message:        el.message.value.trim() || null,
+        source:         'landing_page_inline'
+      };
+
+      if (!payload.full_name) {
+        document.getElementById('inlineDemoName').classList.add('field-error');
+        showInlineError('Please enter your name.'); return;
+      }
+      if (payload.phone.replace(/\D/g, '').length < 10) {
+        document.getElementById('inlineDemoPhone').classList.add('field-error');
+        showInlineError('Please enter a valid 10-digit mobile number.'); return;
+      }
+      if (!payload.service_type) {
+        document.getElementById('inlineDemoServiceType').classList.add('field-error');
+        showInlineError('Please select your type of company.'); return;
+      }
+      if (!payload.preferred_date) {
+        document.getElementById('inlineDemoDate').classList.add('field-error');
+        showInlineError('Please pick a preferred date.'); return;
+      }
+      if (!payload.preferred_time) {
+        document.getElementById('inlineDemoTime').classList.add('field-error');
+        showInlineError('Please pick a preferred time.'); return;
+      }
+
+      setInlineLoading(true);
+
+      try {
+        const client = await getSupabase();
+        const { error } = await client.from('demo_bookings').insert(payload);
+        if (error) throw error;
+
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'demo-booking-notification',
+            userEmail: 'prakash6977z@gmail.com',
+            data: {
+              full_name:      payload.full_name,
+              phone:          payload.phone,
+              company_name:   payload.company_name  ?? '',
+              service_type:   payload.service_type  ?? '',
+              message:        payload.message       ?? '',
+              preferred_date: payload.preferred_date,
+              preferred_time: payload.preferred_time,
+              created_at:     new Date().toISOString(),
+            },
+          }),
+        }).catch(err => console.warn('[Inline Demo] Email notification failed silently:', err));
+
+        inlineForm.reset();
+        inlineBody.style.display = 'none';
+        inlineSuccessPhone.textContent = payload.phone;
+        inlineSuccess.classList.add('show');
+
+      } catch (err) {
+        console.error('Inline demo booking failed:', err);
+        showInlineError('Something went wrong. Please try again or email support@remindi.online');
+      } finally {
+        setInlineLoading(false);
+      }
+    });
+  }
+
+</script>
+
+</body>
+</html>
