@@ -64,7 +64,7 @@ function toWords(n: number): string {
   return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
 }
 
-// ─── Types (mirror Quotation + CompanyProfile + QuotationItem) ──────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 interface BusinessInfo {
   company_name: string
   tagline: string
@@ -290,74 +290,111 @@ function GeneratorTool() {
       const renderQuotation = (doc: jsPDF): number => {
         let y = margin
 
-        // ── HEADER: logo + company info (single_logo style) ────────────────
-        let logoAdded = false
+        // ── HEADER: matches the Remindi branded header ─────────────────────
+        const boxW = 25
+        const boxH = 25
+        const boxX = margin
+        const boxY = y
+
+        // Logo box
+        doc.setFillColor(tr, tg, tb)
+        doc.rect(boxX, boxY, boxW, boxH, "F")
         if (logoBase64) {
           try {
-            doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
-            logoAdded = true
+            doc.addImage(logoBase64, logoFormat, boxX + 1.5, boxY + 1.5, boxW - 3, boxH - 3)
           } catch {}
         }
-        const infoX = logoAdded ? margin + 24 : margin
 
+        // Vertical line
+        doc.setDrawColor(tr, tg, tb)
+        doc.setLineWidth(0.5)
+        doc.line(boxX + boxW + 5, boxY, boxX + boxW + 5, boxY + boxH)
+
+        // Company Info
+        const infoX = boxX + boxW + 10
         doc.setFontSize(14)
         doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(bio.company_name || "Company Name"), infoX, y + 2)
+        doc.setTextColor(tr, tg, tb)
+        doc.text(safeStr(bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 6)
 
         doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
-        let infoY = y + 8
-        if (bio.tagline) { doc.text(safeStr(bio.tagline), infoX, infoY); infoY += 4 }
-        if (bio.address) { doc.text(safeStr(bio.address), infoX, infoY); infoY += 4 }
-        const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
-        if (cityLine) { doc.text(cityLine, infoX, infoY); infoY += 4 }
-        if (bio.phone) { doc.text(`Phone: ${safeStr(bio.phone)}`, infoX, infoY); infoY += 4 }
-        if (bio.email) { doc.text(`Email: ${safeStr(bio.email)}`, infoX, infoY); infoY += 4 }
-        if (bio.gstin) { doc.text(`GSTIN: ${safeStr(bio.gstin)}`, infoX, infoY) }
-        y += 31
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        if (bio.tagline) doc.text(safeStr(bio.tagline), infoX, boxY + 12)
 
-        // Accent line
+        doc.setFontSize(8.5)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        let infoY = boxY + 17
+        if (bio.address) {
+          const addrLines = doc.splitTextToSize(safeStr(bio.address), 125)
+          doc.text(addrLines, infoX, infoY)
+          infoY += addrLines.length * 4
+        }
+        const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
+        if (cityLine) {
+          doc.text(cityLine, infoX, infoY)
+          infoY += 4
+        }
+
+        infoY += 2
+        if (bio.email) {
+          doc.setFont("helvetica", "bold")
+          doc.text("Email:", infoX, infoY)
+          doc.setFont("helvetica", "normal")
+          doc.text(safeStr(bio.email), infoX + 13, infoY)
+          infoY += 5
+        }
+        if (bio.phone) {
+          doc.setFont("helvetica", "bold")
+          doc.text("Phone:", infoX, infoY)
+          doc.setFont("helvetica", "normal")
+          doc.text(safeStr(bio.phone), infoX + 13, infoY)
+          infoY += 5
+        }
+
+        // Horizontal line
+        y = Math.max(boxY + boxH, infoY) + 6
         doc.setDrawColor(tr, tg, tb)
         doc.setLineWidth(0.5)
         doc.line(margin, y, pageW - margin, y)
-        y += 6
 
-        // ── QUOTATION title ────────────────────────────────────────────────
+        // Quote Details
+        y += 8
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(formState.quoteNumber || "QT-001"), margin, y)
+
         doc.setFontSize(16)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(tr, tg, tb)
         doc.text("QUOTATION", pageW - margin, y, { align: "right" })
 
         y += 6
-        doc.setFontSize(10)
+        doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(formState.quoteNumber || "QT-001"), margin, y)
         doc.text("DATE: " + shortDate(formState.quoteDate), pageW - margin, y, { align: "right" })
 
         y += 5
+        if (formState.orderNo) {
+          doc.text("Order No: " + safeStr(formState.orderNo), pageW - margin, y, { align: "right" })
+          y += 5
+        }
+        if (formState.orderDate) {
+          doc.text("Order Date: " + shortDate(formState.orderDate), pageW - margin, y, { align: "right" })
+          y += 5
+        }
         if (formState.validTill) {
           doc.setFontSize(9)
           doc.setTextColor(220, 38, 38)
           doc.text("Valid till: " + formatDate(formState.validTill), pageW - margin, y, { align: "right" })
           y += 5
         }
-        if (formState.orderNo) {
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Order No: " + safeStr(formState.orderNo), pageW - margin, y, { align: "right" })
-          y += 5
-        }
-        if (formState.orderDate) {
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Order Date: " + shortDate(formState.orderDate), pageW - margin, y, { align: "right" })
-        }
         doc.setTextColor(0, 0, 0)
+
+        y += 2 // extra padding before TO block
 
         // ── TO block ───────────────────────────────────────────────────────
         doc.setFont("helvetica", "bold")
@@ -1069,52 +1106,50 @@ function GeneratorTool() {
           <p className="text-xs text-muted-foreground text-center mb-2">Live Preview</p>
           <div className="bg-white dark:bg-card border border-border rounded-xl shadow-sm overflow-hidden text-sm">
 
-            {/* Header */}
-            <div className="p-5 flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 min-w-0">
-                {formState.businessInfo.logoBase64 && (
-                  <img src={formState.businessInfo.logoBase64} alt="Logo"
-                    className="h-12 w-auto object-contain flex-shrink-0" />
+            {/* Header matching the PDF */}
+            <div className="p-5 flex items-start gap-4">
+              {/* Logo Box */}
+              <div className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}>
+                {formState.businessInfo.logoBase64 ? (
+                  <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain" />
+                ) : (
+                  <span className="text-white font-bold text-xs">Logo</span>
                 )}
-                <div className="min-w-0">
-                  <p className="font-bold text-base text-foreground truncate">
-                    {formState.businessInfo.company_name || <span className="text-muted-foreground">Company Name</span>}
-                  </p>
-                  {formState.businessInfo.tagline && <p className="text-xs text-muted-foreground">{formState.businessInfo.tagline}</p>}
-                  {formState.businessInfo.address && <p className="text-xs text-muted-foreground">{formState.businessInfo.address}</p>}
-                  {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
-                    <p className="text-xs text-muted-foreground">
-                      {[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}
-                    </p>
+              </div>
+              {/* Vertical line */}
+              <div className="w-px h-16" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+              {/* Company Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
+                  {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
+                </p>
+                {formState.businessInfo.tagline && <p className="text-xs font-bold text-foreground mt-0.5">{formState.businessInfo.tagline}</p>}
+                {formState.businessInfo.address && <p className="text-xs text-muted-foreground mt-1">{formState.businessInfo.address}</p>}
+                {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
+                  <p className="text-xs text-muted-foreground">{[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}</p>
+                )}
+                <div className="flex gap-4 mt-1">
+                  {formState.businessInfo.email && (
+                    <p className="text-xs text-muted-foreground"><span className="font-bold text-foreground">Email:</span> {formState.businessInfo.email}</p>
                   )}
-                  {formState.businessInfo.phone && <p className="text-xs text-muted-foreground">Phone: {formState.businessInfo.phone}</p>}
-                  {formState.businessInfo.email && <p className="text-xs text-muted-foreground">Email: {formState.businessInfo.email}</p>}
-                  {formState.businessInfo.gstin && <p className="text-xs text-muted-foreground">GSTIN: {formState.businessInfo.gstin}</p>}
+                  {formState.businessInfo.phone && (
+                    <p className="text-xs text-muted-foreground"><span className="font-bold text-foreground">Phone:</span> {formState.businessInfo.phone}</p>
+                  )}
                 </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
-              </div>
             </div>
-
-            {/* Accent line */}
-            <div className="h-0.5" style={{ background: `rgb(${tr}, ${tg}, ${tb})` }} />
-
-            {/* Quote meta */}
-            <div className="p-5 space-y-1">
-              <div className="flex justify-between items-baseline">
-                <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
-                <p className="text-sm font-bold">DATE: {shortDate(formState.quoteDate)}</p>
+            {/* Horizontal Line */}
+            <div className="h-0.5 mx-5" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+            {/* Quote Details */}
+            <div className="p-5 flex justify-between items-start">
+              <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
+              <div className="text-right">
+                <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
+                <p className="text-sm font-bold mt-1">DATE: {shortDate(formState.quoteDate)}</p>
+                {formState.orderNo && <p className="text-sm font-bold mt-0.5">Order No: {formState.orderNo}</p>}
+                {formState.orderDate && <p className="text-sm font-bold mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
+                {formState.validTill && <p className="text-xs text-red-500 font-bold mt-0.5">Valid till: {formatDate(formState.validTill)}</p>}
               </div>
-              {formState.validTill && (
-                <p className="text-right text-xs text-red-500 font-medium">Valid till: {formatDate(formState.validTill)}</p>
-              )}
-              {formState.orderNo && (
-                <p className="text-right text-xs">Order No: {formState.orderNo}</p>
-              )}
-              {formState.orderDate && (
-                <p className="text-right text-xs">Order Date: {shortDate(formState.orderDate)}</p>
-              )}
             </div>
 
             {/* TO + Subject */}
