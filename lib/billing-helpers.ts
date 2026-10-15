@@ -140,3 +140,35 @@ export function getUsageTextColor(percentage: number): string {
   if (percentage < 80) return 'text-yellow-700';
   return 'text-red-700';
 }
+
+export type SubscriptionAccessState = 'active' | 'grace' | 'read-only' | 'locked';
+
+export function getSubscriptionAccessState(subscription: {
+  status?: string | null;
+  end_date?: string | null;
+  trial_end_date?: string | null;
+} | null | undefined, now = new Date()): SubscriptionAccessState {
+  if (!subscription) return 'locked';
+
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const trialEnd = subscription.trial_end_date ? new Date(`${subscription.trial_end_date}T00:00:00Z`) : null;
+  if (subscription.status === 'trial' && trialEnd && trialEnd >= today) return 'active';
+
+  const expiry = subscription.end_date ? new Date(`${subscription.end_date}T00:00:00Z`) : null;
+  if (!expiry || Number.isNaN(expiry.getTime()) || expiry >= today) return 'active';
+
+  const overdueDays = Math.floor((today.getTime() - expiry.getTime()) / 86400000);
+  if (overdueDays <= 3) return overdueDays <= 0 ? 'active' : 'grace';
+  if (overdueDays <= 7) return 'read-only';
+  return 'locked';
+}
+
+export function getOverdueDays(subscription: {
+  end_date?: string | null;
+  trial_end_date?: string | null;
+} | null | undefined, now = new Date()): number {
+  if (!subscription?.end_date) return 0;
+  const expiry = new Date(`${subscription.end_date}T00:00:00Z`);
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return Math.max(0, Math.floor((today.getTime() - expiry.getTime()) / 86400000));
+}

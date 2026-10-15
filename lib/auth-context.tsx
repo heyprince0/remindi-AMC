@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { getSubscriptionAccessState, SubscriptionAccessState } from './billing-helpers'
 
 interface AuthContextType {
   user: User | null
@@ -14,6 +15,7 @@ interface AuthContextType {
   orgName: string | null
   recovery: boolean
   technicianId: string | null
+  subscriptionAccess: SubscriptionAccessState
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [orgName, setOrgName] = useState<string | null>(null)
   const [recovery, setRecovery] = useState(false)
   const [technicianId, setTechnicianId] = useState<string | null>(null)
+  const [subscriptionAccess, setSubscriptionAccess] = useState<SubscriptionAccessState>('active')
 
   useEffect(() => {
     const getInitialSession = async () => {
@@ -72,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchMembership = async () => {
       if (!user) {
-        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null)
+        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null); setSubscriptionAccess('active')
         return
       }
       const { data, error } = await supabase
@@ -84,6 +87,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(data.role)
         setOrgId(data.org_id)
         if (data.org_id) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('status, end_date, trial_end_date')
+            .eq('org_id', data.org_id)
+            .maybeSingle()
+          setSubscriptionAccess(getSubscriptionAccessState(subscription))
+
           const { data: orgData, error: orgError } = await supabase
             .from('organizations')
             .select('name')
@@ -106,14 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } else setOrgName(null)
       } else {
-        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null)
+        setRole(null); setOrgId(null); setOrgName(null); setTechnicianId(null); setSubscriptionAccess('locked')
       }
     }
     fetchMembership()
   }, [user])
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, error, role, orgId, orgName, recovery, technicianId }}>
+    <AuthContext.Provider value={{ user, session, loading, error, role, orgId, orgName, recovery, technicianId, subscriptionAccess }}>
       {children}
     </AuthContext.Provider>
   )
