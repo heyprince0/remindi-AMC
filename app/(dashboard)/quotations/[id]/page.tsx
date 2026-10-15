@@ -1,1397 +1,1060 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { Button } from "@/components/ui/button"
-import { supabase, type Quotation, type CompanyProfile } from "@/lib/supabase"
-import { useAuth } from "@/lib/auth-context"
-import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
+import { useState, useEffect } from "react"
 import {
-  ArrowLeft,
-  Download,
-  Edit,
-  Loader2,
-  FileText,
-  CheckCircle2,
-  Upload,
-  Save,
-  Stamp,
-  Share2,
+  Download, FileText, CheckCircle2, Stamp,
+  Menu, X, ImageIcon
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog, DialogContent, DialogHeader,
+  DialogTitle, DialogDescription, DialogFooter
+} from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import {
+  Accordion, AccordionContent,
+  AccordionItem, AccordionTrigger
+} from "@/components/ui/accordion"
+import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
-import Link from "next/link"
+import { createClient } from "@supabase/supabase-js"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 
-const safeStr = (val: any) => String(val ?? "-")
-const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
-const safeDate = (val: any) =>
-  val ? new Date(val).toLocaleDateString("en-IN") : "-"
+// ─── Supabase ─────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
+// ─── Utilities ────────────────────────────────────────────────────────────────
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return "-"
   return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
+    day: "2-digit", month: "long", year: "numeric",
   })
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [24, 95, 165]
+function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  })
 }
 
 function toWords(n: number): string {
-  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+  const a = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine",
+    "Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen",
+    "Seventeen","Eighteen","Nineteen"]
+  const b = ["","","Twenty","Thirty","Forty","Fifty",
+    "Sixty","Seventy","Eighty","Ninety"]
   if (n === 0) return "Zero"
   if (n < 20) return a[n]
-  if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "")
-  if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + toWords(n % 100) : "")
-  if (n < 100000) return toWords(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + toWords(n % 1000) : "")
-  if (n < 10000000) return toWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + toWords(n % 100000) : "")
-  return toWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + toWords(n % 10000000) : "")
+  if (n < 100) return b[Math.floor(n/10)]+(n%10?" "+a[n%10]:"")
+  if (n < 1000) return a[Math.floor(n/100)]+" Hundred"+(n%100?" "+toWords(n%100):"")
+  if (n < 100000) return toWords(Math.floor(n/1000))+" Thousand"+(n%1000?" "+toWords(n%1000):"")
+  if (n < 10000000) return toWords(Math.floor(n/100000))+" Lakh"+(n%100000?" "+toWords(n%100000):"")
+  return toWords(Math.floor(n/10000000))+" Crore"+(n%10000000?" "+toWords(n%10000000):"")
 }
 
-export default function ViewQuotationPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { user } = useAuth()
-  const [quotation, setQuotation] = useState<Quotation | null>(null)
-  const [profile, setProfile] = useState<CompanyProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [generatingPdf, setGeneratingPdf] = useState(false)
-  const [sharingPdf, setSharingPdf] = useState(false)
-  const [updating, setUpdating] = useState(false)
-  const [showConvertModal, setShowConvertModal] = useState(false)
-  const [includeStamp, setIncludeStamp] = useState<boolean>(false)
-  const [convertLoading, setConvertLoading] = useState(false)
-  const [invoiceNo, setInvoiceNo] = useState("")
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState(() => {
-    const date = new Date()
-    date.setDate(date.getDate() + 14)
-    return date.toISOString().split('T')[0]
-  })
-  const [selectedPaymentTerms, setSelectedPaymentTerms] = useState("")
-  const [invoiceNotes, setInvoiceNotes] = useState("")
-  const [orderNo, setOrderNo] = useState("")
-  const [orderDate, setOrderDate] = useState("")
-  const id = params.id as string
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface BusinessInfo {
+  company_name: string
+  phone: string
+  email: string
+  city: string
+  gstin: string
+  logoBase64: string
+  bank_name: string
+  account_no: string
+  ifsc_code: string
+  upi_id: string
+}
 
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
-  const [subscriptionAlertOpen, setSubscriptionAlertOpen] = useState(false)
+interface LineItem {
+  id: string
+  description: string
+  qty: number
+  rate: number
+}
 
-  // Stamp upload states
-  const [showStampUploadDialog, setShowStampUploadDialog] = useState(false)
-  const [stampFile, setStampFile] = useState<File | null>(null)
-  const [stampPreview, setStampPreview] = useState<string | null>(null)
-  const [uploadingStamp, setUploadingStamp] = useState(false)
+interface FormState {
+  businessInfo: BusinessInfo
+  quoteNumber: string
+  quoteDate: string
+  validTill: string
+  subject: string
+  clientName: string
+  clientAddress: string
+  clientCity: string
+  clientState: string
+  clientPinCode: string
+  clientGstin: string
+  items: LineItem[]
+  includeDiscount: boolean
+  discountType: "percentage" | "flat"
+  discountValue: number
+  includeGst: boolean
+  gstRate: number
+  notes: string
+}
 
-  const { status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
+const LS_KEY = "remindi_business_info_v2"
 
-  useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("memberships")
-        .select("org_id")
-        .eq("user_id", user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Failed to fetch organization:", error)
-            toast.error("Could not determine your organization")
-          } else if (data?.org_id) {
-            setCurrentOrgId(data.org_id)
-          }
-        })
-    }
-  }, [user?.id])
+const defaultState: FormState = {
+  businessInfo: {
+    company_name:"", phone:"", email:"", city:"", gstin:"", logoBase64:"",
+    bank_name:"", account_no:"", ifsc_code:"", upi_id:"",
+  },
+  quoteNumber: "QT-001",
+  quoteDate: new Date().toISOString().split("T")[0],
+  validTill: new Date(Date.now()+30*24*60*60*1000).toISOString().split("T")[0],
+  subject: "",
+  clientName:"", clientAddress:"", clientCity:"", clientState:"",
+  clientPinCode:"", clientGstin:"",
+  items:[
+    { id:"1", description:"", qty:1, rate:0 },
+    { id:"2", description:"", qty:1, rate:0 },
+  ],
+  includeDiscount:false,
+  discountType:"percentage",
+  discountValue:0,
+  includeGst:false,
+  gstRate:18,
+  notes:"",
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem(`stamp_toggle_q_${id}`)
-    if (saved === "true") setIncludeStamp(true)
-  }, [id])
+// ─── Navbar ───────────────────────────────────────────────────────────────────
+function PublicNavbar() {
+  const [open, setOpen] = useState(false)
+  return (
+    <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <span className="text-lg font-bold text-blue-600">Remindi</span>
+        <div className="hidden sm:flex gap-2">
+          <Button variant="ghost" size="sm" onClick={()=>window.open("https://remindi.online/login","_blank")}>Sign In</Button>
+          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={()=>window.open("https://remindi.online/signup","_blank")}>Sign Up Free</Button>
+        </div>
+        <Button variant="ghost" size="icon" className="sm:hidden" onClick={()=>setOpen(!open)}>
+          {open?<X size={20}/>:<Menu size={20}/>}
+        </Button>
+      </div>
+      {open&&(
+        <div className="sm:hidden border-t border-border px-4 py-3 flex flex-col gap-2 bg-background">
+          <Button variant="ghost" className="w-full justify-start" onClick={()=>window.open("https://remindi.online/login","_blank")}>Sign In</Button>
+          <Button className="w-full bg-blue-600 text-white" onClick={()=>window.open("https://remindi.online/signup","_blank")}>Sign Up Free</Button>
+        </div>
+      )}
+    </nav>
+  )
+}
 
-  const handleStampToggle = () => {
-    if (!profile?.stamp_url && !profile?.signature_url) {
-      setShowStampUploadDialog(true)
-      return
-    }
-    const newVal = !includeStamp
-    setIncludeStamp(newVal)
-    localStorage.setItem(`stamp_toggle_q_${id}`, String(newVal))
-  }
+// ─── Hero ─────────────────────────────────────────────────────────────────────
+function HeroBanner() {
+  return (
+    <section className="bg-gradient-to-b from-blue-50 to-white dark:from-slate-950 dark:to-background py-10 sm:py-14">
+      <div className="max-w-4xl mx-auto px-4 text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">
+          Free Quotation Generator for Contractors
+        </h1>
+        <p className="text-base text-muted-foreground mb-2">
+          Create a professional quotation PDF in minutes. No signup needed.
+        </p>
+        <p className="text-sm font-medium text-blue-600">Used by 500+ Indian contractors</p>
+      </div>
+    </section>
+  )
+}
 
-  useEffect(() => {
-    if (user?.id && id && currentOrgId) {
-      loadData()
-    }
-  }, [id, user?.id, currentOrgId])
+// ─── Main Generator ───────────────────────────────────────────────────────────
+function GeneratorTool() {
+  const [form, setForm] = useState<FormState>(defaultState)
+  const [showLead, setShowLead] = useState(false)
+  const [lead, setLead] = useState({fullName:"",phone:"",companyName:"",serviceType:""})
+  const [showPreview, setShowPreview] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    if (profile?.payment_terms) {
-      setSelectedPaymentTerms(profile.payment_terms)
-    }
-  }, [profile?.payment_terms])
-
-  const loadData = async () => {
-    setLoading(true)
+  // Load from localStorage
+  useEffect(()=>{
     try {
-      const { data: qData, error: qErr } = await supabase
-        .from("quotations")
-        .select("*")
-        .eq("id", id)
-        .eq("org_id", currentOrgId)
-        .single()
+      const s = localStorage.getItem(LS_KEY)
+      if (s) {
+        const p = JSON.parse(s) as Partial<BusinessInfo>
+        setForm(prev=>({...prev, businessInfo:{...prev.businessInfo,...p}}))
+      }
+    } catch {}
+  },[])
 
-      if (qErr) throw qErr
+  // Save to localStorage on change
+  useEffect(()=>{
+    try { localStorage.setItem(LS_KEY, JSON.stringify(form.businessInfo)) } catch {}
+  },[form.businessInfo])
 
-      const { data: pData } = await supabase
-        .from("company_profile")
-        .select("*")
-        .eq("org_id", currentOrgId)
-        .single()
-
-      setQuotation(qData as Quotation)
-      if (pData) setProfile(pData as CompanyProfile)
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to load quotation")
-    } finally {
-      setLoading(false)
-    }
+  // Helpers
+  const updateBiz = (f: keyof BusinessInfo, v: string) =>
+    setForm(p=>({...p, businessInfo:{...p.businessInfo,[f]:v}}))
+  const updateField = (f: keyof FormState, v: any) =>
+    setForm(p=>({...p,[f]:v}))
+  const updateItem = (id:string, f:keyof LineItem, v:any) =>
+    setForm(p=>({...p, items:p.items.map(it=>it.id===id?{...it,[f]:v}:it)}))
+  const addItem = () =>
+    setForm(p=>({...p, items:[...p.items,{id:String(Date.now()),description:"",qty:1,rate:0}]}))
+  const deleteItem = (id:string) => {
+    if(form.items.length<=1) return
+    setForm(p=>({...p, items:p.items.filter(it=>it.id!==id)}))
   }
 
-  const handleUploadStamp = async () => {
-    if (!stampFile || !currentOrgId) return
-    setUploadingStamp(true)
-    try {
-      const fileName = `stamp-${currentOrgId}-${Date.now()}.png`
-      const { error: uploadError } = await supabase.storage
-        .from('company-assets')
-        .upload(fileName, stampFile, { upsert: true })
-
-      if (uploadError) throw uploadError
-
-      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(fileName)
-      const publicUrl = urlData.publicUrl
-
-      const { error: updateError } = await supabase
-        .from('company_profile')
-        .update({ stamp_url: publicUrl })
-        .eq('org_id', currentOrgId)
-
-      if (updateError) throw updateError
-
-      setProfile(prev => prev ? { ...prev, stamp_url: publicUrl } : null)
-      setIncludeStamp(true)
-      localStorage.setItem(`stamp_toggle_q_${id}`, 'true')
-      toast.success('Stamp uploaded successfully')
-      setShowStampUploadDialog(false)
-      setStampFile(null)
-      setStampPreview(null)
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to upload stamp')
-    } finally {
-      setUploadingStamp(false)
-    }
+  // Logo upload
+  const handleLogo = (e:React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if(!file) return
+    if(file.size>2*1024*1024){toast.error("Logo must be under 2 MB");return}
+    const reader = new FileReader()
+    reader.onload = ev => updateBiz("logoBase64", ev.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
-  const generateNextInvoiceNo = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("invoice_no")
-        .eq("org_id", currentOrgId)
-      if (error) throw error
-      if (!data || data.length === 0) return "INV-001"
-      const numbers = data
-        .map(inv => {
-          const match = (inv.invoice_no || "").match(/(\d+)$/)
-          return match ? parseInt(match[1]) : 0
-        })
-        .filter(n => n > 0)
-      if (numbers.length === 0) return "INV-001"
-      const maxNumber = Math.max(...numbers)
-      return `INV-${String(maxNumber + 1).padStart(3, '0')}`
-    } catch (err) {
-      console.error(err)
-      return "INV-001"
-    }
-  }
+  // Calculations
+  const subtotal = form.items.reduce((s,it)=>s+it.qty*it.rate,0)
+  const discount = form.includeDiscount
+    ? form.discountType==="percentage" ? (subtotal*form.discountValue)/100 : form.discountValue
+    : 0
+  const taxable = subtotal - discount
+  const sgst = form.includeGst ? (taxable*form.gstRate/2)/100 : 0
+  const cgst = form.includeGst ? (taxable*form.gstRate/2)/100 : 0
+  const grandTotal = taxable + sgst + cgst
+  const hasBankDetails = form.businessInfo.bank_name || form.businessInfo.account_no
+    || form.businessInfo.ifsc_code || form.businessInfo.upi_id
 
-  const handleEditClick = () => {
-    if (limitsLoading) {
-      toast.error("Checking your plan status, please try again in a moment...")
-      return
-    }
-    if (status === 'expired' || status === 'cancelled') {
-      setSubscriptionAlertOpen(true)
-      return
-    }
-    router.push(`/quotations/${id}/edit`)
-  }
-
-  const handleOpenConvertModal = async () => {
-    const nextNo = await generateNextInvoiceNo()
-    setInvoiceNo(nextNo)
-    setShowConvertModal(true)
-  }
-
-  const handleConvertToInvoice = async () => {
-    if (!quotation || !user?.id || !currentOrgId) return
-    setConvertLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .insert({
-          user_id: user.id,
-          org_id: currentOrgId,
-          quotation_id: quotation.id,
-          invoice_no: invoiceNo,
-          order_no: orderNo || null,
-          order_date: orderDate || null,
-          invoice_date: invoiceDate,
-          due_date: dueDate,
-          payment_terms: selectedPaymentTerms,
-          payment_status: "Unpaid",
-          notes: invoiceNotes,
-          client_name: quotation.client_name,
-          client_address: quotation.client_address,
-          client_district: quotation.client_district,
-          client_state: quotation.client_state,
-          client_pin_code: quotation.client_pin_code,
-          subject: quotation.subject,
-          body_text: quotation.body_text,
-          items: quotation.items,
-          subtotal: quotation.subtotal,
-          sgst: quotation.sgst,
-          cgst: quotation.cgst,
-          grand_total: quotation.grand_total,
-          include_gst: quotation.include_gst,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      const { error: updateErr } = await supabase
-        .from("quotations")
-        .update({ invoice_id: data.id })
-        .eq("id", quotation.id)
-
-      if (updateErr) throw updateErr
-
-      setQuotation({ ...quotation, invoice_id: data.id })
-      toast.success("Invoice generated successfully")
-      setShowConvertModal(false)
-
-      setTimeout(() => {
-        router.push(`/invoices/${data.id}`)
-      }, 500)
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to generate invoice: " + (err instanceof Error ? err.message : "Unknown error"))
-    } finally {
-      setConvertLoading(false)
-    }
-  }
-
-  const getMappedItems = () => {
-    return (quotation?.items ?? []).map((item: any, index: number) => ({
-      sr: index + 1,
-      description: item.particulars ?? item.description ?? item.name ?? "-",
-      qty: item.qty ?? item.quantity ?? 1,
-      rate: Number(item.rate ?? item.unit_price ?? 0),
-      amount: Number(item.amount ?? ((item.qty ?? item.quantity ?? 0) * (item.rate ?? item.unit_price ?? 0)) ?? 0),
-    }))
-  }
-
-  const getTotals = () => {
-    if (!quotation) return { subtotal: 0, discountAmount: 0, discountType: null, discountValue: 0, sgst: 0, cgst: 0, grandTotal: 0 }
-    const subtotal = quotation.subtotal || 0
-    const discountAmount = quotation.discount_amount || 0
-    const sgst = quotation.sgst || 0
-    const cgst = quotation.cgst || 0
-    const grandTotal = quotation.grand_total || 0
-    return { subtotal, discountAmount, discountType: quotation.discount_type, discountValue: quotation.discount_value || 0, sgst, cgst, grandTotal }
-  }
-
-  // ── Shared PDF builder ─────────────────────────────────────────────────────
-  // Returns { doc, filename } so both download and share can call the same logic.
-  const buildPdfDoc = async (stampToggle: boolean = false): Promise<{ doc: jsPDF; filename: string } | null> => {
-    if (!quotation) return null
-
-    const shouldIncludeStamp = stampToggle && (!!profile?.stamp_url || !!profile?.signature_url)
-
+  // ─── PDF — matches original Remindi quotation PDF exactly ─────────────────
+  const generatePdf = async () => {
+    setGenerating(true)
     try {
       const pageW = 210
       const margin = 15
-      const themeColor = profile?.theme_color ?? "#185FA5"
-      const [tr, tg, tb] = hexToRgb(themeColor)
+      const blue: [number,number,number] = [37, 99, 235]
+      const gray: [number,number,number] = [120, 120, 120]
 
-      const headerStyle = profile?.header_style ?? "single_logo"
-      let bannerBase64: string | null = null
-      let bannerFormat: "JPEG" | "PNG" = "PNG"
-      let bannerH = 0
-      if (headerStyle === "thumbnail" && profile?.header_thumbnail_url) {
-        try {
-          const response = await fetch(profile.header_thumbnail_url)
-          const blob = await response.blob()
-          bannerFormat = blob.type.includes('jpeg') || blob.type.includes('jpg') ? 'JPEG' : 'PNG'
-          bannerBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-          const naturalSize = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-            const img = new Image()
-            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
-            img.onerror = reject
-            img.src = bannerBase64 as string
-          })
-          const bannerW = pageW - (margin * 2)
-          bannerH = Math.round(bannerW / (naturalSize.w / naturalSize.h))
-          const maxBannerH = 60
-          if (bannerH > maxBannerH) bannerH = maxBannerH
-        } catch (e) { /* skip banner */ }
-      }
-
-      let logoBase64: string | null = null
-      let logoFormat: "JPEG" | "PNG" = "PNG"
-      if (headerStyle !== "thumbnail" && profile?.logo_url) {
-        try {
-          const response = await fetch(profile.logo_url)
-          const blob = await response.blob()
-          logoFormat = blob.type.includes('jpeg') || blob.type.includes('jpg') ? 'JPEG' : 'PNG'
-          logoBase64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(blob)
-          })
-        } catch (e) { /* skip logo */ }
-      }
-
-      let stampBase64: string | null = null
-      let stampFormat: "JPEG" | "PNG" = "PNG"
-      if (shouldIncludeStamp && profile?.stamp_url) {
-        const stampPublicUrl = profile.stamp_url
-        const MAX_STAMP_ATTEMPTS = 3
-        for (let attempt = 1; attempt <= MAX_STAMP_ATTEMPTS; attempt++) {
-          try {
-            const stampResponse = await fetch(stampPublicUrl, { cache: 'no-store' })
-            if (!stampResponse.ok) throw new Error(`HTTP ${stampResponse.status}`)
-            const stampBlob = await stampResponse.blob()
-            stampBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onloadend = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(stampBlob)
-            })
-            stampFormat = stampBlob.type.includes('jpeg') ? 'JPEG' : 'PNG'
-            break
-          } catch (e) {
-            console.warn(`[Stamp] Attempt ${attempt} failed:`, e)
-            if (attempt === MAX_STAMP_ATTEMPTS) {
-              toast.warning('Stamp image could not be loaded – skipping stamp')
-            } else {
-              await new Promise(res => setTimeout(res, 400 * attempt))
-            }
-          }
-        }
-      }
-
-      const items = quotation.items ?? []
-      const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
-
+      // Measure height first on scratch doc, then render on final doc
       const renderQuotation = (doc: jsPDF): number => {
         let y = margin
 
-        if (headerStyle === "thumbnail" && bannerBase64) {
-          const bannerW = pageW - (margin * 2)
-          doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
-          y += bannerH + 6
-        } else if (headerStyle === "single_logo") {
-          y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
+        // ── Header: logo left + company info ──────────────────────────────
+        const biz = form.businessInfo
+        const logoB64 = biz.logoBase64
+
+        if (logoB64) {
+          const fmt: "PNG"|"JPEG" = logoB64.includes("data:image/jpeg") || logoB64.includes("data:image/jpg") ? "JPEG" : "PNG"
+          try { doc.addImage(logoB64, fmt, margin, y, 22, 22) } catch {}
+          const tx = margin + 25
+          doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(0,0,0)
+          doc.text(biz.company_name||"Company Name", tx, y+5)
+          doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...gray)
+          let iy = y+10
+          if(biz.phone){doc.text(biz.phone,tx,iy);iy+=4}
+          if(biz.email){doc.text(biz.email,tx,iy);iy+=4}
+          if(biz.city){doc.text(biz.city,tx,iy);iy+=4}
+          if(biz.gstin){doc.text("GSTIN: "+biz.gstin,tx,iy)}
+          y += 28
         } else {
-          let logoX = margin
-          let logoAdded = false
-          if (logoBase64) {
-            doc.addImage(logoBase64, logoFormat, logoX, y, 22, 22)
-            logoAdded = true
-          }
-          const infoX = logoAdded ? logoX + 24 : logoX
-          doc.setFontSize(14)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text(safeStr(profile?.company_name), infoX, y + 2)
+          doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0,0,0)
+          doc.text(biz.company_name||"Company Name", margin, y+5)
+          doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...gray)
+          let iy = y+11
+          if(biz.phone){doc.text(biz.phone,margin,iy);iy+=4}
+          if(biz.email){doc.text(biz.email,margin,iy);iy+=4}
+          if(biz.city){doc.text(biz.city,margin,iy);iy+=4}
+          if(biz.gstin){doc.text("GSTIN: "+biz.gstin,margin,iy)}
+          y += 28
+        }
 
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(120, 120, 120)
-          let infoY = y + 8
-          if (profile?.tagline) { doc.text(safeStr(profile.tagline), infoX, infoY); infoY += 4 }
-          if (profile?.address) { doc.text(safeStr(profile.address), infoX, infoY); infoY += 4 }
-          if (profile?.city || profile?.state || profile?.zip_code) {
-            const locationStr = [profile.city, profile.state, profile.zip_code].filter(Boolean).join(", ")
-            doc.text(locationStr, infoX, infoY); infoY += 4
-          }
-          if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
-          if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-          y += 31
+        // Blue divider line (matches renderSingleLogoHeader style)
+        doc.setDrawColor(...blue); doc.setLineWidth(0.6)
+        doc.line(margin, y, pageW-margin, y)
+        y += 7
 
-          doc.setDrawColor(tr, tg, tb)
-          doc.setLineWidth(0.5)
-          doc.line(margin, y, pageW - margin, y)
+        // ── "QUOTATION" heading right ──────────────────────────────────────
+        doc.setFont("helvetica","bold"); doc.setFontSize(16)
+        doc.setTextColor(...blue)
+        doc.text("QUOTATION", pageW-margin, y, {align:"right"})
+
+        // Quote No left, DATE right — same row
+        y += 6
+        doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(0,0,0)
+        doc.text(form.quoteNumber||"QT-001", margin, y)
+        doc.text("DATE: "+formatDateShort(form.quoteDate), pageW-margin, y, {align:"right"})
+
+        // Valid till in red
+        y += 5
+        if (form.validTill) {
+          doc.setFont("helvetica","normal"); doc.setFontSize(9)
+          doc.setTextColor(220,38,38)
+          doc.text("Valid till: "+formatDateShort(form.validTill), pageW-margin, y, {align:"right"})
+        }
+        doc.setTextColor(0,0,0)
+
+        // ── TO, + client details ───────────────────────────────────────────
+        y += 2
+        doc.setFont("helvetica","bold"); doc.setFontSize(9)
+        doc.setTextColor(...gray)
+        doc.text("TO,", margin, y)
+        y += 5
+        doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(0,0,0)
+        doc.text((form.clientName||"Client Name").toUpperCase(), margin, y)
+        y += 5
+        doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(40,40,40)
+        if(form.clientAddress){doc.text(form.clientAddress,margin,y);y+=5}
+        const cityLine = [form.clientCity,form.clientState,form.clientPinCode].filter(Boolean).join(", ")
+        if(cityLine){doc.text(cityLine,margin,y);y+=5}
+        if(form.clientGstin){doc.text("GSTIN: "+form.clientGstin,margin,y);y+=5}
+        y += 3
+
+        // ── Subject ───────────────────────────────────────────────────────
+        if(form.subject){
+          doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(0,0,0)
+          doc.text("Sub: "+form.subject, margin, y)
           y += 6
         }
 
-        doc.setFontSize(16)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(tr, tg, tb)
-        doc.text('QUOTATION', pageW - margin, y, { align: 'right' })
-
-        y += 6
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(quotation.quote_no ?? ("QT-" + quotation.id)), margin, y)
-        const formattedDate = quotation.created_at
-          ? new Date(quotation.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
-
-        y += 5
-        if (quotation.valid_till) {
-          doc.setFontSize(9)
-          doc.setTextColor(220, 38, 38)
-          doc.text('Valid till: ' + safeDate(quotation.valid_till), pageW - margin, y, { align: 'right' })
-          y += 5
-        }
-        if (quotation.order_no) {
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(0, 0, 0)
-          doc.text('Order No: ' + safeStr(quotation.order_no), pageW - margin, y, { align: 'right' })
-          y += 5
-        }
-        if (quotation.order_date) {
-          const orderDateFormatted = new Date(quotation.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
-        }
-        doc.setTextColor(0, 0, 0)
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(150, 150, 150)
-        doc.text("TO,", margin, y)
-        y += 5
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(quotation.client_name).toUpperCase(), margin, y)
-        y += 5
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(40, 40, 40)
-        if (quotation.client_address) {
-          doc.text(safeStr(quotation.client_address), margin, y)
-          y += 5
-        }
-        const cityStateZip = [
-          quotation.client_district,
-          quotation.client_state,
-          quotation.client_pin_code
-        ].filter(Boolean).join(', ')
-        if (cityStateZip) {
-          doc.text(cityStateZip, margin, y)
-          y += 5
-        }
-        y += 3
-
-        if (quotation.subject) {
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text('Sub: ' + safeStr(quotation.subject), margin, y)
-          y += 5
-        }
-        if (quotation.body_text) {
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
-          const bodyLines = doc.splitTextToSize(safeStr(quotation.body_text), pageW - 2 * margin)
-          doc.text(bodyLines, margin, y)
-          y += (bodyLines.length * 4) + 3
-        }
-
-        const tableBody = items.map((item: any, idx: number) => [
-          String(idx + 1),
-          safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
-          String(item.qty ?? item.quantity ?? 1),
-          `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
-          `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
+        // ── Items table: SR.NO | PARTICULARS | QTY. | RATE | AMOUNT ───────
+        const tableRows = form.items.map((it,i)=>[
+          String(i+1),
+          it.description||"-",
+          String(it.qty),
+          "Rs. "+Number(it.rate).toLocaleString("en-IN"),
+          "Rs. "+Number(it.qty*it.rate).toLocaleString("en-IN"),
         ])
 
         autoTable(doc, {
           startY: y,
-          head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
-          body: tableBody,
+          head: [["SR.NO","PARTICULARS","QTY.","RATE","AMOUNT"]],
+          body: tableRows,
           theme: "grid",
           headStyles: {
-            fillColor: [tr, tg, tb],
-            textColor: [255, 255, 255],
+            fillColor: blue,
+            textColor: [255,255,255],
             fontStyle: "bold",
             fontSize: 9,
             halign: "center",
           },
-          bodyStyles: {
-            fontSize: 9,
-            textColor: [0, 0, 0],
-          },
+          bodyStyles: { fontSize:9, textColor:[0,0,0] },
           columnStyles: {
-            0: { cellWidth: 15, halign: "center" },
-            1: { cellWidth: "auto" },
-            2: { cellWidth: 20, halign: "center" },
-            3: { cellWidth: 35, halign: "right" },
-            4: { cellWidth: 35, halign: "right" },
+            0: {cellWidth:15, halign:"center"},
+            1: {cellWidth:"auto"},
+            2: {cellWidth:20, halign:"center"},
+            3: {cellWidth:35, halign:"right"},
+            4: {cellWidth:35, halign:"right"},
           },
-          margin: { left: margin, right: margin },
-          pageBreak: "avoid",
-          rowPageBreak: "avoid",
+          margin: {left:margin, right:margin},
+          pageBreak:"avoid",
+          rowPageBreak:"avoid",
         })
 
         y = (doc as any).lastAutoTable.finalY + 8
 
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-
-        doc.text('Subtotal:', 160, y, { align: 'right' })
-        doc.text('Rs. ' + subtotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
+        // ── Totals ────────────────────────────────────────────────────────
+        doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(0,0,0)
+        doc.text("Subtotal:", 160, y, {align:"right"})
+        doc.text("Rs. "+subtotal.toLocaleString("en-IN"), 195, y, {align:"right"})
         y += 4
 
-        if (discountAmount > 0) {
-          const discountLabel = discountType === "percentage"
-            ? `${discountValue}%`
-            : `₹${discountValue}`
-          doc.text(`Discount (${discountLabel}):`, 160, y, { align: 'right' })
-          doc.setTextColor(200, 0, 0)
-          doc.text('- Rs. ' + discountAmount.toLocaleString('en-IN'), 195, y, { align: 'right' })
-          doc.setTextColor(0, 0, 0)
+        if(discount>0){
+          const dlabel = form.discountType==="percentage"
+            ? `Discount (${form.discountValue}%):`
+            : "Discount:"
+          doc.text(dlabel, 160, y, {align:"right"})
+          doc.setTextColor(200,0,0)
+          doc.text("- Rs. "+discount.toLocaleString("en-IN"), 195, y, {align:"right"})
+          doc.setTextColor(0,0,0)
           y += 4
         }
 
-        if (quotation.include_gst) {
-          doc.text('SGST (9%):', 160, y, { align: 'right' })
-          doc.text('Rs. ' + sgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+        if(form.includeGst){
+          doc.text(`SGST (${form.gstRate/2}%):`, 160, y, {align:"right"})
+          doc.text("Rs. "+sgst.toLocaleString("en-IN"), 195, y, {align:"right"})
           y += 4
-          doc.text('CGST (9%):', 160, y, { align: 'right' })
-          doc.text('Rs. ' + cgst.toLocaleString('en-IN'), 195, y, { align: 'right' })
+          doc.text(`CGST (${form.gstRate/2}%):`, 160, y, {align:"right"})
+          doc.text("Rs. "+cgst.toLocaleString("en-IN"), 195, y, {align:"right"})
           y += 3
-          doc.setDrawColor(0, 0, 0)
-          doc.setLineWidth(0.3)
-          doc.line(140, y, 195, y)
-          y += 4
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(10)
-          doc.text('Total:', 160, y, { align: 'right' })
-          doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
-        } else {
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(10)
-          doc.text('Total:', 160, y, { align: 'right' })
-          doc.text('Rs. ' + grandTotal.toLocaleString('en-IN'), 195, y, { align: 'right' })
         }
 
+        doc.setDrawColor(0,0,0); doc.setLineWidth(0.3)
+        doc.line(140, y, 195, y)
+        y += 4
+
+        doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(0,0,0)
+        doc.text("Total:", 160, y, {align:"right"})
+        doc.text("Rs. "+grandTotal.toLocaleString("en-IN"), 195, y, {align:"right"})
         y += 2
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-        const inWordsAmount = grandTotal
-        doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
+
+        // Amount in words — UPPERCASE as original
+        doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(0,0,0)
+        doc.text(("RUPEES "+toWords(Math.round(grandTotal))+" ONLY").toUpperCase(), margin, y)
         y += 20
 
-        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
-          y += 10
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Payment Details:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(40, 40, 40)
-          if (profile?.bank_name) { doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y); y += 4 }
-          if (profile?.account_no) { doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y); y += 4 }
-          if (profile?.ifsc_code) { doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y); y += 4 }
-          if (profile?.upi_id) { doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y); y += 4 }
-          if (quotation.payment_terms) { doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y); y += 4 }
-        }
-
-        if (quotation.include_gst) {
-          y += 6
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Tax Information:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(40, 40, 40)
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
-          if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
-          doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+        // ── Payment Details ────────────────────────────────────────────────
+        if(hasBankDetails){
           y += 4
-          y += 6
+          doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(0,0,0)
+          doc.text("Payment Details:", margin, y); y += 5
+          doc.setFont("helvetica","normal"); doc.setTextColor(40,40,40)
+          if(form.businessInfo.bank_name){doc.text("Bank: "+form.businessInfo.bank_name,margin,y);y+=4}
+          if(form.businessInfo.account_no){doc.text("Account No: "+form.businessInfo.account_no,margin,y);y+=4}
+          if(form.businessInfo.ifsc_code){doc.text("IFSC: "+form.businessInfo.ifsc_code,margin,y);y+=4}
+          if(form.businessInfo.upi_id){doc.text("UPI: "+form.businessInfo.upi_id,margin,y);y+=4}
         }
 
-        if (quotation.notes) {
+        // ── Terms & Conditions ─────────────────────────────────────────────
+        if(form.notes){
           y += 3
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Terms & Conditions:", margin, y)
-          y += 4
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
-          const noteLines = doc.splitTextToSize(safeStr(quotation.notes), pageW - 2 * margin)
-          doc.text(noteLines, margin, y)
-          y += (noteLines.length * 4)
+          doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(0,0,0)
+          doc.text("Terms & Conditions:", margin, y); y += 4
+          doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80)
+          const noteLines = doc.splitTextToSize(form.notes, pageW-2*margin) as string[]
+          doc.text(noteLines, margin, y); y += noteLines.length*4
         }
 
+        // ── Closing ───────────────────────────────────────────────────────
         y += 10
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-        doc.text('Thanking you,', 195, y, { align: 'right' })
-        doc.text('Yours faithfully,', 195, y + 6, { align: 'right' })
-        doc.setFont('helvetica', 'bold')
-        doc.text('For ' + safeStr(profile?.company_name), 195, y + 12, { align: 'right' })
+        doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(0,0,0)
+        doc.text("Thanking you,", 195, y, {align:"right"})
+        doc.text("Yours faithfully,", 195, y+6, {align:"right"})
+        doc.setFont("helvetica","bold")
+        doc.text("For "+(form.businessInfo.company_name||""), 195, y+12, {align:"right"})
 
-        let contentBottom = y + 12
-
-        if (shouldIncludeStamp && stampBase64) {
-          let stampY = y + 18
-          const stampW = 30
-          const stampH = 30
-          const stampX = pageW - margin - stampW
-          doc.addImage(stampBase64, stampFormat, stampX, stampY, stampW, stampH)
-          stampY += stampH + 2
-
-          doc.setDrawColor(200, 200, 200)
-          doc.setLineWidth(0.5)
-          doc.line(pageW - margin - 40, stampY, pageW - margin, stampY)
-          stampY += 4
-
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(8)
-          doc.setTextColor(120, 120, 120)
-          doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
-
-          contentBottom = Math.max(contentBottom, stampY)
-        }
-
-        const footerY = contentBottom + 12
-        doc.setFontSize(8)
-        doc.setTextColor(150, 150, 150)
-        doc.setFont("helvetica", "normal")
-        doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
+        // ── Footer ────────────────────────────────────────────────────────
+        const footerY = y + 28
+        doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont("helvetica","normal")
+        doc.text("Generated by Remindi · remindi.online", pageW/2, footerY, {align:"center"})
 
         return footerY + 8
       }
 
-      const scratchDoc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
-      const measuredHeight = renderQuotation(scratchDoc)
-      const finalPageHeight = Math.max(measuredHeight, 100)
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, finalPageHeight] })
+      // Measure on scratch, render on final doc sized to content
+      const scratch = new jsPDF({orientation:"portrait",unit:"mm",format:[pageW,2000]})
+      const measuredH = renderQuotation(scratch)
+      const finalH = Math.max(measuredH, 100)
+      const doc = new jsPDF({orientation:"portrait",unit:"mm",format:[pageW,finalH]})
       renderQuotation(doc)
 
-      const filename = `Quotation-${safeStr(quotation.quote_no ?? quotation.id)}-${safeStr(quotation.client_name ?? "Client")}.pdf`
-      return { doc, filename }
-    } catch (err) {
-      console.error("PDF build error:", err)
-      throw err
-    }
-  }
+      const safeName = (form.clientName||"Client").replace(/\s+/g,"_")
+      doc.save(`Quotation-${form.quoteNumber}-${safeName}.pdf`)
 
-  const handleDownloadPdf = async (stampToggle: boolean = false) => {
-    setGeneratingPdf(true)
-    try {
-      const result = await buildPdfDoc(stampToggle)
-      if (!result) return
-      result.doc.save(result.filename)
-      toast.success("PDF downloaded")
-    } catch (err) {
-      toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
+      toast.success("Quotation downloaded!", {
+        description:"Want to manage all your quotations automatically? Try Remindi free.",
+        action:{label:"Try Remindi →", onClick:()=>window.open("https://remindi.online/signup","_blank")}
+      })
+    } catch(err){
+      console.error(err)
+      toast.error("PDF generation failed. Please try again.")
     } finally {
-      setGeneratingPdf(false)
+      setGenerating(false)
     }
   }
 
-  const handleWhatsAppShare = async () => {
-    setSharingPdf(true)
+  // Lead submit
+  const handleLeadSubmit = async () => {
+    if(!lead.fullName||!lead.phone||!lead.companyName||!lead.serviceType){
+      toast.error("Please fill all required fields."); return
+    }
+    setSubmitting(true)
     try {
-      const result = await buildPdfDoc(includeStamp)
-      if (!result) return
-      const { doc, filename } = result
-
-      const pdfBlob = doc.output("blob")
-      const file = new File([pdfBlob], filename, { type: "application/pdf" })
-
-      // Mobile (Android Chrome, iOS Safari 15.1+): native share sheet
-      if (
-        typeof navigator.share === "function" &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] })
-      ) {
-        await navigator.share({
-          files: [file],
-          title: `Quotation ${quotation?.quote_no ?? ""}`,
-          text: `Hi, please find the quotation from ${profile?.company_name ?? "us"}. Total: ₹${(quotation?.grand_total ?? 0).toLocaleString("en-IN")}.`,
-        })
-      } else {
-        // Desktop fallback: save PDF + open WhatsApp Web with pre-filled text
-        doc.save(filename)
-        const waText = encodeURIComponent(
-          `Hi, please find the quotation *${quotation?.quote_no ?? ""}* from *${profile?.company_name ?? ""}*.\nAmount: ₹${(quotation?.grand_total ?? 0).toLocaleString("en-IN")}\n\nKindly review and confirm.`
-        )
-        window.open(`https://wa.me/?text=${waText}`, "_blank")
-        toast.info("PDF saved. Open WhatsApp and attach it there.")
-      }
-    } catch (err: any) {
-      if (err?.name === "AbortError") return // user dismissed the share sheet — not an error
-      console.error("Share error:", err)
-      toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
-    } finally {
-      setSharingPdf(false)
+      await supabase.from("demo_bookings").insert({
+        full_name:lead.fullName, phone:lead.phone,
+        company_name:lead.companyName, service_type:lead.serviceType,
+        source:"free-quotation-generator",
+        created_at:new Date().toISOString(),
+      })
+    } catch { /* never block */ }
+    finally {
+      setSubmitting(false)
+      setShowLead(false)
+      await generatePdf()
     }
   }
 
-  // ─── Loading & not-found states ──────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </DashboardLayout>
-    )
-  }
-
-  if (!quotation) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 gap-3">
-          <FileText className="size-10 text-muted-foreground/40" />
-          <p className="text-muted-foreground">Quotation not found</p>
-          <Link href="/quotations">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-1.5 size-3.5" />
-              Back to Quotations
-            </Button>
-          </Link>
-        </div>
-      </DashboardLayout>
-    )
-  }
-
-  const { subtotal, discountAmount, discountType, discountValue, sgst, cgst, grandTotal } = getTotals()
-  const includeGst = quotation.include_gst ?? true
-  const mappedItems = getMappedItems()
-  const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
-
+  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <DashboardLayout>
-      <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+    <section className="max-w-7xl mx-auto px-4 py-8">
+      <div className="lg:hidden mb-4">
+        <Button variant="outline" className="w-full" onClick={()=>setShowPreview(!showPreview)}>
+          {showPreview ? "Hide Preview" : "Show Live Preview"}
+        </Button>
+      </div>
 
-        {/* ── Action bar ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link href="/quotations">
-              <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="size-4" />
-              </Button>
-            </Link>
+      <div className="flex flex-col lg:flex-row gap-6">
+
+        {/* ── LEFT: Form ────────────────────────────────────────────────── */}
+        <div className="flex-1 space-y-4">
+
+          {/* Business Info */}
+          <div className="border border-border rounded-xl p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Your Business Info</h3>
+
+            {/* Logo upload */}
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-semibold leading-tight">
-                  {quotation.quote_no ?? ("QT-" + quotation.id)}
-                </h1>
-                {quotation.invoice_id ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full dark:bg-green-950 dark:text-green-400 dark:border-green-800">
-                    <CheckCircle2 className="size-3" />
-                    Invoice raised
-                  </span>
-                ) : null}
+              <Label className="text-xs font-semibold text-muted-foreground">Company Logo (optional)</Label>
+              <div className="mt-1.5">
+                {form.businessInfo.logoBase64 ? (
+                  <div className="flex items-center gap-3">
+                    <img src={form.businessInfo.logoBase64} alt="logo"
+                      className="h-14 w-auto object-contain border border-border rounded-lg p-1 bg-white" />
+                    <Button variant="outline" size="sm" className="text-red-500 text-xs"
+                      onClick={()=>updateBiz("logoBase64","")}>Remove</Button>
+                  </div>
+                ) : (
+                  <label htmlFor="logo-upload"
+                    className="flex items-center gap-3 border-2 border-dashed border-border rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors bg-muted/20">
+                    <ImageIcon className="size-5 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Click to upload logo</p>
+                      <p className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB · Appears on PDF</p>
+                    </div>
+                    <input id="logo-upload" type="file" accept="image/png,image/jpeg"
+                      className="hidden" onChange={handleLogo} />
+                  </label>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {quotation.client_name} · {formatDate(quotation.created_at)}
-              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                {id:"co",label:"Company Name *",field:"company_name" as const,placeholder:"ABC Elevators Pvt Ltd"},
+                {id:"ph",label:"Phone",field:"phone" as const,placeholder:"+91 98765 43210"},
+                {id:"em",label:"Email",field:"email" as const,placeholder:"info@abcelevators.com"},
+                {id:"ct",label:"City",field:"city" as const,placeholder:"Pune"},
+                {id:"gs",label:"GSTIN (optional)",field:"gstin" as const,placeholder:"27AABCU9603R1ZX"},
+              ]).map(f=>(
+                <div key={f.id}>
+                  <Label htmlFor={f.id} className="text-xs font-semibold text-muted-foreground">{f.label}</Label>
+                  <Input id={f.id} className="mt-1" value={form.businessInfo[f.field]}
+                    onChange={e=>updateBiz(f.field,e.target.value)} placeholder={f.placeholder} />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Your info is saved on this device for next time.</p>
+          </div>
+
+          {/* Bank Details */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <h3 className="font-semibold text-sm">Payment / Bank Details <span className="text-xs font-normal text-muted-foreground">(optional — shown on PDF)</span></h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                {id:"bn",label:"Bank Name",field:"bank_name" as const,placeholder:"State Bank of India"},
+                {id:"ac",label:"Account No",field:"account_no" as const,placeholder:"1234567890"},
+                {id:"if",label:"IFSC Code",field:"ifsc_code" as const,placeholder:"SBIN0001234"},
+                {id:"up",label:"UPI ID",field:"upi_id" as const,placeholder:"yourname@upi"},
+              ]).map(f=>(
+                <div key={f.id}>
+                  <Label htmlFor={f.id} className="text-xs font-semibold text-muted-foreground">{f.label}</Label>
+                  <Input id={f.id} className="mt-1" value={form.businessInfo[f.field]}
+                    onChange={e=>updateBiz(f.field,e.target.value)} placeholder={f.placeholder} />
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Stamp toggle */}
-            <Button
-              onClick={handleStampToggle}
-              disabled={generatingPdf}
-              variant="outline"
-              size="sm"
-              className={
-                includeStamp
-                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700"
-                  : "text-muted-foreground"
-              }
-            >
-              <Stamp className="size-3.5 mr-1.5" />
-              {includeStamp ? "Stamp on" : "Stamp off"}
-            </Button>
+          {/* Quotation Details */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <h3 className="font-semibold text-sm">Quotation Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Quote Number</Label>
+                <Input className="mt-1" value={form.quoteNumber} onChange={e=>updateField("quoteNumber",e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Quote Date</Label>
+                <Input className="mt-1" type="date" value={form.quoteDate} onChange={e=>updateField("quoteDate",e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Valid Till</Label>
+                <Input className="mt-1" type="date" value={form.validTill} onChange={e=>updateField("validTill",e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Subject</Label>
+              <Input className="mt-1" value={form.subject} onChange={e=>updateField("subject",e.target.value)}
+                placeholder="e.g. AMC for Elevator at ABC Towers" />
+            </div>
+          </div>
 
-            <Button variant="outline" size="sm" onClick={handleEditClick}>
-              <Edit className="size-3.5 mr-1.5" />
-              Edit
-            </Button>
+          {/* Client Details */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <h3 className="font-semibold text-sm">Client Details</h3>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Client Name *</Label>
+              <Input className="mt-1" value={form.clientName} onChange={e=>updateField("clientName",e.target.value)} placeholder="XYZ Builders Pvt Ltd" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Client Address</Label>
+              <Textarea className="mt-1 resize-none" rows={2} value={form.clientAddress}
+                onChange={e=>updateField("clientAddress",e.target.value)} placeholder="123, Industrial Area, Phase 2" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">City</Label>
+                <Input className="mt-1" value={form.clientCity} onChange={e=>updateField("clientCity",e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">State</Label>
+                <Input className="mt-1" value={form.clientState} onChange={e=>updateField("clientState",e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">PIN</Label>
+                <Input className="mt-1" value={form.clientPinCode} onChange={e=>updateField("clientPinCode",e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Client GSTIN (optional)</Label>
+              <Input className="mt-1" value={form.clientGstin} onChange={e=>updateField("clientGstin",e.target.value)} />
+            </div>
+          </div>
 
-            <Button
-              onClick={() => handleDownloadPdf(includeStamp)}
-              disabled={generatingPdf || sharingPdf}
-              variant="outline"
-              size="sm"
-            >
-              {generatingPdf ? (
-                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Download className="size-3.5 mr-1.5" />
-              )}
-              Download PDF
-            </Button>
+          {/* Line Items — matching screen: # | Description | Qty | Rate | Amount */}
+          <div className="border border-border rounded-xl p-5">
+            <h3 className="font-semibold text-sm mb-4">Line Items</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border">
+                    <th className="text-center py-2.5 px-3 text-xs font-medium text-muted-foreground w-10">#</th>
+                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted-foreground">Description</th>
+                    <th className="text-center py-2.5 px-3 text-xs font-medium text-muted-foreground w-20">Qty</th>
+                    <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground w-32">Rate (₹)</th>
+                    <th className="text-right py-2.5 px-3 text-xs font-medium text-muted-foreground w-32">Amount</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {form.items.map((item,idx)=>(
+                    <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-2.5 px-3 text-xs text-muted-foreground">{idx+1}</td>
+                      <td className="py-2 px-3">
+                        <Input value={item.description}
+                          onChange={e=>updateItem(item.id,"description",e.target.value)}
+                          placeholder="e.g. Elevator AMC" className="h-8 text-sm" />
+                      </td>
+                      <td className="py-2 px-3">
+                        <Input type="number" min="1" value={item.qty}
+                          onChange={e=>updateItem(item.id,"qty",Number(e.target.value)||1)}
+                          className="h-8 text-sm text-center" />
+                      </td>
+                      <td className="py-2 px-3">
+                        <Input type="number" min="0" value={item.rate}
+                          onChange={e=>updateItem(item.id,"rate",Number(e.target.value)||0)}
+                          className="h-8 text-sm text-right" />
+                      </td>
+                      <td className="text-right py-2.5 px-3 text-sm font-semibold">
+                        ₹{Number(item.qty*item.rate).toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-2 px-2">
+                        <button onClick={()=>deleteItem(item.id)}
+                          className="text-muted-foreground hover:text-red-500 transition-colors text-lg leading-none">×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Button variant="outline" size="sm" className="mt-3" onClick={addItem}>+ Add Item</Button>
+          </div>
 
-            <Button
-              onClick={handleWhatsAppShare}
-              disabled={sharingPdf || generatingPdf}
-              variant="outline"
-              size="sm"
-              className="border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/40"
-            >
-              {sharingPdf ? (
-                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Share2 className="size-3.5 mr-1.5" />
-              )}
-              Share via WhatsApp
-            </Button>
-
-            {quotation.invoice_id ? (
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => router.push(`/invoices/${quotation.invoice_id}`)}
-              >
-                <FileText className="size-3.5 mr-1.5" />
-                View Invoice
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                onClick={handleOpenConvertModal}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <FileText className="size-3.5 mr-1.5" />
-                Convert to Invoice
-              </Button>
+          {/* Discount */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Discount</h3>
+              <Switch checked={form.includeDiscount} onCheckedChange={v=>updateField("includeDiscount",v)} />
+            </div>
+            {form.includeDiscount&&(
+              <div className="space-y-3">
+                <div className="flex gap-4">
+                  {(["percentage","flat"] as const).map(t=>(
+                    <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" checked={form.discountType===t}
+                        onChange={()=>updateField("discountType",t)} className="accent-blue-600" />
+                      {t==="percentage"?"Percentage (%)":"Flat Amount (₹)"}
+                    </label>
+                  ))}
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    {form.discountType==="percentage"?"Discount %":"Discount Amount (₹)"}
+                  </Label>
+                  <Input type="number" min="0" className="mt-1"
+                    value={form.discountValue} onChange={e=>updateField("discountValue",Number(e.target.value)||0)} />
+                </div>
+                {discount>0&&<p className="text-sm text-red-500 font-medium">
+                  Discount: −₹{Number(discount).toLocaleString("en-IN")}
+                </p>}
+              </div>
             )}
           </div>
+
+          {/* GST */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">GST</h3>
+              <Switch checked={form.includeGst} onCheckedChange={v=>updateField("includeGst",v)} />
+            </div>
+            {form.includeGst&&(
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground">GST Rate</Label>
+                  <Select value={String(form.gstRate)} onValueChange={v=>updateField("gstRate",Number(v))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[5,12,18,28].map(r=><SelectItem key={r} value={String(r)}>{r}% GST</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-6 text-sm text-muted-foreground">
+                  <span>SGST ({form.gstRate/2}%): ₹{Number(sgst).toLocaleString("en-IN")}</span>
+                  <span>CGST ({form.gstRate/2}%): ₹{Number(cgst).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Totals box */}
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>₹{Number(subtotal).toLocaleString("en-IN")}</span>
+            </div>
+            {discount>0&&<div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">
+                Discount{form.discountType==="percentage"?` (${form.discountValue}%)`:""}
+              </span>
+              <span className="text-red-500">−₹{Number(discount).toLocaleString("en-IN")}</span>
+            </div>}
+            {form.includeGst&&<>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">SGST ({form.gstRate/2}%)</span>
+                <span>₹{Number(sgst).toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">CGST ({form.gstRate/2}%)</span>
+                <span>₹{Number(cgst).toLocaleString("en-IN")}</span>
+              </div>
+            </>}
+            <div className="border-t border-border pt-2.5 flex justify-between items-baseline gap-2">
+              <span className="font-semibold text-sm">Total</span>
+              <span className="font-bold text-xl text-blue-600">₹{Number(grandTotal).toLocaleString("en-IN")}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Rupees {toWords(Math.round(grandTotal))} Only
+            </p>
+          </div>
+
+          {/* Notes */}
+          <div className="border border-border rounded-xl p-5">
+            <Label className="text-xs font-semibold text-muted-foreground">Terms & Conditions</Label>
+            <Textarea className="mt-1.5 resize-none min-h-[72px] text-sm"
+              placeholder="Payment terms, special conditions..."
+              value={form.notes} onChange={e=>updateField("notes",e.target.value)} />
+          </div>
+
+          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base"
+            onClick={()=>setShowLead(true)} disabled={generating}>
+            <Download className="mr-2 size-5"/>
+            Download Quotation PDF — Free
+          </Button>
         </div>
 
-        {/* ── Quotation document card ────────────────────────────────────────── */}
-        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        {/* ── RIGHT: Live Preview — matches original quotation screen exactly ── */}
+        <div className={`w-full lg:w-[500px] lg:sticky lg:top-20 lg:self-start ${showPreview?"block":"hidden lg:block"}`}>
+          <p className="text-xs text-muted-foreground text-center mb-2">Live Preview</p>
 
-          {/* Coloured accent line */}
-          <div className="h-1 bg-blue-600" />
+          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
 
-          {/* From / To */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
-            {/* From — company */}
-            <div className="flex gap-3 p-5">
-              {profile?.logo_url && (
-                <img
-                  src={profile.logo_url}
-                  alt="Logo"
-                  className="h-11 w-11 object-contain rounded shrink-0 mt-0.5"
-                />
-              )}
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
-                <p className="font-semibold text-sm leading-snug">{profile?.company_name ?? "-"}</p>
-                {profile?.tagline && (
-                  <p className="text-xs text-muted-foreground">{profile.tagline}</p>
+            {/* Blue accent line — exactly as original */}
+            <div className="h-1 bg-blue-600" />
+
+            {/* FROM / TO — two column grid with divide-x, matches original exactly */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-b border-border">
+
+              {/* FROM */}
+              <div className="flex gap-3 p-5">
+                {form.businessInfo.logoBase64&&(
+                  <img src={form.businessInfo.logoBase64} alt="Logo"
+                    className="h-11 w-11 object-contain rounded shrink-0 mt-0.5" />
                 )}
-                {profile?.address && (
-                  <p className="text-xs text-muted-foreground">{profile.address}</p>
-                )}
-                {(profile?.city || profile?.state || profile?.zip_code) && (
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">FROM</p>
+                  <p className="font-semibold text-sm leading-snug">
+                    {form.businessInfo.company_name||<span className="text-muted-foreground">Company Name</span>}
+                  </p>
+                  {form.businessInfo.phone&&<p className="text-xs text-muted-foreground">{form.businessInfo.phone}</p>}
+                  {form.businessInfo.email&&<p className="text-xs text-muted-foreground">{form.businessInfo.email}</p>}
+                  {form.businessInfo.city&&<p className="text-xs text-muted-foreground">{form.businessInfo.city}</p>}
+                  {form.businessInfo.gstin&&<p className="text-xs text-muted-foreground">GSTIN: {form.businessInfo.gstin}</p>}
+                </div>
+              </div>
+
+              {/* TO */}
+              <div className="p-5 space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">TO</p>
+                <p className="font-semibold text-sm leading-snug">
+                  {form.clientName||<span className="text-muted-foreground">Client Name</span>}
+                </p>
+                {form.clientAddress&&<p className="text-xs text-muted-foreground">{form.clientAddress}</p>}
+                {(form.clientCity||form.clientState||form.clientPinCode)&&(
                   <p className="text-xs text-muted-foreground">
-                    {[profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")}
+                    {[form.clientCity,form.clientState,form.clientPinCode].filter(Boolean).join(", ")}
                   </p>
                 )}
-                {profile?.phone && (
-                  <p className="text-xs text-muted-foreground">{profile.phone}</p>
-                )}
-                {profile?.gstin && (
-                  <p className="text-xs text-muted-foreground">GSTIN: {profile.gstin}</p>
-                )}
+                {form.clientGstin&&<p className="text-xs text-muted-foreground">GSTIN: {form.clientGstin}</p>}
               </div>
             </div>
 
-            {/* To — client */}
-            <div className="p-5 space-y-0.5">
-              <p className="text-[10px] font-semibold text-muted-foreground tracking-wider">TO</p>
-              <p className="font-semibold text-sm leading-snug">{quotation.client_name ?? "-"}</p>
-              {quotation.client_address && (
-                <p className="text-xs text-muted-foreground">{quotation.client_address}</p>
-              )}
-              {(quotation.client_district || quotation.client_state || quotation.client_pin_code) && (
-                <p className="text-xs text-muted-foreground">
-                  {[quotation.client_district, quotation.client_state, quotation.client_pin_code]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Quote meta strip */}
-          <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
-            <div>
-              <p className="text-[10px] text-muted-foreground">Quote No</p>
-              <p className="text-sm font-semibold">{quotation.quote_no ?? ("QT-" + quotation.id)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Date</p>
-              <p className="text-sm font-semibold">{formatDate(quotation.created_at)}</p>
-            </div>
-            {(quotation as any).valid_till && (
+            {/* Meta strip — bg-muted/30, matches original exactly */}
+            <div className="flex flex-wrap gap-x-8 gap-y-2 px-5 py-3 bg-muted/30 border-b border-border">
               <div>
-                <p className="text-[10px] text-muted-foreground">Valid Till</p>
-                <p className="text-sm font-semibold text-amber-600">{formatDate((quotation as any).valid_till)}</p>
+                <p className="text-[10px] text-muted-foreground">Quote No</p>
+                <p className="text-sm font-semibold">{form.quoteNumber||"QT-001"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Date</p>
+                <p className="text-sm font-semibold">{formatDate(form.quoteDate)}</p>
+              </div>
+              {form.validTill&&(
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Valid Till</p>
+                  <p className="text-sm font-semibold text-amber-600">{formatDate(form.validTill)}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Subject — matches original "Sub:" style */}
+            {form.subject&&(
+              <div className="px-5 py-4 border-b border-border">
+                <p className="text-sm font-semibold">Sub: {form.subject}</p>
               </div>
             )}
-            {quotation.order_no && (
-              <div>
-                <p className="text-[10px] text-muted-foreground">Order No</p>
-                <p className="text-sm font-semibold">{quotation.order_no}</p>
-              </div>
-            )}
-            {quotation.payment_terms && (
-              <div>
-                <p className="text-[10px] text-muted-foreground">Payment Terms</p>
-                <p className="text-sm font-semibold">{quotation.payment_terms}</p>
-              </div>
-            )}
-          </div>
 
-          {/* Subject + body */}
-          {(quotation.subject || quotation.body_text) && (
-            <div className="px-5 py-4 border-b border-border space-y-1.5">
-              {quotation.subject && (
-                <p className="text-sm font-semibold">Sub: {quotation.subject}</p>
-              )}
-              {quotation.body_text && (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {quotation.body_text}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Items table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40 border-b border-border">
-                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-10">#</th>
-                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description</th>
-                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-16">Qty</th>
-                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Rate</th>
-                  <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {mappedItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
-                      No items added
-                    </td>
+            {/* Items table — #, Description, Qty, Rate, Amount (no Unit) matching original */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border">
+                    <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-10">#</th>
+                    <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description</th>
+                    <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-16">Qty</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Rate</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Amount</th>
                   </tr>
-                ) : (
-                  mappedItems.map((item, i) => (
-                    <tr key={i} className="hover:bg-muted/20 transition-colors">
-                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr}</td>
-                      <td className="py-3 px-4 font-medium text-sm">{item.description}</td>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {form.items.map((item,i)=>(
+                    <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="text-center py-3 px-4 text-xs text-muted-foreground">{i+1}</td>
+                      <td className="py-3 px-4 font-medium text-sm">{item.description||"-"}</td>
                       <td className="text-center py-3 px-4 text-sm text-muted-foreground">{item.qty}</td>
                       <td className="text-right py-3 px-4 text-sm text-muted-foreground">
                         ₹{Number(item.rate).toLocaleString("en-IN")}
                       </td>
                       <td className="text-right py-3 px-4 text-sm font-semibold">
-                        ₹{Number(item.amount).toLocaleString("en-IN")}
+                        ₹{Number(item.qty*item.rate).toLocaleString("en-IN")}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Totals + Notes row */}
-          <div className="border-t border-border">
-            <div className="flex flex-col sm:flex-row">
-
-              {/* Notes / T&C — left */}
-              {quotation.notes ? (
-                <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                    {quotation.notes}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
-
-              {/* Totals — right */}
-              <div className="p-5 sm:w-64 shrink-0">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+            {/* Totals + Notes — matches original layout exactly */}
+            <div className="border-t border-border">
+              <div className="flex flex-col sm:flex-row">
+                {form.notes?(
+                  <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{form.notes}</p>
                   </div>
+                ):<div className="flex-1"/>}
 
-                  {discountAmount > 0 && (
+                <div className="p-5 sm:w-64 shrink-0">
+                  <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Discount
-                        {discountType === "percentage" ? ` (${discountValue}%)` : ""}
-                      </span>
-                      <span className="text-red-500">
-                        −₹{discountAmount.toLocaleString("en-IN")}
-                      </span>
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span>₹{subtotal.toLocaleString("en-IN")}</span>
                     </div>
-                  )}
-
-                  {includeGst && (
-                    <>
+                    {discount>0&&<div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Discount{form.discountType==="percentage"?` (${form.discountValue}%)`:""}
+                      </span>
+                      <span className="text-red-500">−₹{discount.toLocaleString("en-IN")}</span>
+                    </div>}
+                    {form.includeGst&&<>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">SGST (9%)</span>
+                        <span className="text-muted-foreground">SGST ({form.gstRate/2}%)</span>
                         <span>₹{sgst.toLocaleString("en-IN")}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">CGST (9%)</span>
+                        <span className="text-muted-foreground">CGST ({form.gstRate/2}%)</span>
                         <span>₹{cgst.toLocaleString("en-IN")}</span>
                       </div>
-                    </>
-                  )}
-
-                  <div className="border-t border-border pt-2.5 flex justify-between items-baseline gap-2">
-                    <span className="font-semibold text-sm">Total</span>
-                    <span className="font-bold text-xl text-blue-600">
-                      ₹{grandTotal.toLocaleString("en-IN")}
-                    </span>
+                    </>}
+                    <div className="border-t border-border pt-2.5 flex justify-between items-baseline gap-2">
+                      <span className="font-semibold text-sm">Total</span>
+                      <span className="font-bold text-xl text-blue-600">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Rupees {toWords(Math.round(grandTotal))} Only
+                    </p>
                   </div>
-
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    Rupees {toWords(Math.round(grandTotal))} Only
-                  </p>
                 </div>
               </div>
-            </div>
 
-            {/* Bank details strip */}
-            {hasBankDetails && (
-              <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
-                {profile?.bank_name && (
-                  <span className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Bank:</span> {profile.bank_name}
-                  </span>
-                )}
-                {profile?.account_no && (
-                  <span className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">A/C:</span> {profile.account_no}
-                  </span>
-                )}
-                {profile?.ifsc_code && (
-                  <span className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">IFSC:</span> {profile.ifsc_code}
-                  </span>
-                )}
-                {profile?.upi_id && (
-                  <span className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">UPI:</span> {profile.upi_id}
-                  </span>
-                )}
-              </div>
-            )}
+              {/* Bank details strip — matches original bg-muted/30 strip */}
+              {hasBankDetails&&(
+                <div className="flex flex-wrap gap-x-6 gap-y-1 px-5 py-3 bg-muted/30 border-t border-border">
+                  {form.businessInfo.bank_name&&(
+                    <span className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Bank:</span> {form.businessInfo.bank_name}
+                    </span>
+                  )}
+                  {form.businessInfo.account_no&&(
+                    <span className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">A/C:</span> {form.businessInfo.account_no}
+                    </span>
+                  )}
+                  {form.businessInfo.ifsc_code&&(
+                    <span className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">IFSC:</span> {form.businessInfo.ifsc_code}
+                    </span>
+                  )}
+                  {form.businessInfo.upi_id&&(
+                    <span className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">UPI:</span> {form.businessInfo.upi_id}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Convert to Invoice dialog ─────────────────────────────────────────── */}
-      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      {/* Lead Modal */}
+      <Dialog open={showLead} onOpenChange={setShowLead}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Convert to Invoice</DialogTitle>
-            {quotation && (
-              <p className="text-xs text-muted-foreground mt-0.5">From {quotation.quote_no}</p>
-            )}
+            <DialogTitle>One last step</DialogTitle>
+            <DialogDescription>Enter your details to download. We will not spam you.</DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 pt-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="order-no" className="text-xs">Order Number (Optional)</Label>
-                <Input
-                  id="order-no"
-                  value={orderNo}
-                  onChange={(e) => setOrderNo(e.target.value)}
-                  placeholder="PO-2026-001"
-                />
+          <div className="space-y-3 py-2">
+            {([
+              {label:"Full Name *",key:"fullName" as const,placeholder:"Rahul Sharma"},
+              {label:"Phone Number *",key:"phone" as const,placeholder:"+91 98765 43210"},
+              {label:"Company Name *",key:"companyName" as const,placeholder:"ABC Elevators Pvt Ltd"},
+            ]).map(f=>(
+              <div key={f.key}>
+                <Label className="text-xs font-semibold text-muted-foreground">{f.label}</Label>
+                <Input className="mt-1" value={lead[f.key]}
+                  onChange={e=>setLead(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="order-date" className="text-xs">Order Date (Optional)</Label>
-                <Input
-                  id="order-date"
-                  type="date"
-                  value={orderDate}
-                  onChange={(e) => setOrderDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="invoice-no" className="text-xs">Invoice Number</Label>
-              <Input
-                id="invoice-no"
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
-                placeholder="INV-001"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="invoice-date" className="text-xs">Invoice Date</Label>
-                <Input
-                  id="invoice-date"
-                  type="date"
-                  value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="due-date" className="text-xs">Valid Till</Label>
-                <Input
-                  id="due-date"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="payment-terms" className="text-xs">Payment Terms</Label>
-              <Select value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
-                <SelectTrigger id="payment-terms">
-                  <SelectValue placeholder="Select payment terms" />
-                </SelectTrigger>
+            ))}
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Service Type *</Label>
+              <Select value={lead.serviceType} onValueChange={v=>setLead(p=>({...p,serviceType:v}))}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select your service" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="100% advance along with work order">100% advance along with work order</SelectItem>
-                  <SelectItem value="50% advance, balance on completion">50% advance, balance on completion</SelectItem>
-                  <SelectItem value="Net 7 days">Net 7 days</SelectItem>
-                  <SelectItem value="Net 14 days">Net 14 days</SelectItem>
-                  <SelectItem value="Net 30 days">Net 30 days</SelectItem>
-                  <SelectItem value="On completion">On completion</SelectItem>
+                  {["Elevator / Lift","HVAC / AC","Fire Safety","Plumbing","Electrical","CCTV / Security","Pest Control","Other"]
+                    .map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="invoice-notes" className="text-xs">Terms and Conditions</Label>
-              <Textarea
-                id="invoice-notes"
-                value={invoiceNotes}
-                onChange={(e) => setInvoiceNotes(e.target.value)}
-                placeholder="e.g. Please transfer to bank account..."
-                className="min-h-[72px] resize-none text-sm"
-              />
-            </div>
-
-            {/* Summary preview */}
-            {quotation && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Client</span>
-                  <span className="font-medium">{quotation.client_name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>₹{quotation.subtotal.toLocaleString("en-IN")}</span>
-                </div>
-                {quotation.discount_amount && quotation.discount_amount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Discount</span>
-                    <span className="text-red-500">−₹{quotation.discount_amount.toLocaleString("en-IN")}</span>
-                  </div>
-                )}
-                {quotation.include_gst && (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">SGST (9%)</span>
-                      <span>₹{quotation.sgst.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CGST (9%)</span>
-                      <span>₹{quotation.cgst.toLocaleString("en-IN")}</span>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between border-t border-border pt-1.5 font-semibold">
-                  <span>Total</span>
-                  <span className="text-blue-600">₹{quotation.grand_total.toLocaleString("en-IN")}</span>
-                </div>
-              </div>
-            )}
           </div>
-
-          <DialogFooter className="gap-2 pt-1">
-            <Button variant="outline" onClick={() => setShowConvertModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConvertToInvoice}
-              disabled={convertLoading || !invoiceNo}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {convertLoading ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : null}
-              Generate Invoice
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Subscription alert ───────────────────────────────────────────────── */}
-      <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Plan expired</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Your {planName || 'current'} plan has expired. Renew to edit this quotation.
-          </p>
-          <DialogFooter>
-            <Button onClick={() => setSubscriptionAlertOpen(false)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Stamp upload ─────────────────────────────────────────────────────── */}
-      <Dialog open={showStampUploadDialog} onOpenChange={setShowStampUploadDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Stamp / Signature</DialogTitle>
-            <DialogDescription>
-              Upload a stamp or signature to include it on downloaded PDFs.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-2">
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-6 bg-muted/20">
-              {(stampPreview || profile?.stamp_url) ? (
-                <div className="relative">
-                  <img
-                    src={stampPreview || profile?.stamp_url || ''}
-                    alt="Stamp preview"
-                    className="max-h-28 object-contain"
-                    onError={() => toast.error("Failed to load image")}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-red-50 text-red-500 hover:bg-red-100 border border-red-200"
-                    onClick={() => { setStampFile(null); setStampPreview(null) }}
-                  >
-                    ×
-                  </Button>
-                </div>
-              ) : (
-                <label htmlFor="stamp-upload" className="cursor-pointer flex flex-col items-center gap-2 text-center">
-                  <Upload className="size-7 text-muted-foreground" />
-                  <span className="text-sm font-medium">Click to upload stamp</span>
-                  <span className="text-xs text-muted-foreground">PNG or JPG · Max 2 MB</span>
-                  <input
-                    id="stamp-upload"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast.error("File must be under 2 MB")
-                        return
-                      }
-                      setStampFile(file)
-                      const reader = new FileReader()
-                      reader.onload = (ev) => setStampPreview(ev.target?.result as string)
-                      reader.readAsDataURL(file)
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => { setShowStampUploadDialog(false); setStampFile(null); setStampPreview(null) }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUploadStamp}
-              disabled={!stampFile || uploadingStamp}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {uploadingStamp ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : (
-                <Save className="mr-1.5 size-4" />
-              )}
-              Save Stamp
+            <Button variant="outline" onClick={()=>setShowLead(false)}>Cancel</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleLeadSubmit} disabled={submitting||generating}>
+              {submitting||generating?"Generating...":"Download My Free Quotation PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </section>
+  )
+}
+
+// ─── SEO Section ──────────────────────────────────────────────────────────────
+function SeoSection() {
+  return (
+    <section className="py-16 bg-background">
+      <div className="max-w-4xl mx-auto px-4">
+        <h2 className="text-3xl font-bold mb-8 text-center">Why Indian Contractors Trust Remindi</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {[
+            {icon:<FileText className="size-8 text-blue-600 mb-3"/>,title:"Professional Quotations in Minutes",desc:"Fill the form, preview live, download as PDF. No design skills needed."},
+            {icon:<CheckCircle2 className="size-8 text-blue-600 mb-3"/>,title:"GST-Ready for Indian Contractors",desc:"Auto-calculates SGST, CGST, and totals. Supports all GST rates."},
+            {icon:<Stamp className="size-8 text-blue-600 mb-3"/>,title:"Full AMC Management on Remindi",desc:"Track contracts, technicians, send reminders, manage invoices — all in one place."},
+          ].map(c=>(
+            <Card key={c.title} className="border border-border p-5">
+              {c.icon}
+              <h3 className="font-semibold mb-2">{c.title}</h3>
+              <p className="text-sm text-muted-foreground">{c.desc}</p>
+            </Card>
+          ))}
+        </div>
+
+        <div className="text-center mb-14 rounded-xl border border-border bg-muted/30 p-8">
+          <h3 className="text-xl font-semibold mb-3">Ready to manage all your AMC contracts automatically?</h3>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={()=>window.open("https://remindi.online/signup","_blank")}>
+            Start Free on Remindi →
+          </Button>
+        </div>
+
+        <h2 className="text-2xl font-bold mb-6 text-center">Frequently Asked Questions</h2>
+        <Accordion type="single" collapsible className="w-full">
+          {[
+            {q:"Is this free?",a:"Yes. 100% free. No signup or credit card needed."},
+            {q:"Can I add GST?",a:"Yes. Toggle GST on, pick your rate, and SGST + CGST are auto-calculated."},
+            {q:"Can I add my logo?",a:"Yes. Upload your company logo in the Business Info section. It appears on both the preview and the downloaded PDF."},
+            {q:"Can I add bank details?",a:"Yes. Add your bank name, account number, IFSC, and UPI ID. They appear in the PDF so clients can pay you directly."},
+            {q:"Is my data saved?",a:"Your business info is saved on your device only. We do not store your quotation data."},
+            {q:"What is Remindi?",a:"Remindi is an AMC management platform for Indian contractors. Manage service contracts, technicians, reminders, and invoices — free to try."},
+            {q:"Can I create invoices too?",a:"Yes. Visit remindi.online/free-invoice-generator for our free invoice generator."},
+          ].map((faq,i)=>(
+            <AccordionItem key={i} value={`q${i}`}>
+              <AccordionTrigger>{faq.q}</AccordionTrigger>
+              <AccordionContent>{faq.a}</AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+
+        <div className="mt-10 text-center text-sm text-muted-foreground">
+          Also need an invoice?{" "}
+          <a href="/free-invoice-generator" className="text-blue-600 hover:underline font-medium">
+            Use our Free Invoice Generator →
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Page Export ──────────────────────────────────────────────────────────────
+export default function FreeQuotationGeneratorPage() {
+  return (
+    <main>
+      <PublicNavbar />
+      <HeroBanner />
+      <GeneratorTool />
+      <SeoSection />
+    </main>
   )
 }
