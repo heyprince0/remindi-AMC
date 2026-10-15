@@ -302,6 +302,13 @@ export default function CustomersPage() {
   }
 
   const handleEditClick = (customer: Customer & { contractCount: number }) => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    // Pass 0 because editing does not increase the customer count
+    if (checkAndShowLimitModal(0)) return
+    
     setEditingCustomer(customer)
     setModalOpen(true)
   }
