@@ -22,13 +22,12 @@ import { createClient } from "@supabase/supabase-js"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 
-// ─── Supabase (landing page lead capture) ────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// ─── Utilities (mirror of original quotation page) ───────────────────────────
+// ─── Utilities ───────────────────────────────────────────────────────────────
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "-"
   const d = new Date(dateStr)
@@ -195,7 +194,6 @@ function GeneratorTool() {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // ── Load business info from localStorage ────────────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LS_KEY)
@@ -215,7 +213,6 @@ function GeneratorTool() {
     } catch {}
   }, [formState.businessInfo])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   const updateBiz = (field: keyof BusinessInfo, value: string) =>
     setFormState(prev => ({ ...prev, businessInfo: { ...prev.businessInfo, [field]: value } }))
 
@@ -250,7 +247,7 @@ function GeneratorTool() {
     reader.readAsDataURL(file)
   }
 
-  // ── Calculations (match original: 9% SGST + 9% CGST) ─────────────────────
+  // ── Calculations ─────────────────────────────────────────────────────────
   const subtotal = formState.items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0)
   const discountAmount = formState.includeDiscount
     ? Math.min(
@@ -265,9 +262,9 @@ function GeneratorTool() {
   const cgst = formState.includeGst ? Math.round(discountedSubtotal * 0.09) : 0
   const grandTotal = discountedSubtotal + sgst + cgst
 
-  // ───────────────────────────────────────────────────────────────────────────
-  //  PDF generation — mirrors the internal Remindi quotation PDF exactly
-  // ───────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  PDF — matches Quotation-QT-008 exactly (no Tax Information section)
+  // ─────────────────────────────────────────────────────────────────────────
   const generatePdf = async () => {
     setGeneratingPdf(true)
     try {
@@ -277,7 +274,6 @@ function GeneratorTool() {
       const [tr, tg, tb] = hexToRgb(themeColor)
       const bio = formState.businessInfo
 
-      // Prepare logo
       let logoBase64: string | null = null
       let logoFormat: "JPEG" | "PNG" = "PNG"
       if (bio.logoBase64) {
@@ -290,128 +286,163 @@ function GeneratorTool() {
       const renderQuotation = (doc: jsPDF): number => {
         let y = margin
 
-        // ── HEADER: matches the Remindi branded header ─────────────────────
-        const boxW = 25
-        const boxH = 25
+        // ══════════════════════════════════════════════════════════════════
+        //  HEADER — matches Quotation-QT-008 exactly
+        // ══════════════════════════════════════════════════════════════════
+        const boxW = 24
+        const boxH = 24
         const boxX = margin
         const boxY = y
 
-        // Logo box
+        // Solid blue box (logo or initials)
         doc.setFillColor(tr, tg, tb)
         doc.rect(boxX, boxY, boxW, boxH, "F")
+
         if (logoBase64) {
+          // White inner padding then place the logo
+          doc.setFillColor(255, 255, 255)
+          doc.rect(boxX + 1.2, boxY + 1.2, boxW - 2.4, boxH - 2.4, "F")
           try {
-            doc.addImage(logoBase64, logoFormat, boxX + 1.5, boxY + 1.5, boxW - 3, boxH - 3)
+            doc.addImage(logoBase64, logoFormat, boxX + 1.8, boxY + 1.8, boxW - 3.6, boxH - 3.6)
           } catch {}
+        } else {
+          // Show up to 3 initials in white inside the blue box
+          doc.setTextColor(255, 255, 255)
+          doc.setFont("helvetica", "bold")
+          doc.setFontSize(13)
+          const initials = (bio.company_name || "CO")
+            .split(/\s+/)
+            .map(w => w[0])
+            .join("")
+            .slice(0, 3)
+            .toUpperCase()
+          doc.text(initials || "CO", boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
         }
 
-        // Vertical line
+        // Vertical blue line right of the box
+        const lineX = boxX + boxW + 4
         doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.5)
-        doc.line(boxX + boxW + 5, boxY, boxX + boxW + 5, boxY + boxH)
+        doc.setLineWidth(0.6)
+        doc.line(lineX, boxY, lineX, boxY + boxH)
 
-        // Company Info
-        const infoX = boxX + boxW + 10
-        doc.setFontSize(14)
+        // Company info (right of the line)
+        const infoX = lineX + 4
+
+        // Company name — UPPERCASE, theme colour, bold
         doc.setFont("helvetica", "bold")
+        doc.setFontSize(13)
         doc.setTextColor(tr, tg, tb)
-        doc.text(safeStr(bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 6)
+        doc.text(safeStr(bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 5)
 
+        // Tagline — BOLD BLACK (matches original)
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        if (bio.tagline) doc.text(safeStr(bio.tagline), infoX, boxY + 12)
+        if (bio.tagline) doc.text(safeStr(bio.tagline), infoX, boxY + 10)
 
+        // Address — gray, normal
         doc.setFontSize(8.5)
         doc.setFont("helvetica", "normal")
         doc.setTextColor(80, 80, 80)
-        let infoY = boxY + 17
+        let infoY = boxY + 15
         if (bio.address) {
-          const addrLines = doc.splitTextToSize(safeStr(bio.address), 125)
+          const addrLines = doc.splitTextToSize(safeStr(bio.address), 130)
           doc.text(addrLines, infoX, infoY)
-          infoY += addrLines.length * 4
+          infoY += addrLines.length * 3.8
         }
         const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
         if (cityLine) {
           doc.text(cityLine, infoX, infoY)
-          infoY += 4
+          infoY += 4.5
         }
 
-        infoY += 2
+        infoY += 1
         if (bio.email) {
           doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
           doc.text("Email:", infoX, infoY)
           doc.setFont("helvetica", "normal")
-          doc.text(safeStr(bio.email), infoX + 13, infoY)
-          infoY += 5
+          doc.setTextColor(80, 80, 80)
+          doc.text("   " + safeStr(bio.email), infoX, infoY)
+          infoY += 4.5
         }
         if (bio.phone) {
           doc.setFont("helvetica", "bold")
+          doc.setTextColor(0, 0, 0)
           doc.text("Phone:", infoX, infoY)
           doc.setFont("helvetica", "normal")
-          doc.text(safeStr(bio.phone), infoX + 13, infoY)
-          infoY += 5
+          doc.setTextColor(80, 80, 80)
+          doc.text("   " + safeStr(bio.phone), infoX, infoY)
+          infoY += 4.5
         }
 
-        // Horizontal line
-        y = Math.max(boxY + boxH, infoY) + 6
+        // Full-width blue horizontal line under header
+        y = Math.max(boxY + boxH, infoY) + 4
         doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.5)
+        doc.setLineWidth(0.6)
         doc.line(margin, y, pageW - margin, y)
 
-        // Quote Details
-        y += 8
-        doc.setFontSize(10)
+        // ══════════════════════════════════════════════════════════════════
+        //  QUOTATION title + Quote meta
+        // ══════════════════════════════════════════════════════════════════
+        y += 7
         doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(formState.quoteNumber || "QT-001"), margin, y)
-
-        doc.setFontSize(16)
-        doc.setFont("helvetica", "bold")
+        doc.setFontSize(15)
         doc.setTextColor(tr, tg, tb)
         doc.text("QUOTATION", pageW - margin, y, { align: "right" })
 
-        y += 6
-        doc.setFontSize(9)
+        doc.setFontSize(10)
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(formState.quoteNumber || "QT-001"), margin, y)
+
+        y += 5
+        doc.setFontSize(9.5)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text("DATE: " + shortDate(formState.quoteDate), pageW - margin, y, { align: "right" })
 
-        y += 5
+        y += 4.5
         if (formState.orderNo) {
+          doc.setFont("helvetica", "normal")
+          doc.setFontSize(9)
           doc.text("Order No: " + safeStr(formState.orderNo), pageW - margin, y, { align: "right" })
-          y += 5
+          y += 4.5
         }
         if (formState.orderDate) {
+          doc.setFont("helvetica", "normal")
+          doc.setFontSize(9)
           doc.text("Order Date: " + shortDate(formState.orderDate), pageW - margin, y, { align: "right" })
-          y += 5
+          y += 4.5
         }
         if (formState.validTill) {
           doc.setFontSize(9)
           doc.setTextColor(220, 38, 38)
           doc.text("Valid till: " + formatDate(formState.validTill), pageW - margin, y, { align: "right" })
-          y += 5
+          y += 4.5
         }
-        doc.setTextColor(0, 0, 0)
 
-        y += 2 // extra padding before TO block
-
-        // ── TO block ───────────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════
+        //  TO block
+        // ══════════════════════════════════════════════════════════════════
+        y += 6
         doc.setFont("helvetica", "bold")
         doc.setFontSize(9)
         doc.setTextColor(150, 150, 150)
         doc.text("TO,", margin, y)
         y += 5
-        doc.setFont("helvetica", "bold")
+
+        doc.setFontSize(10)
         doc.setTextColor(0, 0, 0)
         doc.text(safeStr(formState.clientName || "Client").toUpperCase(), margin, y)
         y += 5
 
         doc.setFont("helvetica", "normal")
-        doc.setTextColor(40, 40, 40)
+        doc.setFontSize(9)
+        doc.setTextColor(60, 60, 60)
         if (formState.clientAddress) {
-          doc.text(safeStr(formState.clientAddress), margin, y)
-          y += 5
+          const addr = doc.splitTextToSize(safeStr(formState.clientAddress), pageW - 2 * margin)
+          doc.text(addr, margin, y)
+          y += addr.length * 4
         }
         const clientCityLine = [
           formState.clientDistrict,
@@ -420,11 +451,13 @@ function GeneratorTool() {
         ].filter(Boolean).join(", ")
         if (clientCityLine) {
           doc.text(clientCityLine, margin, y)
-          y += 5
+          y += 4
         }
-        y += 3
+        y += 4
 
-        // ── SUBJECT + BODY ─────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════
+        //  Subject + Body
+        // ══════════════════════════════════════════════════════════════════
         if (formState.subject) {
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
@@ -436,10 +469,12 @@ function GeneratorTool() {
           doc.setTextColor(80, 80, 80)
           const bodyLines = doc.splitTextToSize(safeStr(formState.bodyText), pageW - 2 * margin)
           doc.text(bodyLines, margin, y)
-          y += bodyLines.length * 4 + 3
+          y += bodyLines.length * 4 + 2
         }
 
-        // ── ITEMS TABLE (SR.NO / PARTICULARS / QTY. / RATE / AMOUNT) ──────
+        // ══════════════════════════════════════════════════════════════════
+        //  Items table
+        // ══════════════════════════════════════════════════════════════════
         const tableBody = formState.items.map((item, idx) => [
           String(idx + 1),
           safeStr(item.particulars || "-"),
@@ -450,7 +485,7 @@ function GeneratorTool() {
 
         autoTable(doc, {
           startY: y,
-          head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+          head: [["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
           body: tableBody,
           theme: "grid",
           headStyles: {
@@ -459,12 +494,13 @@ function GeneratorTool() {
             fontStyle: "bold",
             fontSize: 9,
             halign: "center",
+            lineWidth: 0,
           },
-          bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
+          bodyStyles: { fontSize: 9, textColor: [0, 0, 0], lineWidth: 0 },
           columnStyles: {
-            0: { cellWidth: 15, halign: "center" },
-            1: { cellWidth: "auto" },
-            2: { cellWidth: 20, halign: "center" },
+            0: { cellWidth: 18, halign: "center" },
+            1: { cellWidth: "auto", halign: "left" },
+            2: { cellWidth: 22, halign: "center" },
             3: { cellWidth: 35, halign: "right" },
             4: { cellWidth: 35, halign: "right" },
           },
@@ -473,51 +509,48 @@ function GeneratorTool() {
           rowPageBreak: "avoid",
         })
 
-        y = (doc as any).lastAutoTable.finalY + 8
+        y = (doc as any).lastAutoTable.finalY + 6
 
-        // ── TOTALS ─────────────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════
+        //  Totals (right-aligned)
+        // ══════════════════════════════════════════════════════════════════
         doc.setFont("helvetica", "normal")
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
 
         doc.text("Subtotal:", 160, y, { align: "right" })
         doc.text("Rs. " + subtotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-        y += 4
+        y += 4.5
 
         if (discountAmount > 0) {
           const discountLabel = formState.discountType === "percentage"
             ? `${formState.discountValue}%`
-            : `₹${formState.discountValue}`
+            : `Rs. ${formState.discountValue}`
           doc.text(`Discount (${discountLabel}):`, 160, y, { align: "right" })
           doc.setTextColor(200, 0, 0)
           doc.text("- Rs. " + discountAmount.toLocaleString("en-IN"), 195, y, { align: "right" })
           doc.setTextColor(0, 0, 0)
-          y += 4
+          y += 4.5
         }
 
         if (formState.includeGst) {
           doc.text("SGST (9%):", 160, y, { align: "right" })
           doc.text("Rs. " + sgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-          y += 4
+          y += 4.5
           doc.text("CGST (9%):", 160, y, { align: "right" })
           doc.text("Rs. " + cgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-          y += 3
-          doc.setDrawColor(0, 0, 0)
-          doc.setLineWidth(0.3)
-          doc.line(140, y, 195, y)
-          y += 4
-          doc.setFont("helvetica", "bold")
-          doc.setFontSize(10)
-          doc.text("Total:", 160, y, { align: "right" })
-          doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-        } else {
-          doc.setFont("helvetica", "bold")
-          doc.setFontSize(10)
-          doc.text("Total:", 160, y, { align: "right" })
-          doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), 195, y, { align: "right" })
+          y += 4.5
         }
 
-        y += 2
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(10)
+        doc.text("Total:", 160, y, { align: "right" })
+        doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), 195, y, { align: "right" })
+        y += 6
+
+        // ══════════════════════════════════════════════════════════════════
+        //  Amount in words (LEFT side, below totals)
+        // ══════════════════════════════════════════════════════════════════
         doc.setFont("helvetica", "bold")
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
@@ -525,73 +558,65 @@ function GeneratorTool() {
           ("RUPEES " + toWords(Math.round(grandTotal)) + " ONLY").toUpperCase(),
           margin, y
         )
-        y += 20
+        y += 30 // big gap matching original
 
-        // ── PAYMENT DETAILS ────────────────────────────────────────────────
-        const hasBank =
-          bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id || formState.paymentTerms
+        // ══════════════════════════════════════════════════════════════════
+        //  Payment Details  (NO Tax Information section)
+        // ══════════════════════════════════════════════════════════════════
+        const hasBank = bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id
         if (hasBank) {
-          y += 10
-          doc.setFontSize(9)
+          doc.setFontSize(9.5)
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
           doc.text("Payment Details:", margin, y)
           y += 5
           doc.setFont("helvetica", "normal")
-          doc.setTextColor(40, 40, 40)
-          if (bio.bank_name) { doc.text(`Bank: ${safeStr(bio.bank_name)}`, margin, y); y += 4 }
-          if (bio.account_no) { doc.text(`Account No: ${safeStr(bio.account_no)}`, margin, y); y += 4 }
-          if (bio.ifsc_code) { doc.text(`IFSC: ${safeStr(bio.ifsc_code)}`, margin, y); y += 4 }
-          if (bio.upi_id) { doc.text(`UPI: ${safeStr(bio.upi_id)}`, margin, y); y += 4 }
-          if (formState.paymentTerms) { doc.text(`Payment Terms: ${safeStr(formState.paymentTerms)}`, margin, y); y += 4 }
-        }
-
-        // ── TAX INFORMATION ────────────────────────────────────────────────
-        if (formState.includeGst) {
-          y += 6
           doc.setFontSize(9)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Tax Information:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
           doc.setTextColor(40, 40, 40)
-          if (bio.gstin) { doc.text(`GSTIN: ${safeStr(bio.gstin)}`, margin, y); y += 4 }
-          if (bio.pan_number) { doc.text(`PAN: ${safeStr(bio.pan_number)}`, margin, y); y += 4 }
-          doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
-          y += 4
-          y += 6
+          if (bio.bank_name) { doc.text(`Bank: ${safeStr(bio.bank_name)}`, margin, y); y += 4.2 }
+          if (bio.account_no) { doc.text(`Account No: ${safeStr(bio.account_no)}`, margin, y); y += 4.2 }
+          if (bio.ifsc_code) { doc.text(`IFSC: ${safeStr(bio.ifsc_code)}`, margin, y); y += 4.2 }
+          if (bio.upi_id) { doc.text(`UPI: ${safeStr(bio.upi_id)}`, margin, y); y += 4.2 }
         }
 
-        // ── TERMS & CONDITIONS ─────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════
+        //  Terms & Conditions
+        // ══════════════════════════════════════════════════════════════════
         if (formState.notes) {
-          y += 3
-          doc.setFontSize(9)
+          y += 6
+          doc.setFontSize(9.5)
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
           doc.text("Terms & Conditions:", margin, y)
-          y += 4
+          y += 5
           doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
+          doc.setFontSize(9)
+          doc.setTextColor(60, 60, 60)
           const noteLines = doc.splitTextToSize(safeStr(formState.notes), pageW - 2 * margin)
           doc.text(noteLines, margin, y)
           y += noteLines.length * 4
         }
 
-        // ── SIGNATURE ──────────────────────────────────────────────────────
-        y += 10
+        // ══════════════════════════════════════════════════════════════════
+        //  Signature (right-aligned)
+        // ══════════════════════════════════════════════════════════════════
+        y += 14
         doc.setFont("helvetica", "normal")
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
-        doc.text("Thanking you,", 195, y, { align: "right" })
-        doc.text("Yours faithfully,", 195, y + 6, { align: "right" })
+        doc.text("Thanking you,", pageW - margin, y, { align: "right" })
+        y += 5
+        doc.text("Yours faithfully,", pageW - margin, y, { align: "right" })
+        y += 5
         doc.setFont("helvetica", "bold")
-        doc.text("For " + safeStr(bio.company_name || "Company"), 195, y + 12, { align: "right" })
+        doc.text("For " + safeStr(bio.company_name || "Company"), pageW - margin, y, { align: "right" })
 
-        const contentBottom = y + 12
+        const contentBottom = y + 4
 
-        // ── FOOTER ─────────────────────────────────────────────────────────
-        const footerY = contentBottom + 12
+        // ══════════════════════════════════════════════════════════════════
+        //  Footer
+        // ══════════════════════════════════════════════════════════════════
+        const footerY = contentBottom + 10
         doc.setFontSize(8)
         doc.setTextColor(150, 150, 150)
         doc.setFont("helvetica", "normal")
@@ -600,7 +625,7 @@ function GeneratorTool() {
         return footerY + 8
       }
 
-      // Two-pass: measure then render on correctly-sized page
+      // Two-pass measure → exact height
       const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
       const measuredHeight = renderQuotation(scratch)
       const finalHeight = Math.max(measuredHeight, 100)
@@ -625,7 +650,6 @@ function GeneratorTool() {
     }
   }
 
-  // ── Lead capture ─────────────────────────────────────────────────────────
   const handleLeadSubmit = async () => {
     if (!leadData.fullName || !leadData.phone || !leadData.companyName || !leadData.serviceType) {
       toast.error("Please fill all required fields.")
@@ -642,7 +666,7 @@ function GeneratorTool() {
         created_at: new Date().toISOString(),
       })
     } catch {
-      // silently fail — never block user
+      // never block user
     } finally {
       setSubmitting(false)
       setShowLeadModal(false)
@@ -651,6 +675,8 @@ function GeneratorTool() {
   }
 
   const [tr, tg, tb] = hexToRgb(formState.businessInfo.theme_color || "#185FA5")
+  const initialsPreview = (formState.businessInfo.company_name || "CO")
+    .split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase() || "CO"
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
@@ -665,11 +691,10 @@ function GeneratorTool() {
         {/* ── LEFT: Form ──────────────────────────────────────────────────── */}
         <div className="flex-1 space-y-4">
 
-          {/* Your Company (header fields) */}
+          {/* Your Company */}
           <div className="border border-border rounded-xl p-5 space-y-4">
             <h3 className="font-semibold text-sm">Your Company</h3>
 
-            {/* Logo */}
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">
                 Company Logo (optional)
@@ -718,21 +743,21 @@ function GeneratorTool() {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Tagline</Label>
                 <Input className="mt-1" value={formState.businessInfo.tagline}
-                  onChange={e => updateBiz("tagline", e.target.value)} placeholder="Sales · Service · AMC" />
+                  onChange={e => updateBiz("tagline", e.target.value)} placeholder="Never Miss service visit" />
               </div>
             </div>
 
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Address</Label>
               <Input className="mt-1" value={formState.businessInfo.address}
-                onChange={e => updateBiz("address", e.target.value)} placeholder="Shop 5, MG Road" />
+                onChange={e => updateBiz("address", e.target.value)} placeholder="Office No. 204, Business Hub," />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">City</Label>
                 <Input className="mt-1" value={formState.businessInfo.city}
-                  onChange={e => updateBiz("city", e.target.value)} placeholder="Pune" />
+                  onChange={e => updateBiz("city", e.target.value)} placeholder="Panvel" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">State</Label>
@@ -742,20 +767,20 @@ function GeneratorTool() {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">PIN Code</Label>
                 <Input className="mt-1" value={formState.businessInfo.zip_code}
-                  onChange={e => updateBiz("zip_code", e.target.value)} placeholder="411001" />
+                  onChange={e => updateBiz("zip_code", e.target.value)} placeholder="410206" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs font-semibold text-muted-foreground">Phone</Label>
-                <Input className="mt-1" value={formState.businessInfo.phone}
-                  onChange={e => updateBiz("phone", e.target.value)} placeholder="+91 98765 43210" />
-              </div>
-              <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Email</Label>
                 <Input className="mt-1" value={formState.businessInfo.email}
-                  onChange={e => updateBiz("email", e.target.value)} placeholder="info@abcelevators.com" />
+                  onChange={e => updateBiz("email", e.target.value)} placeholder="support@company.com" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Phone</Label>
+                <Input className="mt-1" value={formState.businessInfo.phone}
+                  onChange={e => updateBiz("phone", e.target.value)} placeholder="8149463918" />
               </div>
             </div>
 
@@ -773,7 +798,7 @@ function GeneratorTool() {
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-muted-foreground">Theme Colour (used on PDF)</Label>
+              <Label className="text-xs font-semibold text-muted-foreground">Theme Colour (blue box + accents)</Label>
               <div className="mt-1 flex items-center gap-3">
                 <input
                   type="color"
@@ -874,29 +899,29 @@ function GeneratorTool() {
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Client Name *</Label>
               <Input className="mt-1" value={formState.clientName}
-                onChange={e => updateField("clientName", e.target.value)} placeholder="XYZ Builders Pvt Ltd" />
+                onChange={e => updateField("clientName", e.target.value)} placeholder="RAJESH SHARMA" />
             </div>
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Address</Label>
               <Textarea className="mt-1 resize-none" rows={2} value={formState.clientAddress}
                 onChange={e => updateField("clientAddress", e.target.value)}
-                placeholder="123, Industrial Area, Phase 2" />
+                placeholder="Flat No. 203, Sai Residency, Lane 4, Shanti Nagar," />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs font-semibold text-muted-foreground">District</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">District / City</Label>
                 <Input className="mt-1" value={formState.clientDistrict}
-                  onChange={e => updateField("clientDistrict", e.target.value)} />
+                  onChange={e => updateField("clientDistrict", e.target.value)} placeholder="Pune" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">State</Label>
                 <Input className="mt-1" value={formState.clientState}
-                  onChange={e => updateField("clientState", e.target.value)} />
+                  onChange={e => updateField("clientState", e.target.value)} placeholder="Maharashtra" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">PIN Code</Label>
                 <Input className="mt-1" value={formState.clientPinCode}
-                  onChange={e => updateField("clientPinCode", e.target.value)} />
+                  onChange={e => updateField("clientPinCode", e.target.value)} placeholder="411019" />
               </div>
             </div>
           </div>
@@ -908,13 +933,13 @@ function GeneratorTool() {
               <Label className="text-xs font-semibold text-muted-foreground">Subject</Label>
               <Input className="mt-1" value={formState.subject}
                 onChange={e => updateField("subject", e.target.value)}
-                placeholder="e.g. Regarding AC AMC works at above mention place" />
+                placeholder="Annual RO Water Purifier Maintenance Service" />
             </div>
             <div>
               <Label className="text-xs font-semibold text-muted-foreground">Letter Body</Label>
               <Textarea className="mt-1" rows={4} value={formState.bodyText}
                 onChange={e => updateField("bodyText", e.target.value)}
-                placeholder="Respected Sir/Madam, As per discussion held with you, regarding following works..." />
+                placeholder="Respected Sir/Madam, As per discussion held with you, regarding following works at above mention place. Details are given as below;" />
               <div className="flex gap-2 flex-wrap mt-2">
                 <Button type="button" variant="outline" size="sm"
                   onClick={() => updateField("bodyText", (formState.bodyText ? formState.bodyText + "\n" : "") + "Respected Sir/Madam,")}>
@@ -935,7 +960,7 @@ function GeneratorTool() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border">
-                    {["SR.NO", "Particulars", "Qty.", "Rate (₹)", "Amount", ""].map(h => (
+                    {["SR NO", "PARTICULARS", "Qty.", "Rate (₹)", "Amount", ""].map(h => (
                       <th key={h} className="text-center py-2.5 px-2 text-xs font-semibold text-muted-foreground last:w-8">{h}</th>
                     ))}
                   </tr>
@@ -949,7 +974,7 @@ function GeneratorTool() {
                         <td className="py-2 px-2">
                           <Input value={item.particulars}
                             onChange={e => updateItem(item.id, "particulars", e.target.value)}
-                            placeholder="e.g. Elevator AMC – Quarterly" className="h-8 text-sm" />
+                            placeholder="e.g. RO System Servicing" className="h-8 text-sm" />
                         </td>
                         <td className="py-2 px-2 w-20">
                           <Input type="number" min="1" value={item.qty}
@@ -1074,8 +1099,8 @@ function GeneratorTool() {
               <span className="font-semibold text-sm">Total</span>
               <span className="font-bold text-xl text-blue-600">₹{Number(grandTotal).toLocaleString("en-IN")}</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Rupees {toWords(Math.round(grandTotal))} Only
+            <p className="text-[11px] text-muted-foreground leading-snug uppercase font-semibold">
+              RUPEES {toWords(Math.round(grandTotal))} ONLY
             </p>
           </div>
 
@@ -1084,7 +1109,7 @@ function GeneratorTool() {
             <Label className="text-xs font-semibold text-muted-foreground">Terms & Conditions</Label>
             <Textarea
               className="mt-1.5 resize-none min-h-[72px] text-sm"
-              placeholder="Payment terms, delivery, warranty, jurisdiction..."
+              placeholder={"1. Quotation is valid for 15 days from the issue date.\n2. Payment is due upon completion of the service.\n3. Additional repairs or replacement parts will be charged separately."}
               value={formState.notes}
               onChange={e => updateField("notes", e.target.value)}
             />
@@ -1106,48 +1131,65 @@ function GeneratorTool() {
           <p className="text-xs text-muted-foreground text-center mb-2">Live Preview</p>
           <div className="bg-white dark:bg-card border border-border rounded-xl shadow-sm overflow-hidden text-sm">
 
-            {/* Header matching the PDF */}
-            <div className="p-5 flex items-start gap-4">
-              {/* Logo Box */}
-              <div className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}>
-                {formState.businessInfo.logoBase64 ? (
-                  <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain" />
-                ) : (
-                  <span className="text-white font-bold text-xs">Logo</span>
-                )}
-              </div>
-              {/* Vertical line */}
-              <div className="w-px h-16" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
-              {/* Company Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
-                  {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
-                </p>
-                {formState.businessInfo.tagline && <p className="text-xs font-bold text-foreground mt-0.5">{formState.businessInfo.tagline}</p>}
-                {formState.businessInfo.address && <p className="text-xs text-muted-foreground mt-1">{formState.businessInfo.address}</p>}
-                {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
-                  <p className="text-xs text-muted-foreground">{[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}</p>
-                )}
-                <div className="flex gap-4 mt-1">
-                  {formState.businessInfo.email && (
-                    <p className="text-xs text-muted-foreground"><span className="font-bold text-foreground">Email:</span> {formState.businessInfo.email}</p>
+            {/* Header matching the PDF exactly */}
+            <div className="p-5">
+              <div className="flex items-start gap-4">
+                {/* Blue logo box */}
+                <div
+                  className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
+                  style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}
+                >
+                  {formState.businessInfo.logoBase64 ? (
+                    <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain bg-white" />
+                  ) : (
+                    <span className="text-white font-bold text-lg">{initialsPreview}</span>
                   )}
-                  {formState.businessInfo.phone && (
-                    <p className="text-xs text-muted-foreground"><span className="font-bold text-foreground">Phone:</span> {formState.businessInfo.phone}</p>
+                </div>
+                {/* Vertical divider */}
+                <div className="w-px self-stretch" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+                {/* Company info */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
+                    {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
+                  </p>
+                  {formState.businessInfo.tagline && (
+                    <p className="text-xs font-bold text-foreground mt-0.5">{formState.businessInfo.tagline}</p>
                   )}
+                  {formState.businessInfo.address && (
+                    <p className="text-xs text-muted-foreground mt-1">{formState.businessInfo.address}</p>
+                  )}
+                  {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                  <div className="mt-1 space-y-0.5">
+                    {formState.businessInfo.email && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-bold text-foreground">Email:</span>   {formState.businessInfo.email}
+                      </p>
+                    )}
+                    {formState.businessInfo.phone && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-bold text-foreground">Phone:</span>   {formState.businessInfo.phone}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-            {/* Horizontal Line */}
+
+            {/* Horizontal blue line */}
             <div className="h-0.5 mx-5" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
-            {/* Quote Details */}
+
+            {/* Quote details */}
             <div className="p-5 flex justify-between items-start">
               <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
               <div className="text-right">
                 <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
                 <p className="text-sm font-bold mt-1">DATE: {shortDate(formState.quoteDate)}</p>
-                {formState.orderNo && <p className="text-sm font-bold mt-0.5">Order No: {formState.orderNo}</p>}
-                {formState.orderDate && <p className="text-sm font-bold mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
+                {formState.orderNo && <p className="text-sm font-normal mt-0.5">Order No: {formState.orderNo}</p>}
+                {formState.orderDate && <p className="text-sm font-normal mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
                 {formState.validTill && <p className="text-xs text-red-500 font-bold mt-0.5">Valid till: {formatDate(formState.validTill)}</p>}
               </div>
             </div>
@@ -1163,7 +1205,7 @@ function GeneratorTool() {
                 </p>
               )}
               {formState.subject && (
-                <p className="text-sm font-semibold pt-1">Sub: {formState.subject}</p>
+                <p className="text-sm font-semibold pt-2">Sub: {formState.subject}</p>
               )}
               {formState.bodyText && (
                 <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{formState.bodyText}</p>
@@ -1175,7 +1217,7 @@ function GeneratorTool() {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: `rgb(${tr}, ${tg}, ${tb})` }}>
-                    {["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"].map(h => (
+                    {["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"].map(h => (
                       <th key={h} className="py-2.5 px-3 font-semibold text-white text-left first:text-center last:text-right">{h}</th>
                     ))}
                   </tr>
@@ -1197,15 +1239,14 @@ function GeneratorTool() {
               </table>
             </div>
 
-            {/* Totals + Notes */}
-            <div className="border-t border-border flex flex-col sm:flex-row">
-              {formState.notes ? (
-                <div className="flex-1 p-5 border-b sm:border-b-0 sm:border-r border-border">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Terms & Conditions</p>
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{formState.notes}</p>
-                </div>
-              ) : <div className="flex-1" />}
-              <div className="p-5 sm:w-56 shrink-0 space-y-2">
+            {/* Totals + words (no tax info section) */}
+            <div className="border-t border-border p-5 flex flex-col sm:flex-row">
+              <div className="flex-1">
+                <p className="text-[10px] text-muted-foreground leading-snug uppercase font-bold mt-auto">
+                  RUPEES {toWords(Math.round(grandTotal))} ONLY
+                </p>
+              </div>
+              <div className="sm:w-56 shrink-0 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>Rs. {Number(subtotal).toLocaleString("en-IN")}</span>
@@ -1228,31 +1269,25 @@ function GeneratorTool() {
                     Rs. {Number(grandTotal).toLocaleString("en-IN")}
                   </span>
                 </div>
-                <p className="text-[10px] text-muted-foreground leading-snug uppercase">
-                  Rupees {toWords(Math.round(grandTotal))} Only
-                </p>
               </div>
             </div>
 
             {/* Payment details */}
-            {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id || formState.paymentTerms) && (
-              <div className="border-t border-border p-5 space-y-1">
+            {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id) && (
+              <div className="border-t border-border p-5 space-y-1 mt-6">
                 <p className="text-xs font-bold">Payment Details:</p>
                 {formState.businessInfo.bank_name && <p className="text-xs text-muted-foreground">Bank: {formState.businessInfo.bank_name}</p>}
                 {formState.businessInfo.account_no && <p className="text-xs text-muted-foreground">Account No: {formState.businessInfo.account_no}</p>}
                 {formState.businessInfo.ifsc_code && <p className="text-xs text-muted-foreground">IFSC: {formState.businessInfo.ifsc_code}</p>}
                 {formState.businessInfo.upi_id && <p className="text-xs text-muted-foreground">UPI: {formState.businessInfo.upi_id}</p>}
-                {formState.paymentTerms && <p className="text-xs text-muted-foreground">Payment Terms: {formState.paymentTerms}</p>}
               </div>
             )}
 
-            {/* Tax info */}
-            {formState.includeGst && (
+            {/* Terms & Conditions */}
+            {formState.notes && (
               <div className="border-t border-border p-5 space-y-1">
-                <p className="text-xs font-bold">Tax Information:</p>
-                {formState.businessInfo.gstin && <p className="text-xs text-muted-foreground">GSTIN: {formState.businessInfo.gstin}</p>}
-                {formState.businessInfo.pan_number && <p className="text-xs text-muted-foreground">PAN: {formState.businessInfo.pan_number}</p>}
-                <p className="text-xs text-muted-foreground">GST @ 18% will be charged as per applicable rules.</p>
+                <p className="text-xs font-bold">Terms & Conditions:</p>
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{formState.notes}</p>
               </div>
             )}
 
@@ -1299,7 +1334,7 @@ function GeneratorTool() {
               <Select value={leadData.serviceType} onValueChange={v => setLeadData(p => ({ ...p, serviceType: v }))}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select your service" /></SelectTrigger>
                 <SelectContent>
-                  {["Elevator / Lift", "HVAC / AC", "Fire Safety", "Plumbing", "Electrical", "CCTV / Security", "Pest Control", "Other"].map(s => (
+                  {["Elevator / Lift", "HVAC / AC", "Fire Safety", "Plumbing", "Electrical", "CCTV / Security", "Pest Control", "Water Purifier / RO", "Other"].map(s => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1377,7 +1412,6 @@ function SeoSection() {
   )
 }
 
-// ─── Page Export ──────────────────────────────────────────────────────────────
 export default function FreeQuotationGeneratorPage() {
   return (
     <main>
