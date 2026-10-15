@@ -49,8 +49,6 @@ function hexToRgb(hex: string): [number, number, number] {
     : [24, 95, 165]
 }
 
-const safeStr = (val: any) => String(val ?? "-")
-
 function toWords(n: number): string {
   const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
   const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
@@ -120,7 +118,7 @@ const defaultFormState: FormState = {
     company_name: "", tagline: "", address: "", city: "", state: "", zip_code: "",
     phone: "", email: "", gstin: "", pan_number: "",
     bank_name: "", account_no: "", ifsc_code: "", upi_id: "",
-    theme_color: "#185FA5", logoBase64: "",
+    theme_color: "#1E88E5", logoBase64: "",
   },
   quoteNumber: "QT-001",
   quoteDate: new Date().toISOString().split("T")[0],
@@ -263,14 +261,16 @@ function GeneratorTool() {
   const grandTotal = discountedSubtotal + sgst + cgst
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  PDF — matches Quotation-QT-008 exactly (no Tax Information section)
+  //  PDF generation — A4 fixed, matches QT-008 layout 1:1
   // ─────────────────────────────────────────────────────────────────────────
   const generatePdf = async () => {
     setGeneratingPdf(true)
     try {
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       const pageW = 210
+      const pageH = 297
       const margin = 15
-      const themeColor = formState.businessInfo.theme_color || "#185FA5"
+      const themeColor = formState.businessInfo.theme_color || "#1E88E5"
       const [tr, tg, tb] = hexToRgb(themeColor)
       const bio = formState.businessInfo
 
@@ -283,354 +283,338 @@ function GeneratorTool() {
         }
       }
 
-      const renderQuotation = (doc: jsPDF): number => {
-        let y = margin
+      // ══════════════════════════════════════════════════════════════════
+      //  HEADER  (y = 15 → 68)
+      // ══════════════════════════════════════════════════════════════════
+      const boxX = margin
+      const boxY = 15
+      const boxW = 28
+      const boxH = 28
 
-        // ══════════════════════════════════════════════════════════════════
-        //  HEADER — matches Quotation-QT-008 exactly
-        // ══════════════════════════════════════════════════════════════════
-        const boxW = 24
-        const boxH = 24
-        const boxX = margin
-        const boxY = y
+      // Solid blue square
+      doc.setFillColor(tr, tg, tb)
+      doc.rect(boxX, boxY, boxW, boxH, "F")
 
-        // Solid blue box (logo or initials)
-        doc.setFillColor(tr, tg, tb)
-        doc.rect(boxX, boxY, boxW, boxH, "F")
-
-        if (logoBase64) {
-          // White inner padding then place the logo
-          doc.setFillColor(255, 255, 255)
-          doc.rect(boxX + 1.2, boxY + 1.2, boxW - 2.4, boxH - 2.4, "F")
-          try {
-            doc.addImage(logoBase64, logoFormat, boxX + 1.8, boxY + 1.8, boxW - 3.6, boxH - 3.6)
-          } catch {}
-        } else {
-          // Show up to 3 initials in white inside the blue box
-          doc.setTextColor(255, 255, 255)
+      if (logoBase64) {
+        // White padding then logo
+        doc.setFillColor(255, 255, 255)
+        doc.rect(boxX + 1.5, boxY + 1.5, boxW - 3, boxH - 3, "F")
+        try {
+          doc.addImage(logoBase64, logoFormat, boxX + 2, boxY + 2, boxW - 4, boxH - 4)
+        } catch {
+          const initials = (bio.company_name || "CO").split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase()
+          doc.setTextColor(tr, tg, tb)
           doc.setFont("helvetica", "bold")
-          doc.setFontSize(13)
-          const initials = (bio.company_name || "CO")
-            .split(/\s+/)
-            .map(w => w[0])
-            .join("")
-            .slice(0, 3)
-            .toUpperCase()
-          doc.text(initials || "CO", boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
+          doc.setFontSize(16)
+          doc.text(initials || "CO", boxX + boxW / 2, boxY + boxH / 2 + 3, { align: "center" })
         }
-
-        // Vertical blue line right of the box
-        const lineX = boxX + boxW + 4
-        doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.6)
-        doc.line(lineX, boxY, lineX, boxY + boxH)
-
-        // Company info (right of the line)
-        const infoX = lineX + 4
-
-        // Company name — UPPERCASE, theme colour, bold
+      } else {
+        const initials = (bio.company_name || "CO").split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase()
+        doc.setTextColor(255, 255, 255)
         doc.setFont("helvetica", "bold")
-        doc.setFontSize(13)
-        doc.setTextColor(tr, tg, tb)
-        doc.text(safeStr(bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 5)
+        doc.setFontSize(16)
+        doc.text(initials || "CO", boxX + boxW / 2, boxY + boxH / 2 + 3, { align: "center" })
+      }
 
-        // Tagline — BOLD BLACK (matches original)
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        if (bio.tagline) doc.text(safeStr(bio.tagline), infoX, boxY + 10)
+      // Vertical blue line
+      const lineX = boxX + boxW + 5  // 48
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.8)
+      doc.line(lineX, boxY + 2, lineX, boxY + boxH - 4)
 
-        // Address — gray, normal
-        doc.setFontSize(8.5)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(80, 80, 80)
-        let infoY = boxY + 15
-        if (bio.address) {
-          const addrLines = doc.splitTextToSize(safeStr(bio.address), 130)
-          doc.text(addrLines, infoX, infoY)
-          infoY += addrLines.length * 3.8
-        }
-        const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
-        if (cityLine) {
-          doc.text(cityLine, infoX, infoY)
-          infoY += 4.5
-        }
+      // Company info
+      const infoX = lineX + 6  // 54
 
-        infoY += 1
-        if (bio.email) {
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Email:", infoX, infoY)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
-          doc.text("   " + safeStr(bio.email), infoX, infoY)
-          infoY += 4.5
-        }
-        if (bio.phone) {
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Phone:", infoX, infoY)
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
-          doc.text("   " + safeStr(bio.phone), infoX, infoY)
-          infoY += 4.5
-        }
+      // Company name — uppercase theme colour
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(14)
+      doc.setTextColor(tr, tg, tb)
+      doc.text((bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 7)
 
-        // Full-width blue horizontal line under header
-        y = Math.max(boxY + boxH, infoY) + 4
-        doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.6)
-        doc.line(margin, y, pageW - margin, y)
-
-        // ══════════════════════════════════════════════════════════════════
-        //  QUOTATION title + Quote meta
-        // ══════════════════════════════════════════════════════════════════
-        y += 7
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(15)
-        doc.setTextColor(tr, tg, tb)
-        doc.text("QUOTATION", pageW - margin, y, { align: "right" })
-
-        doc.setFontSize(10)
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(formState.quoteNumber || "QT-001"), margin, y)
-
-        y += 5
+      // Tagline — bold black
+      if (bio.tagline) {
         doc.setFontSize(9.5)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
-        doc.text("DATE: " + shortDate(formState.quoteDate), pageW - margin, y, { align: "right" })
-
-        y += 4.5
-        if (formState.orderNo) {
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(9)
-          doc.text("Order No: " + safeStr(formState.orderNo), pageW - margin, y, { align: "right" })
-          y += 4.5
-        }
-        if (formState.orderDate) {
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(9)
-          doc.text("Order Date: " + shortDate(formState.orderDate), pageW - margin, y, { align: "right" })
-          y += 4.5
-        }
-        if (formState.validTill) {
-          doc.setFontSize(9)
-          doc.setTextColor(220, 38, 38)
-          doc.text("Valid till: " + formatDate(formState.validTill), pageW - margin, y, { align: "right" })
-          y += 4.5
-        }
-
-        // ══════════════════════════════════════════════════════════════════
-        //  TO block
-        // ══════════════════════════════════════════════════════════════════
-        y += 6
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
-        doc.setTextColor(150, 150, 150)
-        doc.text("TO,", margin, y)
-        y += 5
-
-        doc.setFontSize(10)
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(formState.clientName || "Client").toUpperCase(), margin, y)
-        y += 5
-
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(9)
-        doc.setTextColor(60, 60, 60)
-        if (formState.clientAddress) {
-          const addr = doc.splitTextToSize(safeStr(formState.clientAddress), pageW - 2 * margin)
-          doc.text(addr, margin, y)
-          y += addr.length * 4
-        }
-        const clientCityLine = [
-          formState.clientDistrict,
-          formState.clientState,
-          formState.clientPinCode,
-        ].filter(Boolean).join(", ")
-        if (clientCityLine) {
-          doc.text(clientCityLine, margin, y)
-          y += 4
-        }
-        y += 4
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Subject + Body
-        // ══════════════════════════════════════════════════════════════════
-        if (formState.subject) {
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Sub: " + safeStr(formState.subject), margin, y)
-          y += 5
-        }
-        if (formState.bodyText) {
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(80, 80, 80)
-          const bodyLines = doc.splitTextToSize(safeStr(formState.bodyText), pageW - 2 * margin)
-          doc.text(bodyLines, margin, y)
-          y += bodyLines.length * 4 + 2
-        }
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Items table
-        // ══════════════════════════════════════════════════════════════════
-        const tableBody = formState.items.map((item, idx) => [
-          String(idx + 1),
-          safeStr(item.particulars || "-"),
-          String(item.qty ?? 1),
-          `Rs. ${Number(item.rate ?? 0).toLocaleString("en-IN")}`,
-          `Rs. ${(Number(item.qty ?? 0) * Number(item.rate ?? 0)).toLocaleString("en-IN")}`,
-        ])
-
-        autoTable(doc, {
-          startY: y,
-          head: [["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
-          body: tableBody,
-          theme: "grid",
-          headStyles: {
-            fillColor: [tr, tg, tb],
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
-            lineWidth: 0,
-          },
-          bodyStyles: { fontSize: 9, textColor: [0, 0, 0], lineWidth: 0 },
-          columnStyles: {
-            0: { cellWidth: 18, halign: "center" },
-            1: { cellWidth: "auto", halign: "left" },
-            2: { cellWidth: 22, halign: "center" },
-            3: { cellWidth: 35, halign: "right" },
-            4: { cellWidth: 35, halign: "right" },
-          },
-          margin: { left: margin, right: margin },
-          pageBreak: "avoid",
-          rowPageBreak: "avoid",
-        })
-
-        y = (doc as any).lastAutoTable.finalY + 6
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Totals (right-aligned)
-        // ══════════════════════════════════════════════════════════════════
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-
-        doc.text("Subtotal:", 160, y, { align: "right" })
-        doc.text("Rs. " + subtotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-        y += 4.5
-
-        if (discountAmount > 0) {
-          const discountLabel = formState.discountType === "percentage"
-            ? `${formState.discountValue}%`
-            : `Rs. ${formState.discountValue}`
-          doc.text(`Discount (${discountLabel}):`, 160, y, { align: "right" })
-          doc.setTextColor(200, 0, 0)
-          doc.text("- Rs. " + discountAmount.toLocaleString("en-IN"), 195, y, { align: "right" })
-          doc.setTextColor(0, 0, 0)
-          y += 4.5
-        }
-
-        if (formState.includeGst) {
-          doc.text("SGST (9%):", 160, y, { align: "right" })
-          doc.text("Rs. " + sgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-          y += 4.5
-          doc.text("CGST (9%):", 160, y, { align: "right" })
-          doc.text("Rs. " + cgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-          y += 4.5
-        }
-
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(10)
-        doc.text("Total:", 160, y, { align: "right" })
-        doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-        y += 6
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Amount in words (LEFT side, below totals)
-        // ══════════════════════════════════════════════════════════════════
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-        doc.text(
-          ("RUPEES " + toWords(Math.round(grandTotal)) + " ONLY").toUpperCase(),
-          margin, y
-        )
-        y += 30 // big gap matching original
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Payment Details  (NO Tax Information section)
-        // ══════════════════════════════════════════════════════════════════
-        const hasBank = bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id
-        if (hasBank) {
-          doc.setFontSize(9.5)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Payment Details:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(9)
-          doc.setTextColor(40, 40, 40)
-          if (bio.bank_name) { doc.text(`Bank: ${safeStr(bio.bank_name)}`, margin, y); y += 4.2 }
-          if (bio.account_no) { doc.text(`Account No: ${safeStr(bio.account_no)}`, margin, y); y += 4.2 }
-          if (bio.ifsc_code) { doc.text(`IFSC: ${safeStr(bio.ifsc_code)}`, margin, y); y += 4.2 }
-          if (bio.upi_id) { doc.text(`UPI: ${safeStr(bio.upi_id)}`, margin, y); y += 4.2 }
-        }
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Terms & Conditions
-        // ══════════════════════════════════════════════════════════════════
-        if (formState.notes) {
-          y += 6
-          doc.setFontSize(9.5)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Terms & Conditions:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(9)
-          doc.setTextColor(60, 60, 60)
-          const noteLines = doc.splitTextToSize(safeStr(formState.notes), pageW - 2 * margin)
-          doc.text(noteLines, margin, y)
-          y += noteLines.length * 4
-        }
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Signature (right-aligned)
-        // ══════════════════════════════════════════════════════════════════
-        y += 14
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(9)
-        doc.setTextColor(0, 0, 0)
-        doc.text("Thanking you,", pageW - margin, y, { align: "right" })
-        y += 5
-        doc.text("Yours faithfully,", pageW - margin, y, { align: "right" })
-        y += 5
-        doc.setFont("helvetica", "bold")
-        doc.text("For " + safeStr(bio.company_name || "Company"), pageW - margin, y, { align: "right" })
-
-        const contentBottom = y + 4
-
-        // ══════════════════════════════════════════════════════════════════
-        //  Footer
-        // ══════════════════════════════════════════════════════════════════
-        const footerY = contentBottom + 10
-        doc.setFontSize(8)
-        doc.setTextColor(150, 150, 150)
-        doc.setFont("helvetica", "normal")
-        doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
-
-        return footerY + 8
+        doc.text(bio.tagline, infoX, boxY + 15)
       }
 
-      // Two-pass measure → exact height
-      const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
-      const measuredHeight = renderQuotation(scratch)
-      const finalHeight = Math.max(measuredHeight, 100)
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, finalHeight] })
-      renderQuotation(doc)
+      // Address — gray normal
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(80, 80, 80)
+      let addrY = boxY + 22
+      if (bio.address) {
+        const addrLines = doc.splitTextToSize(bio.address, 135)
+        doc.text(addrLines, infoX, addrY)
+        addrY += addrLines.length * 4
+      }
+      const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
+      if (cityLine) {
+        doc.text(cityLine, infoX, addrY)
+        addrY += 5
+      }
+
+      // Email + Phone with bold labels
+      addrY += 2
+      if (bio.email) {
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(9.5)
+        doc.setTextColor(0, 0, 0)
+        doc.text("Email:", infoX, addrY)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        doc.text(bio.email, infoX + 17, addrY)
+        addrY += 6.5
+      }
+      if (bio.phone) {
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Phone:", infoX, addrY)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(80, 80, 80)
+        doc.text(bio.phone, infoX + 17, addrY)
+        addrY += 6.5
+      }
+
+      // Blue horizontal full-width line
+      const headerEndY = Math.max(boxY + boxH + 6, addrY + 2)  // ~68
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.8)
+      doc.line(margin, headerEndY, pageW - margin, headerEndY)
+
+      // ══════════════════════════════════════════════════════════════════
+      //  QUOTATION title + quote meta
+      // ══════════════════════════════════════════════════════════════════
+      let y = headerEndY + 8  // ~76
+
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(18)
+      doc.setTextColor(tr, tg, tb)
+      doc.text("QUOTATION", pageW - margin, y, { align: "right" })
+
+      y += 7  // ~83
+      doc.setFontSize(10)
+      doc.setTextColor(0, 0, 0)
+      doc.text(formState.quoteNumber || "QT-001", margin, y)
+      doc.text("DATE: " + shortDate(formState.quoteDate), pageW - margin, y, { align: "right" })
+
+      y += 5
+      if (formState.orderNo) {
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9)
+        doc.setTextColor(0, 0, 0)
+        doc.text("Order No: " + formState.orderNo, pageW - margin, y, { align: "right" })
+        y += 4.5
+      }
+      if (formState.orderDate) {
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9)
+        doc.text("Order Date: " + shortDate(formState.orderDate), pageW - margin, y, { align: "right" })
+        y += 4.5
+      }
+      if (formState.validTill) {
+        doc.setFontSize(9)
+        doc.setTextColor(220, 38, 38)
+        doc.text("Valid till: " + formatDate(formState.validTill), pageW - margin, y, { align: "right" })
+        y += 4.5
+      }
+
+      // ══════════════════════════════════════════════════════════════════
+      //  TO block
+      // ══════════════════════════════════════════════════════════════════
+      y += 6
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(9)
+      doc.setTextColor(150, 150, 150)
+      doc.text("TO,", margin, y)
+      y += 5.5
+
+      doc.setFontSize(10.5)
+      doc.setTextColor(0, 0, 0)
+      doc.text((formState.clientName || "Client").toUpperCase(), margin, y)
+      y += 5.5
+
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(9.5)
+      doc.setTextColor(60, 60, 60)
+      if (formState.clientAddress) {
+        const addr = doc.splitTextToSize(formState.clientAddress, pageW - 2 * margin)
+        doc.text(addr, margin, y)
+        y += addr.length * 4.5
+      }
+      const clientCityLine = [formState.clientDistrict, formState.clientState, formState.clientPinCode].filter(Boolean).join(", ")
+      if (clientCityLine) {
+        doc.text(clientCityLine, margin, y)
+        y += 4.5
+      }
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Subject + Body
+      // ══════════════════════════════════════════════════════════════════
+      y += 5
+      if (formState.subject) {
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(9.5)
+        doc.setTextColor(0, 0, 0)
+        doc.text("Sub: " + formState.subject, margin, y)
+        y += 5.5
+      }
+      if (formState.bodyText) {
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9.5)
+        doc.setTextColor(80, 80, 80)
+        const bodyLines = doc.splitTextToSize(formState.bodyText, pageW - 2 * margin)
+        doc.text(bodyLines, margin, y)
+        y += bodyLines.length * 4.5 + 2
+      }
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Items table
+      // ══════════════════════════════════════════════════════════════════
+      y += 3
+      const tableBody = formState.items.map((item, idx) => [
+        String(idx + 1),
+        item.particulars || "-",
+        String(item.qty ?? 1),
+        `Rs. ${Number(item.rate ?? 0).toLocaleString("en-IN")}`,
+        `Rs. ${(Number(item.qty ?? 0) * Number(item.rate ?? 0)).toLocaleString("en-IN")}`,
+      ])
+
+      autoTable(doc, {
+        startY: y,
+        head: [["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: {
+          fillColor: [tr, tg, tb],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 9.5,
+          halign: "center",
+          cellPadding: 2.8,
+        },
+        bodyStyles: { fontSize: 9.5, textColor: [0, 0, 0], cellPadding: 2.8 },
+        columnStyles: {
+          0: { cellWidth: 22, halign: "center" },
+          1: { cellWidth: "auto", halign: "left" },
+          2: { cellWidth: 22, halign: "center" },
+          3: { cellWidth: 35, halign: "right" },
+          4: { cellWidth: 35, halign: "right" },
+        },
+        margin: { left: margin, right: margin },
+        pageBreak: "avoid",
+        rowPageBreak: "avoid",
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 6
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Totals (right-aligned, stacked)
+      // ══════════════════════════════════════════════════════════════════
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(9.5)
+      doc.setTextColor(0, 0, 0)
+
+      const labelX = pageW - 50
+      const valueX = pageW - margin
+
+      doc.text("Subtotal:", labelX, y, { align: "right" })
+      doc.text("Rs. " + subtotal.toLocaleString("en-IN"), valueX, y, { align: "right" })
+      y += 5
+
+      if (discountAmount > 0) {
+        const discountLabel = formState.discountType === "percentage"
+          ? `${formState.discountValue}%`
+          : `Rs. ${formState.discountValue}`
+        doc.text(`Discount (${discountLabel}):`, labelX, y, { align: "right" })
+        doc.setTextColor(200, 0, 0)
+        doc.text("- Rs. " + discountAmount.toLocaleString("en-IN"), valueX, y, { align: "right" })
+        doc.setTextColor(0, 0, 0)
+        y += 5
+      }
+
+      if (formState.includeGst) {
+        doc.text("SGST (9%):", labelX, y, { align: "right" })
+        doc.text("Rs. " + sgst.toLocaleString("en-IN"), valueX, y, { align: "right" })
+        y += 5
+        doc.text("CGST (9%):", labelX, y, { align: "right" })
+        doc.text("Rs. " + cgst.toLocaleString("en-IN"), valueX, y, { align: "right" })
+        y += 5
+      }
+
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(11)
+      doc.text("Total:", labelX, y, { align: "right" })
+      doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), valueX, y, { align: "right" })
+      y += 9
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Amount in words (LEFT side, below totals)
+      // ══════════════════════════════════════════════════════════════════
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(10)
+      doc.setTextColor(0, 0, 0)
+      doc.text(("RUPEES " + toWords(Math.round(grandTotal)) + " ONLY").toUpperCase(), margin, y)
+      y += 22
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Payment Details  (NO Tax Information)
+      // ══════════════════════════════════════════════════════════════════
+      const hasBank = bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id
+      if (hasBank) {
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Payment Details:", margin, y)
+        y += 5.5
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9.5)
+        doc.setTextColor(40, 40, 40)
+        if (bio.bank_name) { doc.text(`Bank: ${bio.bank_name}`, margin, y); y += 5 }
+        if (bio.account_no) { doc.text(`Account No: ${bio.account_no}`, margin, y); y += 5 }
+        if (bio.ifsc_code) { doc.text(`IFSC: ${bio.ifsc_code}`, margin, y); y += 5 }
+        if (bio.upi_id) { doc.text(`UPI: ${bio.upi_id}`, margin, y); y += 5 }
+      }
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Terms & Conditions
+      // ══════════════════════════════════════════════════════════════════
+      if (formState.notes) {
+        y += 5
+        doc.setFontSize(10)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text("Terms & Conditions:", margin, y)
+        y += 5.5
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9.5)
+        doc.setTextColor(60, 60, 60)
+        const noteLines = doc.splitTextToSize(formState.notes, pageW - 2 * margin)
+        doc.text(noteLines, margin, y)
+        y += noteLines.length * 4.5
+      }
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Signature (right-aligned, lower part of page)
+      // ══════════════════════════════════════════════════════════════════
+      const sigY = Math.max(y + 20, 235)
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(9.5)
+      doc.setTextColor(0, 0, 0)
+      doc.text("Thanking you,", pageW - margin, sigY, { align: "right" })
+      doc.text("Yours faithfully,", pageW - margin, sigY + 7, { align: "right" })
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(10)
+      doc.text("For " + (bio.company_name || "Company"), pageW - margin, sigY + 14, { align: "right" })
+
+      // ══════════════════════════════════════════════════════════════════
+      //  Footer (fixed)
+      // ══════════════════════════════════════════════════════════════════
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.setFont("helvetica", "normal")
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 10, { align: "center" })
 
       const safeName = (formState.clientName || "Client").replace(/\s+/g, "_")
       doc.save(`Quotation_${formState.quoteNumber}_${safeName}.pdf`)
@@ -674,7 +658,7 @@ function GeneratorTool() {
     }
   }
 
-  const [tr, tg, tb] = hexToRgb(formState.businessInfo.theme_color || "#185FA5")
+  const [tr, tg, tb] = hexToRgb(formState.businessInfo.theme_color || "#1E88E5")
   const initialsPreview = (formState.businessInfo.company_name || "CO")
     .split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase() || "CO"
 
@@ -738,7 +722,7 @@ function GeneratorTool() {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Company Name *</Label>
                 <Input className="mt-1" value={formState.businessInfo.company_name}
-                  onChange={e => updateBiz("company_name", e.target.value)} placeholder="ABC Elevators Pvt Ltd" />
+                  onChange={e => updateBiz("company_name", e.target.value)} placeholder="Remindi Software" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Tagline</Label>
@@ -775,7 +759,7 @@ function GeneratorTool() {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Email</Label>
                 <Input className="mt-1" value={formState.businessInfo.email}
-                  onChange={e => updateBiz("email", e.target.value)} placeholder="support@company.com" />
+                  onChange={e => updateBiz("email", e.target.value)} placeholder="support@remindi.com" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Phone</Label>
@@ -828,7 +812,7 @@ function GeneratorTool() {
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">Account No.</Label>
                 <Input className="mt-1" value={formState.businessInfo.account_no}
-                  onChange={e => updateBiz("account_no", e.target.value)} placeholder="50100XXXXXXX" />
+                  onChange={e => updateBiz("account_no", e.target.value)} placeholder="134578900985" />
               </div>
               <div>
                 <Label className="text-xs font-semibold text-muted-foreground">IFSC Code</Label>
@@ -1109,7 +1093,7 @@ function GeneratorTool() {
             <Label className="text-xs font-semibold text-muted-foreground">Terms & Conditions</Label>
             <Textarea
               className="mt-1.5 resize-none min-h-[72px] text-sm"
-              placeholder={"1. Quotation is valid for 15 days from the issue date.\n2. Payment is due upon completion of the service.\n3. Additional repairs or replacement parts will be charged separately."}
+              placeholder={"1. Quotation is valid for 15 days from the issue date.\n2. Payment is due upon completion of the service.\n3. Additional repairs or replacement parts will be charged separately.\n4. Service will be scheduled after customer confirmation."}
               value={formState.notes}
               onChange={e => updateField("notes", e.target.value)}
             />
@@ -1131,39 +1115,36 @@ function GeneratorTool() {
           <p className="text-xs text-muted-foreground text-center mb-2">Live Preview</p>
           <div className="bg-white dark:bg-card border border-border rounded-xl shadow-sm overflow-hidden text-sm">
 
-            {/* Header matching the PDF exactly */}
+            {/* Header — matches PDF exactly */}
             <div className="p-5">
               <div className="flex items-start gap-4">
-                {/* Blue logo box */}
                 <div
                   className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
                   style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}
                 >
                   {formState.businessInfo.logoBase64 ? (
-                    <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain bg-white" />
+                    <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain bg-white rounded-sm" />
                   ) : (
                     <span className="text-white font-bold text-lg">{initialsPreview}</span>
                   )}
                 </div>
-                {/* Vertical divider */}
                 <div className="w-px self-stretch" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
-                {/* Company info */}
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
                     {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
                   </p>
                   {formState.businessInfo.tagline && (
-                    <p className="text-xs font-bold text-foreground mt-0.5">{formState.businessInfo.tagline}</p>
+                    <p className="text-xs font-bold text-foreground mt-1">{formState.businessInfo.tagline}</p>
                   )}
                   {formState.businessInfo.address && (
-                    <p className="text-xs text-muted-foreground mt-1">{formState.businessInfo.address}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">{formState.businessInfo.address}</p>
                   )}
                   {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
                     <p className="text-xs text-muted-foreground">
                       {[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}
                     </p>
                   )}
-                  <div className="mt-1 space-y-0.5">
+                  <div className="mt-2 space-y-1">
                     {formState.businessInfo.email && (
                       <p className="text-xs text-muted-foreground">
                         <span className="font-bold text-foreground">Email:</span>   {formState.businessInfo.email}
@@ -1179,18 +1160,22 @@ function GeneratorTool() {
               </div>
             </div>
 
-            {/* Horizontal blue line */}
+            {/* Blue horizontal line */}
             <div className="h-0.5 mx-5" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
 
             {/* Quote details */}
-            <div className="p-5 flex justify-between items-start">
-              <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
-              <div className="text-right">
+            <div className="p-5">
+              <div className="text-right mb-1">
                 <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
-                <p className="text-sm font-bold mt-1">DATE: {shortDate(formState.quoteDate)}</p>
-                {formState.orderNo && <p className="text-sm font-normal mt-0.5">Order No: {formState.orderNo}</p>}
-                {formState.orderDate && <p className="text-sm font-normal mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
-                {formState.validTill && <p className="text-xs text-red-500 font-bold mt-0.5">Valid till: {formatDate(formState.validTill)}</p>}
+              </div>
+              <div className="flex justify-between items-start">
+                <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
+                <div className="text-right">
+                  <p className="text-sm font-bold">DATE: {shortDate(formState.quoteDate)}</p>
+                  {formState.orderNo && <p className="text-xs font-normal mt-0.5">Order No: {formState.orderNo}</p>}
+                  {formState.orderDate && <p className="text-xs font-normal mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
+                  {formState.validTill && <p className="text-xs text-red-500 font-bold mt-0.5">Valid till: {formatDate(formState.validTill)}</p>}
+                </div>
               </div>
             </div>
 
@@ -1239,14 +1224,14 @@ function GeneratorTool() {
               </table>
             </div>
 
-            {/* Totals + words (no tax info section) */}
+            {/* Totals + Amount in words */}
             <div className="border-t border-border p-5 flex flex-col sm:flex-row">
-              <div className="flex-1">
-                <p className="text-[10px] text-muted-foreground leading-snug uppercase font-bold mt-auto">
+              <div className="flex-1 flex items-end">
+                <p className="text-[10px] text-muted-foreground leading-snug uppercase font-bold">
                   RUPEES {toWords(Math.round(grandTotal))} ONLY
                 </p>
               </div>
-              <div className="sm:w-56 shrink-0 space-y-2">
+              <div className="sm:w-56 shrink-0 space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>Rs. {Number(subtotal).toLocaleString("en-IN")}</span>
@@ -1272,9 +1257,9 @@ function GeneratorTool() {
               </div>
             </div>
 
-            {/* Payment details */}
+            {/* Payment details (NO Tax Information) */}
             {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id) && (
-              <div className="border-t border-border p-5 space-y-1 mt-6">
+              <div className="border-t border-border p-5 space-y-1">
                 <p className="text-xs font-bold">Payment Details:</p>
                 {formState.businessInfo.bank_name && <p className="text-xs text-muted-foreground">Bank: {formState.businessInfo.bank_name}</p>}
                 {formState.businessInfo.account_no && <p className="text-xs text-muted-foreground">Account No: {formState.businessInfo.account_no}</p>}
