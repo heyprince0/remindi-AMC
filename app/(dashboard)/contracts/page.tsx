@@ -464,6 +464,13 @@ export default function ContractsPage() {
   }
 
   const handleEditClick = (contract: ContractDisplay) => {
+    if (subscriptionLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    // Passing false so it doesn't trigger the auto-shown flag
+    if (checkAndShowLimitModal(false)) return
+
     setEditingContract(contract as Contract)
     setModalOpen(true)
   }
