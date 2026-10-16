@@ -60,13 +60,31 @@ export async function sendPasswordResetEmail(userEmail: string, resetLink: strin
   }
 }
 
-export async function sendServiceReminderEmail(userEmail: string, contractName: string, serviceDate: string, customerName: string): Promise<EmailResponse> {
+export async function sendServiceReminderEmail(
+  userEmail: string,
+  contractName: string,
+  serviceDate: string,
+  customerName: string,
+  serviceType: string,
+  customerPhone: string,
+  contractorName: string
+): Promise<EmailResponse> {
   try {
     if (!resend) return { success: false, error: 'Email service is not configured.' }
     const response = await resend.emails.send({
       from: `${EMAIL_CONFIG.FROM_NAME} <${EMAIL_CONFIG.FROM_EMAIL}>`,
       to: userEmail,
-      template: { id: 'service-reminder', variables: { contractName, serviceDate, customerName } },
+      template: {
+        id: 'service-reminder',
+        variables: {
+          CONTRACTOR_NAME: contractorName,
+          CONTRACT_NAME:   contractName,
+          CUSTOMER_NAME:   customerName,
+          SERVICE_TYPE:    serviceType,
+          SERVICE_DATE:    serviceDate,
+          CUSTOMER_PHONE:  customerPhone,
+        },
+      },
     })
     if (response.error) return { success: false, error: response.error.message }
     return { success: true, messageId: response.data?.id }
