@@ -285,7 +285,7 @@ function GeneratorTool() {
       let y = margin
 
       // ══════════════════════════════════════════════════════════════════
-      //  HEADER — blue logo box + vertical line + company info
+      //  HEADER — logo (or initials placeholder) + vertical line + company info
       //  (matches paid Quotation-QT-008 layout exactly)
       // ══════════════════════════════════════════════════════════════════
       const boxX = margin
@@ -293,41 +293,40 @@ function GeneratorTool() {
       const boxW = 28
       const boxH = 28
 
-      // 1) Solid theme-coloured square behind the logo
-      doc.setFillColor(tr, tg, tb)
-      doc.rect(boxX, boxY, boxW, boxH, "F")
-
       const initials = (bio.company_name || "CO")
         .split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase() || "CO"
 
       if (logoBase64) {
-        // White inner padding, then the logo
-        doc.setFillColor(255, 255, 255)
-        doc.rect(boxX + 1.5, boxY + 1.5, boxW - 3, boxH - 3, "F")
+        // Logo uploaded — render it directly, NO blue box, NO white padding behind it
         try {
-          doc.addImage(logoBase64, logoFormat, boxX + 2, boxY + 2, boxW - 4, boxH - 4)
+          doc.addImage(logoBase64, logoFormat, boxX, boxY, boxW, boxH)
         } catch {
-          doc.setTextColor(tr, tg, tb)
+          // If image fails to load, fall back to blue box + initials
+          doc.setFillColor(tr, tg, tb)
+          doc.rect(boxX, boxY, boxW, boxH, "F")
+          doc.setTextColor(255, 255, 255)
           doc.setFont("helvetica", "bold")
           doc.setFontSize(14)
           doc.text(initials, boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
         }
       } else {
-        // No logo → initials in white
+        // No logo uploaded — blue box with white initials as a placeholder
+        doc.setFillColor(tr, tg, tb)
+        doc.rect(boxX, boxY, boxW, boxH, "F")
         doc.setTextColor(255, 255, 255)
         doc.setFont("helvetica", "bold")
         doc.setFontSize(14)
         doc.text(initials, boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
       }
 
-      // 2) Vertical theme-coloured line — between logo box and company info
-      const lineX = boxX + boxW + 5          // 15 + 28 + 5 = 48mm
+      // Vertical theme-coloured line — between logo and company info
+      const lineX = boxX + boxW + 5
       doc.setDrawColor(tr, tg, tb)
       doc.setLineWidth(0.8)
       doc.line(lineX, boxY + 2, lineX, boxY + boxH - 4)
 
-      // 3) Company info — to the right of the vertical line
-      const infoX = lineX + 6                 // 54mm
+      // Company info — to the right of the vertical line
+      const infoX = lineX + 6
 
       doc.setFont("helvetica", "bold")
       doc.setFontSize(14)
@@ -378,7 +377,7 @@ function GeneratorTool() {
         infoY += 6.5
       }
 
-      // 4) Advance y to just below the header
+      // Advance y to just below the header
       y = Math.max(boxY + boxH + 6, infoY + 2)
 
       // Full-width theme-coloured horizontal line
@@ -475,7 +474,7 @@ function GeneratorTool() {
       }
 
       // ══════════════════════════════════════════════════════════════════
-      //  Items table — matches paid quotation column sizes exactly
+      //  Items table
       // ══════════════════════════════════════════════════════════════════
       const tableBody = formState.items.map((item, idx) => [
         String(idx + 1),
@@ -513,7 +512,7 @@ function GeneratorTool() {
       y = (doc as any).lastAutoTable.finalY + 8
 
       // ══════════════════════════════════════════════════════════════════
-      //  Totals — matches paid quotation exactly (divider line + bold Total)
+      //  Totals
       // ══════════════════════════════════════════════════════════════════
       doc.setFont("helvetica", "normal")
       doc.setFontSize(9)
@@ -567,7 +566,7 @@ function GeneratorTool() {
       y += 20
 
       // ══════════════════════════════════════════════════════════════════
-      //  Payment Details (with Payment Terms — matches paid quotation)
+      //  Payment Details
       // ══════════════════════════════════════════════════════════════════
       const hasBank = bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id
       if (hasBank || formState.paymentTerms) {
@@ -588,7 +587,7 @@ function GeneratorTool() {
       }
 
       // ══════════════════════════════════════════════════════════════════
-      //  Tax Information (when GST enabled — matches paid quotation)
+      //  Tax Information (when GST enabled)
       // ══════════════════════════════════════════════════════════════════
       if (formState.includeGst) {
         y += 6
@@ -625,7 +624,7 @@ function GeneratorTool() {
       }
 
       // ══════════════════════════════════════════════════════════════════
-      //  Signature — content-aware, matches paid quotation
+      //  Signature
       // ══════════════════════════════════════════════════════════════════
       y += 10
       doc.setFont("helvetica", "normal")
@@ -637,7 +636,7 @@ function GeneratorTool() {
       doc.text("For " + (bio.company_name || "Company"), pageW - margin, y + 12, { align: "right" })
 
       // ══════════════════════════════════════════════════════════════════
-      //  Footer (fixed at bottom of A4)
+      //  Footer
       // ══════════════════════════════════════════════════════════════════
       doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
@@ -1146,16 +1145,20 @@ function GeneratorTool() {
             {/* Header — matches PDF exactly */}
             <div className="p-5">
               <div className="flex items-start gap-4">
-                <div
-                  className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-                  style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}
-                >
-                  {formState.businessInfo.logoBase64 ? (
-                    <img src={formState.businessInfo.logoBase64} alt="Logo" className="w-14 h-14 object-contain bg-white rounded-sm" />
-                  ) : (
+                {formState.businessInfo.logoBase64 ? (
+                  <img
+                    src={formState.businessInfo.logoBase64}
+                    alt="Logo"
+                    className="w-16 h-16 object-contain flex-shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}
+                  >
                     <span className="text-white font-bold text-lg">{initialsPreview}</span>
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="w-px self-stretch" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
@@ -1285,7 +1288,7 @@ function GeneratorTool() {
               </div>
             </div>
 
-            {/* Payment details (NO Tax Information) */}
+            {/* Payment details */}
             {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id) && (
               <div className="border-t border-border p-5 space-y-1">
                 <p className="text-xs font-bold">Payment Details:</p>
