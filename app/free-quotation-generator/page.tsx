@@ -285,8 +285,8 @@ function GeneratorTool() {
       let y = margin
 
       // ══════════════════════════════════════════════════════════════════
-      //  HEADER — blue logo box + vertical line + company info
-      //  (matches paid Quotation-QT-008 layout exactly)
+      //  HEADER — logo box + BIG vertical line + company info
+      //  (identical to paid Quotation-QT-008 layout)
       // ══════════════════════════════════════════════════════════════════
       const boxX = margin
       const boxY = y
@@ -297,7 +297,7 @@ function GeneratorTool() {
         .split(/\s+/).map(w => w[0]).join("").slice(0, 3).toUpperCase() || "CO"
 
       if (logoBase64) {
-        // Logo uploaded — render it directly, NO blue box behind it
+        // Logo uploaded — place it directly, no blue box behind
         try {
           doc.addImage(logoBase64, logoFormat, boxX, boxY, boxW, boxH)
         } catch {
@@ -309,6 +309,7 @@ function GeneratorTool() {
           doc.text(initials, boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
         }
       } else {
+        // No logo — blue box with initials
         doc.setFillColor(tr, tg, tb)
         doc.rect(boxX, boxY, boxW, boxH, "F")
         doc.setTextColor(255, 255, 255)
@@ -317,21 +318,21 @@ function GeneratorTool() {
         doc.text(initials, boxX + boxW / 2, boxY + boxH / 2 + 2, { align: "center" })
       }
 
-      // Vertical theme-coloured line — same height as logo box, thicker
+      // ── BIG vertical theme-coloured line (full logo box height) ──
       const lineX = boxX + boxW + 5
       doc.setDrawColor(tr, tg, tb)
-      doc.setLineWidth(0.9)
-      doc.line(lineX, boxY + 1, lineX, boxY + boxH - 1)
+      doc.setLineWidth(1)
+      doc.line(lineX, boxY, lineX, boxY + boxH)
 
-      // Company info — to the right of the vertical line
       const infoX = lineX + 7
 
+      // Company name — theme colour, uppercase, bold
       doc.setFont("helvetica", "bold")
-      doc.setFontSize(15)
+      doc.setFontSize(14)
       doc.setTextColor(tr, tg, tb)
       doc.text((bio.company_name || "Company Name").toUpperCase(), infoX, boxY + 6)
 
-      let infoY = boxY + 14
+      let infoY = boxY + 13
 
       // Tagline — bold black
       if (bio.tagline) {
@@ -342,7 +343,7 @@ function GeneratorTool() {
         infoY += 6
       }
 
-      // Address + city line — gray
+      // Address — gray normal
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(80, 80, 80)
@@ -354,7 +355,7 @@ function GeneratorTool() {
       const cityLine = [bio.city, bio.state, bio.zip_code].filter(Boolean).join(", ")
       if (cityLine) { doc.text(cityLine, infoX, infoY); infoY += 7 }
 
-      // Email / Phone — bold label, normal value
+      // Email — bold label, normal value
       if (bio.email) {
         doc.setFont("helvetica", "bold")
         doc.setFontSize(9.5)
@@ -365,6 +366,7 @@ function GeneratorTool() {
         doc.text(bio.email, infoX + 17, infoY)
         infoY += 6.5
       }
+      // Phone — bold label, normal value
       if (bio.phone) {
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
@@ -375,24 +377,24 @@ function GeneratorTool() {
         infoY += 6.5
       }
 
-      // Advance y below the header block (extra gap for breathing room)
-      y = Math.max(boxY + boxH + 10, infoY + 6)
+      // Advance y to below the header block
+      y = Math.max(boxY + boxH + 8, infoY + 3)
 
-      // Full-width theme-coloured horizontal line
+      // Full-width theme-coloured horizontal separator
       doc.setDrawColor(tr, tg, tb)
-      doc.setLineWidth(0.9)
+      doc.setLineWidth(1)
       doc.line(margin, y, pageW - margin, y)
-      y += 12
+      y += 8
 
       // ══════════════════════════════════════════════════════════════════
       //  QUOTATION title + quote meta
       // ══════════════════════════════════════════════════════════════════
       doc.setFont("helvetica", "bold")
-      doc.setFontSize(17)
+      doc.setFontSize(16)
       doc.setTextColor(tr, tg, tb)
       doc.text("QUOTATION", pageW - margin, y, { align: "right" })
 
-      y += 7
+      y += 6
       doc.setFontSize(10)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(0, 0, 0)
@@ -425,18 +427,18 @@ function GeneratorTool() {
       // ══════════════════════════════════════════════════════════════════
       //  TO block
       // ══════════════════════════════════════════════════════════════════
-      y += 6
+      y += 4
       doc.setFont("helvetica", "bold")
       doc.setFontSize(9)
       doc.setTextColor(150, 150, 150)
       doc.text("TO,", margin, y)
-      y += 5.5
+      y += 5
 
       doc.setFont("helvetica", "bold")
       doc.setFontSize(10)
       doc.setTextColor(0, 0, 0)
       doc.text((formState.clientName || "Client").toUpperCase(), margin, y)
-      y += 5.5
+      y += 5
 
       doc.setFont("helvetica", "normal")
       doc.setFontSize(9)
@@ -451,31 +453,30 @@ function GeneratorTool() {
         doc.text(clientCityLine, margin, y)
         y += 5
       }
-      y += 4
+      y += 3
 
       // ══════════════════════════════════════════════════════════════════
       //  Subject + Body
       // ══════════════════════════════════════════════════════════════════
       if (formState.subject) {
         doc.setFont("helvetica", "bold")
-        doc.setFontSize(9.5)
+        doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
         doc.text("Sub: " + formState.subject, margin, y)
-        y += 5.5
+        y += 5
       }
       if (formState.bodyText) {
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(9.5)
+        doc.setFontSize(9)
         doc.setTextColor(80, 80, 80)
         const bodyLines = doc.splitTextToSize(formState.bodyText, pageW - 2 * margin)
         doc.text(bodyLines, margin, y)
-        y += bodyLines.length * 4.5 + 3
+        y += bodyLines.length * 4 + 3
       }
 
       // ══════════════════════════════════════════════════════════════════
       //  Items table
       // ══════════════════════════════════════════════════════════════════
-      y += 2
       const tableBody = formState.items.map((item, idx) => [
         String(idx + 1),
         item.particulars || "-",
@@ -493,11 +494,10 @@ function GeneratorTool() {
           fillColor: [tr, tg, tb],
           textColor: [255, 255, 255],
           fontStyle: "bold",
-          fontSize: 9.5,
+          fontSize: 9,
           halign: "center",
-          cellPadding: 2.8,
         },
-        bodyStyles: { fontSize: 9.5, textColor: [0, 0, 0], cellPadding: 2.8 },
+        bodyStyles: { fontSize: 9, textColor: [0, 0, 0] },
         columnStyles: {
           0: { cellWidth: 15, halign: "center" },
           1: { cellWidth: "auto", halign: "left" },
@@ -516,12 +516,12 @@ function GeneratorTool() {
       //  Totals
       // ══════════════════════════════════════════════════════════════════
       doc.setFont("helvetica", "normal")
-      doc.setFontSize(9.5)
+      doc.setFontSize(9)
       doc.setTextColor(0, 0, 0)
 
       doc.text("Subtotal:", 160, y, { align: "right" })
       doc.text("Rs. " + subtotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-      y += 5
+      y += 4
 
       if (discountAmount > 0) {
         const discountLabel = formState.discountType === "percentage"
@@ -531,66 +531,77 @@ function GeneratorTool() {
         doc.setTextColor(200, 0, 0)
         doc.text("- Rs. " + discountAmount.toLocaleString("en-IN"), 195, y, { align: "right" })
         doc.setTextColor(0, 0, 0)
-        y += 5
+        y += 4
       }
 
       if (formState.includeGst) {
         doc.text("SGST (9%):", 160, y, { align: "right" })
         doc.text("Rs. " + sgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-        y += 5
+        y += 4
         doc.text("CGST (9%):", 160, y, { align: "right" })
         doc.text("Rs. " + cgst.toLocaleString("en-IN"), 195, y, { align: "right" })
-        y += 5
+        y += 3
+        doc.setDrawColor(0, 0, 0)
+        doc.setLineWidth(0.3)
+        doc.line(140, y, 195, y)
+        y += 4
+      } else {
+        y += 2
+        doc.setDrawColor(0, 0, 0)
+        doc.setLineWidth(0.3)
+        doc.line(140, y, 195, y)
+        y += 4
       }
 
       doc.setFont("helvetica", "bold")
-      doc.setFontSize(11)
+      doc.setFontSize(10)
       doc.text("Total:", 160, y, { align: "right" })
       doc.text("Rs. " + grandTotal.toLocaleString("en-IN"), 195, y, { align: "right" })
-      y += 9
+      y += 2
 
       // Amount in words
       doc.setFont("helvetica", "bold")
-      doc.setFontSize(10)
+      doc.setFontSize(9)
       doc.setTextColor(0, 0, 0)
       doc.text(("RUPEES " + toWords(Math.round(grandTotal)) + " ONLY").toUpperCase(), margin, y)
-      y += 22
+      y += 20
 
       // ══════════════════════════════════════════════════════════════════
       //  Payment Details
       // ══════════════════════════════════════════════════════════════════
       const hasBank = bio.bank_name || bio.account_no || bio.ifsc_code || bio.upi_id
       if (hasBank || formState.paymentTerms) {
-        doc.setFontSize(10)
+        y += 10
+        doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text("Payment Details:", margin, y)
-        y += 5.5
+        y += 5
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(9.5)
+        doc.setFontSize(9)
         doc.setTextColor(40, 40, 40)
-        if (bio.bank_name) { doc.text(`Bank: ${bio.bank_name}`, margin, y); y += 5 }
-        if (bio.account_no) { doc.text(`Account No: ${bio.account_no}`, margin, y); y += 5 }
-        if (bio.ifsc_code) { doc.text(`IFSC: ${bio.ifsc_code}`, margin, y); y += 5 }
-        if (bio.upi_id) { doc.text(`UPI: ${bio.upi_id}`, margin, y); y += 5 }
-        if (formState.paymentTerms) { doc.text(`Payment Terms: ${formState.paymentTerms}`, margin, y); y += 5 }
+        if (bio.bank_name) { doc.text(`Bank: ${bio.bank_name}`, margin, y); y += 4 }
+        if (bio.account_no) { doc.text(`Account No: ${bio.account_no}`, margin, y); y += 4 }
+        if (bio.ifsc_code) { doc.text(`IFSC: ${bio.ifsc_code}`, margin, y); y += 4 }
+        if (bio.upi_id) { doc.text(`UPI: ${bio.upi_id}`, margin, y); y += 4 }
+        if (formState.paymentTerms) { doc.text(`Payment Terms: ${formState.paymentTerms}`, margin, y); y += 4 }
       }
 
       // ══════════════════════════════════════════════════════════════════
-      //  Tax Information (when GST enabled)
+      //  Tax Information (only when GST enabled)
       // ══════════════════════════════════════════════════════════════════
       if (formState.includeGst) {
         y += 6
-        doc.setFontSize(10)
+        doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text("Tax Information:", margin, y)
-        y += 5.5
+        y += 5
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(9.5)
+        doc.setFontSize(9)
         doc.setTextColor(40, 40, 40)
-        if (bio.gstin) { doc.text(`GSTIN: ${bio.gstin}`, margin, y); y += 5 }
-        if (bio.pan_number) { doc.text(`PAN: ${bio.pan_number}`, margin, y); y += 5 }
+        if (bio.gstin) { doc.text(`GSTIN: ${bio.gstin}`, margin, y); y += 4 }
+        if (bio.pan_number) { doc.text(`PAN: ${bio.pan_number}`, margin, y); y += 4 }
         doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
         y += 10
       }
@@ -600,34 +611,33 @@ function GeneratorTool() {
       // ══════════════════════════════════════════════════════════════════
       if (formState.notes) {
         y += 3
-        doc.setFontSize(10)
+        doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(0, 0, 0)
         doc.text("Terms & Conditions:", margin, y)
-        y += 5.5
+        y += 4
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(9.5)
+        doc.setFontSize(9)
         doc.setTextColor(80, 80, 80)
         const noteLines = doc.splitTextToSize(formState.notes, pageW - 2 * margin)
         doc.text(noteLines, margin, y)
-        y += noteLines.length * 5
+        y += noteLines.length * 4
       }
 
       // ══════════════════════════════════════════════════════════════════
-      //  Signature (pushed to lower portion of page)
+      //  Signature
       // ══════════════════════════════════════════════════════════════════
-      const sigY = Math.max(y + 20, 235)
+      y += 10
       doc.setFont("helvetica", "normal")
-      doc.setFontSize(9.5)
+      doc.setFontSize(9)
       doc.setTextColor(0, 0, 0)
-      doc.text("Thanking you,", pageW - margin, sigY, { align: "right" })
-      doc.text("Yours faithfully,", pageW - margin, sigY + 7, { align: "right" })
+      doc.text("Thanking you,", pageW - margin, y, { align: "right" })
+      doc.text("Yours faithfully,", pageW - margin, y + 6, { align: "right" })
       doc.setFont("helvetica", "bold")
-      doc.setFontSize(10)
-      doc.text("For " + (bio.company_name || "Company"), pageW - margin, sigY + 14, { align: "right" })
+      doc.text("For " + (bio.company_name || "Company"), pageW - margin, y + 12, { align: "right" })
 
       // ══════════════════════════════════════════════════════════════════
-      //  Footer (fixed at bottom of A4)
+      //  Footer
       // ══════════════════════════════════════════════════════════════════
       doc.setFontSize(8)
       doc.setTextColor(150, 150, 150)
@@ -1134,8 +1144,8 @@ function GeneratorTool() {
           <div className="bg-white dark:bg-card border border-border rounded-xl shadow-sm overflow-hidden text-sm">
 
             {/* Header — matches PDF exactly */}
-            <div className="p-6">
-              <div className="flex items-start gap-5">
+            <div className="p-5">
+              <div className="flex items-start gap-4">
                 {formState.businessInfo.logoBase64 ? (
                   <img
                     src={formState.businessInfo.logoBase64}
@@ -1156,7 +1166,7 @@ function GeneratorTool() {
                     {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
                   </p>
                   {formState.businessInfo.tagline && (
-                    <p className="text-xs font-bold text-foreground mt-1.5">{formState.businessInfo.tagline}</p>
+                    <p className="text-xs font-bold text-foreground mt-1">{formState.businessInfo.tagline}</p>
                   )}
                   {formState.businessInfo.address && (
                     <p className="text-xs text-muted-foreground mt-1.5">{formState.businessInfo.address}</p>
@@ -1166,7 +1176,7 @@ function GeneratorTool() {
                       {[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}
                     </p>
                   )}
-                  <div className="mt-2.5 space-y-1">
+                  <div className="mt-2 space-y-1">
                     {formState.businessInfo.email && (
                       <p className="text-xs text-muted-foreground">
                         <span className="font-bold text-foreground">Email:</span>   {formState.businessInfo.email}
@@ -1183,11 +1193,11 @@ function GeneratorTool() {
             </div>
 
             {/* Blue horizontal line */}
-            <div className="h-[2px] mx-6" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+            <div className="h-[2px] mx-5" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
 
             {/* Quote details */}
-            <div className="p-6 pt-5">
-              <div className="text-right mb-2">
+            <div className="p-5">
+              <div className="text-right mb-1">
                 <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
               </div>
               <div className="flex justify-between items-start">
@@ -1202,7 +1212,7 @@ function GeneratorTool() {
             </div>
 
             {/* TO + Subject */}
-            <div className="px-6 pb-5 space-y-1.5">
+            <div className="px-5 pb-4 space-y-1.5">
               <p className="text-[10px] font-bold tracking-wider text-muted-foreground">TO,</p>
               <p className="text-sm font-bold uppercase">{formState.clientName || <span className="text-muted-foreground normal-case font-normal">Client Name</span>}</p>
               {formState.clientAddress && <p className="text-xs text-muted-foreground">{formState.clientAddress}</p>}
@@ -1224,7 +1234,7 @@ function GeneratorTool() {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: `rgb(${tr}, ${tg}, ${tb})` }}>
-                    {["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"].map(h => (
+                    {["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"].map(h => (
                       <th key={h} className="py-2.5 px-3 font-semibold text-white text-left first:text-center last:text-right">{h}</th>
                     ))}
                   </tr>
@@ -1247,7 +1257,7 @@ function GeneratorTool() {
             </div>
 
             {/* Totals + Amount in words */}
-            <div className="border-t border-border p-6 flex flex-col sm:flex-row">
+            <div className="border-t border-border p-5 flex flex-col sm:flex-row">
               <div className="flex-1 flex items-end">
                 <p className="text-[10px] text-muted-foreground leading-snug uppercase font-bold">
                   RUPEES {toWords(Math.round(grandTotal))} ONLY
@@ -1281,7 +1291,7 @@ function GeneratorTool() {
 
             {/* Payment details */}
             {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id) && (
-              <div className="border-t border-border p-6 space-y-1">
+              <div className="border-t border-border p-5 space-y-1">
                 <p className="text-xs font-bold">Payment Details:</p>
                 {formState.businessInfo.bank_name && <p className="text-xs text-muted-foreground">Bank: {formState.businessInfo.bank_name}</p>}
                 {formState.businessInfo.account_no && <p className="text-xs text-muted-foreground">Account No: {formState.businessInfo.account_no}</p>}
@@ -1292,19 +1302,19 @@ function GeneratorTool() {
 
             {/* Terms & Conditions */}
             {formState.notes && (
-              <div className="border-t border-border p-6 space-y-1">
+              <div className="border-t border-border p-5 space-y-1">
                 <p className="text-xs font-bold">Terms & Conditions:</p>
                 <p className="text-xs text-muted-foreground whitespace-pre-wrap">{formState.notes}</p>
               </div>
             )}
 
             {/* Signature + Footer */}
-            <div className="border-t border-border p-6 text-right">
+            <div className="border-t border-border p-5 text-right">
               <p className="text-xs">Thanking you,</p>
               <p className="text-xs mt-1">Yours faithfully,</p>
               <p className="text-xs font-bold mt-1">For {formState.businessInfo.company_name || "Company"}</p>
             </div>
-            <div className="border-t border-border py-3 px-6">
+            <div className="border-t border-border py-3 px-5">
               <p className="text-[10px] text-muted-foreground text-center">Generated by Remindi · remindi.online</p>
             </div>
           </div>
