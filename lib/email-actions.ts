@@ -47,10 +47,28 @@ export async function triggerPasswordResetEmail(userEmail: string, resetLink: st
   }
 }
 
-export async function triggerServiceReminderEmail(userEmail: string, contractName: string, serviceDate: string, customerName: string) {
+export async function triggerServiceReminderEmail(
+  userEmail: string,
+  contractName: string,
+  serviceDate: string,
+  customerName: string,
+  serviceType: string,
+  customerPhone: string,
+  contractorName: string
+) {
   try {
-    if (!userEmail || !contractName || !serviceDate || !customerName) return { success: false, error: 'Missing required fields' }
-    const result = await sendServiceReminderEmail(userEmail, contractName, serviceDate, customerName)
+    if (!userEmail || !contractName || !serviceDate || !customerName) {
+      return { success: false, error: 'Missing required fields' }
+    }
+    const result = await sendServiceReminderEmail(
+      userEmail,
+      contractName,
+      serviceDate,
+      customerName,
+      serviceType,
+      customerPhone,
+      contractorName
+    )
     if (!result.success) { console.error(`[Email Actions] ${result.error}`); return { success: false, error: result.error } }
     return { success: true, messageId: result.messageId }
   } catch (error) {
