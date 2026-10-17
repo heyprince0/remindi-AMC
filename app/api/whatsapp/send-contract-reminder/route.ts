@@ -39,20 +39,22 @@ interface ReminderBody {
   serviceType: string
   date: string
   contractId: string
-  // Types:
-  //   upcoming           → soon_service          (service T-3, uses next_service_date)
-  //   not_completed      → service_notcompleted  (service T-0 & T+3, uses next_service_date)
-  //   expired            → service_notcompleted  (test button + service T+3 alias)
-  //   due                → soon_service          (legacy fallback)
-  //   contract_ending_soon → contract_ending_soon (AMC expiry T-30 days)
-  //   contract_end         → contract_end          (AMC expiry T-0 days)
   type: 'due' | 'upcoming' | 'not_completed' | 'expired' | 'contract_ending_soon' | 'contract_end'
   dedupKey?: string
 }
 
-// Allowed callers:
-//   1) The cron job (sends header x-internal-secret = CRON_SECRET)
-//   2) A logged-in user of the same organization (sends Authorization: Bearer <access_token>)
+// ── Language code per template ──────────────────────────────────────────────
+// IMPORTANT: Open MSG91 dashboard → WhatsApp → Templates and verify the
+// language shown for each template. Set the exact value here.
+// Common values: 'en' / 'en_US' / 'en_IN'
+// A mismatch causes MSG91 to return HTTP 200 with hasError:true — silent fail.
+const TEMPLATE_LANGUAGE: Record<string, string> = {
+  soon_service:         'en',   // ← verify in MSG91 dashboard
+  service_notcompleted: 'en',   // ← verify in MSG91 dashboard
+  contract_ending_soon: 'en',   // ← verify in MSG91 dashboard
+  contract_end:         'en',   // ← verify in MSG91 dashboard
+}
+
 async function isAuthorized(
   request: NextRequest,
   orgId: string,
@@ -117,7 +119,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // The contract must belong to the organization in the request
     const { data: contract } = await supabase
       .from('contracts')
       .select('id')
@@ -133,7 +134,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MSG91_AUTHKEY is missing' }, { status: 500 })
     }
 
-    // FIX: Guard these the same way as authkey — no silent placeholder fallbacks
     const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER
     if (!integratedNumber) {
       return NextResponse.json({ error: 'MSG91_INTEGRATED_NUMBER is missing' }, { status: 500 })
@@ -150,8 +150,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Template mapping ──
-    const isContractExpiry = type === 'contract_ending_soon' || type === 'contract_end';
-    
+    const isContractExpiry = type === 'contract_ending_soon' || type === 'contract_end'
+
     const templateName =
       (type === 'not_completed' || type === 'expired') ? 'service_notcompleted' :
       (type === 'contract_ending_soon')                ? 'contract_ending_soon' :
@@ -159,12 +159,7 @@ export async function POST(request: NextRequest) {
       type === 'upcoming'                              ? 'soon_service' :
                                                          'soon_service'
 
-    // Prepare components based on template type
-    // For AMC contract templates (from preview): 
-    //   {{1}} = Customer Name, {{2}} = Contractor Name, {{5}} = Contractor Phone
-    // For Service templates (existing): 
-    //   {{1}} = Contractor Name, {{2}} = Customer Name, {{5}} = Customer Phone
-    const components = isContractExpiry 
+    const components = isContractExpiry
       ? {
           body_1: { type: 'text', value: clean(customerName, 'Customer') },
           body_2: { type: 'text', value: clean(contractorName, 'Contractor') },
@@ -180,7 +175,7 @@ export async function POST(request: NextRequest) {
           body_4: { type: 'text', value: clean(date) },
           body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
           button_1: { subtype: 'url', type: 'text', value: contractId },
-        };
+        }
 
     const msg91Response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/',
@@ -199,9 +194,8 @@ export async function POST(request: NextRequest) {
             template: {
               name: templateName,
               language: {
-                // FIX: 'en' is not a valid WhatsApp locale — Meta rejects it silently.
-                // Must match exactly how the template was registered (en_US or en_IN).
-                code: 'en_US',
+                // FIX: per-template language map — must match MSG91 dashboard exactly
+                code: TEMPLATE_LANGUAGE[templateName] ?? 'en',
                 policy: 'deterministic',
               },
               namespace,
@@ -219,7 +213,6 @@ export async function POST(request: NextRequest) {
 
     const result = await msg91Response.json().catch(() => ({}))
 
-    // MSG91 can answer HTTP 200 and still report a failure in the body
     const delivered =
       msg91Response.ok &&
       result?.hasError !== true &&
