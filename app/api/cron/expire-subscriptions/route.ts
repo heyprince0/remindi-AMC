@@ -101,7 +101,7 @@ export async function GET(req: Request) {
 
     // Trigger the Sender API
     try {
-      const res = await fetch(`${appUrl}/api/send-subscription-reminder`, {
+      const res = await fetch(`${appUrl}/api/whatsapp/send-subscription-reminder`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
