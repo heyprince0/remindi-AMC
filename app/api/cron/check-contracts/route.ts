@@ -194,7 +194,8 @@ export async function GET() {
 
             if (!already) {
               try {
-                const waRes = await fetch(`${appUrl}/api/send-contract-reminder`, {
+                // ✅ FIXED URL: Added /whatsapp/
+                const waRes = await fetch(`${appUrl}/api/whatsapp/send-contract-reminder`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -352,7 +353,8 @@ export async function GET() {
         }
 
         try {
-          const waRes = await fetch(`${appUrl}/api/send-contract-reminder`, {
+          // ✅ FIXED URL: Added /whatsapp/
+          const waRes = await fetch(`${appUrl}/api/whatsapp/send-contract-reminder`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
