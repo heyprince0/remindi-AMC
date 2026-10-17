@@ -130,10 +130,19 @@ export async function POST(request: NextRequest) {
 
     const authkey = process.env.MSG91_AUTHKEY
     if (!authkey) {
-      return NextResponse.json({ error: 'MSG91 config missing' }, { status: 500 })
+      return NextResponse.json({ error: 'MSG91_AUTHKEY is missing' }, { status: 500 })
     }
-    const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER || '15553241999'
-    const namespace = process.env.MSG91_NAMESPACE || '43e589d3_fa5d_4f63_8f02_4ac10a934039'
+
+    // FIX: Guard these the same way as authkey — no silent placeholder fallbacks
+    const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER
+    if (!integratedNumber) {
+      return NextResponse.json({ error: 'MSG91_INTEGRATED_NUMBER is missing' }, { status: 500 })
+    }
+
+    const namespace = process.env.MSG91_NAMESPACE
+    if (!namespace) {
+      return NextResponse.json({ error: 'MSG91_NAMESPACE is missing' }, { status: 500 })
+    }
 
     const cleanContractorPhone = formatPhone(contractorPhone)
     if (!cleanContractorPhone) {
@@ -190,7 +199,9 @@ export async function POST(request: NextRequest) {
             template: {
               name: templateName,
               language: {
-                code: 'en',
+                // FIX: 'en' is not a valid WhatsApp locale — Meta rejects it silently.
+                // Must match exactly how the template was registered (en_US or en_IN).
+                code: 'en_US',
                 policy: 'deterministic',
               },
               namespace,
