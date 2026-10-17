@@ -14,9 +14,20 @@ const supabase = createClient(
 )
 
 const NOTIFY_AT_DAYS = [3, 0, -1, -3, -7]
-const CONTRACT_EXPIRY_NOTIFY_DAYS = [30, 0] // 30 days before, and on the day of expiry
 
 export async function GET() {
+  // Guard: CRON_SECRET must be set — empty string would accept any request
+  if (!process.env.CRON_SECRET) {
+    console.error('CRON_SECRET env var is not set')
+    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl) {
+    console.error('NEXT_PUBLIC_APP_URL is not set')
+    return NextResponse.json({ error: 'NEXT_PUBLIC_APP_URL is missing' }, { status: 500 })
+  }
+
   try {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -31,10 +42,9 @@ export async function GET() {
     const ago30Days = new Date(today)
     ago30Days.setDate(today.getDate() - 30)
 
-    const in7DaysStr = in7Days.toISOString().split('T')[0]
+    const in7DaysStr   = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
-    // FIX: added customers(name, phone) — phone is needed for WhatsApp
     const { data: contracts, error: dbError } = await supabase
       .from('contracts')
       .select(`
@@ -72,12 +82,10 @@ export async function GET() {
 
         const ownerIds = Object.values(orgOwnerMap).filter(Boolean)
         const ownerEmailMap: Record<string, string> = {}
-        // FIX: added phone + name maps for WhatsApp
         const ownerPhoneMap: Record<string, string> = {}
-        const ownerNameMap: Record<string, string> = {}
+        const ownerNameMap:  Record<string, string> = {}
 
         if (ownerIds.length) {
-          // FIX: added phone, full_name to profiles query
           const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
             .select('id, email, phone, full_name')
@@ -101,19 +109,12 @@ export async function GET() {
           if (!usersError && users) {
             for (const u of users) {
               if (missingIds.includes(u.id)) {
-                if (!ownerEmailMap[u.id] && u.email) ownerEmailMap[u.id] = u.email
-                if (!ownerPhoneMap[u.id] && u.phone) ownerPhoneMap[u.id] = u.phone
-                if (!ownerNameMap[u.id] && u.user_metadata?.full_name) {
-                  ownerNameMap[u.id] = u.user_metadata.full_name
-                }
+                if (!ownerEmailMap[u.id] && u.email)                    ownerEmailMap[u.id] = u.email
+                if (!ownerPhoneMap[u.id] && u.phone)                    ownerPhoneMap[u.id] = u.phone
+                if (!ownerNameMap[u.id]  && u.user_metadata?.full_name) ownerNameMap[u.id]  = u.user_metadata.full_name
               }
             }
           }
-        }
-
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL
-        if (!appUrl) {
-          console.error('NEXT_PUBLIC_APP_URL is not set — WhatsApp calls will be skipped')
         }
 
         for (const contract of contracts) {
@@ -128,20 +129,19 @@ export async function GET() {
             continue
           }
 
-          const customerName = contract.customers?.name || 'Unknown'
+          const customerName  = contract.customers?.name  || 'Unknown'
           const customerPhone = contract.customers?.phone || 'Not available'
-          const ownerId = orgOwnerMap[contract.org_id]
+          const ownerId       = orgOwnerMap[contract.org_id]
 
           if (!ownerId) {
             skipped++
             continue
           }
 
-          const userEmail = ownerEmailMap[ownerId]
+          const userEmail  = ownerEmailMap[ownerId]
           const ownerPhone = ownerPhoneMap[ownerId]
-          const ownerName = ownerNameMap[ownerId] || 'Contractor'
+          const ownerName  = ownerNameMap[ownerId] || 'Contractor'
 
-          // Skip only if both channels are unavailable
           if (!userEmail && !ownerPhone) {
             skipped++
             continue
@@ -152,24 +152,15 @@ export async function GET() {
             let result
             if (daysUntil < 0) {
               result = await sendAMCExpiredEmail(
-                userEmail,
-                contract.contract_name,
-                contract.next_service_date,
-                customerName
+                userEmail, contract.contract_name, contract.next_service_date, customerName
               )
             } else if (daysUntil === 0) {
               result = await sendServiceReminderEmail(
-                userEmail,
-                contract.contract_name,
-                contract.next_service_date,
-                customerName
+                userEmail, contract.contract_name, contract.next_service_date, customerName
               )
             } else {
               result = await sendAMCExpiryReminderEmail(
-                userEmail,
-                contract.contract_name,
-                contract.next_service_date,
-                customerName
+                userEmail, contract.contract_name, contract.next_service_date, customerName
               )
             }
 
@@ -180,43 +171,41 @@ export async function GET() {
             }
           }
 
-          // FIX: WhatsApp for service reminders — this was missing entirely
-          if (ownerPhone && appUrl) {
-            const waType = daysUntil > 0 ? 'upcoming' : 'not_completed'
+          // ── WhatsApp ──
+          if (ownerPhone) {
+            const waType   = daysUntil > 0 ? 'upcoming' : 'not_completed'
             const dedupKey = `${waType}_${contract.id}_${contract.next_service_date}`
 
-            // Dedup check — don't send the same WhatsApp twice for the same service date
+            // FIX C1: filter by status='sent' so failed rows don't block retries forever
             const { data: already } = await supabase
               .from('reminders_log')
               .select('id')
               .eq('contract_id', contract.id)
               .eq('message_type', `whatsapp_${dedupKey}`)
+              .eq('status', 'sent')
               .maybeSingle()
 
             if (!already) {
               try {
-                const waRes = await fetch(
-                  `${appUrl}/api/send-contract-reminder`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'x-internal-secret': process.env.CRON_SECRET || '',
-                    },
-                    body: JSON.stringify({
-                      orgId: contract.org_id,
-                      contractorPhone: ownerPhone,
-                      contractorName: ownerName,
-                      customerName,
-                      customerPhone,
-                      serviceType: contract.contract_name || 'Service',
-                      date: contract.next_service_date,
-                      contractId: contract.id,
-                      type: waType,
-                      dedupKey,
-                    }),
-                  }
-                )
+                const waRes = await fetch(`${appUrl}/api/send-contract-reminder`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-internal-secret': process.env.CRON_SECRET!,
+                  },
+                  body: JSON.stringify({
+                    orgId:           contract.org_id,
+                    contractorPhone: ownerPhone,
+                    contractorName:  ownerName,
+                    customerName,
+                    customerPhone,
+                    serviceType:     contract.contract_name || 'Service',
+                    date:            contract.next_service_date,
+                    contractId:      contract.id,
+                    type:            waType,
+                    dedupKey,
+                  }),
+                })
                 if (!waRes.ok) {
                   const errData = await waRes.json().catch(() => ({}))
                   console.error(`WA service reminder failed for contract ${contract.id}:`, errData)
@@ -237,14 +226,18 @@ export async function GET() {
     in30Days.setDate(today.getDate() + 30)
     const in30DaysStr = in30Days.toISOString().split('T')[0]
 
-    // FIX: added gte(todayStr) lower bound — previously fetched all historically expired contracts
+    // FIX C4: extend lower bound 1 day back so a missed D-0 cron run is caught next day
+    const ago1Day = new Date(today)
+    ago1Day.setDate(today.getDate() - 1)
+    const ago1DayStr = ago1Day.toISOString().split('T')[0]
+
     const { data: amcContracts, error: amcError } = await supabase
       .from('contracts')
       .select(`
         *,
         customers(name, phone)
       `)
-      .gte('end_date', todayStr)
+      .gte('end_date', ago1DayStr)   // FIX: was todayStr — now catches yesterday's missed D-0
       .lte('end_date', in30DaysStr)
       .eq('status', 'active')
 
@@ -267,9 +260,9 @@ export async function GET() {
         if (org.owner_id) amcOrgOwnerMap[org.id] = org.owner_id
       }
 
-      const amcOwnerIds = Object.values(amcOrgOwnerMap).filter(Boolean)
+      const amcOwnerIds    = Object.values(amcOrgOwnerMap).filter(Boolean)
       const amcOwnerPhoneMap: Record<string, string> = {}
-      const amcOwnerNameMap: Record<string, string> = {}
+      const amcOwnerNameMap:  Record<string, string> = {}
 
       if (amcOwnerIds.length) {
         const { data: profiles } = await supabase
@@ -283,23 +276,15 @@ export async function GET() {
         }
       }
 
-      // Fallback to auth.users for missing phones/names
       const missingAmcOwnerIds = amcOwnerIds.filter(id => !amcOwnerPhoneMap[id] || !amcOwnerNameMap[id])
       if (missingAmcOwnerIds.length) {
         const { data: { users } } = await supabase.auth.admin.listUsers()
         for (const u of users || []) {
           if (missingAmcOwnerIds.includes(u.id)) {
-            if (!amcOwnerPhoneMap[u.id] && u.phone) amcOwnerPhoneMap[u.id] = u.phone
-            if (!amcOwnerNameMap[u.id] && u.user_metadata?.full_name) {
-              amcOwnerNameMap[u.id] = u.user_metadata.full_name
-            }
+            if (!amcOwnerPhoneMap[u.id] && u.phone)                    amcOwnerPhoneMap[u.id] = u.phone
+            if (!amcOwnerNameMap[u.id]  && u.user_metadata?.full_name) amcOwnerNameMap[u.id]  = u.user_metadata.full_name
           }
         }
-      }
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL
-      if (!appUrl) {
-        console.error('NEXT_PUBLIC_APP_URL is not set — AMC WhatsApp calls will be skipped')
       }
 
       for (const contract of amcContracts) {
@@ -311,8 +296,11 @@ export async function GET() {
           (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         )
 
-        // FIX: use a ±2 day tolerance around 30 so cron timing drift doesn't miss the window
-        const isNotifyDay = daysUntilEnd === 0 || (daysUntilEnd >= 28 && daysUntilEnd <= 30)
+        // FIX C4: daysUntilEnd === -1 catches a missed D-0 run from yesterday
+        // FIX: ±2 day window on D-30 so cron timing drift doesn't miss it
+        const isNotifyDay =
+          (daysUntilEnd >= -1 && daysUntilEnd <= 0) ||      // D-0 + 1 day grace
+          (daysUntilEnd >= 28 && daysUntilEnd <= 30)        // D-30 window
         if (!isNotifyDay) {
           amcSkipped++
           continue
@@ -325,7 +313,7 @@ export async function GET() {
         }
 
         const contractorPhone = amcOwnerPhoneMap[ownerId]
-        const contractorName = amcOwnerNameMap[ownerId] || 'Contractor'
+        const contractorName  = amcOwnerNameMap[ownerId] || 'Contractor'
 
         if (!contractorPhone) {
           amcSkipped++
@@ -333,38 +321,48 @@ export async function GET() {
           continue
         }
 
-        if (!appUrl) {
+        const customerName  = contract.customers?.name  || 'Customer'
+        const customerPhone = contract.customers?.phone || 'Not available'
+        const serviceType   = contract.contract_name    || 'Service'
+
+        // daysUntilEnd <= 0 covers both D-0 and the D+1 grace catch
+        const reminderType = daysUntilEnd <= 0 ? 'contract_end' : 'contract_ending_soon'
+        const dedupKey     = `${reminderType}_${contract.id}`
+
+        // FIX C2: Block 2 was missing dedup entirely — added here with status='sent'
+        // This also prevents the ±2 day window from firing contract_ending_soon 3 times
+        const { data: amcAlready } = await supabase
+          .from('reminders_log')
+          .select('id')
+          .eq('contract_id', contract.id)
+          .eq('message_type', `whatsapp_${dedupKey}`)
+          .eq('status', 'sent')
+          .maybeSingle()
+
+        if (amcAlready) {
           amcSkipped++
           continue
         }
-
-        const customerName = contract.customers?.name || 'Customer'
-        const customerPhone = contract.customers?.phone || 'Not available'
-        const serviceType = contract.contract_name || 'Service'
-        
-        // FIX: reminderType now correctly handles the ±2 day tolerance window
-        const reminderType = daysUntilEnd === 0 ? 'contract_end' : 'contract_ending_soon'
-        const dedupKey = `${reminderType}_${contract.id}`
 
         try {
           const waRes = await fetch(`${appUrl}/api/send-contract-reminder`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-internal-secret': process.env.CRON_SECRET || ''
+              'x-internal-secret': process.env.CRON_SECRET!,
             },
             body: JSON.stringify({
-              orgId: contract.org_id,
+              orgId:           contract.org_id,
               contractorPhone: contractorPhone,
-              contractorName: contractorName,
-              customerName: customerName,
-              customerPhone: customerPhone,
-              serviceType: serviceType,
-              date: contract.end_date,
-              contractId: contract.id,
-              type: reminderType,
-              dedupKey: dedupKey
-            })
+              contractorName:  contractorName,
+              customerName:    customerName,
+              customerPhone:   customerPhone,
+              serviceType:     serviceType,
+              date:            contract.end_date,
+              contractId:      contract.id,
+              type:            reminderType,
+              dedupKey:        dedupKey,
+            }),
           })
 
           if (waRes.ok) {
@@ -379,12 +377,12 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ 
-      sent, 
-      skipped, 
+    return NextResponse.json({
+      sent,
+      skipped,
       amcSent,
       amcSkipped,
-      errors: errors.length ? errors : undefined 
+      errors: errors.length ? errors : undefined,
     })
   } catch (error) {
     console.error('check-contracts error:', error)
