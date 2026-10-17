@@ -155,8 +155,15 @@ export async function GET() {
                 userEmail, contract.contract_name, contract.next_service_date, customerName
               )
             } else if (daysUntil === 0) {
+              // ✅ FIXED: Added the 3 missing arguments required by email-service.ts
               result = await sendServiceReminderEmail(
-                userEmail, contract.contract_name, contract.next_service_date, customerName
+                userEmail, 
+                contract.contract_name, 
+                contract.next_service_date, 
+                customerName,
+                contract.contract_name || 'Service',
+                customerPhone,
+                ownerName
               )
             } else {
               result = await sendAMCExpiryReminderEmail(
