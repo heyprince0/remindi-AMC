@@ -34,10 +34,13 @@ export async function GET(req: Request) {
   }
 
   // 3. Fetch Subscriptions for WhatsApp Notifications
+  // Notice we are now joining `plan:subscription_plans!fk_subscriptions_plan(*)` just like your page.tsx
+  const baseQuery = '*, plan:subscription_plans!fk_subscriptions_plan(*), organizations(owner_id)';
+
   // A) Expiring Soon (Next 7 days, active)
   const { data: expiringSoon } = await supabase
     .from('subscriptions')
-    .select('*, organizations(owner_id)')
+    .select(baseQuery)
     .eq('status', 'active')
     .gte('end_date', todayStr)
     .lte('end_date', in7DaysStr);
@@ -45,17 +48,16 @@ export async function GET(req: Request) {
   // B) Just Expired (Expired yesterday or today)
   const { data: justExpired } = await supabase
     .from('subscriptions')
-    .select('*, organizations(owner_id)')
+    .select(baseQuery)
     .eq('status', 'expired')
     .gte('end_date', yesterdayStr)
     .lte('end_date', todayStr);
 
-  // C) Trials Ending Soon (Next 7 days, trialing)
-  // Note: If your DB doesn't have 'trialing' status, this will safely return empty
+  // C) Trials Ending Soon (Using 'trial' status as shown in your page.tsx)
   const { data: trialEnding } = await supabase
     .from('subscriptions')
-    .select('*, organizations(owner_id)')
-    .eq('status', 'trialing')
+    .select(baseQuery)
+    .eq('status', 'trial')
     .gte('end_date', todayStr)
     .lte('end_date', in7DaysStr);
 
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
 
   // 4. Helper Function to Process & Send
   async function processReminder(sub: any, type: 'expired' | 'expiring_soon' | 'trial_ending') {
-    const orgId = sub.org_id || sub.organization_id;
+    const orgId = sub.org_id;
     const ownerId = sub.organizations?.owner_id;
     if (!ownerId) return waSkipped++;
 
@@ -79,7 +81,7 @@ export async function GET(req: Request) {
 
     const dedupKey = `${type}_${sub.id}`;
 
-    // Deduplication Check (Don't send if already sent)
+    // Deduplication Check
     const { data: alreadySent } = await supabase
       .from('reminders_log')
       .select('id')
@@ -89,6 +91,13 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     if (alreadySent) return waSkipped++;
+
+    // Extract plan details from the joined table (matching page.tsx structure)
+    const planName = sub.plan?.name || 'Basic Plan';
+    const planPrice = sub.plan?.price || sub.plan?.amount || ''; 
+    
+    // Combines into "499 Basic Plan" as expected by MSG91 template {{3}}
+    const formattedPlan = planPrice ? `${planPrice} ${planName}` : planName;
 
     // Trigger the Sender API
     try {
@@ -103,7 +112,7 @@ export async function GET(req: Request) {
           userPhone: profile.phone,
           userName: profile.full_name || 'User',
           expiryDate: sub.end_date,
-          planName: sub.plan_name || 'Basic Plan', // Adjust column name if needed
+          planName: formattedPlan,
           type: type,
           dedupKey: dedupKey,
         }),
