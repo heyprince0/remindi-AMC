@@ -963,4 +963,484 @@ function GeneratorTool() {
                   "Respected Sir/Madam,"
                 </Button>
                 <Button type="button" variant="outline" size="sm"
-                  onClick={() => updateField("bodyText", (formState.bodyText ? formState.bodyText + "\n" : "") + "As per discussion held with you, regarding following works at above mention place. Details are
+                  onClick={() => updateField("bodyText", (formState.bodyText ? formState.bodyText + "\n" : "") + "As per discussion held with you, regarding following works at above mention place. Details are given as below;")}>
+                  "As per discussion..."
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="border border-border rounded-xl p-5">
+            <h3 className="font-semibold text-sm mb-4">Line Items</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    {["SR NO", "PARTICULARS", "Qty.", "Rate (₹)", "Amount", ""].map(h => (
+                      <th key={h} className="text-center py-2.5 px-2 text-xs font-semibold text-muted-foreground last:w-8">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formState.items.map((item, idx) => {
+                    const amt = (Number(item.qty) || 0) * (Number(item.rate) || 0)
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                        <td className="text-center py-2 px-2 text-xs text-muted-foreground w-10">{idx + 1}</td>
+                        <td className="py-2 px-2">
+                          <Input value={item.particulars}
+                            onChange={e => updateItem(item.id, "particulars", e.target.value)}
+                            placeholder="e.g. RO System Servicing" className="h-8 text-sm" />
+                        </td>
+                        <td className="py-2 px-2 w-20">
+                          <Input type="number" min="1" value={item.qty}
+                            onFocus={(e) => e.target.value = ""}
+                            onBlur={(e) => {
+                              const v = parseFloat(e.target.value)
+                              updateItem(item.id, "qty", isNaN(v) || v <= 0 ? 1 : v)
+                            }}
+                            onChange={e => updateItem(item.id, "qty", Number(e.target.value) || 0)}
+                            className="h-8 text-sm text-center" />
+                        </td>
+                        <td className="py-2 px-2 w-28">
+                          <Input type="number" min="0" value={item.rate}
+                            onFocus={(e) => e.target.value = ""}
+                            onBlur={(e) => {
+                              const v = parseFloat(e.target.value)
+                              updateItem(item.id, "rate", isNaN(v) ? 0 : v)
+                            }}
+                            onChange={e => updateItem(item.id, "rate", Number(e.target.value) || 0)}
+                            className="h-8 text-sm text-right" />
+                        </td>
+                        <td className="py-2 px-2 text-right text-sm font-semibold w-28">
+                          ₹{Number(amt).toLocaleString("en-IN")}
+                        </td>
+                        <td className="py-2 px-2 w-8">
+                          <button
+                            onClick={() => deleteItem(item.id)}
+                            className="text-muted-foreground hover:text-red-500 transition-colors text-base leading-none"
+                          >×</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Button variant="outline" size="sm" className="mt-3" onClick={addItem}>+ Add Item</Button>
+          </div>
+
+          {/* Discount */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Discount</h3>
+              <Switch checked={formState.includeDiscount}
+                onCheckedChange={v => updateField("includeDiscount", v)} />
+            </div>
+            {formState.includeDiscount && (
+              <div className="space-y-3">
+                <div className="flex gap-4">
+                  {(["percentage", "flat"] as const).map(t => (
+                    <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" checked={formState.discountType === t}
+                        onChange={() => updateField("discountType", t)} className="accent-blue-600" />
+                      {t === "percentage" ? "Percentage (%)" : "Flat Amount (₹)"}
+                    </label>
+                  ))}
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    {formState.discountType === "percentage" ? "Discount %" : "Discount Amount (₹)"}
+                  </Label>
+                  <Input type="number" min="0" className="mt-1"
+                    value={formState.discountValue}
+                    onFocus={(e) => e.target.value = ""}
+                    onBlur={(e) => {
+                      const v = parseFloat(e.target.value)
+                      updateField("discountValue", isNaN(v) || v < 0 ? 0 : v)
+                    }}
+                    onChange={e => updateField("discountValue", Number(e.target.value) || 0)} />
+                </div>
+                {discountAmount > 0 && (
+                  <p className="text-sm text-red-500 font-medium">
+                    Discount: −₹{Number(discountAmount).toLocaleString("en-IN")}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* GST */}
+          <div className="border border-border rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Include GST (9% SGST + 9% CGST)</h3>
+              <Switch checked={formState.includeGst}
+                onCheckedChange={v => updateField("includeGst", v)} />
+            </div>
+            {formState.includeGst && (
+              <div className="flex gap-6 text-sm text-muted-foreground">
+                <span>SGST (9%): ₹{Number(sgst).toLocaleString("en-IN")}</span>
+                <span>CGST (9%): ₹{Number(cgst).toLocaleString("en-IN")}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Totals summary */}
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>₹{Number(subtotal).toLocaleString("en-IN")}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {formState.discountType === "percentage" ? `Discount (${formState.discountValue}%)` : "Discount"}
+                </span>
+                <span className="text-red-500">−₹{Number(discountAmount).toLocaleString("en-IN")}</span>
+              </div>
+            )}
+            {formState.includeGst && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">SGST (9%)</span>
+                  <span>₹{Number(sgst).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">CGST (9%)</span>
+                  <span>₹{Number(cgst).toLocaleString("en-IN")}</span>
+                </div>
+              </>
+            )}
+            <div className="border-t border-border pt-2.5 flex justify-between items-baseline">
+              <span className="font-semibold text-sm">Total</span>
+              <span className="font-bold text-xl text-blue-600">₹{Number(grandTotal).toLocaleString("en-IN")}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug uppercase font-semibold">
+              RUPEES {toWords(Math.round(grandTotal))} ONLY
+            </p>
+          </div>
+
+          {/* Notes */}
+          <div className="border border-border rounded-xl p-5">
+            <Label className="text-xs font-semibold text-muted-foreground">Terms & Conditions</Label>
+            <Textarea
+              className="mt-1.5 resize-none min-h-[72px] text-sm"
+              placeholder={"1. Quotation is valid for 15 days from the issue date.\n2. Payment is due upon completion of the service.\n3. Additional repairs or replacement parts will be charged separately.\n4. Service will be scheduled after customer confirmation."}
+              value={formState.notes}
+              onChange={e => updateField("notes", e.target.value)}
+            />
+          </div>
+
+          {/* Download */}
+          <Button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base"
+            onClick={() => setShowLeadModal(true)}
+            disabled={generatingPdf}
+          >
+            {generatingPdf ? <Loader2 className="mr-2 size-5 animate-spin" /> : <Download className="mr-2 size-5" />}
+            Download Quotation PDF — Free
+          </Button>
+        </div>
+
+        {/* ── RIGHT: Live Preview ─────────────────────────────────────────── */}
+        <div className={`w-full lg:w-[520px] lg:sticky lg:top-20 lg:self-start ${showPreview ? "block" : "hidden lg:block"}`}>
+          <p className="text-xs text-muted-foreground text-center mb-2">Live Preview</p>
+          <div className="bg-white dark:bg-card border border-border rounded-xl shadow-sm overflow-hidden text-sm">
+
+            {/* Header — matches PDF exactly */}
+            <div className="p-5">
+              <div className="flex items-start gap-4">
+                {formState.businessInfo.logoBase64 ? (
+                  <img
+                    src={formState.businessInfo.logoBase64}
+                    alt="Logo"
+                    className="w-16 h-16 object-contain flex-shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-16 h-16 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }}
+                  >
+                    <span className="text-white font-bold text-lg">{initialsPreview}</span>
+                  </div>
+                )}
+                <div className="w-[2px] self-stretch min-h-[64px]" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-base truncate" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
+                    {(formState.businessInfo.company_name || "Company Name").toUpperCase()}
+                  </p>
+                  {formState.businessInfo.tagline && (
+                    <p className="text-xs font-bold text-foreground mt-1">{formState.businessInfo.tagline}</p>
+                  )}
+                  {formState.businessInfo.address && (
+                    <p className="text-xs text-muted-foreground mt-1.5">{formState.businessInfo.address}</p>
+                  )}
+                  {(formState.businessInfo.city || formState.businessInfo.state || formState.businessInfo.zip_code) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[formState.businessInfo.city, formState.businessInfo.state, formState.businessInfo.zip_code].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                  <div className="mt-2 space-y-1">
+                    {formState.businessInfo.email && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-bold text-foreground">Email:</span>   {formState.businessInfo.email}
+                      </p>
+                    )}
+                    {formState.businessInfo.phone && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-bold text-foreground">Phone:</span>   {formState.businessInfo.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Blue horizontal line */}
+            <div className="h-[2px] mx-5" style={{ backgroundColor: `rgb(${tr}, ${tg}, ${tb})` }} />
+
+            {/* Quote details */}
+            <div className="p-5">
+              <div className="text-right mb-1">
+                <p className="text-xl font-bold tracking-wide" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>QUOTATION</p>
+              </div>
+              <div className="flex justify-between items-start">
+                <p className="text-sm font-bold">{formState.quoteNumber || "QT-001"}</p>
+                <div className="text-right">
+                  <p className="text-sm font-bold">DATE: {shortDate(formState.quoteDate)}</p>
+                  {formState.orderNo && <p className="text-xs font-normal mt-0.5">Order No: {formState.orderNo}</p>}
+                  {formState.orderDate && <p className="text-xs font-normal mt-0.5">Order Date: {shortDate(formState.orderDate)}</p>}
+                  {formState.validTill && <p className="text-xs text-red-500 font-bold mt-0.5">Valid till: {formatDate(formState.validTill)}</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* TO + Subject */}
+            <div className="px-5 pb-4 space-y-1.5">
+              <p className="text-[10px] font-bold tracking-wider text-muted-foreground">TO,</p>
+              <p className="text-sm font-bold uppercase">{formState.clientName || <span className="text-muted-foreground normal-case font-normal">Client Name</span>}</p>
+              {formState.clientAddress && <p className="text-xs text-muted-foreground">{formState.clientAddress}</p>}
+              {(formState.clientDistrict || formState.clientState || formState.clientPinCode) && (
+                <p className="text-xs text-muted-foreground">
+                  {[formState.clientDistrict, formState.clientState, formState.clientPinCode].filter(Boolean).join(", ")}
+                </p>
+              )}
+              {formState.subject && (
+                <p className="text-sm font-semibold pt-2">Sub: {formState.subject}</p>
+              )}
+              {formState.bodyText && (
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{formState.bodyText}</p>
+              )}
+            </div>
+
+            {/* Items table */}
+            <div className="overflow-x-auto border-t border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: `rgb(${tr}, ${tg}, ${tb})` }}>
+                    {["SR NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"].map(h => (
+                      <th key={h} className="py-2.5 px-3 font-semibold text-white text-left first:text-center last:text-right">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formState.items.map((it, i) => {
+                    const amt = (Number(it.qty) || 0) * (Number(it.rate) || 0)
+                    return (
+                      <tr key={it.id} className="hover:bg-muted/20 border-b border-border/50">
+                        <td className="text-center py-2 px-3 text-muted-foreground">{i + 1}</td>
+                        <td className="py-2 px-3 font-medium">{it.particulars || "-"}</td>
+                        <td className="text-center py-2 px-3 text-muted-foreground">{it.qty}</td>
+                        <td className="text-right py-2 px-3">Rs. {Number(it.rate).toLocaleString("en-IN")}</td>
+                        <td className="text-right py-2 px-3 font-semibold">Rs. {Number(amt).toLocaleString("en-IN")}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals + Amount in words */}
+            <div className="border-t border-border p-5 flex flex-col sm:flex-row">
+              <div className="flex-1 flex items-end">
+                <p className="text-[10px] text-muted-foreground leading-snug uppercase font-bold">
+                  RUPEES {toWords(Math.round(grandTotal))} ONLY
+                </p>
+              </div>
+              <div className="sm:w-56 shrink-0 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>Rs. {Number(subtotal).toLocaleString("en-IN")}</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {formState.discountType === "percentage" ? `Discount (${formState.discountValue}%)` : "Discount"}
+                    </span>
+                    <span className="text-red-500">- Rs. {Number(discountAmount).toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                {formState.includeGst && <>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">SGST (9%)</span><span>Rs. {Number(sgst).toLocaleString("en-IN")}</span></div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">CGST (9%)</span><span>Rs. {Number(cgst).toLocaleString("en-IN")}</span></div>
+                </>}
+                <div className="border-t border-border pt-2.5 flex justify-between items-baseline">
+                  <span className="font-semibold text-xs">Total</span>
+                  <span className="font-bold text-base" style={{ color: `rgb(${tr}, ${tg}, ${tb})` }}>
+                    Rs. {Number(grandTotal).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment details */}
+            {(formState.businessInfo.bank_name || formState.businessInfo.account_no || formState.businessInfo.ifsc_code || formState.businessInfo.upi_id) && (
+              <div className="border-t border-border p-5 space-y-1">
+                <p className="text-xs font-bold">Payment Details:</p>
+                {formState.businessInfo.bank_name && <p className="text-xs text-muted-foreground">Bank: {formState.businessInfo.bank_name}</p>}
+                {formState.businessInfo.account_no && <p className="text-xs text-muted-foreground">Account No: {formState.businessInfo.account_no}</p>}
+                {formState.businessInfo.ifsc_code && <p className="text-xs text-muted-foreground">IFSC: {formState.businessInfo.ifsc_code}</p>}
+                {formState.businessInfo.upi_id && <p className="text-xs text-muted-foreground">UPI: {formState.businessInfo.upi_id}</p>}
+              </div>
+            )}
+
+            {/* Terms & Conditions */}
+            {formState.notes && (
+              <div className="border-t border-border p-5 space-y-1">
+                <p className="text-xs font-bold">Terms & Conditions:</p>
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{formState.notes}</p>
+              </div>
+            )}
+
+            {/* Signature + Footer */}
+            <div className="border-t border-border p-5 text-right">
+              <p className="text-xs">Thanking you,</p>
+              <p className="text-xs mt-1">Yours faithfully,</p>
+              <p className="text-xs font-bold mt-1">For {formState.businessInfo.company_name || "Company"}</p>
+            </div>
+            <div className="border-t border-border py-3 px-5">
+              <p className="text-[10px] text-muted-foreground text-center">Generated by Remindi · remindi.online</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Lead Capture Modal ─────────────────────────────────────────────── */}
+      <Dialog open={showLeadModal} onOpenChange={setShowLeadModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>One last step</DialogTitle>
+            <DialogDescription>
+              Enter your details to download your quotation PDF. We will not spam you.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Full Name *</Label>
+              <Input className="mt-1" value={leadData.fullName}
+                onChange={e => setLeadData(p => ({ ...p, fullName: e.target.value }))} placeholder="Rahul Sharma" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Phone Number *</Label>
+              <Input className="mt-1" value={leadData.phone}
+                onChange={e => setLeadData(p => ({ ...p, phone: e.target.value }))} placeholder="+91 98765 43210" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Company Name *</Label>
+              <Input className="mt-1" value={leadData.companyName}
+                onChange={e => setLeadData(p => ({ ...p, companyName: e.target.value }))} placeholder="ABC Elevators Pvt Ltd" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Service Type *</Label>
+              <Select value={leadData.serviceType} onValueChange={v => setLeadData(p => ({ ...p, serviceType: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select your service" /></SelectTrigger>
+                <SelectContent>
+                  {["Elevator / Lift", "HVAC / AC", "Fire Safety", "Plumbing", "Electrical", "CCTV / Security", "Pest Control", "Water Purifier / RO", "Other"].map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowLeadModal(false)}>Cancel</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleLeadSubmit}
+              disabled={submitting || generatingPdf}
+            >
+              {submitting || generatingPdf ? "Generating..." : "Download My Free Quotation PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  )
+}
+
+// ─── SEO Section ──────────────────────────────────────────────────────────────
+function SeoSection() {
+  return (
+    <section className="py-16 bg-background">
+      <div className="max-w-4xl mx-auto px-4">
+        <h2 className="text-3xl font-bold mb-8 text-center">Why Indian Contractors Trust Remindi</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          {[
+            { icon: <FileText className="size-8 text-blue-600 mb-3" />, title: "Professional Quotations in Minutes", desc: "Fill the form, preview live, download as PDF. No design skills needed." },
+            { icon: <CheckCircle2 className="size-8 text-blue-600 mb-3" />, title: "GST-Ready for Indian Contractors", desc: "Auto-calculates SGST, CGST, and totals. Supports all GST rates." },
+            { icon: <Stamp className="size-8 text-blue-600 mb-3" />, title: "Full AMC Management on Remindi", desc: "Track contracts, technicians, send reminders, manage invoices — all in one place." },
+          ].map(c => (
+            <Card key={c.title} className="border border-border p-5">
+              {c.icon}
+              <h3 className="font-semibold mb-2">{c.title}</h3>
+              <p className="text-sm text-muted-foreground">{c.desc}</p>
+            </Card>
+          ))}
+        </div>
+
+        <div className="text-center mb-14 rounded-xl border border-border bg-muted/30 p-8">
+          <h3 className="text-xl font-semibold mb-3">Ready to manage all your AMC contracts automatically?</h3>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => window.open("https://remindi.online/signup", "_blank")}>
+            Start Free on Remindi →
+          </Button>
+        </div>
+
+        <h2 className="text-2xl font-bold mb-6 text-center">Frequently Asked Questions</h2>
+        <Accordion type="single" collapsible className="w-full">
+          {[
+            { q: "Is this free?", a: "Yes. 100% free. No signup or credit card needed." },
+            { q: "Can I add GST?", a: "Yes. Toggle GST on, and 9% SGST + 9% CGST are auto-calculated just like the paid app." },
+            { q: "Is my data saved?", a: "Your business info is saved on your device only. We do not store your quotation data on our servers." },
+            { q: "Can I add my logo?", a: "Yes. Upload your company logo in the Company section. It appears on both the preview and the downloaded PDF." },
+            { q: "What is Remindi?", a: "Remindi is an AMC management platform for Indian contractors. Manage service contracts, technicians, reminders, and invoices — free to try." },
+            { q: "Can I create invoices too?", a: "Yes. Visit remindi.online/free-invoice-generator for our free invoice generator." },
+          ].map((faq, i) => (
+            <AccordionItem key={i} value={`q${i}`}>
+              <AccordionTrigger>{faq.q}</AccordionTrigger>
+              <AccordionContent>{faq.a}</AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+
+        <div className="mt-10 text-center text-sm text-muted-foreground">
+          Also need an invoice?{" "}
+          <a href="/free-invoice-generator" className="text-blue-600 hover:underline font-medium">
+            Use our Free Invoice Generator →
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default function FreeQuotationGeneratorPage() {
+  return (
+    <main>
+      <PublicNavbar />
+      <HeroBanner />
+      <GeneratorTool />
+      <SeoSection />
+    </main>
+  )
+}
