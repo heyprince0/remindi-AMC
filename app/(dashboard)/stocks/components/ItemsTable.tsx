@@ -27,7 +27,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, History, ArrowUp, ArrowDown, Package } from "lucide-react"
+import {
+  Plus,
+  Search,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  History,
+  ArrowUp,
+  ArrowDown,
+  Package,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 import StockInOutDialog from "./StockInOutDialog"
 import StockHistoryDialog from "./StockHistoryDialog"
@@ -180,6 +191,16 @@ export default function ItemsTable({
     )
   ).sort((a, b) => a.localeCompare(b))
 
+  const hasActiveFilters =
+    searchTerm !== "" || filterStatus !== "all" || filterCategory !== "all" || filterLocation !== "all"
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setFilterStatus("all")
+    setFilterCategory("all")
+    setFilterLocation("all")
+  }
+
   const handleDelete = async () => {
     if (!itemToDelete) return
     setDeleting(true)
@@ -228,71 +249,109 @@ export default function ItemsTable({
   }
 
   return (
-    <div className="flex flex-col gap-6 overflow-x-hidden">
+    <div className="flex flex-col gap-4 md:gap-6 overflow-x-hidden pb-24 md:pb-0">
       {/* ── Title (mobile only) ── */}
       <h2 className="text-lg font-semibold md:hidden">Inventory Items</h2>
 
-      {/* ── Filter Bar ── */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center flex-wrap">
-        <div className="relative flex-1 min-w-[150px]">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      {/* ══════════ IMPROVED FILTER BAR ══════════ */}
+      <div className="flex flex-col gap-3">
+        {/* Row 1: Search (full-width, with clear X) */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search by name, SKU, or brand..."
-            className="pl-10"
+            className="h-11 pl-10 pr-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="in-stock">In Stock</SelectItem>
-              <SelectItem value="low">Low Stock</SelectItem>
-              <SelectItem value="out">Out of Stock</SelectItem>
-            </SelectContent>
-          </Select>
 
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Row 2: Filters + clear + add (desktop) */}
+        <div className="flex items-center gap-2">
+          <div className="grid flex-1 grid-cols-3 gap-2 md:flex md:flex-none md:gap-2">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full md:w-[130px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="in-stock">In Stock</SelectItem>
+                <SelectItem value="low">Low Stock</SelectItem>
+                <SelectItem value="out">Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={filterLocation} onValueChange={setFilterLocation}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Location" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Locations</SelectItem>
-              {locations.map((loc) => (
-                <SelectItem key={loc} value={loc}>
-                  {loc}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full md:w-[130px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Button onClick={onAddItem}>
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="w-full md:w-[130px]">
+                <SelectValue placeholder="Location" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc} value={loc}>
+                    {loc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="shrink-0 px-2 text-muted-foreground hover:text-foreground md:px-3"
+              aria-label="Clear filters"
+            >
+              <X className="size-4 md:mr-1" />
+              <span className="hidden md:inline">Clear</span>
+            </Button>
+          )}
+
+          {/* Add Item button – desktop only (mobile uses FAB) */}
+          <Button onClick={onAddItem} className="ml-auto hidden md:inline-flex">
             <Plus className="mr-2 size-4" />
             Add Item
           </Button>
         </div>
+
+        {/* Row 3: Result count */}
+        {!loading && (
+          <p className="text-xs text-muted-foreground">
+            Showing <span className="font-medium text-foreground">{filteredItems.length}</span> of{" "}
+            <span className="font-medium text-foreground">{items.length}</span> items
+            {hasActiveFilters && <span className="ml-1">· filtered</span>}
+          </p>
+        )}
       </div>
 
-      {/* ── DESKTOP Table ── */}
+      {/* ── DESKTOP Table (Card untouched) ── */}
       <Card className="hidden md:block">
         <CardHeader>
           <CardTitle>Inventory Items</CardTitle>
@@ -322,7 +381,7 @@ export default function ItemsTable({
                 ) : filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      {searchTerm || filterStatus !== "all" || filterCategory !== "all" || filterLocation !== "all"
+                      {hasActiveFilters
                         ? "No items found matching filters"
                         : "No inventory items yet"}
                     </TableCell>
@@ -408,13 +467,13 @@ export default function ItemsTable({
         </CardContent>
       </Card>
 
-      {/* ── MOBILE Cards ── */}
+      {/* ── MOBILE Cards (untouched) ── */}
       <div className="flex flex-col gap-4 md:hidden">
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Loading inventory items...</div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            {searchTerm || filterStatus !== "all" || filterCategory !== "all" || filterLocation !== "all"
+            {hasActiveFilters
               ? "No items found matching filters"
               : "No inventory items yet"}
           </div>
@@ -530,6 +589,15 @@ export default function ItemsTable({
           })
         )}
       </div>
+
+      {/* ══════════ FAB – Add Item (mobile only) ══════════ */}
+      <Button
+        onClick={onAddItem}
+        className="fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full shadow-lg transition-all hover:shadow-xl active:scale-95 md:hidden"
+        aria-label="Add Item"
+      >
+        <Plus className="size-6" />
+      </Button>
 
       {/* Dialogs */}
       <StockInOutDialog
