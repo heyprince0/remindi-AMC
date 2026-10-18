@@ -1,6 +1,6 @@
 # Remindi Software 
 
-**AMC Management Software for Indian Service Contractors.**
+**AMC Management Software for Indian Service Contractors..**
 
 Remindi is a B2B SaaS platform that helps service contractors in India manage their Annual Maintenance Contracts — from quotations and invoices to client tracking and payment records. Built for electricians, HVAC technicians, plumbers, and other field service professionals who want to move away from manual paperwork and run their contracts digitally.
 
