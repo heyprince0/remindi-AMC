@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
-import { Search, ArrowUp, ArrowDown } from "lucide-react"
+import { Search, ArrowUp, ArrowDown, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface StockMovement {
@@ -214,6 +214,16 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
 
   const uniqueReasons = Array.from(new Set(movements.map((m) => m.reason).filter(Boolean))).sort()
 
+  const hasActiveFilters =
+    searchTerm !== "" || filterType !== "all" || filterReason !== "all" || filterDate !== ""
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setFilterType("all")
+    setFilterReason("all")
+    setFilterDate("")
+  }
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString("en-IN", {
@@ -228,71 +238,97 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
   const formatINR = (amount: number) => `₹${(amount || 0).toLocaleString("en-IN")}`
 
   const FiltersRow = (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center flex-wrap">
-      <div className="relative flex-1 min-w-[150px]">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="flex flex-col gap-3">
+      {/* Search – full-width with clear X */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
           placeholder="Search items..."
-          className="pl-10"
+          className="h-11 pl-10 pr-10"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => setSearchTerm("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </div>
-      <div className="flex gap-2 flex-wrap items-center">
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="in">Stock In</SelectItem>
-            <SelectItem value="out">Stock Out</SelectItem>
-          </SelectContent>
-        </Select>
 
-        <Select value={filterReason} onValueChange={setFilterReason}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Reason" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Reasons</SelectItem>
-            {uniqueReasons.map((reason) => (
-              <SelectItem key={reason} value={reason}>{reason}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Filters + global clear */}
+      <div className="flex items-center gap-2">
+        <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-none md:gap-2">
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="w-full md:w-[120px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="in">Stock In</SelectItem>
+              <SelectItem value="out">Stock Out</SelectItem>
+            </SelectContent>
+          </Select>
 
-        <div className="relative w-[160px]">
+          <Select value={filterReason} onValueChange={setFilterReason}>
+            <SelectTrigger className="w-full md:w-[140px]">
+              <SelectValue placeholder="Reason" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Reasons</SelectItem>
+              {uniqueReasons.map((reason) => (
+                <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Input
             type="date"
-            className="w-full"
+            className="w-full md:w-[160px]"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
+            aria-label="Filter by date"
           />
-          {!filterDate && (
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-              Date
-            </span>
-          )}
         </div>
-        {filterDate && (
-          <Button variant="ghost" size="sm" onClick={() => setFilterDate("")}>
-            Clear
+
+        {hasActiveFilters && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearFilters}
+            className="shrink-0 px-2 text-muted-foreground hover:text-foreground md:px-3"
+            aria-label="Clear filters"
+          >
+            <X className="size-4 md:mr-1" />
+            <span className="hidden md:inline">Clear</span>
           </Button>
         )}
       </div>
+
+      {/* Result count */}
+      {!loading && (
+        <p className="text-xs text-muted-foreground">
+          Showing <span className="font-medium text-foreground">{filteredMovements.length}</span> of{" "}
+          <span className="font-medium text-foreground">{movements.length}</span> movements
+          {hasActiveFilters && <span className="ml-1">· filtered</span>}
+        </p>
+      )}
     </div>
   )
 
-  const emptyMessage = searchTerm || filterType !== "all" || filterReason !== "all"
+  const emptyMessage = hasActiveFilters
     ? "No movements found matching filters"
     : "No stock movements recorded"
 
   return (
     <div className="flex flex-col gap-4 overflow-x-hidden">
 
-      {/* ── DESKTOP Table ── */}
+      {/* ── DESKTOP Table (Card untouched) ── */}
       <Card className="hidden md:block">
         <CardHeader>
           <CardTitle>Stock Movements</CardTitle>
@@ -367,7 +403,7 @@ export default function StockMovementsTable({ orgId }: StockMovementsTableProps)
         </CardContent>
       </Card>
 
-      {/* ── MOBILE Cards ── */}
+      {/* ── MOBILE Cards (untouched) ── */}
       <div className="flex flex-col gap-4 md:hidden">
         <h2 className="text-lg font-semibold">Stock Movements</h2>
         {FiltersRow}
