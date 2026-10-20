@@ -259,7 +259,7 @@ export default function CustomerDetailPage() {
         body: [
           ["Name", safeStr(customer.name)],
           ["Phone", safeStr(customer.phone)],
-          ["Email", safeStr(customer.email)],
+          // "Email" line removed as requested
           ["Address", safeStr(customer.address)],
           ["Notes", safeStr(customer.notes)],
         ],
