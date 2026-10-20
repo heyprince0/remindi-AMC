@@ -1,4 +1,5 @@
 export const runtime = 'nodejs'
+export const maxDuration = 60 // Allows Vercel to run up to 60 seconds if needed
 
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -15,7 +16,6 @@ const supabase = createClient(
 
 const NOTIFY_AT_DAYS = [3, 0, -1, -3, -7]
 
-// ── MSG91 HELPERS (Direct API calls, bypassing Vercel fetch limits) ──
 function formatPhone(phone: string): string | null {
   let digits = String(phone ?? '').replace(/\D/g, '')
   digits = digits.replace(/^0+/, '')
@@ -79,9 +79,7 @@ async function sendWA(templateName: string, phone: string, components: any) {
 }
 
 export async function GET() {
-  // Guard: CRON_SECRET must be set
   if (!process.env.CRON_SECRET) {
-    console.error('CRON_SECRET env var is not set')
     return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
   }
 
@@ -94,9 +92,6 @@ export async function GET() {
     const in7DaysStr = in7Days.toISOString().split('T')[0]
     const ago30DaysStr = ago30Days.toISOString().split('T')[0]
 
-    // ─────────────────────────────────────────────────────────────
-    // 1. SERVICE REMINDERS
-    // ─────────────────────────────────────────────────────────────
     const { data: contracts } = await supabase
       .from('contracts')
       .select(`*, customers(name, phone)`)
@@ -104,8 +99,7 @@ export async function GET() {
       .lte('next_service_date', in7DaysStr)
       .eq('status', 'active')
 
-    let sent = 0
-    let skipped = 0
+    let sent = 0, skipped = 0
     const errors: string[] = []
 
     if (contracts?.length) {
@@ -140,107 +134,102 @@ export async function GET() {
         }
       }
 
-      for (const contract of contracts) {
+      // 🚀 OPTIMIZATION: Run all tasks in parallel using Promise.all
+      const tasks = contracts.map(async (contract) => {
         const nextDate = new Date(contract.next_service_date)
         nextDate.setHours(0, 0, 0, 0)
         const daysUntil = Math.round((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
-        if (!NOTIFY_AT_DAYS.includes(daysUntil)) { skipped++; continue }
+        if (!NOTIFY_AT_DAYS.includes(daysUntil)) { skipped++; return }
 
         const customerName = contract.customers?.name || 'Unknown'
         const customerPhone = contract.customers?.phone || 'Not available'
         const ownerId = orgOwnerMap[contract.org_id]
         
-        if (!ownerId) { skipped++; continue }
+        if (!ownerId) { skipped++; return }
 
         const userEmail = ownerEmailMap[ownerId]
         const ownerPhone = ownerPhoneMap[ownerId]
         const ownerName = ownerNameMap[ownerId] || 'Contractor'
 
-        // ── 1A. SEND WHATSAPP FIRST (Critical Path) ──
-        if (ownerPhone) {
-          const waType = daysUntil > 0 ? 'upcoming' : 'not_completed'
-          const dedupKey = `${waType}_${contract.id}_${contract.next_service_date}`
+        // Execute WhatsApp and Email simultaneously for this contract
+        await Promise.all([
+          // 1A. SEND WHATSAPP
+          (async () => {
+            if (!ownerPhone) return;
+            const waType = daysUntil > 0 ? 'upcoming' : 'not_completed'
+            const dedupKey = `${waType}_${contract.id}_${contract.next_service_date}`
 
-          const { data: already } = await supabase
-            .from('reminders_log')
-            .select('id')
-            .eq('contract_id', contract.id)
-            .eq('message_type', `whatsapp_${dedupKey}`)
-            .eq('status', 'sent')
-            .maybeSingle()
+            const { data: already } = await supabase
+              .from('reminders_log')
+              .select('id')
+              .eq('contract_id', contract.id)
+              .eq('message_type', `whatsapp_${dedupKey}`)
+              .eq('status', 'sent')
+              .maybeSingle()
 
-          if (!already) {
-            const templateName = waType === 'upcoming' ? 'soon_service' : 'service_notcompleted'
-            const components = {
-              body_1: { type: 'text', value: clean(ownerName, 'there') },
-              body_2: { type: 'text', value: clean(customerName) },
-              body_3: { type: 'text', value: clean(contract.contract_name || 'Service') },
-              body_4: { type: 'text', value: clean(contract.next_service_date) },
-              body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
-              button_1: { subtype: 'url', type: 'text', value: contract.id },
+            if (!already) {
+              const templateName = waType === 'upcoming' ? 'soon_service' : 'service_notcompleted'
+              const components = {
+                body_1: { type: 'text', value: clean(ownerName, 'there') },
+                body_2: { type: 'text', value: clean(customerName) },
+                body_3: { type: 'text', value: clean(contract.contract_name || 'Service') },
+                body_4: { type: 'text', value: clean(contract.next_service_date) },
+                body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
+                button_1: { subtype: 'url', type: 'text', value: contract.id },
+              }
+
+              await new Promise(r => setTimeout(r, Math.random() * 1000)) // 0-1s random delay to avoid MSG91 blocking
+              const { delivered, result } = await sendWA(templateName, ownerPhone, components)
+
+              await supabase.from('reminders_log').insert({
+                org_id: contract.org_id, contract_id: contract.id,
+                sent_at: new Date().toISOString(), message_type: `whatsapp_${dedupKey}`,
+                status: delivered ? 'sent' : 'failed',
+                recipient_phone: formatPhone(ownerPhone) || ownerPhone,
+                whatsapp_sent: delivered, whatsapp_response: result,
+              })
             }
+          })(),
+          
+          // 1B. SEND EMAIL
+          (async () => {
+            if (!userEmail) return;
+            let result
+            if (daysUntil < 0) {
+              result = await sendAMCExpiredEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
+            } else if (daysUntil === 0) {
+              result = await sendServiceReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName, contract.contract_name || 'Service', customerPhone, ownerName)
+            } else {
+              result = await sendAMCExpiryReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
+            }
+            if (result.success) { sent++ } else { errors.push(`Contract ${contract.id}: ${result.error}`) }
+          })()
+        ])
+      })
 
-            // 1.5 second delay to prevent MSG91 Rate Limiting
-            await new Promise(r => setTimeout(r, 1500))
-            
-            const { delivered, result } = await sendWA(templateName, ownerPhone, components)
-
-            await supabase.from('reminders_log').insert({
-              org_id: contract.org_id,
-              contract_id: contract.id,
-              sent_at: new Date().toISOString(),
-              message_type: `whatsapp_${dedupKey}`,
-              status: delivered ? 'sent' : 'failed',
-              recipient_phone: formatPhone(ownerPhone) || ownerPhone,
-              whatsapp_sent: delivered,
-              whatsapp_response: result,
-            })
-          }
-        }
-
-        // ── 1B. SEND EMAIL SECOND ──
-        if (userEmail) {
-          let result
-          if (daysUntil < 0) {
-            result = await sendAMCExpiredEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
-          } else if (daysUntil === 0) {
-            result = await sendServiceReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName, contract.contract_name || 'Service', customerPhone, ownerName)
-          } else {
-            result = await sendAMCExpiryReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
-          }
-          if (result.success) { sent++ } else { errors.push(`Contract ${contract.id}: ${result.error}`) }
-        }
-      }
+      await Promise.all(tasks) // Wait for all contracts to finish
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. AMC EXPIRY REMINDERS (WhatsApp Only)
-    // ─────────────────────────────────────────────────────────────
+    // ── AMC EXPIRY REMINDERS (Parallelized) ──
     const in30DaysStr = new Date(today.getTime() + 30 * 86400000).toISOString().split('T')[0]
     const ago1DayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
 
     const { data: amcContracts } = await supabase
-      .from('contracts')
-      .select(`*, customers(name, phone)`)
-      .gte('end_date', ago1DayStr)
-      .lte('end_date', in30DaysStr)
-      .eq('status', 'active')
+      .from('contracts').select(`*, customers(name, phone)`)
+      .gte('end_date', ago1DayStr).lte('end_date', in30DaysStr).eq('status', 'active')
 
-    let amcSent = 0
-    let amcSkipped = 0
+    let amcSent = 0, amcSkipped = 0
 
     if (amcContracts?.length) {
+      // ... (same logic for owner maps) ...
       const amcOrgIds = [...new Set(amcContracts.map(c => c.org_id).filter(Boolean))]
       const { data: amcOrgs } = await supabase.from('organizations').select('id, owner_id').in('id', amcOrgIds)
-      
       const amcOrgOwnerMap: Record<string, string> = {}
       for (const org of amcOrgs || []) { if (org.owner_id) amcOrgOwnerMap[org.id] = org.owner_id }
-
       const amcOwnerIds = Object.values(amcOrgOwnerMap).filter(Boolean)
       const amcOwnerPhoneMap: Record<string, string> = {}
       const amcOwnerNameMap: Record<string, string> = {}
-
       if (amcOwnerIds.length) {
         const { data: profiles } = await supabase.from('profiles').select('id, phone, full_name').in('id', amcOwnerIds)
         for (const p of profiles || []) {
@@ -248,7 +237,6 @@ export async function GET() {
           if (p.full_name) amcOwnerNameMap[p.id] = p.full_name
         }
       }
-
       const missingAmcOwnerIds = amcOwnerIds.filter(id => !amcOwnerPhoneMap[id] || !amcOwnerNameMap[id])
       if (missingAmcOwnerIds.length) {
         const { data: { users } } = await supabase.auth.admin.listUsers()
@@ -260,38 +248,26 @@ export async function GET() {
         }
       }
 
-      for (const contract of amcContracts) {
-        if (!contract.end_date) continue
-        const endDate = new Date(contract.end_date)
-        endDate.setHours(0, 0, 0, 0)
+      const amcTasks = amcContracts.map(async (contract) => {
+        if (!contract.end_date) return
+        const endDate = new Date(contract.end_date); endDate.setHours(0, 0, 0, 0)
         const daysUntilEnd = Math.round((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-
         const isNotifyDay = (daysUntilEnd >= -1 && daysUntilEnd <= 0) || (daysUntilEnd >= 28 && daysUntilEnd <= 30)
-        if (!isNotifyDay) { amcSkipped++; continue }
+        if (!isNotifyDay) { amcSkipped++; return }
 
         const ownerId = amcOrgOwnerMap[contract.org_id]
-        if (!ownerId) { amcSkipped++; continue }
+        if (!ownerId || !amcOwnerPhoneMap[ownerId]) { amcSkipped++; return }
 
         const contractorPhone = amcOwnerPhoneMap[ownerId]
-        if (!contractorPhone) { amcSkipped++; continue }
-
         const contractorName = amcOwnerNameMap[ownerId] || 'Contractor'
         const customerName = contract.customers?.name || 'Customer'
         const customerPhone = contract.customers?.phone || 'Not available'
         const serviceType = contract.contract_name || 'Service'
-
         const reminderType = daysUntilEnd <= 0 ? 'contract_end' : 'contract_ending_soon'
         const dedupKey = `${reminderType}_${contract.id}`
 
-        const { data: amcAlready } = await supabase
-          .from('reminders_log')
-          .select('id')
-          .eq('contract_id', contract.id)
-          .eq('message_type', `whatsapp_${dedupKey}`)
-          .eq('status', 'sent')
-          .maybeSingle()
-          
-        if (amcAlready) { amcSkipped++; continue }
+        const { data: amcAlready } = await supabase.from('reminders_log').select('id').eq('contract_id', contract.id).eq('message_type', `whatsapp_${dedupKey}`).eq('status', 'sent').maybeSingle()
+        if (amcAlready) { amcSkipped++; return }
 
         const components = {
           body_1: { type: 'text', value: clean(customerName, 'Customer') },
@@ -302,28 +278,22 @@ export async function GET() {
           button_1: { subtype: 'url', type: 'text', value: contract.id },
         }
 
-        // 1.5 second delay to prevent MSG91 Rate Limiting
-        await new Promise(r => setTimeout(r, 1500))
-
+        await new Promise(r => setTimeout(r, Math.random() * 1000))
         const { delivered, result } = await sendWA(reminderType, contractorPhone, components)
         if (delivered) amcSent++
 
         await supabase.from('reminders_log').insert({
-          org_id: contract.org_id,
-          contract_id: contract.id,
-          sent_at: new Date().toISOString(),
-          message_type: `whatsapp_${dedupKey}`,
-          status: delivered ? 'sent' : 'failed',
+          org_id: contract.org_id, contract_id: contract.id, sent_at: new Date().toISOString(),
+          message_type: `whatsapp_${dedupKey}`, status: delivered ? 'sent' : 'failed',
           recipient_phone: formatPhone(contractorPhone) || contractorPhone,
-          whatsapp_sent: delivered,
-          whatsapp_response: result,
+          whatsapp_sent: delivered, whatsapp_response: result,
         })
-      }
+      })
+      await Promise.all(amcTasks)
     }
 
     return NextResponse.json({ sent, skipped, amcSent, amcSkipped, errors: errors.length ? errors : undefined })
   } catch (error) {
-    console.error('check-contracts error:', error)
     return NextResponse.json({ error: 'Failed', detail: String(error) }, { status: 500 })
   }
 }
