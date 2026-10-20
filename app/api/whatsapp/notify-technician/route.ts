@@ -6,7 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Same normalisation your working wa.me links use (page 20 / page 21).
+// Same normalisation your working wa.me links use.
 function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let p = String(raw).replace(/[\s\-().]/g, '');
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     const isWork = templateType === 'work';
     const templateName = isWork ? 'work_assigned' : 'service_visit_assigned';
 
-    // ── CHANGED HERE: using MSG91_AUTHKEY as it is spelled in Vercel ──
+    // Using MSG91_AUTHKEY to match your Vercel environment variables
     const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER;
     const authKey = process.env.MSG91_AUTHKEY; 
     
@@ -86,16 +86,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 4. MSG91 Payload - 'to' moved up to the payload level
     const msg91Payload = {
       integrated_number: integratedNumber,
       content_type: 'template',
       payload: {
         messaging_product: 'whatsapp',
+        to: toPhone, // <--- FIXED: Moved to payload root
         type: 'template',
         template: {
           name: templateName,
           language: { code: 'en', policy: 'deterministic' },
-          to: toPhone,
           components: [
             {
               type: 'body',
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // 4. Send — single-message endpoint (not /bulk/) for one recipient.
+    // 5. Send to MSG91
     const response = await fetch(
       'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/',
       {
