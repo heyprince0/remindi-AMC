@@ -45,7 +45,7 @@ export default function NewQuotationPage() {
   const [discountValue, setDiscountValue] = useState(0)
   const [notes, setNotes] = useState("")
 
-  // --- ADDED: organization ID ---
+  // --- organization ID ---
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   // --- fetch org_id ---
@@ -66,6 +66,43 @@ export default function NewQuotationPage() {
         })
     }
   }, [user?.id])
+
+  // --- Auto-generate next Order Number ---
+  useEffect(() => {
+    if (!currentOrgId) return;
+
+    const generateOrderNo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("quotations")
+          .select("order_no")
+          .eq("org_id", currentOrgId)
+          .not("order_no", "is", null)
+          .like("order_no", "ORD-%");
+
+        if (error) throw error;
+
+        let maxNum = 0;
+        if (data) {
+          data.forEach((q) => {
+            if (q.order_no) {
+              const match = q.order_no.match(/ORD-(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > maxNum) maxNum = num;
+              }
+            }
+          });
+        }
+        setOrderNo(`ORD-${String(maxNum + 1).padStart(3, "0")}`);
+      } catch (err) {
+        console.error("Failed to generate order no", err);
+        setOrderNo("ORD-001");
+      }
+    };
+
+    generateOrderNo();
+  }, [currentOrgId]);
 
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0)
   const discountAmount = Math.min(
@@ -124,7 +161,7 @@ export default function NewQuotationPage() {
       const { data: existingQuotes, error: countError } = await supabase
         .from("quotations")
         .select("quote_no", { count: "exact" })
-        .eq("org_id", currentOrgId)   // <-- changed from user_id
+        .eq("org_id", currentOrgId)
 
       if (countError) throw countError
 
@@ -147,7 +184,7 @@ export default function NewQuotationPage() {
         .from("quotations")
         .insert({
           user_id: user.id,
-          org_id: currentOrgId,           // <-- added
+          org_id: currentOrgId,
           quote_no: quoteNo,
           order_no: orderNo || null,
           client_name: customerName,
@@ -225,13 +262,13 @@ export default function NewQuotationPage() {
 
             <div className="space-y-2">
               <Label htmlFor="order-no">
-                Order Number <span className="text-xs text-muted-foreground">(Optional)</span>
+                Order Number <span className="text-xs text-muted-foreground">(Auto-generated, editable)</span>
               </Label>
               <Input
                 id="order-no"
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
-                placeholder="e.g. PO-2026-001"
+                placeholder="e.g. ORD-001"
               />
             </div>
 
