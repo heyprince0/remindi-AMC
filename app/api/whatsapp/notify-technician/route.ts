@@ -74,8 +74,10 @@ export async function POST(req: NextRequest) {
     const isWork = templateType === 'work';
     const templateName = isWork ? 'work_assigned' : 'service_visit_assigned';
 
+    // ── CHANGED HERE: using MSG91_AUTHKEY as it is spelled in Vercel ──
     const integratedNumber = process.env.MSG91_INTEGRATED_NUMBER;
-    const authKey = process.env.MSG91_AUTH_KEY;
+    const authKey = process.env.MSG91_AUTHKEY; 
+    
     if (!integratedNumber || !authKey) {
       console.error('notify-technician: MSG91 env vars missing');
       return NextResponse.json(
