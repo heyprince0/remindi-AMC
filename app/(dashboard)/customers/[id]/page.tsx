@@ -14,10 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { supabase, type Customer, type Contract, type ServiceHistory, type Technician, getDaysUntilService } from "@/lib/supabase"
+import { supabase, type Customer, type Contract, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw } from "lucide-react"
+import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
+import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 
 interface ServiceRecord extends ServiceHistory {
   technicianName: string
@@ -26,6 +29,15 @@ interface ServiceRecord extends ServiceHistory {
 interface ContractDisplay extends Contract {
   daysUntilService: number
   endDate: string | null
+}
+
+const safeStr = (val: any) => String(val ?? "-")
+
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return result
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [24, 95, 165]
 }
 
 function getContractEndDate(startDate: string | null, durationYears: number | null): string | null {
@@ -69,8 +81,11 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [contracts, setContracts] = useState<ContractDisplay[]>([])
   const [serviceHistory, setServiceHistory] = useState<ServiceRecord[]>([])
+  const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [sharingPdf, setSharingPdf] = useState(false)
 
   useEffect(() => {
     if (user?.id) {
@@ -89,6 +104,18 @@ export default function CustomerDetailPage() {
         })
     }
   }, [user?.id])
+
+  useEffect(() => {
+    if (!currentOrgId) return
+    supabase
+      .from("company_profile")
+      .select("*")
+      .eq("org_id", currentOrgId)
+      .single()
+      .then(({ data }) => {
+        if (data) setProfile(data as CompanyProfile)
+      })
+  }, [currentOrgId])
 
   useEffect(() => {
     if (currentOrgId && customerId) loadCustomerDetails()
@@ -148,6 +175,268 @@ export default function CustomerDetailPage() {
       toast.error('Failed to load customer details')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── Shared PDF builder — same pattern as contract page ────────────────────
+  const buildCustomerReportPdf = async (): Promise<{ doc: jsPDF; filename: string } | null> => {
+    if (!customer) return null
+
+    const pageW = 210
+    const margin = 15
+    const [tr, tg, tb] = hexToRgb(profile?.theme_color ?? "#185FA5")
+
+    // Load logo
+    let logoBase64: string | null = null
+    let logoFormat: "JPEG" | "PNG" = "PNG"
+    if (profile?.logo_url) {
+      try {
+        const blob = await (await fetch(profile.logo_url)).blob()
+        logoFormat = /jpe?g/i.test(blob.type) ? "JPEG" : "PNG"
+        logoBase64 = await new Promise<string>((res, rej) => {
+          const rd = new FileReader()
+          rd.onloadend = () => res(rd.result as string)
+          rd.onerror = rej
+          rd.readAsDataURL(blob)
+        })
+      } catch { /* skip logo */ }
+    }
+
+    // Load stamp
+    let stampBase64: string | null = null
+    let stampFormat: "JPEG" | "PNG" = "PNG"
+    if (profile?.stamp_url) {
+      try {
+        const blob = await (await fetch(profile.stamp_url, { cache: "no-store" })).blob()
+        stampFormat = /jpe?g/i.test(blob.type) ? "JPEG" : "PNG"
+        stampBase64 = await new Promise<string>((res, rej) => {
+          const rd = new FileReader()
+          rd.onloadend = () => res(rd.result as string)
+          rd.onerror = rej
+          rd.readAsDataURL(blob)
+        })
+      } catch { /* skip stamp */ }
+    }
+
+    const sortedHistory = serviceHistory.slice().sort((a, b) =>
+      String(b.service_date || "").localeCompare(String(a.service_date || ""))
+    )
+
+    const renderReport = (doc: jsPDF): number => {
+      let y = margin
+
+      if (profile) {
+        y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
+      } else {
+        y += 12
+      }
+
+      // Title
+      doc.setFontSize(15)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("CUSTOMER REPORT", pageW - margin, y, { align: "right" })
+
+      y += 5
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(80, 80, 80)
+      
+      doc.text(
+        "Generated: " + new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        pageW - margin, y, { align: "right" }
+      )
+      y += 3
+      doc.setDrawColor(tr, tg, tb)
+      doc.setLineWidth(0.4)
+      doc.line(margin, y, pageW - margin, y)
+      y += 6
+
+      // Customer Info
+      autoTable(doc, {
+        startY: y,
+        head: [["CUSTOMER DETAILS", ""]],
+        body: [
+          ["Name", safeStr(customer.name)],
+          ["Phone", safeStr(customer.phone)],
+          ["Email", safeStr(customer.email)],
+          ["Address", safeStr(customer.address)],
+          ["Notes", safeStr(customer.notes)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontSize: 9, fontStyle: "bold" },
+        bodyStyles: { fontSize: 9, textColor: [40, 40, 40] },
+        columnStyles: {
+          0: { cellWidth: 50, fontStyle: "bold", fillColor: [248, 250, 252] },
+          1: { cellWidth: "auto" },
+        },
+        margin: { left: margin, right: margin },
+      })
+      y = (doc as any).lastAutoTable.finalY + 6
+
+      // Contracts Table
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("CONTRACTS", margin, y)
+      y += 3
+
+      if (contracts.length === 0) {
+        y += 4
+        doc.setFont("helvetica", "italic")
+        doc.setFontSize(9)
+        doc.setTextColor(150, 150, 150)
+        doc.text("No contracts found for this customer.", margin, y)
+        y += 6
+      } else {
+        autoTable(doc, {
+          startY: y,
+          head: [["CONTRACT", "FREQUENCY", "PRICE", "LAST SERVICE", "NEXT SERVICE", "STATUS"]],
+          body: contracts.map(c => [
+            safeStr(c.contract_name),
+            `Every ${Math.max(1, Math.round((c.frequency_days || 30) / 30))} mo`,
+            c.contracts_price != null ? `Rs. ${Number(c.contracts_price).toLocaleString("en-IN")}` : "—",
+            formatDate(c.start_date),
+            formatDate(c.next_service_date),
+            c.status,
+          ]),
+          theme: "striped",
+          headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontSize: 8, fontStyle: "bold" },
+          bodyStyles: { fontSize: 8, textColor: [40, 40, 40] },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { cellWidth: "auto" },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 30 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 25 },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 8
+      }
+
+      // Service History Table
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("SERVICE HISTORY", margin, y)
+      y += 3
+
+      if (sortedHistory.length === 0) {
+        y += 4
+        doc.setFont("helvetica", "italic")
+        doc.setFontSize(9)
+        doc.setTextColor(150, 150, 150)
+        doc.text("No service records found.", margin, y)
+        y += 6
+      } else {
+        autoTable(doc, {
+          startY: y,
+          head: [["DATE", "TECHNICIAN", "STATUS", "NOTES"]],
+          body: sortedHistory.map(r => [
+            formatDate(r.service_date),
+            safeStr(r.technicianName),
+            String(r.status || "").charAt(0).toUpperCase() + String(r.status || "").slice(1),
+            safeStr(r.notes || "—"),
+          ]),
+          theme: "striped",
+          headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontSize: 9, fontStyle: "bold" },
+          bodyStyles: { fontSize: 9, textColor: [40, 40, 40] },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 42 },
+            2: { cellWidth: 28 },
+            3: { cellWidth: "auto" },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 8
+      }
+
+      // Signature block
+      let sigY = y + 6
+      if (stampBase64) {
+        doc.addImage(stampBase64, stampFormat, pageW - margin - 30, sigY, 30, 30)
+        sigY += 32
+      } else {
+        sigY += 10
+      }
+
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.4)
+      doc.line(pageW - margin - 45, sigY, pageW - margin, sigY)
+      sigY += 4
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+      doc.setTextColor(120, 120, 120)
+      doc.text("Authorized Signatory", pageW - margin, sigY, { align: "right" })
+      doc.text(safeStr(profile?.company_name || user?.email), pageW - margin, sigY + 3.5, { align: "right" })
+
+      const footerY = sigY + 12
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
+      return footerY + 6
+    }
+
+    const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
+    const measuredHeight = Math.max(renderReport(scratch), 100)
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, measuredHeight] })
+    renderReport(doc)
+
+    const safeName = (customer.name || "customer").replace(/[^a-z0-9]/gi, "_")
+    return { doc, filename: `Customer-Report-${safeName}.pdf` }
+  }
+
+  const handleDownloadPdf = async () => {
+    setGeneratingPdf(true)
+    try {
+      const result = await buildCustomerReportPdf()
+      if (!result) return
+      result.doc.save(result.filename)
+      toast.success("PDF downloaded")
+    } catch (err) {
+      toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
+
+  const handleSharePdf = async () => {
+    setSharingPdf(true)
+    try {
+      const result = await buildCustomerReportPdf()
+      if (!result) return
+      const { doc, filename } = result
+      const file = new File([doc.output("blob")], filename, { type: "application/pdf" })
+
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: `Customer Report — ${customer?.name ?? ""}`,
+          text: `Customer report for ${customer?.name ?? ""}`,
+        })
+      } else {
+        doc.save(filename)
+        const waText = encodeURIComponent(
+          `Hi, please find the report for *${customer?.name ?? ""}*.\n\nRegards,\n${profile?.company_name ?? user?.email ?? ""}`
+        )
+        window.open(`https://wa.me/?text=${waText}`, "_blank")
+        toast.info("PDF saved. Open WhatsApp and attach it there.")
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return
+      console.error("Share error:", err)
+      toast.error("Could not share: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setSharingPdf(false)
     }
   }
 
@@ -267,6 +556,26 @@ export default function CustomerDetailPage() {
 
           {/* Desktop actions in header */}
           <div className="hidden md:flex items-center gap-2 shrink-0">
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf || sharingPdf}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              {generatingPdf ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              PDF
+            </Button>
+            <Button
+              onClick={handleSharePdf}
+              disabled={sharingPdf || generatingPdf}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              {sharingPdf ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}
+              Share
+            </Button>
             <a href={`tel:${customer.phone}`}>
               <Button variant="outline" size="sm" className="gap-1.5">
                 <PhoneCall className="size-4" />
@@ -287,19 +596,37 @@ export default function CustomerDetailPage() {
         {/* ── Mobile quick-action buttons ── */}
         <div className="flex gap-2 md:hidden">
           <a href={`tel:${customer.phone}`} className="flex-1">
-            <Button variant="outline" className="w-full h-10 gap-2">
-              <PhoneCall className="size-4" />
+            <Button variant="outline" className="w-full h-10 gap-1.5 text-xs">
+              <PhoneCall className="size-3.5" />
               Call
             </Button>
           </a>
           {whatsappUrl && (
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-              <Button variant="outline" className="w-full h-10 gap-2 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10">
-                <MessageSquare className="size-4" />
+              <Button variant="outline" className="w-full h-10 gap-1.5 text-xs border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10">
+                <MessageSquare className="size-3.5" />
                 WhatsApp
               </Button>
             </a>
           )}
+          <Button
+            onClick={handleDownloadPdf}
+            disabled={generatingPdf || sharingPdf}
+            variant="outline"
+            className="flex-1 gap-1.5 h-10 text-xs"
+          >
+            {generatingPdf ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+            PDF
+          </Button>
+          <Button
+            onClick={handleSharePdf}
+            disabled={sharingPdf || generatingPdf}
+            variant="outline"
+            className="flex-1 gap-1.5 h-10 text-xs"
+          >
+            {sharingPdf ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
+            Share
+          </Button>
         </div>
 
         {/* ── Contact Information Card ── */}
