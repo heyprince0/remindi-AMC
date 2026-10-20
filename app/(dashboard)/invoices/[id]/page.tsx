@@ -204,7 +204,7 @@ export default function ViewInvoicePage() {
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(fileName)
-      const publicUrl = data.publicUrl
+      const publicUrl = urlData.publicUrl // Fixed missing urlData bug here
 
       const { error: updateError } = await supabase
         .from('company_profile')
@@ -267,6 +267,7 @@ export default function ViewInvoicePage() {
       sr: index + 1,
       description: item.particulars ?? item.description ?? item.name ?? "-",
       qty: item.qty ?? item.quantity ?? 1,
+      unit: item.unit ?? "Nos.", // <-- ADDED UNIT HERE
       rate: Number(item.rate ?? item.unit_price ?? 0),
       amount: Number(item.amount ?? ((item.qty ?? item.quantity ?? 0) * (item.rate ?? item.unit_price ?? 0)) ?? 0),
     }))
@@ -472,7 +473,7 @@ export default function ViewInvoicePage() {
           y += 5
         }
 
-        // ✅ GST from invoice details — shown under customer address, only if present
+        // GST from invoice details
         if (invoiceGstin) {
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
@@ -495,17 +496,19 @@ export default function ViewInvoicePage() {
           y += (bodyLines.length * 4) + 3
         }
 
+        // ADDED UNIT IN PDF TABLE
         const tableBody = items.map((item: any, idx: number) => [
           String(idx + 1),
           safeStr(item.particulars ?? item.description ?? item.name ?? "-"),
           String(item.qty ?? item.quantity ?? 1),
+          safeStr(item.unit ?? "Nos."),
           `Rs. ${Number(item.rate ?? item.unit_price ?? 0).toLocaleString("en-IN")}`,
           `Rs. ${Number(item.amount ?? ((Number(item.qty ?? item.quantity ?? 0)) * (Number(item.rate ?? item.unit_price ?? 0)))).toLocaleString("en-IN")}`,
         ])
 
         autoTable(doc, {
           startY: y,
-          head: [["SR.NO", "PARTICULARS", "QTY.", "RATE", "AMOUNT"]],
+          head: [["SR.NO", "PARTICULARS", "QTY.", "UNIT", "RATE", "AMOUNT"]], // ADDED UNIT
           body: tableBody,
           theme: "grid",
           headStyles: {
@@ -522,9 +525,10 @@ export default function ViewInvoicePage() {
           columnStyles: {
             0: { cellWidth: 15, halign: "center" },
             1: { cellWidth: "auto" },
-            2: { cellWidth: 20, halign: "center" },
-            3: { cellWidth: 35, halign: "right" },
-            4: { cellWidth: 35, halign: "right" },
+            2: { cellWidth: 15, halign: "center" },
+            3: { cellWidth: 25, halign: "center" }, // UNIT column width
+            4: { cellWidth: 30, halign: "right" },
+            5: { cellWidth: 35, halign: "right" },
           },
           margin: { left: margin, right: margin },
           pageBreak: "avoid",
@@ -977,6 +981,7 @@ export default function ViewInvoicePage() {
             </div>
           )}
 
+          {/* HTML Table with Unit Column */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -984,6 +989,7 @@ export default function ViewInvoicePage() {
                   <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-10">#</th>
                   <th className="text-left py-2.5 px-4 font-medium text-muted-foreground text-xs">Description</th>
                   <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-16">Qty</th>
+                  <th className="text-center py-2.5 px-4 font-medium text-muted-foreground text-xs w-24">Unit</th>
                   <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Rate</th>
                   <th className="text-right py-2.5 px-4 font-medium text-muted-foreground text-xs w-28">Amount</th>
                 </tr>
@@ -991,7 +997,7 @@ export default function ViewInvoicePage() {
               <tbody className="divide-y divide-border/60">
                 {mappedItems.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
+                    <td colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
                       No items added
                     </td>
                   </tr>
@@ -1001,6 +1007,7 @@ export default function ViewInvoicePage() {
                       <td className="text-center py-3 px-4 text-xs text-muted-foreground">{item.sr}</td>
                       <td className="py-3 px-4 font-medium text-sm">{item.description}</td>
                       <td className="text-center py-3 px-4 text-sm text-muted-foreground">{item.qty}</td>
+                      <td className="text-center py-3 px-4 text-sm text-muted-foreground">{item.unit}</td>
                       <td className="text-right py-3 px-4 text-sm text-muted-foreground">
                         ₹{Number(item.rate).toLocaleString("en-IN")}
                       </td>
@@ -1198,4 +1205,4 @@ export default function ViewInvoicePage() {
       </Dialog>
     </DashboardLayout>
   )
-            }
+}
