@@ -188,7 +188,7 @@ The general development workflow involves:
 
 ## About Remindi
 
-Remindi is built and maintained by **Prakash Jadhav (Prince)**.
+Remindi Software is founded and maintained by **Prakash Jadhav (Prince)**.
 
 Remindi is a product of **Cosmos**, a software venture focused on building practical digital tools for businesses.
 
