@@ -15,7 +15,7 @@ const supabase = createClient(
 
 const NOTIFY_AT_DAYS = [3, 0, -1, -3, -7]
 
-// ── MSG91 HELPERS (Moved inside the cron to bypass Vercel timeouts) ──
+// ── MSG91 HELPERS (Direct API calls, bypassing Vercel fetch limits) ──
 function formatPhone(phone: string): string | null {
   let digits = String(phone ?? '').replace(/\D/g, '')
   digits = digits.replace(/^0+/, '')
