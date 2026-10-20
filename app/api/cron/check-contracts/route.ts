@@ -157,20 +157,7 @@ export async function GET() {
         const ownerPhone = ownerPhoneMap[ownerId]
         const ownerName = ownerNameMap[ownerId] || 'Contractor'
 
-        // 1A. SEND EMAIL
-        if (userEmail) {
-          let result
-          if (daysUntil < 0) {
-            result = await sendAMCExpiredEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
-          } else if (daysUntil === 0) {
-            result = await sendServiceReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName, contract.contract_name || 'Service', customerPhone, ownerName)
-          } else {
-            result = await sendAMCExpiryReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
-          }
-          if (result.success) { sent++ } else { errors.push(`Contract ${contract.id}: ${result.error}`) }
-        }
-
-        // 1B. SEND WHATSAPP (Direct to MSG91)
+        // ── 1A. SEND WHATSAPP FIRST (Critical Path) ──
         if (ownerPhone) {
           const waType = daysUntil > 0 ? 'upcoming' : 'not_completed'
           const dedupKey = `${waType}_${contract.id}_${contract.next_service_date}`
@@ -194,7 +181,7 @@ export async function GET() {
               button_1: { subtype: 'url', type: 'text', value: contract.id },
             }
 
-            // ✅ NEW: 1.5 second delay to prevent MSG91 Rate Limiting (429 Too Many Requests)
+            // 1.5 second delay to prevent MSG91 Rate Limiting
             await new Promise(r => setTimeout(r, 1500))
             
             const { delivered, result } = await sendWA(templateName, ownerPhone, components)
@@ -211,11 +198,24 @@ export async function GET() {
             })
           }
         }
+
+        // ── 1B. SEND EMAIL SECOND ──
+        if (userEmail) {
+          let result
+          if (daysUntil < 0) {
+            result = await sendAMCExpiredEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
+          } else if (daysUntil === 0) {
+            result = await sendServiceReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName, contract.contract_name || 'Service', customerPhone, ownerName)
+          } else {
+            result = await sendAMCExpiryReminderEmail(userEmail, contract.contract_name, contract.next_service_date, customerName)
+          }
+          if (result.success) { sent++ } else { errors.push(`Contract ${contract.id}: ${result.error}`) }
+        }
       }
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 2. AMC EXPIRY REMINDERS
+    // 2. AMC EXPIRY REMINDERS (WhatsApp Only)
     // ─────────────────────────────────────────────────────────────
     const in30DaysStr = new Date(today.getTime() + 30 * 86400000).toISOString().split('T')[0]
     const ago1DayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
@@ -302,7 +302,7 @@ export async function GET() {
           button_1: { subtype: 'url', type: 'text', value: contract.id },
         }
 
-        // ✅ NEW: 1.5 second delay to prevent MSG91 Rate Limiting
+        // 1.5 second delay to prevent MSG91 Rate Limiting
         await new Promise(r => setTimeout(r, 1500))
 
         const { delivered, result } = await sendWA(reminderType, contractorPhone, components)
