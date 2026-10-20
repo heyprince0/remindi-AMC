@@ -121,9 +121,9 @@ export async function GET() {
       const ownerNameMap: Record<string, string> = {}
 
       if (ownerIds.length) {
-        const { data: profiles } = await supabase.from('profiles').select('id, email, phone, full_name').in('id', ownerIds)
+        // ✅ FIX: Removed 'email' from profiles select because the column doesn't exist
+        const { data: profiles } = await supabase.from('profiles').select('id, phone, full_name').in('id', ownerIds)
         for (const p of profiles || []) {
-          if (p.email) ownerEmailMap[p.id] = p.email
           if (p.phone) ownerPhoneMap[p.id] = p.phone
           if (p.full_name) ownerNameMap[p.id] = p.full_name
         }
@@ -131,6 +131,7 @@ export async function GET() {
 
       const missingIds = ownerIds.filter(id => !ownerEmailMap[id] || !ownerPhoneMap[id] || !ownerNameMap[id])
       if (missingIds.length) {
+        // ✅ FIX: Email will now correctly fall back to auth.users
         const { data: { users } } = await supabase.auth.admin.listUsers()
         for (const u of users || []) {
           if (missingIds.includes(u.id)) {
