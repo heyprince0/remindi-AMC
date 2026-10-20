@@ -22,6 +22,12 @@ import { Plus, Trash2, Save, ArrowLeft, Loader2, Percent } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 
+const UNIT_OPTIONS = [
+  "Piece (PCS)", "Set", "Unit", "Nos.", "Meter (m)",
+  "Feet (ft)", "Kilogram (kg)", "Liter (L)", "Box",
+  "Pack", "Roll", "Hour (hr)", "Day", "Job", "Visit"
+]
+
 export default function NewQuotationPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -36,8 +42,9 @@ export default function NewQuotationPage() {
   const [orderNo, setOrderNo] = useState("")
   const [subject, setSubject] = useState("")
   const [bodyText, setBodyText] = useState("")
-  const [items, setItems] = useState<QuotationItem[]>([
-    { id: "1", description: "", quantity: 1, unit_price: 0, amount: 0 },
+  
+  const [items, setItems] = useState<any[]>([
+    { id: "1", description: "", quantity: 1, unit: "Nos.", unit_price: 0, amount: 0 },
   ])
   const [includeGst, setIncludeGst] = useState(true)
   const [gstRate, setGstRate] = useState(18)
@@ -116,7 +123,7 @@ export default function NewQuotationPage() {
 
   const handleAddItem = () => {
     const newId = String(Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1)
-    setItems([...items, { id: newId, description: "", quantity: 1, unit_price: 0, amount: 0 }])
+    setItems([...items, { id: newId, description: "", quantity: 1, unit: "Nos.", unit_price: 0, amount: 0 }])
   }
 
   const handleRemoveItem = (id: string) => {
@@ -127,7 +134,7 @@ export default function NewQuotationPage() {
     }
   }
 
-  const handleItemChange = (id: string, field: keyof QuotationItem, value: any) => {
+  const handleItemChange = (id: string, field: string, value: any) => {
     const updatedItems = items.map(item => {
       if (item.id === id) {
         const updated = { ...item, [field]: value }
@@ -399,6 +406,24 @@ export default function NewQuotationPage() {
                     }}
                     onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
                   />
+                </div>
+                <div className="w-28 space-y-2">
+                  <Label htmlFor={`unit-${item.id}`} className="text-xs">
+                    Unit
+                  </Label>
+                  <Select
+                    value={item.unit || "Nos."}
+                    onValueChange={(val) => handleItemChange(item.id, "unit", val)}
+                  >
+                    <SelectTrigger id={`unit-${item.id}`} className="h-10">
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_OPTIONS.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="w-32 space-y-2">
                   <Label htmlFor={`price-${item.id}`} className="text-xs">
