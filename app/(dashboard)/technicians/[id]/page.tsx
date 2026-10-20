@@ -435,43 +435,72 @@ export default function TechnicianDetailPage() {
   }
 
   // --- WhatsApp Notification Logic ---
+  // Plain fetch + separate customer lookup (same pattern as the rest of the app).
   const sendWorkWhatsApp = async (jobId: string) => {
     try {
-      const { data: job } = await supabase
+      if (!currentOrgId) return
+
+      // 1. Job — plain select, no PostgREST embed
+      const { data: job, error: jobErr } = await supabase
         .from('technician_jobs')
-        .select('*, customers(name, phone), technicians(name)')
+        .select('*')
         .eq('id', jobId)
         .eq('org_id', currentOrgId)
-        .single();
+        .single()
 
-      if (!job) return;
+      if (jobErr || !job) {
+        console.error('notify(work): job fetch failed', jobErr)
+        return
+      }
 
-      await fetch('/api/whatsapp/notify-technician', {
+      // 2. Customer — separate lookup, filtered by org
+      let customerName = 'Customer'
+      let customerPhone = ''
+      if (job.customer_id) {
+        const { data: customer, error: cErr } = await supabase
+          .from('customers')
+          .select('name, phone')
+          .eq('id', job.customer_id)
+          .eq('org_id', currentOrgId)
+          .single()
+        if (cErr) console.error('notify(work): customer fetch failed', cErr)
+        customerName = customer?.name || 'Customer'
+        customerPhone = customer?.phone || ''
+      }
+
+      // 3. POST to the route — surface any failure
+      const res = await fetch('/api/whatsapp/notify-technician', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateType: 'work',
           technicianId: job.technician_id,
           title: job.title,
-          customerName: job.customers?.name || 'Customer',
-          customerPhone: job.customers?.phone || '',
+          customerName,
+          customerPhone,
           assignedDate: job.assigned_date,
           dueDate: job.due_date,
           notes: job.notes,
           orgId: currentOrgId,
         }),
-      });
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error('notify(work): API failed', res.status, err)
+        toast.error('Could not send WhatsApp notification')
+      }
     } catch (err) {
-      console.error('Failed to send work WhatsApp:', err);
+      console.error('notify(work): unexpected', err)
     }
-  };
+  }
 
   const handleModalSuccess = async () => {
-    await loadTechnicianDetails();
-    
+    await loadTechnicianDetails()
+
     // Wait briefly for DB transaction to commit, then fetch latest job
     setTimeout(async () => {
-      if (!currentOrgId) return;
+      if (!currentOrgId) return
       const { data: latestJob } = await supabase
         .from('technician_jobs')
         .select('id')
@@ -479,13 +508,13 @@ export default function TechnicianDetailPage() {
         .eq('org_id', currentOrgId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .single()
 
       if (latestJob?.id) {
-        await sendWorkWhatsApp(latestJob.id);
+        await sendWorkWhatsApp(latestJob.id)
       }
-    }, 800);
-  };
+    }, 800)
+  }
 
   const handleStatusSave = async () => {
     try {
