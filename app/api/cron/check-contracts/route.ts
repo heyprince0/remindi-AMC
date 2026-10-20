@@ -121,7 +121,6 @@ export async function GET() {
       const ownerNameMap: Record<string, string> = {}
 
       if (ownerIds.length) {
-        // ✅ FIX: Removed 'email' from profiles select because the column doesn't exist
         const { data: profiles } = await supabase.from('profiles').select('id, phone, full_name').in('id', ownerIds)
         for (const p of profiles || []) {
           if (p.phone) ownerPhoneMap[p.id] = p.phone
@@ -131,7 +130,6 @@ export async function GET() {
 
       const missingIds = ownerIds.filter(id => !ownerEmailMap[id] || !ownerPhoneMap[id] || !ownerNameMap[id])
       if (missingIds.length) {
-        // ✅ FIX: Email will now correctly fall back to auth.users
         const { data: { users } } = await supabase.auth.admin.listUsers()
         for (const u of users || []) {
           if (missingIds.includes(u.id)) {
@@ -172,7 +170,7 @@ export async function GET() {
           if (result.success) { sent++ } else { errors.push(`Contract ${contract.id}: ${result.error}`) }
         }
 
-        // 1B. SEND WHATSAPP (Direct to MSG91, no internal fetch)
+        // 1B. SEND WHATSAPP (Direct to MSG91)
         if (ownerPhone) {
           const waType = daysUntil > 0 ? 'upcoming' : 'not_completed'
           const dedupKey = `${waType}_${contract.id}_${contract.next_service_date}`
@@ -195,6 +193,9 @@ export async function GET() {
               body_5: { type: 'text', value: clean(customerPhone, 'Not available') },
               button_1: { subtype: 'url', type: 'text', value: contract.id },
             }
+
+            // ✅ NEW: 1.5 second delay to prevent MSG91 Rate Limiting (429 Too Many Requests)
+            await new Promise(r => setTimeout(r, 1500))
             
             const { delivered, result } = await sendWA(templateName, ownerPhone, components)
 
@@ -300,6 +301,9 @@ export async function GET() {
           body_5: { type: 'text', value: clean(contractorPhone, 'Not available') },
           button_1: { subtype: 'url', type: 'text', value: contract.id },
         }
+
+        // ✅ NEW: 1.5 second delay to prevent MSG91 Rate Limiting
+        await new Promise(r => setTimeout(r, 1500))
 
         const { delivered, result } = await sendWA(reminderType, contractorPhone, components)
         if (delivered) amcSent++
