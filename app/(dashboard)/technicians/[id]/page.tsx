@@ -77,7 +77,6 @@ export default function TechnicianDetailPage() {
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [scanDialogOpen, setScanDialogOpen] = useState(false)
 
-  // ── Delete job dialog state ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -407,13 +406,11 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  // ── Open delete confirmation dialog ──
   const openDeleteDialog = (job: JobWithCustomer) => {
     setJobToDelete(job)
     setDeleteDialogOpen(true)
   }
 
-  // ── Perform delete after confirmation ──
   const handleConfirmDelete = async () => {
     if (!currentOrgId || !jobToDelete || deleting) return
     setDeleting(true)
@@ -437,9 +434,58 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  const handleModalSuccess = () => {
-    loadTechnicianDetails()
-  }
+  // --- WhatsApp Notification Logic ---
+  const sendWorkWhatsApp = async (jobId: string) => {
+    try {
+      const { data: job } = await supabase
+        .from('technician_jobs')
+        .select('*, customers(name, phone), technicians(name)')
+        .eq('id', jobId)
+        .eq('org_id', currentOrgId)
+        .single();
+
+      if (!job) return;
+
+      await fetch('/api/whatsapp/notify-technician', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateType: 'work',
+          technicianId: job.technician_id,
+          title: job.title,
+          customerName: job.customers?.name || 'Customer',
+          customerPhone: job.customers?.phone || '',
+          assignedDate: job.assigned_date,
+          dueDate: job.due_date,
+          notes: job.notes,
+          orgId: currentOrgId,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to send work WhatsApp:', err);
+    }
+  };
+
+  const handleModalSuccess = async () => {
+    await loadTechnicianDetails();
+    
+    // Wait briefly for DB transaction to commit, then fetch latest job
+    setTimeout(async () => {
+      if (!currentOrgId) return;
+      const { data: latestJob } = await supabase
+        .from('technician_jobs')
+        .select('id')
+        .eq('technician_id', technicianId)
+        .eq('org_id', currentOrgId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (latestJob?.id) {
+        await sendWorkWhatsApp(latestJob.id);
+      }
+    }, 800);
+  };
 
   const handleStatusSave = async () => {
     try {
@@ -524,7 +570,6 @@ export default function TechnicianDetailPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {showBackButton && (
@@ -551,7 +596,6 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
-        {/* ── Technician Info Card ── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -632,7 +676,6 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── DESKTOP: Assigned Jobs Table ── */}
         <Card className="hidden md:block">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
@@ -727,7 +770,6 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE: Assigned Jobs Cards ── */}
         <div className="flex flex-col gap-4 md:hidden">
           <div className="flex items-center justify-between">
             <div>
@@ -784,7 +826,6 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
-        {/* ── DESKTOP: Job History Table ── */}
         <Card className="hidden md:block">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -892,7 +933,6 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ── MOBILE: Job History — compact timeline log ── */}
         <div className="flex flex-col gap-3 md:hidden">
           <div>
             <h2 className="text-base font-semibold flex items-center gap-1.5">
@@ -1004,7 +1044,6 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
-        {/* Modals */}
         {user && currentOrgId && (
           <AddTechnicianJobModal
             open={modalOpen}
@@ -1084,7 +1123,6 @@ export default function TechnicianDetailPage() {
           </DialogContent>
         </Dialog>
 
-        {/* ── Delete Job Confirmation Dialog ── */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
