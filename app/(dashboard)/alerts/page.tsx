@@ -19,6 +19,7 @@ import { toast } from "sonner"
 interface ServiceAlert {
   id: string
   customer: string
+  customerPhone: string
   contract: string
   serviceType: string
   dueDate: string
@@ -53,7 +54,6 @@ function ServiceAlertCard({
   return (
     <Card className={`border-l-4 ${borderColor} ${bgColor}`}>
       <CardContent className="p-4">
-        {/* Info row */}
         <div className="flex flex-col gap-3">
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
@@ -81,7 +81,6 @@ function ServiceAlertCard({
             </div>
           </div>
 
-          {/* Action buttons — full width on mobile, inline on desktop */}
           <div className="flex gap-2 md:flex-row md:justify-end">
             <Button
               variant="outline"
@@ -214,6 +213,7 @@ export default function ServiceAlertsPage() {
         const alert: ServiceAlert = {
           id: contract.id,
           customer: customer?.name || "Unknown Customer",
+          customerPhone: customer?.phone || "",
           contract: contract.contract_name,
           serviceType: contract.service_type || "Service",
           dueDate: contract.next_service_date,
@@ -248,7 +248,59 @@ export default function ServiceAlertsPage() {
     setAssignModalOpen(true)
   }
 
-  const handleAssignSuccess = () => loadServices()
+  // --- WhatsApp Notification Logic ---
+  const sendServiceWhatsApp = async (jobId: string) => {
+    try {
+      const { data: job } = await supabase
+        .from('technician_jobs')
+        .select('*, customers(name, phone), technicians(name)')
+        .eq('id', jobId)
+        .eq('org_id', currentOrgId)
+        .single();
+
+      if (!job) return;
+
+      await fetch('/api/whatsapp/notify-technician', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateType: 'service',
+          technicianId: job.technician_id,
+          title: job.title,
+          customerName: job.customers?.name || 'Customer',
+          customerPhone: job.customers?.phone || '',
+          assignedDate: job.assigned_date,
+          dueDate: job.due_date,
+          notes: job.notes,
+          orgId: currentOrgId,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to send service WhatsApp:', err);
+    }
+  };
+
+  const handleAssignSuccess = async () => {
+    await loadServices();
+    if (!contractToAssign || !currentOrgId) return;
+    
+    // Wait briefly for DB transaction to commit, then fetch latest job
+    setTimeout(async () => {
+      const { data: latestJob } = await supabase
+        .from('technician_jobs')
+        .select('id')
+        .eq('contract_id', contractToAssign.id)
+        .eq('org_id', currentOrgId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (latestJob?.id) {
+        await sendServiceWhatsApp(latestJob.id);
+      }
+    }, 800);
+  };
+
   const handleModalSuccess = () => loadServices()
 
   const handleViewPlans = () => {
@@ -266,8 +318,6 @@ export default function ServiceAlertsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-4 md:gap-6">
-
-        {/* ── MOBILE header: compact ── */}
         <div className="flex items-center justify-between md:hidden">
           <div>
             <h1 className="text-xl font-bold text-foreground">Service Alerts</h1>
@@ -277,13 +327,11 @@ export default function ServiceAlertsPage() {
           </div>
         </div>
 
-        {/* ── DESKTOP header: full ── */}
         <div className="hidden md:block">
           <h1 className="text-2xl font-bold text-foreground">Service Alerts</h1>
           <p className="text-muted-foreground">Monitor and manage upcoming and overdue services</p>
         </div>
 
-        {/* ── MOBILE: compact 3-column stat row ── */}
         <div className="grid grid-cols-3 gap-2 md:hidden">
           <div className="rounded-lg border-l-4 border-l-alert-overdue bg-alert-overdue/5 p-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -308,7 +356,6 @@ export default function ServiceAlertsPage() {
           </div>
         </div>
 
-        {/* ── DESKTOP: full 3-card grid (unchanged) ── */}
         <div className="hidden md:grid gap-4 sm:grid-cols-3">
           <Card className="border-l-4 border-l-alert-overdue bg-alert-overdue/5">
             <CardHeader className="pb-2">
@@ -348,9 +395,7 @@ export default function ServiceAlertsPage() {
           </Card>
         </div>
 
-        {/* ── Tabs ── */}
         <Tabs defaultValue="overdue" className="w-full">
-          {/* Mobile: full-width 3-col tabs with short labels */}
           <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
             <TabsTrigger value="overdue" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <span className="size-2 rounded-full bg-alert-overdue shrink-0" />
@@ -432,7 +477,6 @@ export default function ServiceAlertsPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Modals — untouched */}
         {user && currentOrgId && (
           <MarkCompleteModal
             open={modalOpen}
