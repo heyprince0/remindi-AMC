@@ -22,6 +22,12 @@ import { Plus, Trash2, Save, ArrowLeft, Loader2, Percent } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 
+const UNIT_OPTIONS = [
+  "Piece (PCS)", "Set", "Unit", "Nos.", "Meter (m)",
+  "Feet (ft)", "Kilogram (kg)", "Liter (L)", "Box",
+  "Pack", "Roll", "Hour (hr)", "Day", "Job", "Visit"
+]
+
 export default function EditQuotationPage() {
   const params = useParams()
   const router = useRouter()
@@ -38,7 +44,7 @@ export default function EditQuotationPage() {
   const [orderNo, setOrderNo] = useState("")
   const [subject, setSubject] = useState("")
   const [bodyText, setBodyText] = useState("")
-  const [items, setItems] = useState<QuotationItem[]>([])
+  const [items, setItems] = useState<any[]>([])
   const [includeGst, setIncludeGst] = useState(true)
   const [gstRate, setGstRate] = useState(18)
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
@@ -96,7 +102,13 @@ export default function EditQuotationPage() {
       setOrderNo(quotation.order_no || "")
       setSubject(quotation.subject || "")
       setBodyText(quotation.body_text || "")
-      setItems(quotation.items)
+      
+      const processedItems = (quotation.items ?? []).map((item: any) => ({
+        ...item,
+        unit: item.unit || "Nos."
+      }))
+      setItems(processedItems)
+
       setIncludeGst(quotation.include_gst)
       setGstRate(quotation.gst_rate || 18)
       setDiscountType(quotation.discount_type === "fixed" ? "fixed" : "percentage")
@@ -113,7 +125,7 @@ export default function EditQuotationPage() {
 
   const handleAddItem = () => {
     const newId = String(Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1)
-    setItems([...items, { id: newId, description: "", quantity: 1, unit_price: 0, amount: 0 }])
+    setItems([...items, { id: newId, description: "", quantity: 1, unit: "Nos.", unit_price: 0, amount: 0 }])
   }
 
   const handleRemoveItem = (id: string) => {
@@ -124,7 +136,7 @@ export default function EditQuotationPage() {
     }
   }
 
-  const handleItemChange = (id: string, field: keyof QuotationItem, value: any) => {
+  const handleItemChange = (id: string, field: string, value: any) => {
     const updatedItems = items.map(item => {
       if (item.id === id) {
         const updated = { ...item, [field]: value }
@@ -191,7 +203,7 @@ export default function EditQuotationPage() {
           notes: notes,
         })
         .eq("id", id)
-        .eq("org_id", currentOrgId)   // <-- added
+        .eq("org_id", currentOrgId)
 
       if (error) throw error
       toast.success("Quotation updated successfully")
@@ -396,6 +408,24 @@ export default function EditQuotationPage() {
                     }}
                     onChange={(e) => handleItemChange(item.id, "quantity", parseFloat(e.target.value) || 0)}
                   />
+                </div>
+                <div className="w-28 space-y-2">
+                  <Label htmlFor={`unit-${item.id}`} className="text-xs">
+                    Unit
+                  </Label>
+                  <Select
+                    value={item.unit || "Nos."}
+                    onValueChange={(val) => handleItemChange(item.id, "unit", val)}
+                  >
+                    <SelectTrigger id={`unit-${item.id}`} className="h-10">
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_OPTIONS.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="w-32 space-y-2">
                   <Label htmlFor={`price-${item.id}`} className="text-xs">
