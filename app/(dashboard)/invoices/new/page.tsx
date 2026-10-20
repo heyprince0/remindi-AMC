@@ -79,6 +79,47 @@ export default function NewInvoicePage() {
     }
   }, [user?.id])
 
+  // --- Auto-generate next Order Number ---
+  useEffect(() => {
+    if (!currentOrgId) return;
+
+    const generateOrderNo = async () => {
+      try {
+        // We fetch order numbers from both invoices and quotations to ensure sequence doesn't clash
+        const [invRes, quoteRes] = await Promise.all([
+          supabase.from("invoices").select("order_no").eq("org_id", currentOrgId).not("order_no", "is", null).like("order_no", "ORD-%"),
+          supabase.from("quotations").select("order_no").eq("org_id", currentOrgId).not("order_no", "is", null).like("order_no", "ORD-%")
+        ]);
+
+        let maxNum = 0;
+        
+        const processData = (data: any[] | null) => {
+          if (data) {
+            data.forEach((record) => {
+              if (record.order_no) {
+                const match = record.order_no.match(/ORD-(\d+)/i);
+                if (match) {
+                  const num = parseInt(match[1], 10);
+                  if (!isNaN(num) && num > maxNum) maxNum = num;
+                }
+              }
+            });
+          }
+        };
+
+        processData(invRes.data);
+        processData(quoteRes.data);
+
+        setOrderNo(`ORD-${String(maxNum + 1).padStart(3, "0")}`);
+      } catch (err) {
+        console.error("Failed to generate order no", err);
+        setOrderNo("ORD-001");
+      }
+    };
+
+    generateOrderNo();
+  }, [currentOrgId]);
+
   // Set default invoice date to today
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -251,13 +292,13 @@ export default function NewInvoicePage() {
 
             <div className="space-y-2">
               <Label htmlFor="order-no">
-                Order Number <span className="text-xs text-muted-foreground">(Optional)</span>
+                Order Number <span className="text-xs text-muted-foreground">(Auto-generated, editable)</span>
               </Label>
               <Input
                 id="order-no"
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
-                placeholder="e.g. PO-2026-001"
+                placeholder="e.g. ORD-001"
               />
             </div>
 
