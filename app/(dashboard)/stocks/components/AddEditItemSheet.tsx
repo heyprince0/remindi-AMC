@@ -22,6 +22,7 @@ import {
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
+// ─── Inventory item (existing) ────────────────────────────────────────────────
 interface InventoryItem {
   id: string
   org_id: string
@@ -43,6 +44,21 @@ interface InventoryItem {
   updated_at: string
 }
 
+// ─── Catalog product (new — maps to `products` table) ────────────────────────
+export interface CatalogProduct {
+  id: string
+  org_id: string
+  name: string
+  description: string | null
+  unit: string
+  selling_price: number | null
+  hsn_code: string | null
+  category: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 interface Category {
   id: string
   name: string
@@ -51,26 +67,45 @@ interface Category {
 interface AddEditItemSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  editingItem: InventoryItem | null
-  categories: Category[]
+  // Inventory mode props (unchanged)
+  editingItem?: InventoryItem | null
+  categories?: Category[]
+  prefillSku?: string
+  // Catalog mode props (new)
+  catalogMode?: boolean
+  editingProduct?: CatalogProduct | null
+  // Shared
   orgId: string
   onSuccess: () => void
-  prefillSku?: string
 }
 
-const UNITS = ["piece", "kg", "liter", "meter", "box", "pack", "pair", "set"]
+const INVENTORY_UNITS = ["piece", "kg", "liter", "meter", "box", "pack", "pair", "set"]
+
+const CATALOG_UNITS = [
+  "Piece (PCS)", "Set", "Unit", "Nos.", "Meter (m)",
+  "Feet (ft)", "Kilogram (kg)", "Liter (L)", "Box",
+  "Pack", "Roll", "Hour (hr)", "Day", "Job", "Visit",
+]
+
+const CATALOG_CATEGORY_SUGGESTIONS = [
+  "Filters", "Labour", "Parts", "AMC", "Repair", "Installation", "Other",
+]
 
 export default function AddEditItemSheet({
   open,
   onOpenChange,
-  editingItem,
-  categories,
+  editingItem = null,
+  categories = [],
+  prefillSku,
+  catalogMode = false,
+  editingProduct = null,
   orgId,
   onSuccess,
-  prefillSku,
 }: AddEditItemSheetProps) {
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
+
+  // ─── Inventory form state ─────────────────────────────────────────────────
+  const [inventoryForm, setInventoryForm] = useState({
     name: "",
     sku: "",
     category_id: "",
@@ -85,64 +120,148 @@ export default function AddEditItemSheet({
     notes: "",
   })
 
+  // ─── Catalog form state ───────────────────────────────────────────────────
+  const [catalogForm, setCatalogForm] = useState({
+    name: "",
+    category: "",
+    unit: "Nos.",
+    selling_price: "",
+    hsn_code: "",
+    description: "",
+  })
+
+  // ─── Populate forms when editing ─────────────────────────────────────────
   useEffect(() => {
-    if (editingItem) {
-      setFormData({
-        name: editingItem.name,
-        sku: editingItem.sku,
-        category_id: editingItem.category_id || "",
-        brand: editingItem.brand || "",
-        unit: editingItem.unit,
-        purchase_price: editingItem.purchase_price ? editingItem.purchase_price.toString() : "",
-        selling_price: editingItem.selling_price ? editingItem.selling_price.toString() : "",
-        current_stock: editingItem.current_stock ? editingItem.current_stock.toString() : "",
-        min_stock_level: editingItem.min_stock_level ? editingItem.min_stock_level.toString() : "",
-        max_stock_level: editingItem.max_stock_level?.toString() || "",
-        storage_location: editingItem.storage_location || "",
-        notes: editingItem.notes || "",
-      })
+    if (!open) return
+
+    if (catalogMode) {
+      if (editingProduct) {
+        setCatalogForm({
+          name: editingProduct.name,
+          category: editingProduct.category ?? "",
+          unit: editingProduct.unit ?? "Nos.",
+          selling_price: editingProduct.selling_price?.toString() ?? "",
+          hsn_code: editingProduct.hsn_code ?? "",
+          description: editingProduct.description ?? "",
+        })
+      } else {
+        setCatalogForm({
+          name: "",
+          category: "",
+          unit: "Nos.",
+          selling_price: "",
+          hsn_code: "",
+          description: "",
+        })
+      }
     } else {
-      setFormData({
-        name: "",
-        sku: prefillSku || "",
-        category_id: "",
-        brand: "",
-        unit: "piece",
-        purchase_price: "",
-        selling_price: "",
-        current_stock: "",
-        min_stock_level: "",
-        max_stock_level: "",
-        storage_location: "",
-        notes: "",
-      })
+      if (editingItem) {
+        setInventoryForm({
+          name: editingItem.name,
+          sku: editingItem.sku,
+          category_id: editingItem.category_id ?? "",
+          brand: editingItem.brand ?? "",
+          unit: editingItem.unit,
+          purchase_price: editingItem.purchase_price?.toString() ?? "",
+          selling_price: editingItem.selling_price?.toString() ?? "",
+          current_stock: editingItem.current_stock?.toString() ?? "",
+          min_stock_level: editingItem.min_stock_level?.toString() ?? "",
+          max_stock_level: editingItem.max_stock_level?.toString() ?? "",
+          storage_location: editingItem.storage_location ?? "",
+          notes: editingItem.notes ?? "",
+        })
+      } else {
+        setInventoryForm({
+          name: "",
+          sku: prefillSku ?? "",
+          category_id: "",
+          brand: "",
+          unit: "piece",
+          purchase_price: "",
+          selling_price: "",
+          current_stock: "",
+          min_stock_level: "",
+          max_stock_level: "",
+          storage_location: "",
+          notes: "",
+        })
+      }
     }
-  }, [editingItem, open, prefillSku])
+  }, [open, editingItem, editingProduct, catalogMode, prefillSku])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ─── Submit: catalog mode ─────────────────────────────────────────────────
+  const handleCatalogSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    if (!catalogForm.name.trim()) {
+      toast.error("Product name is required")
+      return
+    }
 
+    setLoading(true)
     try {
-      if (!formData.name.trim()) {
-        toast.error("Item name is required")
-        return
+      const payload = {
+        org_id: orgId,
+        name: catalogForm.name.trim(),
+        category: catalogForm.category.trim() || null,
+        unit: catalogForm.unit,
+        selling_price: parseFloat(catalogForm.selling_price) || null,
+        hsn_code: catalogForm.hsn_code.trim() || null,
+        description: catalogForm.description.trim() || null,
+        is_active: true,
       }
 
+      if (editingProduct) {
+        const { error } = await supabase
+          .from("products")
+          .update(payload)
+          .eq("id", editingProduct.id)
+          .eq("org_id", orgId)
+        if (error) throw error
+        toast.success("Product updated")
+      } else {
+        const { error } = await supabase
+          .from("products")
+          .insert([payload])
+        if (error) throw error
+        toast.success("Product added to catalog")
+      }
+
+      onOpenChange(false)
+      onSuccess()
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to save product")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ─── Submit: inventory mode (unchanged logic) ─────────────────────────────
+  const handleInventorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inventoryForm.name.trim()) {
+      toast.error("Item name is required")
+      return
+    }
+
+    setLoading(true)
+    try {
       const itemData = {
         org_id: orgId,
-        name: formData.name.trim(),
-        sku: formData.sku.trim(),
-        category_id: formData.category_id || null,
-        brand: formData.brand.trim() || null,
-        unit: formData.unit,
-        purchase_price: parseFloat(formData.purchase_price) || 0,
-        selling_price: parseFloat(formData.selling_price) || 0,
-        current_stock: parseFloat(formData.current_stock) || 0,
-        min_stock_level: parseFloat(formData.min_stock_level) || 0,
-        max_stock_level: formData.max_stock_level ? parseFloat(formData.max_stock_level) : null,
-        storage_location: formData.storage_location.trim() || null,
-        notes: formData.notes.trim() || null,
+        name: inventoryForm.name.trim(),
+        sku: inventoryForm.sku.trim(),
+        category_id: inventoryForm.category_id || null,
+        brand: inventoryForm.brand.trim() || null,
+        unit: inventoryForm.unit,
+        purchase_price: parseFloat(inventoryForm.purchase_price) || 0,
+        selling_price: parseFloat(inventoryForm.selling_price) || 0,
+        current_stock: parseFloat(inventoryForm.current_stock) || 0,
+        min_stock_level: parseFloat(inventoryForm.min_stock_level) || 0,
+        max_stock_level: inventoryForm.max_stock_level
+          ? parseFloat(inventoryForm.max_stock_level)
+          : null,
+        storage_location: inventoryForm.storage_location.trim() || null,
+        notes: inventoryForm.notes.trim() || null,
         is_active: true,
       }
 
@@ -152,14 +271,12 @@ export default function AddEditItemSheet({
           .update(itemData)
           .eq("id", editingItem.id)
           .eq("org_id", orgId)
-
         if (error) throw error
         toast.success("Item updated successfully")
       } else {
         const { error } = await supabase
           .from("inventory_items")
           .insert([itemData])
-
         if (error) throw error
         toast.success("Item created successfully")
       }
@@ -174,14 +291,27 @@ export default function AddEditItemSheet({
     }
   }
 
+  const handleSubmit = catalogMode ? handleCatalogSubmit : handleInventorySubmit
+
+  // ─── Sheet title / description ────────────────────────────────────────────
+  const title = catalogMode
+    ? editingProduct ? "Edit Product" : "Add Product"
+    : editingItem    ? "Edit Item"    : "Add New Item"
+
+  const description = catalogMode
+    ? editingProduct
+      ? "Update this product in your catalog"
+      : "Add a product or service to your catalog. It will autofill in quotations and invoices."
+    : editingItem
+      ? "Update item details"
+      : "Create a new inventory item"
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border px-6 py-5">
-          <SheetTitle className="text-xl">{editingItem ? "Edit Item" : "Add New Item"}</SheetTitle>
-          <SheetDescription>
-            {editingItem ? "Update item details" : "Create a new inventory item"}
-          </SheetDescription>
+          <SheetTitle className="text-xl">{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
 
         <form
@@ -189,189 +319,313 @@ export default function AddEditItemSheet({
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto px-6 py-6"
         >
-          <div className="flex flex-col gap-6">
-            {/* Basic Info */}
-            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
-              <h3 className="text-sm font-semibold text-foreground">Basic Info</h3>
+          {/* ═══════════════════════════════════════════════════════════════
+              CATALOG MODE — simple price list, no stock tracking
+          ═══════════════════════════════════════════════════════════════ */}
+          {catalogMode ? (
+            <div className="flex flex-col gap-6">
+              <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">Product Details</h3>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Item Name *</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Sediment Filter"
-                  className="rounded-lg"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Name */}
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="sku">SKU</Label>
+                  <Label htmlFor="catalog-name">Product / Service Name *</Label>
                   <Input
-                    id="sku"
-                    placeholder="e.g., SF-001"
+                    id="catalog-name"
+                    placeholder="e.g., Carbon Filter, Annual Service Visit"
                     className="rounded-lg"
-                    value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    value={catalogForm.name}
+                    onChange={(e) => setCatalogForm({ ...catalogForm, name: e.target.value })}
+                    required
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="brand">Brand</Label>
-                  <Input
-                    id="brand"
-                    placeholder="e.g., Kent"
-                    className="rounded-lg"
-                    value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={formData.category_id} onValueChange={(val) => setFormData({ ...formData, category_id: val })}>
-                    <SelectTrigger className="rounded-lg">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
+                {/* Category + Unit */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="catalog-category">Category</Label>
+                    {/* datalist gives suggestions without locking the user to a fixed list */}
+                    <Input
+                      id="catalog-category"
+                      list="category-suggestions"
+                      placeholder="e.g., Filters"
+                      className="rounded-lg"
+                      value={catalogForm.category}
+                      onChange={(e) => setCatalogForm({ ...catalogForm, category: e.target.value })}
+                    />
+                    <datalist id="category-suggestions">
+                      {CATALOG_CATEGORY_SUGGESTIONS.map((c) => (
+                        <option key={c} value={c} />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="unit">Unit</Label>
-                  <Select value={formData.unit} onValueChange={(val) => setFormData({ ...formData, unit: val })}>
-                    <SelectTrigger className="rounded-lg">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UNITS.map((u) => (
-                        <SelectItem key={u} value={u}>
-                          {u}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </section>
+                    </datalist>
+                  </div>
 
-            {/* Pricing & Stock */}
-            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
-              <h3 className="text-sm font-semibold text-foreground">Pricing &amp; Stock</h3>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="catalog-unit">Unit</Label>
+                    <Select
+                      value={catalogForm.unit}
+                      onValueChange={(val) => setCatalogForm({ ...catalogForm, unit: val })}
+                    >
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATALOG_UNITS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Price + HSN */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="catalog-price">Selling Price (₹)</Label>
+                    <Input
+                      id="catalog-price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="rounded-lg"
+                      value={catalogForm.selling_price}
+                      onFocus={(e) => { if (e.target.value === "0") e.target.value = "" }}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value)
+                        setCatalogForm({ ...catalogForm, selling_price: isNaN(val) ? "" : val.toString() })
+                      }}
+                      onChange={(e) => setCatalogForm({ ...catalogForm, selling_price: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="catalog-hsn">
+                      HSN / SAC Code{" "}
+                      <span className="text-xs text-muted-foreground">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="catalog-hsn"
+                      placeholder="e.g., 8414"
+                      className="rounded-lg"
+                      value={catalogForm.hsn_code}
+                      onChange={(e) => setCatalogForm({ ...catalogForm, hsn_code: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="purchase-price">Purchase Price (Rs.)</Label>
-                  <Input
-                    id="purchase-price"
-                    type="number"
-                    placeholder="0"
+                  <Label htmlFor="catalog-desc">
+                    Description{" "}
+                    <span className="text-xs text-muted-foreground">(Optional)</span>
+                  </Label>
+                  <Textarea
+                    id="catalog-desc"
+                    placeholder="Short description of this product or service..."
                     className="rounded-lg"
-                    value={formData.purchase_price}
-                    onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
-                    min="0"
-                    step="0.01"
+                    rows={3}
+                    value={catalogForm.description}
+                    onChange={(e) => setCatalogForm({ ...catalogForm, description: e.target.value })}
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="selling-price">Selling Price (Rs.)</Label>
-                  <Input
-                    id="selling-price"
-                    type="number"
-                    placeholder="0"
-                    className="rounded-lg"
-                    value={formData.selling_price}
-                    onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-              </div>
+              </section>
+            </div>
+          ) : (
+            /* ═══════════════════════════════════════════════════════════════
+                INVENTORY MODE — full stock tracking (unchanged UI)
+            ═══════════════════════════════════════════════════════════════ */
+            <div className="flex flex-col gap-6">
+              {/* Basic Info */}
+              <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">Basic Info</h3>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="current-stock">Current Stock</Label>
+                  <Label htmlFor="name">Item Name *</Label>
                   <Input
-                    id="current-stock"
-                    type="number"
-                    placeholder="0"
+                    id="name"
+                    placeholder="e.g., Sediment Filter"
                     className="rounded-lg"
-                    value={formData.current_stock}
-                    onChange={(e) => setFormData({ ...formData, current_stock: e.target.value })}
-                    min="0"
-                    step="0.01"
+                    value={inventoryForm.name}
+                    onChange={(e) => setInventoryForm({ ...inventoryForm, name: e.target.value })}
+                    required
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="min-stock">Minimum Stock Level</Label>
-                  <Input
-                    id="min-stock"
-                    type="number"
-                    placeholder="0"
-                    className="rounded-lg"
-                    value={formData.min_stock_level}
-                    onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="sku">SKU</Label>
+                    <Input
+                      id="sku"
+                      placeholder="e.g., SF-001"
+                      className="rounded-lg"
+                      value={inventoryForm.sku}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, sku: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="brand">Brand</Label>
+                    <Input
+                      id="brand"
+                      placeholder="e.g., Kent"
+                      className="rounded-lg"
+                      value={inventoryForm.brand}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, brand: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select
+                      value={inventoryForm.category_id}
+                      onValueChange={(val) => setInventoryForm({ ...inventoryForm, category_id: val })}
+                    >
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="unit">Unit</Label>
+                    <Select
+                      value={inventoryForm.unit}
+                      onValueChange={(val) => setInventoryForm({ ...inventoryForm, unit: val })}
+                    >
+                      <SelectTrigger className="rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INVENTORY_UNITS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </section>
+
+              {/* Pricing & Stock */}
+              <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">Pricing &amp; Stock</h3>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="purchase-price">Purchase Price (Rs.)</Label>
+                    <Input
+                      id="purchase-price"
+                      type="number"
+                      placeholder="0"
+                      className="rounded-lg"
+                      value={inventoryForm.purchase_price}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, purchase_price: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="selling-price">Selling Price (Rs.)</Label>
+                    <Input
+                      id="selling-price"
+                      type="number"
+                      placeholder="0"
+                      className="rounded-lg"
+                      value={inventoryForm.selling_price}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, selling_price: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="current-stock">Current Stock</Label>
+                    <Input
+                      id="current-stock"
+                      type="number"
+                      placeholder="0"
+                      className="rounded-lg"
+                      value={inventoryForm.current_stock}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, current_stock: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="min-stock">Minimum Stock Level</Label>
+                    <Input
+                      id="min-stock"
+                      type="number"
+                      placeholder="0"
+                      className="rounded-lg"
+                      value={inventoryForm.min_stock_level}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, min_stock_level: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="max-stock">Max Stock Level</Label>
+                    <Input
+                      id="max-stock"
+                      type="number"
+                      placeholder="Optional"
+                      className="rounded-lg"
+                      value={inventoryForm.max_stock_level}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, max_stock_level: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="location">Storage Location</Label>
+                    <Input
+                      id="location"
+                      placeholder="e.g., Shelf A-1"
+                      className="rounded-lg"
+                      value={inventoryForm.storage_location}
+                      onChange={(e) => setInventoryForm({ ...inventoryForm, storage_location: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Additional Details */}
+              <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="max-stock">Max Stock Level</Label>
-                  <Input
-                    id="max-stock"
-                    type="number"
-                    placeholder="Optional"
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Additional notes about this item..."
                     className="rounded-lg"
-                    value={formData.max_stock_level}
-                    onChange={(e) => setFormData({ ...formData, max_stock_level: e.target.value })}
-                    min="0"
-                    step="0.01"
+                    value={inventoryForm.notes}
+                    onChange={(e) => setInventoryForm({ ...inventoryForm, notes: e.target.value })}
+                    rows={3}
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="location">Storage Location</Label>
-                  <Input
-                    id="location"
-                    placeholder="e.g., Shelf A-1"
-                    className="rounded-lg"
-                    value={formData.storage_location}
-                    onChange={(e) => setFormData({ ...formData, storage_location: e.target.value })}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Additional Details */}
-            <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
-              <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="Additional notes about this item..."
-                  className="rounded-lg"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                />
-              </div>
-            </section>
-          </div>
+              </section>
+            </div>
+          )}
         </form>
 
-        {/* Sticky footer actions */}
+        {/* Sticky footer */}
         <div className="flex items-center justify-end gap-3 border-t border-border bg-background px-6 py-4">
           <Button
             type="button"
@@ -382,7 +636,11 @@ export default function AddEditItemSheet({
             Cancel
           </Button>
           <Button type="submit" form="item-form" disabled={loading} className="rounded-lg">
-            {loading ? "Saving..." : editingItem ? "Update Item" : "Create Item"}
+            {loading
+              ? "Saving..."
+              : catalogMode
+                ? editingProduct ? "Update Product" : "Add to Catalog"
+                : editingItem    ? "Update Item"    : "Create Item"}
           </Button>
         </div>
       </SheetContent>
