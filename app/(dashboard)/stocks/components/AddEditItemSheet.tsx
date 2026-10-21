@@ -21,8 +21,10 @@ import {
 } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { Tag, Boxes } from "lucide-react"
 
-// ─── Inventory item (existing) ────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface InventoryItem {
   id: string
   org_id: string
@@ -44,7 +46,6 @@ interface InventoryItem {
   updated_at: string
 }
 
-// ─── Catalog product (new — maps to `products` table) ────────────────────────
 export interface CatalogProduct {
   id: string
   org_id: string
@@ -67,17 +68,17 @@ interface Category {
 interface AddEditItemSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Inventory mode props (unchanged)
   editingItem?: InventoryItem | null
+  editingProduct?: CatalogProduct | null
   categories?: Category[]
   prefillSku?: string
-  // Catalog mode props (new)
-  catalogMode?: boolean
-  editingProduct?: CatalogProduct | null
-  // Shared
   orgId: string
   onSuccess: () => void
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+type Mode = "catalog" | "inventory"
 
 const INVENTORY_UNITS = ["piece", "kg", "liter", "meter", "box", "pack", "pair", "set"]
 
@@ -91,20 +92,48 @@ const CATALOG_CATEGORY_SUGGESTIONS = [
   "Filters", "Labour", "Parts", "AMC", "Repair", "Installation", "Other",
 ]
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function AddEditItemSheet({
   open,
   onOpenChange,
   editingItem = null,
+  editingProduct = null,
   categories = [],
   prefillSku,
-  catalogMode = false,
-  editingProduct = null,
   orgId,
   onSuccess,
 }: AddEditItemSheetProps) {
   const [loading, setLoading] = useState(false)
 
-  // ─── Inventory form state ─────────────────────────────────────────────────
+  // Determine initial mode:
+  // - editing an inventory item → lock to inventory
+  // - editing a catalog product → lock to catalog
+  // - new → default to catalog (Price List), user can switch
+  const getInitialMode = (): Mode => {
+    if (editingItem) return "inventory"
+    if (editingProduct) return "catalog"
+    return "catalog"
+  }
+
+  const [mode, setMode] = useState<Mode>(getInitialMode)
+
+  // Lock mode when editing — don't let the user switch tables mid-edit
+  const isEditing = !!(editingItem || editingProduct)
+
+  // ─── Catalog form state ─────────────────────────────────────────────────
+
+  const [catalogForm, setCatalogForm] = useState({
+    name: "",
+    category: "",
+    unit: "Nos.",
+    selling_price: "",
+    hsn_code: "",
+    description: "",
+  })
+
+  // ─── Inventory form state ───────────────────────────────────────────────
+
   const [inventoryForm, setInventoryForm] = useState({
     name: "",
     sku: "",
@@ -120,83 +149,75 @@ export default function AddEditItemSheet({
     notes: "",
   })
 
-  // ─── Catalog form state ───────────────────────────────────────────────────
-  const [catalogForm, setCatalogForm] = useState({
-    name: "",
-    category: "",
-    unit: "Nos.",
-    selling_price: "",
-    hsn_code: "",
-    description: "",
-  })
+  // ─── Populate forms when sheet opens ───────────────────────────────────
 
-  // ─── Populate forms when editing ─────────────────────────────────────────
   useEffect(() => {
     if (!open) return
 
-    if (catalogMode) {
-      if (editingProduct) {
-        setCatalogForm({
-          name: editingProduct.name,
-          category: editingProduct.category ?? "",
-          unit: editingProduct.unit ?? "Nos.",
-          selling_price: editingProduct.selling_price?.toString() ?? "",
-          hsn_code: editingProduct.hsn_code ?? "",
-          description: editingProduct.description ?? "",
-        })
-      } else {
-        setCatalogForm({
-          name: "",
-          category: "",
-          unit: "Nos.",
-          selling_price: "",
-          hsn_code: "",
-          description: "",
-        })
-      }
-    } else {
-      if (editingItem) {
-        setInventoryForm({
-          name: editingItem.name,
-          sku: editingItem.sku,
-          category_id: editingItem.category_id ?? "",
-          brand: editingItem.brand ?? "",
-          unit: editingItem.unit,
-          purchase_price: editingItem.purchase_price?.toString() ?? "",
-          selling_price: editingItem.selling_price?.toString() ?? "",
-          current_stock: editingItem.current_stock?.toString() ?? "",
-          min_stock_level: editingItem.min_stock_level?.toString() ?? "",
-          max_stock_level: editingItem.max_stock_level?.toString() ?? "",
-          storage_location: editingItem.storage_location ?? "",
-          notes: editingItem.notes ?? "",
-        })
-      } else {
-        setInventoryForm({
-          name: "",
-          sku: prefillSku ?? "",
-          category_id: "",
-          brand: "",
-          unit: "piece",
-          purchase_price: "",
-          selling_price: "",
-          current_stock: "",
-          min_stock_level: "",
-          max_stock_level: "",
-          storage_location: "",
-          notes: "",
-        })
-      }
-    }
-  }, [open, editingItem, editingProduct, catalogMode, prefillSku])
+    // Reset mode based on what we're editing
+    setMode(getInitialMode())
 
-  // ─── Submit: catalog mode ─────────────────────────────────────────────────
+    if (editingProduct) {
+      setCatalogForm({
+        name: editingProduct.name,
+        category: editingProduct.category ?? "",
+        unit: editingProduct.unit ?? "Nos.",
+        selling_price: editingProduct.selling_price?.toString() ?? "",
+        hsn_code: editingProduct.hsn_code ?? "",
+        description: editingProduct.description ?? "",
+      })
+    } else {
+      setCatalogForm({
+        name: "",
+        category: "",
+        unit: "Nos.",
+        selling_price: "",
+        hsn_code: "",
+        description: "",
+      })
+    }
+
+    if (editingItem) {
+      setInventoryForm({
+        name: editingItem.name,
+        sku: editingItem.sku,
+        category_id: editingItem.category_id ?? "",
+        brand: editingItem.brand ?? "",
+        unit: editingItem.unit,
+        purchase_price: editingItem.purchase_price?.toString() ?? "",
+        selling_price: editingItem.selling_price?.toString() ?? "",
+        current_stock: editingItem.current_stock?.toString() ?? "",
+        min_stock_level: editingItem.min_stock_level?.toString() ?? "",
+        max_stock_level: editingItem.max_stock_level?.toString() ?? "",
+        storage_location: editingItem.storage_location ?? "",
+        notes: editingItem.notes ?? "",
+      })
+    } else {
+      setInventoryForm({
+        name: "",
+        sku: prefillSku ?? "",
+        category_id: "",
+        brand: "",
+        unit: "piece",
+        purchase_price: "",
+        selling_price: "",
+        current_stock: "",
+        min_stock_level: "",
+        max_stock_level: "",
+        storage_location: "",
+        notes: "",
+      })
+    }
+  }, [open, editingItem, editingProduct, prefillSku])
+
+  // ─── Submit: catalog → products table ──────────────────────────────────
+
   const handleCatalogSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catalogForm.name.trim()) {
       toast.error("Product name is required")
       return
     }
-
     setLoading(true)
     try {
       const payload = {
@@ -219,11 +240,9 @@ export default function AddEditItemSheet({
         if (error) throw error
         toast.success("Product updated")
       } else {
-        const { error } = await supabase
-          .from("products")
-          .insert([payload])
+        const { error } = await supabase.from("products").insert([payload])
         if (error) throw error
-        toast.success("Product added to catalog")
+        toast.success("Product added to price list")
       }
 
       onOpenChange(false)
@@ -236,14 +255,14 @@ export default function AddEditItemSheet({
     }
   }
 
-  // ─── Submit: inventory mode (unchanged logic) ─────────────────────────────
+  // ─── Submit: inventory → inventory_items table ──────────────────────────
+
   const handleInventorySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inventoryForm.name.trim()) {
       toast.error("Item name is required")
       return
     }
-
     setLoading(true)
     try {
       const itemData = {
@@ -272,39 +291,38 @@ export default function AddEditItemSheet({
           .eq("id", editingItem.id)
           .eq("org_id", orgId)
         if (error) throw error
-        toast.success("Item updated successfully")
+        toast.success("Item updated")
       } else {
-        const { error } = await supabase
-          .from("inventory_items")
-          .insert([itemData])
+        const { error } = await supabase.from("inventory_items").insert([itemData])
         if (error) throw error
-        toast.success("Item created successfully")
+        toast.success("Item added to inventory")
       }
 
       onOpenChange(false)
       onSuccess()
     } catch (error) {
-      console.error("Error saving item:", error)
+      console.error(error)
       toast.error("Failed to save item")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSubmit = catalogMode ? handleCatalogSubmit : handleInventorySubmit
+  const handleSubmit = mode === "catalog" ? handleCatalogSubmit : handleInventorySubmit
 
-  // ─── Sheet title / description ────────────────────────────────────────────
-  const title = catalogMode
-    ? editingProduct ? "Edit Product" : "Add Product"
-    : editingItem    ? "Edit Item"    : "Add New Item"
+  // ─── Sheet title ────────────────────────────────────────────────────────
 
-  const description = catalogMode
-    ? editingProduct
-      ? "Update this product in your catalog"
-      : "Add a product or service to your catalog. It will autofill in quotations and invoices."
-    : editingItem
-      ? "Update item details"
-      : "Create a new inventory item"
+  const title = isEditing
+    ? mode === "catalog" ? "Edit Product" : "Edit Item"
+    : "Add New"
+
+  const description = isEditing
+    ? mode === "catalog"
+      ? "Update this product in your price list"
+      : "Update this inventory item"
+    : "Choose how you want to add this — price list only, or with stock tracking."
+
+  // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -314,20 +332,74 @@ export default function AddEditItemSheet({
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
 
+        {/* ── MODE SELECTOR (only shown when adding new) ─────────────────── */}
+        {!isEditing && (
+          <div className="border-b border-border px-6 py-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              What do you want to do?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Price List button */}
+              <button
+                type="button"
+                onClick={() => setMode("catalog")}
+                className={`
+                  flex flex-col items-start gap-1.5 rounded-xl border-2 p-3 text-left transition-all
+                  ${mode === "catalog"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/60"}
+                `}
+              >
+                <div className={`rounded-lg p-1.5 ${mode === "catalog" ? "bg-primary/10" : "bg-muted"}`}>
+                  <Tag className="size-4" />
+                </div>
+                <span className="text-sm font-semibold leading-tight text-foreground">
+                  Price List
+                </span>
+                <span className="text-xs leading-snug text-muted-foreground">
+                  Just name + price. Autofills in quotations.
+                </span>
+              </button>
+
+              {/* Track Stock button */}
+              <button
+                type="button"
+                onClick={() => setMode("inventory")}
+                className={`
+                  flex flex-col items-start gap-1.5 rounded-xl border-2 p-3 text-left transition-all
+                  ${mode === "inventory"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/60"}
+                `}
+              >
+                <div className={`rounded-lg p-1.5 ${mode === "inventory" ? "bg-primary/10" : "bg-muted"}`}>
+                  <Boxes className="size-4" />
+                </div>
+                <span className="text-sm font-semibold leading-tight text-foreground">
+                  Track Stock
+                </span>
+                <span className="text-xs leading-snug text-muted-foreground">
+                  Qty, low stock alerts, movements.
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <form
           id="item-form"
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto px-6 py-6"
         >
-          {/* ═══════════════════════════════════════════════════════════════
-              CATALOG MODE — simple price list, no stock tracking
-          ═══════════════════════════════════════════════════════════════ */}
-          {catalogMode ? (
+
+          {/* ══════════════════════════════════════════════════════════════
+              PRICE LIST MODE — saves to `products` table
+          ══════════════════════════════════════════════════════════════ */}
+          {mode === "catalog" && (
             <div className="flex flex-col gap-6">
               <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
                 <h3 className="text-sm font-semibold text-foreground">Product Details</h3>
 
-                {/* Name */}
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="catalog-name">Product / Service Name *</Label>
                   <Input
@@ -340,11 +412,9 @@ export default function AddEditItemSheet({
                   />
                 </div>
 
-                {/* Category + Unit */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="catalog-category">Category</Label>
-                    {/* datalist gives suggestions without locking the user to a fixed list */}
                     <Input
                       id="catalog-category"
                       list="category-suggestions"
@@ -371,16 +441,13 @@ export default function AddEditItemSheet({
                       </SelectTrigger>
                       <SelectContent>
                         {CATALOG_UNITS.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u}
-                          </SelectItem>
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                {/* Price + HSN */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="catalog-price">Selling Price (₹)</Label>
@@ -416,7 +483,6 @@ export default function AddEditItemSheet({
                   </div>
                 </div>
 
-                {/* Description */}
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="catalog-desc">
                     Description{" "}
@@ -433,10 +499,12 @@ export default function AddEditItemSheet({
                 </div>
               </section>
             </div>
-          ) : (
-            /* ═══════════════════════════════════════════════════════════════
-                INVENTORY MODE — full stock tracking (unchanged UI)
-            ═══════════════════════════════════════════════════════════════ */
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              TRACK STOCK MODE — saves to `inventory_items` table
+          ══════════════════════════════════════════════════════════════ */}
+          {mode === "inventory" && (
             <div className="flex flex-col gap-6">
               {/* Basic Info */}
               <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
@@ -489,9 +557,7 @@ export default function AddEditItemSheet({
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -507,9 +573,7 @@ export default function AddEditItemSheet({
                       </SelectTrigger>
                       <SelectContent>
                         {INVENTORY_UNITS.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u}
-                          </SelectItem>
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -606,7 +670,7 @@ export default function AddEditItemSheet({
                 </div>
               </section>
 
-              {/* Additional Details */}
+              {/* Notes */}
               <section className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
                 <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
                 <div className="flex flex-col gap-2">
@@ -625,7 +689,7 @@ export default function AddEditItemSheet({
           )}
         </form>
 
-        {/* Sticky footer */}
+        {/* ── Sticky footer ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 border-t border-border bg-background px-6 py-4">
           <Button
             type="button"
@@ -638,9 +702,9 @@ export default function AddEditItemSheet({
           <Button type="submit" form="item-form" disabled={loading} className="rounded-lg">
             {loading
               ? "Saving..."
-              : catalogMode
-                ? editingProduct ? "Update Product" : "Add to Catalog"
-                : editingItem    ? "Update Item"    : "Create Item"}
+              : mode === "catalog"
+                ? editingProduct ? "Update Product" : "Add to Price List"
+                : editingItem    ? "Update Item"    : "Add to Inventory"}
           </Button>
         </div>
       </SheetContent>
