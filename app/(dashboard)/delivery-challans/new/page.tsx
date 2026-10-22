@@ -22,14 +22,68 @@ const blankItem = (sr_no: number): DeliveryChallanItem => ({ sr_no, particulars:
 export default function NewDeliveryChallanPage() {
   const { user } = useAuth(); const router = useRouter(); const params = useParams()
   const id = params?.id as string | undefined; const editing = Boolean(id)
-  const [orgId, setOrgId] = useState<string | null>(null); const [saving, setSaving] = useState(false); const [loading, setLoading] = useState(editing)
-  const [challanNo, setChallanNo] = useState(""); const [slipNo, setSlipNo] = useState(""); const [challanDate, setChallanDate] = useState(today)
-  const [customerName, setCustomerName] = useState(""); const [customerAddress, setCustomerAddress] = useState(""); const [subject, setSubject] = useState(""); const [bodyText, setBodyText] = useState("Goods dispatched for the above mentioned work. Details are given as below;")
-  const [items, setItems] = useState<DeliveryChallanItem[]>([blankItem(1)]); const [vehicleNo, setVehicleNo] = useState(""); const [transportMode, setTransportMode] = useState(""); const [ewayBillNo, setEwayBillNo] = useState(""); const [driverName, setDriverName] = useState(""); const [notes, setNotes] = useState("Goods received in good condition. This challan must accompany the goods during transit. Rate/value not shown as this is a delivery challan, not a tax invoice.")
+  
+  const [orgId, setOrgId] = useState<string | null>(null); 
+  const [saving, setSaving] = useState(false); 
+  const [loading, setLoading] = useState(editing)
+  
+  const [challanNo, setChallanNo] = useState(""); 
+  const [slipNo, setSlipNo] = useState(""); 
+  const [slipNoLabel, setSlipNoLabel] = useState("Slip No"); // ⭐ New state for label
+  const [challanDate, setChallanDate] = useState(today)
+  
+  const [customerName, setCustomerName] = useState(""); 
+  const [customerAddress, setCustomerAddress] = useState(""); 
+  const [subject, setSubject] = useState(""); 
+  const [bodyText, setBodyText] = useState("Goods dispatched for the above mentioned work. Details are given as below;")
+  
+  const [items, setItems] = useState<DeliveryChallanItem[]>([blankItem(1)]); 
+  const [vehicleNo, setVehicleNo] = useState(""); 
+  const [transportMode, setTransportMode] = useState(""); 
+  const [ewayBillNo, setEwayBillNo] = useState(""); 
+  const [driverName, setDriverName] = useState(""); 
+  const [notes, setNotes] = useState("Goods received in good condition. This challan must accompany the goods during transit. Rate/value not shown as this is a delivery challan, not a tax invoice.")
 
-  useEffect(() => { if (user?.id) supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data }) => setOrgId(data?.org_id ?? null)) }, [user?.id])
-  useEffect(() => { if (!orgId) return; (async () => { if (editing) { const { data, error } = await supabase.from("delivery_challans").select("*").eq("id", id).eq("org_id", orgId).single(); if (error) toast.error("Failed to load challan"); else if (data) { const d = data as DeliveryChallan; setChallanNo(d.challan_no); setSlipNo(d.slip_no); setChallanDate(d.challan_date?.slice(0, 10) || today); setCustomerName(d.customer_name || ""); setCustomerAddress(d.customer_address || ""); setSubject(d.subject || ""); setBodyText(d.body_text || ""); setItems(d.items?.length ? d.items : [blankItem(1)]); setVehicleNo(d.vehicle_no || ""); setTransportMode(d.transport_mode || ""); setEwayBillNo(d.eway_bill_no || ""); setDriverName(d.driver_name || ""); setNotes(d.notes || "") }; setLoading(false) } else { const { count } = await supabase.from("delivery_challans").select("id", { count: "exact", head: true }).eq("org_id", orgId); const n = (count || 0) + 1; setChallanNo(`DC-${String(n).padStart(3, "0")}`); setSlipNo(String(n).padStart(6, "0")) } })() }, [orgId, editing, id])
-  const updateItem = (index: number, field: keyof DeliveryChallanItem, value: string | number) => setItems(items.map((item, i) => i === index ? { ...item, [field]: field === "qty" ? Number(value) : value } : item))
+  useEffect(() => { 
+    if (user?.id) supabase.from("memberships").select("org_id").eq("user_id", user.id).single().then(({ data }) => setOrgId(data?.org_id ?? null)) 
+  }, [user?.id])
+
+  useEffect(() => { 
+    if (!orgId) return; 
+    (async () => { 
+      if (editing) { 
+        const { data, error } = await supabase.from("delivery_challans").select("*").eq("id", id).eq("org_id", orgId).single(); 
+        if (error) toast.error("Failed to load challan"); 
+        else if (data) { 
+          const d = data as DeliveryChallan; 
+          setChallanNo(d.challan_no); 
+          setSlipNo(d.slip_no); 
+          setSlipNoLabel((d as any).slip_no_label || "Slip No"); // ⭐ Load existing label or fallback
+          setChallanDate(d.challan_date?.slice(0, 10) || today); 
+          setCustomerName(d.customer_name || ""); 
+          setCustomerAddress(d.customer_address || ""); 
+          setSubject(d.subject || ""); 
+          setBodyText(d.body_text || ""); 
+          setItems(d.items?.length ? d.items : [blankItem(1)]); 
+          setVehicleNo(d.vehicle_no || ""); 
+          setTransportMode(d.transport_mode || ""); 
+          setEwayBillNo(d.eway_bill_no || ""); 
+          setDriverName(d.driver_name || ""); 
+          setNotes(d.notes || "") 
+        }; 
+        setLoading(false) 
+      } else { 
+        const { count } = await supabase.from("delivery_challans").select("id", { count: "exact", head: true }).eq("org_id", orgId); 
+        const n = (count || 0) + 1; 
+        setChallanNo(`DC-${String(n).padStart(3, "0")}`); 
+        setSlipNo(String(n).padStart(6, "0")) 
+      } 
+    })() 
+  }, [orgId, editing, id])
+
+  const updateItem = (index: number, field: keyof DeliveryChallanItem, value: string | number) => 
+    setItems(items.map((item, i) => i === index ? { ...item, [field]: field === "qty" ? Number(value) : value } : item))
+
   const handleProductSelect = (
     itemId: number,
     product: { description: string; unit: string; unit_price: number }
@@ -40,9 +94,205 @@ export default function NewDeliveryChallanPage() {
       )
     )
   }
-  const save = async () => { if (!user?.id || !orgId) return; if (!customerName.trim() || !subject.trim() || items.some(item => !item.particulars.trim() || item.qty <= 0)) { toast.error("Please complete the customer, subject, and item details"); return }; setSaving(true); const payload = { user_id: user.id, org_id: orgId, challan_no: challanNo, slip_no: slipNo, challan_date: challanDate, customer_name: customerName, customer_address: customerAddress || null, subject, body_text: bodyText, items: items.map((item, index) => ({ ...item, sr_no: index + 1 })), vehicle_no: vehicleNo || null, transport_mode: transportMode || null, eway_bill_no: ewayBillNo || null, driver_name: driverName || null, notes: notes || null, status: "draft" }; const result = editing ? await supabase.from("delivery_challans").update(payload).eq("id", id).eq("org_id", orgId).select().single() : await supabase.from("delivery_challans").insert(payload).select().single(); if (result.error) toast.error(result.error.message); else { toast.success(editing ? "Challan updated" : "Challan created"); router.push(`/delivery-challans/${result.data.id}`) }; setSaving(false) }
+
+  const save = async () => { 
+    if (!user?.id || !orgId) return; 
+    if (!customerName.trim() || !subject.trim() || items.some(item => !item.particulars.trim() || item.qty <= 0)) { 
+      toast.error("Please complete the customer, subject, and item details"); 
+      return 
+    }; 
+    
+    setSaving(true); 
+    const payload = { 
+      user_id: user.id, 
+      org_id: orgId, 
+      challan_no: challanNo, 
+      slip_no: slipNo, 
+      slip_no_label: slipNoLabel, // ⭐ Save the selected label
+      challan_date: challanDate, 
+      customer_name: customerName, 
+      customer_address: customerAddress || null, 
+      subject, 
+      body_text: bodyText, 
+      items: items.map((item, index) => ({ ...item, sr_no: index + 1 })), 
+      vehicle_no: vehicleNo || null, 
+      transport_mode: transportMode || null, 
+      eway_bill_no: ewayBillNo || null, 
+      driver_name: driverName || null, 
+      notes: notes || null, 
+      status: "draft" 
+    }; 
+    
+    const result = editing 
+      ? await supabase.from("delivery_challans").update(payload).eq("id", id).eq("org_id", orgId).select().single() 
+      : await supabase.from("delivery_challans").insert(payload).select().single(); 
+      
+    if (result.error) toast.error(result.error.message); 
+    else { 
+      toast.success(editing ? "Challan updated" : "Challan created"); 
+      router.push(`/delivery-challans/${result.data.id}`) 
+    }; 
+    setSaving(false) 
+  }
 
   if (loading) return <DashboardLayout><p className="text-muted-foreground">Loading challan...</p></DashboardLayout>
-  const field = (label: string, value: string, setValue: (value: string) => void, placeholder?: string) => <div className="flex flex-col gap-2"><Label>{label}</Label><Input value={value} onChange={e => setValue(e.target.value)} placeholder={placeholder} /></div>
-  return <DashboardLayout><div className="mx-auto flex w-full max-w-4xl flex-col gap-6"><div className="flex items-center gap-3"><Button variant="outline" size="icon" asChild><Link href={editing ? `/delivery-challans/${id}` : "/delivery-challans"}><ArrowLeft /></Link></Button><div><h1 className="text-2xl font-bold">{editing ? "Edit Delivery Challan" : "Create Delivery Challan"}</h1><p className="text-muted-foreground">Prepare a document for goods in transit</p></div></div><Card><CardHeader><CardTitle>Challan Header</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-3">{field("Challan No", challanNo, setChallanNo)}{field("Slip No", slipNo, setSlipNo)}{field("Challan Date", challanDate, setChallanDate)}</CardContent></Card><Card><CardHeader><CardTitle>Customer Details</CardTitle></CardHeader><CardContent className="flex flex-col gap-4">{field("Customer Name", customerName, setCustomerName, "Enter customer name")}<div className="flex flex-col gap-2"><Label>Customer Address</Label><Textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} rows={3} /></div></CardContent></Card><Card><CardHeader><CardTitle>Content</CardTitle></CardHeader><CardContent className="flex flex-col gap-4">{field("Subject", subject, setSubject, "e.g. CHC Lift Break Coil Replacement")}<div className="flex flex-col gap-2"><Label>Body Text</Label><Textarea value={bodyText} onChange={e => setBodyText(e.target.value)} rows={4} /></div></CardContent></Card><Card><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>Items</CardTitle><CardDescription>Add every item included in this dispatch.</CardDescription></div><Button variant="outline" size="sm" onClick={() => setItems([...items, blankItem(items.length + 1)])}><Plus data-icon="inline-start" />Add Item</Button></CardHeader><CardContent className="flex flex-col gap-4">{items.map((item, index) => <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_140px_90px_100px_auto]" key={index}><div className="flex flex-col gap-2"><Label>Particulars</Label><ProductAutocompleteInput id={`desc-${index}`} value={item.particulars} orgId={orgId} onChange={value => updateItem(index, "particulars", value)} onProductSelect={product => handleProductSelect(index, product)} /></div><div className="flex flex-col gap-2"><Label>HSN/SAC</Label><Input value={item.hsn_sac} onChange={e => updateItem(index, "hsn_sac", e.target.value)} /></div><div className="flex flex-col gap-2"><Label>Qty</Label><Input type="number" min="1" value={item.qty} onChange={e => updateItem(index, "qty", e.target.value)} /></div><div className="flex flex-col gap-2"><Label>Unit</Label><Input value={item.unit} onChange={e => updateItem(index, "unit", e.target.value)} /></div><Button className="self-end" variant="ghost" size="icon" disabled={items.length === 1} onClick={() => setItems(items.filter((_, i) => i !== index))}><Trash2 /></Button></div>)}</CardContent></Card><Card><CardHeader><CardTitle>Transport</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2">{field("Vehicle No", vehicleNo, setVehicleNo)}<div className="flex flex-col gap-2"><Label>Transport Mode</Label><Select value={transportMode} onValueChange={setTransportMode}><SelectTrigger><SelectValue placeholder="Select mode" /></SelectTrigger><SelectContent><SelectItem value="By Hand">By Hand</SelectItem><SelectItem value="Courier">Courier</SelectItem><SelectItem value="Vehicle">Vehicle</SelectItem></SelectContent></Select></div>{field("E-way Bill No", ewayBillNo, setEwayBillNo)}{field("Driver Name", driverName, setDriverName)}</CardContent></Card><Card><CardHeader><CardTitle>Notes</CardTitle></CardHeader><CardContent><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} /></CardContent></Card><div className="flex justify-end gap-3"><Button variant="outline" asChild><Link href={editing ? `/delivery-challans/${id}` : "/delivery-challans"}>Cancel</Link></Button><Button onClick={save} disabled={saving}><Save data-icon="inline-start" />{saving ? "Saving..." : "Save Challan"}</Button></div></div></DashboardLayout>
+  
+  const field = (label: string, value: string, setValue: (value: string) => void, placeholder?: string) => (
+    <div className="flex flex-col gap-2">
+      <Label>{label}</Label>
+      <Input value={value} onChange={e => setValue(e.target.value)} placeholder={placeholder} />
+    </div>
+  )
+
+  return (
+    <DashboardLayout>
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="icon" asChild>
+            <Link href={editing ? `/delivery-challans/${id}` : "/delivery-challans"}>
+              <ArrowLeft />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{editing ? "Edit Delivery Challan" : "Create Delivery Challan"}</h1>
+            <p className="text-muted-foreground">Prepare a document for goods in transit</p>
+          </div>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Challan Header</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-3">
+            {field("Challan No", challanNo, setChallanNo)}
+            
+            {/* ⭐ Updated Slip/RGP No Field with Select */}
+            <div className="flex flex-col gap-2">
+              <Label>Slip / RGP No.</Label>
+              <div className="flex gap-2">
+                <Select value={slipNoLabel} onValueChange={setSlipNoLabel}>
+                  <SelectTrigger className="w-[110px] shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Slip No">Slip No</SelectItem>
+                    <SelectItem value="RGP No">RGP No</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input value={slipNo} onChange={e => setSlipNo(e.target.value)} className="flex-1" placeholder="No." />
+              </div>
+            </div>
+
+            {field("Challan Date", challanDate, setChallanDate)}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Details</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {field("Customer Name", customerName, setCustomerName, "Enter customer name")}
+            <div className="flex flex-col gap-2">
+              <Label>Customer Address</Label>
+              <Textarea value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} rows={3} />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Content</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {field("Subject", subject, setSubject, "e.g. CHC Lift Break Coil Replacement")}
+            <div className="flex flex-col gap-2">
+              <Label>Body Text</Label>
+              <Textarea value={bodyText} onChange={e => setBodyText(e.target.value)} rows={4} />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Items</CardTitle>
+              <CardDescription>Add every item included in this dispatch.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setItems([...items, blankItem(items.length + 1)])}>
+              <Plus data-icon="inline-start" />Add Item
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {items.map((item, index) => (
+              <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_140px_90px_100px_auto]" key={index}>
+                <div className="flex flex-col gap-2">
+                  <Label>Particulars</Label>
+                  <ProductAutocompleteInput id={`desc-${index}`} value={item.particulars} orgId={orgId} onChange={value => updateItem(index, "particulars", value)} onProductSelect={product => handleProductSelect(index, product)} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>HSN/SAC</Label>
+                  <Input value={item.hsn_sac} onChange={e => updateItem(index, "hsn_sac", e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Qty</Label>
+                  <Input type="number" min="1" value={item.qty} onChange={e => updateItem(index, "qty", e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Unit</Label>
+                  <Input value={item.unit} onChange={e => updateItem(index, "unit", e.target.value)} />
+                </div>
+                <Button className="self-end" variant="ghost" size="icon" disabled={items.length === 1} onClick={() => setItems(items.filter((_, i) => i !== index))}>
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Transport</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            {field("Vehicle No", vehicleNo, setVehicleNo)}
+            <div className="flex flex-col gap-2">
+              <Label>Transport Mode</Label>
+              <Select value={transportMode} onValueChange={setTransportMode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="By Hand">By Hand</SelectItem>
+                  <SelectItem value="Courier">Courier</SelectItem>
+                  <SelectItem value="Vehicle">Vehicle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {field("E-way Bill No", ewayBillNo, setEwayBillNo)}
+            {field("Driver Name", driverName, setDriverName)}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Notes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} />
+          </CardContent>
+        </Card>
+        
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" asChild>
+            <Link href={editing ? `/delivery-challans/${id}` : "/delivery-challans"}>Cancel</Link>
+          </Button>
+          <Button onClick={save} disabled={saving}>
+            <Save data-icon="inline-start" />
+            {saving ? "Saving..." : "Save Challan"}
+          </Button>
+        </div>
+      </div>
+    </DashboardLayout>
+  )
 }
