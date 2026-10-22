@@ -68,7 +68,8 @@ function hexToRgb(hex: string): [number, number, number] {
 async function downloadBlankDwr(
   profile: CompanyProfile | null,
   rowCount: number,
-  includeStamp: boolean
+  includeStamp: boolean,
+  checklistItems: { name: string }[] = [] // ⭐ Added checklist items parameter
 ) {
   const pageW = 210
   const margin = 15
@@ -259,6 +260,38 @@ async function downloadBlankDwr(
       margin: { left: margin, right: margin },
     })
     y = (doc as any).lastAutoTable.finalY + 6
+
+    // ⭐ ── Safety Checklist Table ── ⭐
+    if (checklistItems.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        head: [["CHECK SAFTIES", "OK", "NOT OK", "NA"]],
+        body: checklistItems.map((item) => [item.name, "", "", ""]),
+        theme: "grid",
+        headStyles: {
+          fillColor: [tr, tg, tb],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 9,
+          halign: "left",
+        },
+        bodyStyles: {
+          fontSize: 9,
+          textColor: [0, 0, 0],
+          minCellHeight: 8,
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: "auto" },
+          1: { cellWidth: 15, halign: "center" },
+          2: { cellWidth: 15, halign: "center" },
+          3: { cellWidth: 15, halign: "center" },
+        },
+        margin: { left: margin, right: margin },
+      })
+      y = (doc as any).lastAutoTable.finalY + 6
+    }
+    // ⭐ ────────────────────────────── ⭐
 
     const boxY = y
     const boxH = 28
@@ -531,7 +564,15 @@ export default function DailyWorkReportsPage() {
 
     setGeneratingBlank(true)
     try {
-      await downloadBlankDwr(profile, rowCount, includeStamp)
+      // ⭐ Fetch active checklist items
+      const { data: checklists } = await supabase
+        .from("checklist_templates")
+        .select("name")
+        .eq("org_id", orgId)
+        .eq("is_active", true)
+        .order("display_order")
+
+      await downloadBlankDwr(profile, rowCount, includeStamp, checklists || [])
       toast.success("Blank PDF downloaded")
       setBlankDialog(false)
     } catch (err) {
