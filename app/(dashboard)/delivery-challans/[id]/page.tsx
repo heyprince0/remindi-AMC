@@ -255,8 +255,11 @@ export default function DeliveryChallanDetailPage() {
         doc.setFontSize(10)
         doc.text(`DATE: ${fmtDateShort(challan.challan_date)}`, pageW - margin, y, { align: "right" })
         y += 6
+        
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
-        doc.text(`SLIP NO.: ${safeStr(challan.slip_no)}`, pageW - margin, y, { align: "right" })
+        // ⭐ Dynamic Label in PDF
+        const slipLabel = (challan as any).slip_no_label || "Slip No"
+        doc.text(`${slipLabel.toUpperCase()}.: ${safeStr(challan.slip_no)}`, pageW - margin, y, { align: "right" })
         y += 10
 
         doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
@@ -483,6 +486,7 @@ export default function DeliveryChallanDetailPage() {
 
   const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
   const hasTransport   = challan.vehicle_no || challan.transport_mode || challan.eway_bill_no || challan.driver_name
+  const slipLabel      = (challan as any).slip_no_label || "Slip No" // ⭐ Dynamic Label for UI
 
   return (
     <DashboardLayout>
@@ -621,7 +625,8 @@ export default function DeliveryChallanDetailPage() {
               <p className="text-sm font-semibold">{challan.challan_no}</p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Slip No</p>
+              {/* ⭐ Dynamic Label in Detail View */}
+              <p className="text-[10px] text-muted-foreground">{slipLabel}</p>
               <p className="text-sm font-semibold">{challan.slip_no || "-"}</p>
             </div>
             <div>
