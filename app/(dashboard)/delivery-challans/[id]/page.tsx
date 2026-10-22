@@ -158,6 +158,12 @@ export default function DeliveryChallanDetailPage() {
       const headerStyle  = profile?.header_style ?? "single_logo"
       const shouldStamp  = includeStamp && !!profile?.stamp_url
 
+      // ⭐ Parse the slip number to get label and clean value
+      const rawSlipNo = challan.slip_no || ""
+      const isRgp = rawSlipNo.startsWith("RGP:")
+      const slipLabel = isRgp ? "RGP No" : "Slip No"
+      const cleanSlipNo = isRgp ? rawSlipNo.replace("RGP:", "").trim() : rawSlipNo
+
       // load logo
       let logoBase64: string | null = null
       let logoFormat: "JPEG" | "PNG" = "PNG"
@@ -257,9 +263,8 @@ export default function DeliveryChallanDetailPage() {
         y += 6
         
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(80, 80, 80)
-        // ⭐ Dynamic Label in PDF
-        const slipLabel = (challan as any).slip_no_label || "Slip No"
-        doc.text(`${slipLabel.toUpperCase()}.: ${safeStr(challan.slip_no)}`, pageW - margin, y, { align: "right" })
+        // ⭐ Output the correct label based on string check
+        doc.text(`${slipLabel.toUpperCase()}.: ${safeStr(cleanSlipNo)}`, pageW - margin, y, { align: "right" })
         y += 10
 
         doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.3)
@@ -486,7 +491,12 @@ export default function DeliveryChallanDetailPage() {
 
   const hasBankDetails = profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id
   const hasTransport   = challan.vehicle_no || challan.transport_mode || challan.eway_bill_no || challan.driver_name
-  const slipLabel      = (challan as any).slip_no_label || "Slip No" // ⭐ Dynamic Label for UI
+  
+  // ⭐ Parse for UI display
+  const rawSlipNo = challan.slip_no || ""
+  const isRgp = rawSlipNo.startsWith("RGP:")
+  const slipLabel = isRgp ? "RGP No" : "Slip No"
+  const cleanSlipNo = isRgp ? rawSlipNo.replace("RGP:", "").trim() : rawSlipNo
 
   return (
     <DashboardLayout>
@@ -627,7 +637,7 @@ export default function DeliveryChallanDetailPage() {
             <div>
               {/* ⭐ Dynamic Label in Detail View */}
               <p className="text-[10px] text-muted-foreground">{slipLabel}</p>
-              <p className="text-sm font-semibold">{challan.slip_no || "-"}</p>
+              <p className="text-sm font-semibold">{cleanSlipNo || "-"}</p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">Date</p>
