@@ -18,6 +18,7 @@ import {
   Loader2,
   Minus,
   Stamp,
+  ListChecks,
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,6 +51,7 @@ import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
+import ChecklistManagerDialog from "@/components/ChecklistManagerDialog"
 import { toast } from "sonner"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -390,6 +392,8 @@ export default function DailyWorkReportsPage() {
   const [includeStamp, setIncludeStamp] = useState(true)
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
+  const [checklistDialog, setChecklistDialog] = useState(false)
+
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(orgId)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
@@ -557,7 +561,15 @@ export default function DailyWorkReportsPage() {
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
             <p className="text-muted-foreground">Create and manage daily work completion reports</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setChecklistDialog(true)}
+              disabled={!orgId}
+            >
+              <ListChecks className="mr-2 size-4" />
+              Checklist
+            </Button>
             <Button variant="outline" onClick={handleOpenBlankDialog}>
               <FileDown className="mr-2 size-4" />
               Blank PDF
@@ -904,6 +916,15 @@ export default function DailyWorkReportsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ⭐ Manage Safety Checklist */}
+      {orgId && (
+        <ChecklistManagerDialog
+          open={checklistDialog}
+          onOpenChange={setChecklistDialog}
+          orgId={orgId}
+        />
+      )}
 
       {/* ⭐ Unified Limit/Subscription Modal */}
       <LimitReachedModal
