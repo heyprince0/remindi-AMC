@@ -69,9 +69,10 @@ async function downloadBlankDwr(
   profile: CompanyProfile | null,
   rowCount: number,
   includeStamp: boolean,
-  checklistItems: { name: string }[] = [] // ⭐ Added checklist items parameter
+  checklistItems: { name: string }[] = [] 
 ) {
   const pageW = 210
+  const pageH = 297 // Standard A4 height
   const margin = 15
   const themeColor = profile?.theme_color ?? "#185FA5"
   const [tr, tg, tb] = hexToRgb(themeColor)
@@ -140,81 +141,100 @@ async function downloadBlankDwr(
 
   const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
 
-  const renderBlank = (doc: jsPDF): number => {
-    let y = margin
+  const renderBlank = (doc: jsPDF) => {
+    let headerHeight = 0
 
-    if (headerStyle === "thumbnail" && bannerBase64) {
-      doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
-      y += bannerH + 6
-    } else if (headerStyle === "single_logo") {
-      y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
-    } else {
-      let logoAdded = false
-      if (logoBase64) {
-        doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
-        logoAdded = true
+    // ⭐ Helper to draw the header and return the new Y position
+    const renderHeader = (doc: jsPDF, startY: number): number => {
+      let y = startY
+
+      if (headerStyle === "thumbnail" && bannerBase64) {
+        doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
+        y += bannerH + 6
+      } else if (headerStyle === "single_logo") {
+        y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
+      } else {
+        let logoAdded = false
+        if (logoBase64) {
+          doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
+          logoAdded = true
+        }
+        const infoX = logoAdded ? margin + 24 : margin
+        doc.setFontSize(14)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(profile?.company_name), infoX, y + 2)
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(120, 120, 120)
+        let iy = y + 8
+        if (profile?.tagline)  { doc.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
+        if (profile?.address)  { doc.text(safeStr(profile.address),  infoX, iy); iy += 4 }
+        const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
+        if (loc)               { doc.text(loc,                       infoX, iy); iy += 4 }
+        if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
+        if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
+        if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
+        y += 31
+        doc.setDrawColor(tr, tg, tb)
+        doc.setLineWidth(0.5)
+        doc.line(margin, y, pageW - margin, y)
+        y += 6
       }
-      const infoX = logoAdded ? margin + 24 : margin
-      doc.setFontSize(14)
+
+      // Title centered
+      doc.setFontSize(15)
       doc.setFont("helvetica", "bold")
-      doc.setTextColor(0, 0, 0)
-      doc.text(safeStr(profile?.company_name), infoX, y + 2)
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
+
+      // ── DATE (right) — blank field for hand-filling ──
+      doc.setFontSize(7)
+      doc.setFont("helvetica", "bold")
       doc.setTextColor(120, 120, 120)
-      let iy = y + 8
-      if (profile?.tagline)  { doc.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
-      if (profile?.address)  { doc.text(safeStr(profile.address),  infoX, iy); iy += 4 }
-      const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
-      if (loc)               { doc.text(loc,                       infoX, iy); iy += 4 }
-      if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
-      if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
-      if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
-      y += 31
-      doc.setDrawColor(tr, tg, tb)
-      doc.setLineWidth(0.5)
-      doc.line(margin, y, pageW - margin, y)
-      y += 6
+      doc.text("DATE", pageW - margin, y + 10, { align: "right" })
+      doc.setDrawColor(180, 180, 180)
+      doc.setLineWidth(0.3)
+      doc.line(pageW - margin - 50, y + 15, pageW - margin, y + 15)
+
+      // ── CUSTOMER NAME (left) — blank field ──
+      doc.setFontSize(7)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(120, 120, 120)
+      doc.text("CUSTOMER NAME", margin, y + 22)
+      doc.setDrawColor(180, 180, 180)
+      doc.setLineWidth(0.3)
+      doc.line(margin, y + 32, margin + 60, y + 32)
+
+      // ── WORK ORDER NO. (right) — blank field ──
+      doc.setFontSize(7)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(120, 120, 120)
+      doc.text("WORK ORDER NO.", pageW - margin, y + 22, { align: "right" })
+      doc.setDrawColor(180, 180, 180)
+      doc.setLineWidth(0.3)
+      doc.line(pageW - margin - 50, y + 32, pageW - margin, y + 32)
+
+      y += 38
+      
+      if (headerHeight === 0) {
+        headerHeight = y - startY + 8 // Calculate header height once
+      }
+      
+      return y + 8
     }
 
-    // Title centered
-    doc.setFontSize(15)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(tr, tg, tb)
-    doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
+    // ⭐ Helper to manually manage page breaks for non-table elements
+    const checkPageBreak = (currentY: number, neededHeight: number): number => {
+      if (currentY + neededHeight > pageH - margin) {
+        doc.addPage()
+        return renderHeader(doc, margin)
+      }
+      return currentY
+    }
 
-    // ── DATE (right) — blank field for hand-filling ──
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("DATE", pageW - margin, y + 10, { align: "right" })
-
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 15, pageW - margin, y + 15)
-
-    // ── CUSTOMER NAME (left) — blank field ──
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("CUSTOMER NAME", margin, y + 22)
-
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(margin, y + 32, margin + 60, y + 32)
-
-    // ── WORK ORDER NO. (right) — blank field ──
-    doc.setFontSize(7)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(120, 120, 120)
-    doc.text("WORK ORDER NO.", pageW - margin, y + 22, { align: "right" })
-
-    doc.setDrawColor(180, 180, 180)
-    doc.setLineWidth(0.3)
-    doc.line(pageW - margin - 50, y + 32, pageW - margin, y + 32)
-
-    y += 38
-    y += 8
+    // ── Start rendering ──
+    let y = renderHeader(doc, margin)
 
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
@@ -234,6 +254,7 @@ async function downloadBlankDwr(
 
     y += 18
 
+    // Work Table
     autoTable(doc, {
       startY: y,
       head: [["SR.", "Description of Work / Service", "Status"]],
@@ -257,16 +278,24 @@ async function downloadBlankDwr(
         1: { cellWidth: "auto" },
         2: { cellWidth: 30, halign: "center" },
       },
-      margin: { left: margin, right: margin },
+      margin: { top: headerHeight + 5, left: margin, right: margin },
+      willDrawPage: (data) => {
+        // Draw header on every new page automatically created by the table
+        if (data.pageNumber > 1) {
+          renderHeader(data.doc, margin)
+        }
+      }
     })
     y = (doc as any).lastAutoTable.finalY + 6
 
-    // ⭐ ── Safety Checklist Table ── ⭐
+    // ⭐ ── Safety Checklist Table (Simplified) ── ⭐
     if (checklistItems.length > 0) {
+      y = checkPageBreak(y, 20) // Check if we need a new page before starting checklist
+      
       autoTable(doc, {
         startY: y,
-        head: [["CHECK SAFTIES", "OK", "NOT OK", "NA"]],
-        body: checklistItems.map((item) => [item.name, "", "", ""]),
+        head: [["CHECK SAFTIES", "Status"]],
+        body: checklistItems.map((item) => [item.name, ""]),
         theme: "grid",
         headStyles: {
           fillColor: [tr, tg, tb],
@@ -283,18 +312,23 @@ async function downloadBlankDwr(
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
           0: { cellWidth: "auto" },
-          1: { cellWidth: 15, halign: "center" },
-          2: { cellWidth: 15, halign: "center" },
-          3: { cellWidth: 15, halign: "center" },
+          1: { cellWidth: 30, halign: "center" },
         },
-        margin: { left: margin, right: margin },
+        margin: { top: headerHeight + 5, left: margin, right: margin },
+        willDrawPage: (data) => {
+          if (data.pageNumber > 1) {
+            renderHeader(data.doc, margin)
+          }
+        }
       })
       y = (doc as any).lastAutoTable.finalY + 6
     }
-    // ⭐ ────────────────────────────── ⭐
+
+    // ⭐ Check page break for Inspection Box
+    const boxH = 28
+    y = checkPageBreak(y, boxH + 10)
 
     const boxY = y
-    const boxH = 28
     doc.setFillColor(240, 248, 255)
     doc.rect(margin, boxY, pageW - 2 * margin, boxH, "F")
 
@@ -318,6 +352,10 @@ async function downloadBlankDwr(
     doc.line(margin + 46, boxY + 22, pageW - margin - 5, boxY + 22)
 
     y = boxY + boxH + 10
+
+    // ⭐ Check page break for Signatures
+    const sigBlockH = 65 
+    y = checkPageBreak(y, sigBlockH)
 
     const sigLineW = 75
     const leftColX  = margin
@@ -372,7 +410,10 @@ async function downloadBlankDwr(
 
     y += 14
 
+    // ⭐ Check page break for Stamp
     if (shouldStamp && stampBase64) {
+      y = checkPageBreak(y, 35)
+      
       const stampW = 30
       const stampH = 30
       const stampX = pageW - margin - stampW
@@ -391,17 +432,15 @@ async function downloadBlankDwr(
       y = y + stampH + 14
     }
 
+    // Footer (Always at bottom of page)
     doc.setFontSize(8)
     doc.setFont("helvetica", "normal")
     doc.setTextColor(180, 180, 180)
-    doc.text("Generated by Remindi · remindi.online", pageW / 2, y, { align: "center" })
-
-    return y + 6
+    doc.text("Generated by Remindi · remindi.online", pageW / 2, pageH - 10, { align: "center" })
   }
 
-  const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
-  const measuredH = renderBlank(scratch)
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
+  // Initialize as standard A4
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   renderBlank(doc)
   doc.save(`DWR-Blank-${rowCount}-rows.pdf`)
 }
