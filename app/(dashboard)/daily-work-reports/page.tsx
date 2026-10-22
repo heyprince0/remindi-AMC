@@ -142,85 +142,88 @@ async function downloadBlankDwr(
   const blankBody = Array.from({ length: rowCount }, (_, i) => [String(i + 1), "", ""])
 
   const renderBlank = (doc: jsPDF) => {
-    let headerHeight = 0
-
-    // ⭐ Helper to draw the header and return the new Y position
-    const renderHeader = (doc: jsPDF, startY: number): number => {
+    // ⭐ Helper to draw ONLY the logo/banner (used for page 2+)
+    const drawLogoHeader = (d: jsPDF, startY: number): number => {
       let y = startY
-
       if (headerStyle === "thumbnail" && bannerBase64) {
-        doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
+        d.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
         y += bannerH + 6
       } else if (headerStyle === "single_logo") {
-        y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
+        y = renderSingleLogoHeader(d, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
       } else {
         let logoAdded = false
         if (logoBase64) {
-          doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
+          d.addImage(logoBase64, logoFormat, margin, y, 22, 22)
           logoAdded = true
         }
         const infoX = logoAdded ? margin + 24 : margin
-        doc.setFontSize(14)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(profile?.company_name), infoX, y + 2)
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(120, 120, 120)
+        d.setFontSize(14)
+        d.setFont("helvetica", "bold")
+        d.setTextColor(0, 0, 0)
+        d.text(safeStr(profile?.company_name), infoX, y + 2)
+        d.setFontSize(9)
+        d.setFont("helvetica", "normal")
+        d.setTextColor(120, 120, 120)
         let iy = y + 8
-        if (profile?.tagline)  { doc.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
-        if (profile?.address)  { doc.text(safeStr(profile.address),  infoX, iy); iy += 4 }
+        if (profile?.tagline)  { d.text(safeStr(profile.tagline),  infoX, iy); iy += 4 }
+        if (profile?.address)  { d.text(safeStr(profile.address),  infoX, iy); iy += 4 }
         const loc = [profile?.city, profile?.state, profile?.zip_code].filter(Boolean).join(", ")
-        if (loc)               { doc.text(loc,                       infoX, iy); iy += 4 }
-        if (profile?.phone)    { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
-        if (profile?.email)    { doc.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
-        if (profile?.gstin)    { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
+        if (loc)               { d.text(loc,                       infoX, iy); iy += 4 }
+        if (profile?.phone)    { d.text(`Phone: ${safeStr(profile.phone)}`, infoX, iy); iy += 4 }
+        if (profile?.email)    { d.text(`Email: ${safeStr(profile.email)}`, infoX, iy); iy += 4 }
+        if (profile?.gstin)    { d.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, iy) }
         y += 31
-        doc.setDrawColor(tr, tg, tb)
-        doc.setLineWidth(0.5)
-        doc.line(margin, y, pageW - margin, y)
+        d.setDrawColor(tr, tg, tb)
+        d.setLineWidth(0.5)
+        d.line(margin, y, pageW - margin, y)
         y += 6
       }
+      return y
+    }
+
+    // Measure logo height dynamically to set proper top margin for Page 2+
+    const tempDoc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, pageH] })
+    const yAfterLogo = drawLogoHeader(tempDoc, margin)
+    const headerTopMargin = yAfterLogo - margin + 5
+
+    // ⭐ Helper to draw the FULL header (Page 1 only)
+    const renderFullHeader = (d: jsPDF, startY: number): number => {
+      let y = drawLogoHeader(d, startY)
 
       // Title centered
-      doc.setFontSize(15)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(tr, tg, tb)
-      doc.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
+      d.setFontSize(15)
+      d.setFont("helvetica", "bold")
+      d.setTextColor(tr, tg, tb)
+      d.text("WORK REPORT", pageW / 2, y + 2, { align: "center" })
 
-      // ── DATE (right) — blank field for hand-filling ──
-      doc.setFontSize(7)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(120, 120, 120)
-      doc.text("DATE", pageW - margin, y + 10, { align: "right" })
-      doc.setDrawColor(180, 180, 180)
-      doc.setLineWidth(0.3)
-      doc.line(pageW - margin - 50, y + 15, pageW - margin, y + 15)
+      // DATE
+      d.setFontSize(7)
+      d.setFont("helvetica", "bold")
+      d.setTextColor(120, 120, 120)
+      d.text("DATE", pageW - margin, y + 10, { align: "right" })
+      d.setDrawColor(180, 180, 180)
+      d.setLineWidth(0.3)
+      d.line(pageW - margin - 50, y + 15, pageW - margin, y + 15)
 
-      // ── CUSTOMER NAME (left) — blank field ──
-      doc.setFontSize(7)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(120, 120, 120)
-      doc.text("CUSTOMER NAME", margin, y + 22)
-      doc.setDrawColor(180, 180, 180)
-      doc.setLineWidth(0.3)
-      doc.line(margin, y + 32, margin + 60, y + 32)
+      // CUSTOMER NAME
+      d.setFontSize(7)
+      d.setFont("helvetica", "bold")
+      d.setTextColor(120, 120, 120)
+      d.text("CUSTOMER NAME", margin, y + 22)
+      d.setDrawColor(180, 180, 180)
+      d.setLineWidth(0.3)
+      d.line(margin, y + 32, margin + 60, y + 32)
 
-      // ── WORK ORDER NO. (right) — blank field ──
-      doc.setFontSize(7)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(120, 120, 120)
-      doc.text("WORK ORDER NO.", pageW - margin, y + 22, { align: "right" })
-      doc.setDrawColor(180, 180, 180)
-      doc.setLineWidth(0.3)
-      doc.line(pageW - margin - 50, y + 32, pageW - margin, y + 32)
+      // WORK ORDER NO
+      d.setFontSize(7)
+      d.setFont("helvetica", "bold")
+      d.setTextColor(120, 120, 120)
+      d.text("WORK ORDER NO.", pageW - margin, y + 22, { align: "right" })
+      d.setDrawColor(180, 180, 180)
+      d.setLineWidth(0.3)
+      d.line(pageW - margin - 50, y + 32, pageW - margin, y + 32)
 
       y += 38
-      
-      if (headerHeight === 0) {
-        headerHeight = y - startY + 8 // Calculate header height once
-      }
-      
       return y + 8
     }
 
@@ -228,13 +231,13 @@ async function downloadBlankDwr(
     const checkPageBreak = (currentY: number, neededHeight: number): number => {
       if (currentY + neededHeight > pageH - margin) {
         doc.addPage()
-        return renderHeader(doc, margin)
+        return drawLogoHeader(doc, margin) + 8
       }
       return currentY
     }
 
-    // ── Start rendering ──
-    let y = renderHeader(doc, margin)
+    // ── Start rendering Page 1 ──
+    let y = renderFullHeader(doc, margin)
 
     const label = (text: string, x: number, yy: number) => {
       doc.setFontSize(8)
@@ -248,7 +251,6 @@ async function downloadBlankDwr(
       doc.line(x, yy, x + w, yy)
     }
 
-    // Only Equipment field remains
     label("EQUIPMENT", margin, y)
     blankLine(margin, y + 12, 100)
 
@@ -278,11 +280,10 @@ async function downloadBlankDwr(
         1: { cellWidth: "auto" },
         2: { cellWidth: 30, halign: "center" },
       },
-      margin: { top: headerHeight + 5, left: margin, right: margin },
+      margin: { top: headerTopMargin, left: margin, right: margin },
       willDrawPage: (data) => {
-        // Draw header on every new page automatically created by the table
         if (data.pageNumber > 1) {
-          renderHeader(data.doc, margin)
+          drawLogoHeader(data.doc, margin)
         }
       }
     })
@@ -290,7 +291,7 @@ async function downloadBlankDwr(
 
     // ⭐ ── Safety Checklist Table (Simplified) ── ⭐
     if (checklistItems.length > 0) {
-      y = checkPageBreak(y, 20) // Check if we need a new page before starting checklist
+      y = checkPageBreak(y, 20)
       
       autoTable(doc, {
         startY: y,
@@ -314,10 +315,10 @@ async function downloadBlankDwr(
           0: { cellWidth: "auto" },
           1: { cellWidth: 30, halign: "center" },
         },
-        margin: { top: headerHeight + 5, left: margin, right: margin },
+        margin: { top: headerTopMargin, left: margin, right: margin },
         willDrawPage: (data) => {
           if (data.pageNumber > 1) {
-            renderHeader(data.doc, margin)
+            drawLogoHeader(data.doc, margin)
           }
         }
       })
@@ -603,7 +604,6 @@ export default function DailyWorkReportsPage() {
 
     setGeneratingBlank(true)
     try {
-      // ⭐ Fetch active checklist items
       const { data: checklists } = await supabase
         .from("checklist_templates")
         .select("name")
@@ -736,7 +736,6 @@ export default function DailyWorkReportsPage() {
                               <ArrowUpRight className="size-4" />
                               <span className="sr-only">View Details</span>
                             </Button>
-                            {/* ⭐ onEdit passed so the 3-dot Edit triggers the subscription check */}
                             <Actions
                               report={r}
                               onDelete={setDeleteReport}
@@ -1049,7 +1048,6 @@ function Actions({
             View
           </Link>
         </DropdownMenuItem>
-        {/* ⭐ Edit now runs the subscription check before navigating */}
         <DropdownMenuItem
           onClick={() => onEdit(report)}
           className="flex items-center cursor-pointer"
