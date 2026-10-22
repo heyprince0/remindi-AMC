@@ -29,7 +29,7 @@ export default function NewDeliveryChallanPage() {
   
   const [challanNo, setChallanNo] = useState(""); 
   const [slipNo, setSlipNo] = useState(""); 
-  const [slipNoLabel, setSlipNoLabel] = useState("Slip No"); // ⭐ New state for label
+  const [slipNoLabel, setSlipNoLabel] = useState("Slip No"); // Dropdown state
   const [challanDate, setChallanDate] = useState(today)
   
   const [customerName, setCustomerName] = useState(""); 
@@ -56,9 +56,14 @@ export default function NewDeliveryChallanPage() {
         if (error) toast.error("Failed to load challan"); 
         else if (data) { 
           const d = data as DeliveryChallan; 
+          
+          // ⭐ Parse the saved string to extract label and value
+          const rawSlip = d.slip_no || "";
+          const isRgp = rawSlip.startsWith("RGP:");
+          setSlipNoLabel(isRgp ? "RGP No" : "Slip No");
+          setSlipNo(isRgp ? rawSlip.replace("RGP:", "").trim() : rawSlip);
+
           setChallanNo(d.challan_no); 
-          setSlipNo(d.slip_no); 
-          setSlipNoLabel((d as any).slip_no_label || "Slip No"); // ⭐ Load existing label or fallback
           setChallanDate(d.challan_date?.slice(0, 10) || today); 
           setCustomerName(d.customer_name || ""); 
           setCustomerAddress(d.customer_address || ""); 
@@ -107,8 +112,8 @@ export default function NewDeliveryChallanPage() {
       user_id: user.id, 
       org_id: orgId, 
       challan_no: challanNo, 
-      slip_no: slipNo, 
-      slip_no_label: slipNoLabel, // ⭐ Save the selected label
+      // ⭐ Save the label directly inside the slip_no string
+      slip_no: slipNoLabel === 'RGP No' ? `RGP: ${slipNo}` : slipNo, 
       challan_date: challanDate, 
       customer_name: customerName, 
       customer_address: customerAddress || null, 
@@ -166,7 +171,6 @@ export default function NewDeliveryChallanPage() {
           <CardContent className="grid gap-4 sm:grid-cols-3">
             {field("Challan No", challanNo, setChallanNo)}
             
-            {/* ⭐ Updated Slip/RGP No Field with Select */}
             <div className="flex flex-col gap-2">
               <Label>Slip / RGP No.</Label>
               <div className="flex gap-2">
