@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import ProductAutocompleteInput from "@/components/ProductAutocompleteInput"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -162,6 +163,24 @@ export default function NewInvoicePage() {
       return item
     })
     setItems(updatedItems)
+  }
+
+  const handleProductSelect = (
+    itemId: string,
+    product: { description: string; unit: string; unit_price: number }
+  ) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item
+        return {
+          ...item,
+          description: product.description,
+          unit: product.unit,
+          unit_price: product.unit_price,
+          amount: (item.quantity || 1) * product.unit_price,
+        }
+      })
+    )
   }
 
   const handleSave = async () => {
@@ -406,11 +425,12 @@ export default function NewInvoicePage() {
                   <Label htmlFor={`desc-${item.id}`} className="text-xs">
                     Description
                   </Label>
-                  <Input
+                  <ProductAutocompleteInput
                     id={`desc-${item.id}`}
                     value={item.description}
-                    onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
-                    placeholder="Service or product description"
+                    orgId={currentOrgId}
+                    onChange={(val) => handleItemChange(item.id, "description", val)}
+                    onProductSelect={(product) => handleProductSelect(item.id, product)}
                   />
                 </div>
                 <div className="w-20 space-y-2">
