@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Loader2, Plus, Save, Trash2 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import ProductAutocompleteInput from "@/components/ProductAutocompleteInput"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -125,6 +126,17 @@ export function DailyWorkReportForm({ edit = false }: Props) {
     setItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, [field]: value, sr_no: i + 1 } : item))
     )
+
+  const handleProductSelect = (
+    itemId: string,
+    product: { description: string; unit: string; unit_price: number }
+  ) => {
+    setItems((prev) =>
+      prev.map((item, index) =>
+        String(index) === itemId ? { ...item, description: product.description } : item
+      )
+    )
+  }
 
   const handleAddItem = () => {
     setItems((prev) => [...prev, emptyItem(prev.length + 1)])
@@ -331,11 +343,12 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                   <Label htmlFor={`desc-${index}`} className="text-xs">
                     Description of Work / Service
                   </Label>
-                  <Input
+                  <ProductAutocompleteInput
                     id={`desc-${index}`}
                     value={item.description}
-                    onChange={(e) => updateItem(index, "description", e.target.value)}
-                    placeholder="Describe the work performed"
+                    orgId={orgId}
+                    onChange={(value) => updateItem(index, "description", value)}
+                    onProductSelect={(product) => handleProductSelect(String(index), product)}
                   />
                 </div>
 
