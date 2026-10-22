@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase, type CompanyProfile, type DeliveryChallan } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
@@ -36,7 +37,8 @@ function hexToRgb(hex: string): [number, number, number] {
 async function downloadBlankDc(
   profile: CompanyProfile | null,
   rowCount: number,
-  includeStamp: boolean
+  includeStamp: boolean,
+  slipLabel: string = "Slip No" // ⭐ Added parameter
 ) {
   const pageW = 210
   const margin = 15
@@ -179,11 +181,12 @@ async function downloadBlankDc(
 
     y += 12
 
-    // ── SLIP NO (right) ──
+    // ── SLIP NO / RGP NO (right) ──
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    doc.text("SLIP NO.", rightColX, y)
+    // ⭐ Dynamically render the label passed from the dialog
+    doc.text(`${slipLabel.toUpperCase()}.`, rightColX, y)
 
     doc.setDrawColor(180, 180, 180)
     doc.setLineWidth(0.3)
@@ -373,6 +376,7 @@ export default function DeliveryChallansPage() {
   const [blankDialog, setBlankDialog] = useState(false)
   const [rowCount, setRowCount] = useState(5)
   const [includeStamp, setIncludeStamp] = useState(true)
+  const [blankSlipLabel, setBlankSlipLabel] = useState("Slip No") // ⭐ New state for label
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
   useEffect(() => {
@@ -459,7 +463,7 @@ export default function DeliveryChallansPage() {
   const handleDownloadBlank = async () => {
     setGeneratingBlank(true)
     try {
-      await downloadBlankDc(profile, rowCount, includeStamp)
+      await downloadBlankDc(profile, rowCount, includeStamp, blankSlipLabel) // ⭐ Pass the label
       toast.success("Blank PDF downloaded")
       setBlankDialog(false)
     } catch (err) {
@@ -574,7 +578,7 @@ export default function DeliveryChallansPage() {
           </CardContent>
         </Card>
 
-        {/* ── Mobile Cards (matches DWR style) ── */}
+        {/* ── Mobile Cards ── */}
         <div className="flex flex-col gap-4 md:hidden">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading delivery challans...</div>
@@ -718,6 +722,20 @@ export default function DeliveryChallansPage() {
               </div>
             </div>
 
+            {/* ⭐ Selector for Slip No / RGP No */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Field Label</Label>
+              <Select value={blankSlipLabel} onValueChange={setBlankSlipLabel} disabled={generatingBlank}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Slip No">Slip No</SelectItem>
+                  <SelectItem value="RGP No">RGP No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {hasStamp ? (
               <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -753,7 +771,7 @@ export default function DeliveryChallansPage() {
             )}
 
             <p className="text-xs text-muted-foreground">
-              Maximum 20 rows. The PDF includes your company header, blank fields for DC No, Date, Slip No,
+              Maximum 20 rows. The PDF includes your company header, blank fields for DC No, Date, {blankSlipLabel},
               customer details, transport info, and item rows ready to fill in by hand.
             </p>
           </div>
