@@ -38,7 +38,7 @@ async function downloadBlankDc(
   profile: CompanyProfile | null,
   rowCount: number,
   includeStamp: boolean,
-  slipLabel: string = "Slip No" // ⭐ Added parameter
+  slipLabel: string = "Slip No"
 ) {
   const pageW = 210
   const margin = 15
@@ -185,7 +185,6 @@ async function downloadBlankDc(
     doc.setFontSize(8)
     doc.setFont("helvetica", "bold")
     doc.setTextColor(120, 120, 120)
-    // ⭐ Dynamically render the label passed from the dialog
     doc.text(`${slipLabel.toUpperCase()}.`, rightColX, y)
 
     doc.setDrawColor(180, 180, 180)
@@ -374,9 +373,9 @@ export default function DeliveryChallansPage() {
   const [deleteRow, setDeleteRow] = useState<DeliveryChallan | null>(null)
 
   const [blankDialog, setBlankDialog] = useState(false)
-  const [rowCount, setRowCount] = useState(5)
+  const [rowCount, setRowCount] = useState(4) // ⭐ Changed default from 5 to 4
   const [includeStamp, setIncludeStamp] = useState(true)
-  const [blankSlipLabel, setBlankSlipLabel] = useState("Slip No") // ⭐ New state for label
+  const [blankSlipLabel, setBlankSlipLabel] = useState("Slip No")
   const [generatingBlank, setGeneratingBlank] = useState(false)
 
   useEffect(() => {
@@ -463,7 +462,7 @@ export default function DeliveryChallansPage() {
   const handleDownloadBlank = async () => {
     setGeneratingBlank(true)
     try {
-      await downloadBlankDc(profile, rowCount, includeStamp, blankSlipLabel) // ⭐ Pass the label
+      await downloadBlankDc(profile, rowCount, includeStamp, blankSlipLabel)
       toast.success("Blank PDF downloaded")
       setBlankDialog(false)
     } catch (err) {
@@ -707,7 +706,7 @@ export default function DeliveryChallansPage() {
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                {[3, 5, 8, 10, 15].map((n) => (
+                {[3, 4, 5, 8, 10, 15].map((n) => (
                   <Button
                     key={n}
                     variant={rowCount === n ? "default" : "outline"}
@@ -722,7 +721,7 @@ export default function DeliveryChallansPage() {
               </div>
             </div>
 
-            {/* ⭐ Selector for Slip No / RGP No */}
+            {/* Selector for Slip No / RGP No */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Field Label</Label>
               <Select value={blankSlipLabel} onValueChange={setBlankSlipLabel} disabled={generatingBlank}>
