@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare } from "lucide-react"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import SignaturePad, { type SignaturePadRef } from "@/components/SignaturePad"
 import { supabase, type DailyWorkItem, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
@@ -63,6 +64,13 @@ export function DailyWorkReportForm({ edit = false }: Props) {
     { id: string; name: string; display_order: number }[]
   >([])
   const [checklistResponses, setChecklistResponses] = useState<ChecklistResponse[]>([])
+
+  // ⭐ Signature Refs & State
+  const techSignRef     = useRef<SignaturePadRef>(null)
+  const customerSignRef = useRef<SignaturePadRef>(null)
+
+  const [techSignDataURL,     setTechSignDataURL]     = useState<string | null>(null)
+  const [customerSignDataURL, setCustomerSignDataURL] = useState<string | null>(null)
 
   // ⭐ Only columns that ACTUALLY exist in daily_work_reports
   const [form, setForm] = useState({
@@ -204,6 +212,31 @@ export function DailyWorkReportForm({ edit = false }: Props) {
     )
   }
 
+  // ⭐ Upload helper
+  const uploadSignature = async (
+    dataURL: string,
+    prefix: "tech" | "customer",
+    reportId: string
+  ): Promise<string | null> => {
+    try {
+      // dataURL → Blob
+      const res  = await fetch(dataURL)
+      const blob = await res.blob()
+      const path = `${orgId}/${reportId}/${prefix}-sign-${Date.now()}.png`
+      const { error } = await supabase.storage
+        .from("work-report-signatures")
+        .upload(path, blob, { contentType: "image/png", upsert: true })
+      if (error) throw error
+      const { data } = supabase.storage
+        .from("work-report-signatures")
+        .getPublicUrl(path)
+      return data.publicUrl
+    } catch (err) {
+      console.error("Signature upload failed:", err)
+      return null
+    }
+  }
+
   const handleSave = async () => {
     if (!user?.id || !orgId) return
 
@@ -234,28 +267,42 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         reportNo = `DWR-${String(max + 1).padStart(3, "0")}`
       }
 
-      // ⭐ Explicitly list only valid DB columns
+      // Upload any new signature drawings
+      const reportId = edit ? String(params.id) : `new-${Date.now()}`
+      let techSignUrl     = report?.tech_sign_url    ?? null
+      let customerSignUrl = report?.customer_sign_url ?? null
+
+      if (techSignDataURL) {
+        const url = await uploadSignature(techSignDataURL, "tech", reportId)
+        if (url) techSignUrl = url
+      }
+      if (customerSignDataURL) {
+        const url = await uploadSignature(customerSignDataURL, "customer", reportId)
+        if (url) customerSignUrl = url
+      }
+
       const payload = {
-        report_date: form.report_date,
-        work_order_no: form.work_order_no || null,
-        lift_no: form.lift_no || null,
-        technician_name: form.technician_name || null,
-        customer_name: form.customer_name,
-        operational_test_status: form.operational_test_status || null,
-        safety_observations: form.safety_observations || null,
-        pending_recommendations: form.pending_recommendations || null,
-        tech_sign_name: form.tech_sign_name || null,
-        tech_sign_datetime: fromDatetimeLocal(form.tech_sign_datetime),
-        customer_sign_name: form.customer_sign_name || null,
-        customer_sign_datetime: fromDatetimeLocal(form.customer_sign_datetime),
-        report_no: reportNo,
-        work_items: items.map((item, i) => ({ ...item, sr_no: i + 1 })),
-        // ⭐ Include Checklist Data
-        checklist_responses: checklistResponses.length > 0 ? checklistResponses : null,
-        org_id: orgId,
-        user_id: user.id,
-        status: edit ? report?.status || "Draft" : "Draft",
-        updated_at: new Date().toISOString(),
+        report_date:              form.report_date,
+        work_order_no:            form.work_order_no || null,
+        lift_no:                  form.lift_no || null,
+        technician_name:          form.technician_name || null,
+        customer_name:            form.customer_name,
+        operational_test_status:  form.operational_test_status || null,
+        safety_observations:      form.safety_observations || null,
+        pending_recommendations:  form.pending_recommendations || null,
+        tech_sign_name:           form.tech_sign_name || null,
+        tech_sign_datetime:       fromDatetimeLocal(form.tech_sign_datetime),
+        customer_sign_name:       form.customer_sign_name || null,
+        customer_sign_datetime:   fromDatetimeLocal(form.customer_sign_datetime),
+        tech_sign_url:            techSignUrl,
+        customer_sign_url:        customerSignUrl,
+        report_no:                reportNo,
+        work_items:               items.map((item, i) => ({ ...item, sr_no: i + 1 })),
+        checklist_responses:      checklistResponses.length > 0 ? checklistResponses : null,
+        org_id:                   orgId,
+        user_id:                  user.id,
+        status:                   edit ? report?.status || "Draft" : "Draft",
+        updated_at:               new Date().toISOString(),
       }
 
       const result = edit
@@ -590,55 +637,76 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         <Card>
           <CardHeader>
             <CardTitle>Acknowledgement</CardTitle>
-            <CardDescription>Signature details from technician and customer</CardDescription>
+            <CardDescription>
+              Enter names, date/time, and draw signatures for technician and customer
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="tech-sign-name">
-                  Technician / Engineer Signature Name
-                </Label>
-                <Input
-                  id="tech-sign-name"
-                  value={form.tech_sign_name}
-                  onChange={(e) => setField("tech_sign_name", e.target.value)}
-                  placeholder="Enter name"
-                />
+          <CardContent className="space-y-6">
+
+            {/* ── Technician ──────────────────────────────────────── */}
+            <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Technician / Engineer
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="tech-sign-name">Name</Label>
+                  <Input
+                    id="tech-sign-name"
+                    value={form.tech_sign_name}
+                    onChange={(e) => setField("tech_sign_name", e.target.value)}
+                    placeholder="Enter name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tech-sign-datetime">Date &amp; Time</Label>
+                  <Input
+                    id="tech-sign-datetime"
+                    type="datetime-local"
+                    value={form.tech_sign_datetime}
+                    onChange={(e) => setField("tech_sign_datetime", e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="tech-sign-datetime">Technician Signature Date &amp; Time</Label>
-                <Input
-                  id="tech-sign-datetime"
-                  type="datetime-local"
-                  value={form.tech_sign_datetime}
-                  onChange={(e) => setField("tech_sign_datetime", e.target.value)}
-                />
-              </div>
+              <SignaturePad
+                ref={techSignRef}
+                label="Technician Signature"
+                existingUrl={report?.tech_sign_url ?? null}
+                onChange={(dataURL) => setTechSignDataURL(dataURL)}
+              />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="customer-sign-name">
-                  Customer / Site Representative Name
-                </Label>
-                <Input
-                  id="customer-sign-name"
-                  value={form.customer_sign_name}
-                  onChange={(e) => setField("customer_sign_name", e.target.value)}
-                  placeholder="Enter name"
-                />
+            {/* ── Customer ────────────────────────────────────────── */}
+            <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Customer / Site Representative
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="customer-sign-name">Name</Label>
+                  <Input
+                    id="customer-sign-name"
+                    value={form.customer_sign_name}
+                    onChange={(e) => setField("customer_sign_name", e.target.value)}
+                    placeholder="Enter name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="customer-sign-datetime">Date &amp; Time</Label>
+                  <Input
+                    id="customer-sign-datetime"
+                    type="datetime-local"
+                    value={form.customer_sign_datetime}
+                    onChange={(e) => setField("customer_sign_datetime", e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="customer-sign-datetime">
-                  Customer Signature Date &amp; Time
-                </Label>
-                <Input
-                  id="customer-sign-datetime"
-                  type="datetime-local"
-                  value={form.customer_sign_datetime}
-                  onChange={(e) => setField("customer_sign_datetime", e.target.value)}
-                />
-              </div>
+              <SignaturePad
+                ref={customerSignRef}
+                label="Customer Signature"
+                existingUrl={report?.customer_sign_url ?? null}
+                onChange={(dataURL) => setCustomerSignDataURL(dataURL)}
+              />
             </div>
           </CardContent>
         </Card>
