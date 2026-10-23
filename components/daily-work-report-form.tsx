@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Plus, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,12 +11,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase, type DailyWorkItem, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 
 type Props = { edit?: boolean }
+
+interface ChecklistResponse {
+  template_id: string
+  name: string
+  status: "OK" | "Not OK" | "NA"
+}
 
 const today = () => new Date().toISOString().slice(0, 10)
 const emptyItem = (sr_no: number): DailyWorkItem => ({
@@ -51,6 +58,12 @@ export function DailyWorkReportForm({ edit = false }: Props) {
   const [saving, setSaving] = useState(false)
   const [report, setReport] = useState<DailyWorkReport | null>(null)
 
+  // ⭐ Checklist state
+  const [checklistTemplates, setChecklistTemplates] = useState<
+    { id: string; name: string; display_order: number }[]
+  >([])
+  const [checklistResponses, setChecklistResponses] = useState<ChecklistResponse[]>([])
+
   // ⭐ Only columns that ACTUALLY exist in daily_work_reports
   const [form, setForm] = useState({
     report_date: today(),
@@ -77,8 +90,24 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         .eq("user_id", user.id)
         .single()
         .then(({ data, error }) => {
-          if (error) toast.error("Could not determine your organization")
-          else setOrgId(data.org_id)
+          if (error) {
+            toast.error("Could not determine your organization")
+          } else {
+            setOrgId(data.org_id)
+            
+            // ⭐ Load active checklist templates for this org
+            supabase
+              .from("checklist_templates")
+              .select("id, name, display_order")
+              .eq("org_id", data.org_id)
+              .eq("is_active", true)
+              .order("display_order")
+              .then(({ data: templates }) => {
+                if (templates && templates.length > 0) {
+                  setChecklistTemplates(templates)
+                }
+              })
+          }
         })
     }
   }, [user?.id])
@@ -118,6 +147,29 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         setLoading(false)
       })
   }, [edit, params.id, orgId, router])
+
+  // ⭐ Initialize checklistResponses when templates or report data load
+  useEffect(() => {
+    if (checklistTemplates.length === 0) return
+
+    let savedResponses: ChecklistResponse[] = []
+    if (edit && report?.checklist_responses) {
+      // Handle both stringified JSON and raw arrays from the DB
+      if (typeof report.checklist_responses === "string") {
+        try { savedResponses = JSON.parse(report.checklist_responses) } catch {}
+      } else if (Array.isArray(report.checklist_responses)) {
+        savedResponses = report.checklist_responses as ChecklistResponse[]
+      }
+    }
+
+    const savedMap = new Map(savedResponses.map((r) => [r.template_id, r]))
+    
+    setChecklistResponses(
+      checklistTemplates.map((t) =>
+        savedMap.get(t.id) ?? { template_id: t.id, name: t.name, status: "NA" }
+      )
+    )
+  }, [checklistTemplates, report, edit])
 
   const setField = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -198,6 +250,8 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         customer_sign_datetime: fromDatetimeLocal(form.customer_sign_datetime),
         report_no: reportNo,
         work_items: items.map((item, i) => ({ ...item, sr_no: i + 1 })),
+        // ⭐ Include Checklist Data
+        checklist_responses: checklistResponses.length > 0 ? checklistResponses : null,
         org_id: orgId,
         user_id: user.id,
         status: edit ? report?.status || "Draft" : "Draft",
@@ -408,6 +462,81 @@ export function DailyWorkReportForm({ edit = false }: Props) {
             </Button>
           </CardContent>
         </Card>
+
+        {/* ⭐ Safety Checklist */}
+        {checklistTemplates.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="size-5 text-primary" />
+                <div>
+                  <CardTitle className="text-base">Safety Checklist</CardTitle>
+                  <CardDescription className="text-xs">
+                    Mark each item as OK, Not OK, or NA
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-2">
+                {checklistResponses.map((item, index) => (
+                  <div
+                    key={item.template_id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5"
+                  >
+                    {/* Item name */}
+                    <span className="text-sm font-medium flex-1 truncate">
+                      {item.name}
+                    </span>
+
+                    {/* Status toggle buttons */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(["OK", "Not OK", "NA"] as const).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() =>
+                            setChecklistResponses((prev) =>
+                              prev.map((r, i) =>
+                                i === index ? { ...r, status } : r
+                              )
+                            )
+                          }
+                          className={`
+                            rounded-md px-2.5 py-1 text-xs font-semibold transition-all border
+                            ${item.status === status
+                              ? status === "OK"
+                                ? "bg-green-600 text-white border-green-600"
+                                : status === "Not OK"
+                                  ? "bg-red-600 text-white border-red-600"
+                                  : "bg-muted text-foreground border-border"
+                              : "bg-transparent text-muted-foreground border-border hover:border-muted-foreground/50 hover:text-foreground"}
+                          `}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Summary badges */}
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border flex-wrap">
+                <span className="text-xs text-muted-foreground">Summary:</span>
+                <Badge className="bg-green-500/10 text-green-700 border-green-500/20 text-xs">
+                  OK: {checklistResponses.filter((r) => r.status === "OK").length}
+                </Badge>
+                <Badge className="bg-red-500/10 text-red-700 border-red-500/20 text-xs">
+                  Not OK: {checklistResponses.filter((r) => r.status === "Not OK").length}
+                </Badge>
+                <Badge className="bg-muted text-muted-foreground border-border text-xs">
+                  NA: {checklistResponses.filter((r) => r.status === "NA").length}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Inspection / Testing */}
         <Card>
