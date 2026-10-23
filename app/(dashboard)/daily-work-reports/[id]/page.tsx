@@ -42,6 +42,21 @@ interface ChecklistResponse {
   status: "OK" | "Not OK" | "NA"
 }
 
+// ⭐ Safe parser to handle both raw arrays and stringified JSON
+const parseChecklist = (data: any): ChecklistResponse[] => {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   return result
@@ -54,13 +69,6 @@ function formatDateLong(dateStr: string | null | undefined): string {
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return "-"
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })
-}
-
-function formatDateShort(dateStr: string | null | undefined): string {
-  if (!dateStr) return "-"
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return "-"
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
 function formatDateTime(dateStr: string | null | undefined): string {
@@ -271,6 +279,27 @@ export default function DailyWorkReportDetailPage() {
         }
       }
 
+      // ⭐ Load signature images if they exist
+      let techSignBase64: string | null = null
+      let customerSignBase64: string | null = null
+
+      if (report.tech_sign_url) {
+        try {
+          const blob = await (await fetch(report.tech_sign_url)).blob()
+          techSignBase64 = await new Promise<string>(res => {
+            const r = new FileReader(); r.onloadend = () => res(r.result as string); r.readAsDataURL(blob)
+          })
+        } catch (e) { console.warn("[DWR PDF] tech signature:", e) }
+      }
+      if (report.customer_sign_url) {
+        try {
+          const blob = await (await fetch(report.customer_sign_url)).blob()
+          customerSignBase64 = await new Promise<string>(res => {
+            const r = new FileReader(); r.onloadend = () => res(r.result as string); r.readAsDataURL(blob)
+          })
+        } catch (e) { console.warn("[DWR PDF] customer signature:", e) }
+      }
+
       const formattedDate = report.report_date
         ? new Date(report.report_date).toLocaleDateString("en-IN", {
             day: "2-digit", month: "2-digit", year: "numeric",
@@ -378,8 +407,8 @@ export default function DailyWorkReportDetailPage() {
         y = (doc as any).lastAutoTable.finalY + 6
 
         // ⭐ ── Safety Checklist in PDF ── ⭐
-        const checklist = report.checklist_responses as ChecklistResponse[] | null
-        if (Array.isArray(checklist) && checklist.length > 0) {
+        const checklist = parseChecklist(report.checklist_responses)
+        if (checklist.length > 0) {
           const yAfterItems = y
 
           doc.setFontSize(8)
@@ -457,24 +486,43 @@ export default function DailyWorkReportDetailPage() {
         y = boxY + boxH + 10
 
         // ── SIGNATURES ──
-        doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3)
-        doc.line(margin, y, margin + 65, y)
-        doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
-        doc.text("Technician / Engineer Signature", margin, y - 2)
+        // Signature box height depends on whether we have an image
+        const sigBoxH = 28
+        const sigImgH = 18
+        const sigImgW = 50
 
-        doc.line(pageW - margin - 65, y, pageW - margin, y)
-        doc.text("Customer / Site Representative Signature", pageW - margin, y - 2, { align: "right" })
-
-        y += 8
+        // Technician side (left)
+        doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
+        doc.text("Technician / Engineer", margin, y)
+        y += 4
         doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
-        doc.text(`Name: ${safeStr(report.tech_sign_name)}`, margin, y)
-        doc.text(`Name: ${safeStr(report.customer_sign_name)}`, pageW - margin, y, { align: "right" })
-
-        y += 5
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
+        doc.text(safeStr(report.tech_sign_name || "-"), margin, y)
+        y += 4
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120)
         doc.text(formatDateTime(report.tech_sign_datetime), margin, y)
-        doc.text(formatDateTime(report.customer_sign_datetime), pageW - margin, y, { align: "right" })
-        y += 12
+
+        const sigY = y + 3
+        if (techSignBase64) {
+          doc.addImage(techSignBase64, "PNG", margin, sigY, sigImgW, sigImgH)
+        }
+        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
+        doc.line(margin, sigY + sigImgH + 1, margin + sigImgW, sigY + sigImgH + 1)
+
+        // Customer side (right)
+        const rightX = pageW - margin - sigImgW
+        doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
+        doc.text("Customer / Site Representative", rightX, y - 8)
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(report.customer_sign_name || "-"), rightX, y - 4)
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+        doc.text(formatDateTime(report.customer_sign_datetime), rightX, y)
+
+        if (customerSignBase64) {
+          doc.addImage(customerSignBase64, "PNG", rightX, sigY, sigImgW, sigImgH)
+        }
+        doc.line(rightX, sigY + sigImgH + 1, rightX + sigImgW, sigY + sigImgH + 1)
+
+        y = sigY + sigImgH + 8
 
         // ── STAMP ──
         if (shouldStamp && stampBase64) {
@@ -590,6 +638,7 @@ export default function DailyWorkReportDetailPage() {
   }
 
   const workItems = report.work_items ?? []
+  const checklist = parseChecklist(report.checklist_responses) // ⭐ Parse for UI
 
   return (
     <DashboardLayout>
@@ -780,8 +829,7 @@ export default function DailyWorkReportDetailPage() {
           </div>
 
           {/* ⭐ Safety Checklist UI ── ⭐ */}
-          {Array.isArray(report.checklist_responses) &&
-            report.checklist_responses.length > 0 && (
+          {checklist.length > 0 && (
             <div className="border-t border-border">
               <div className="px-5 py-3 bg-muted/30 border-b border-border flex items-center gap-2">
                 <CheckSquare className="size-3.5 text-muted-foreground" />
@@ -789,7 +837,7 @@ export default function DailyWorkReportDetailPage() {
               </div>
               <div className="px-5 py-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {(report.checklist_responses as ChecklistResponse[]).map((item, i) => (
+                  {checklist.map((item, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
@@ -815,13 +863,13 @@ export default function DailyWorkReportDetailPage() {
                 <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/60 flex-wrap">
                   <span className="text-xs text-muted-foreground">Summary:</span>
                   <span className="text-xs font-semibold text-green-700 dark:text-green-400">
-                    OK: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "OK").length}
+                    OK: {checklist.filter(r => r.status === "OK").length}
                   </span>
                   <span className="text-xs font-semibold text-red-700 dark:text-red-400">
-                    Not OK: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "Not OK").length}
+                    Not OK: {checklist.filter(r => r.status === "Not OK").length}
                   </span>
                   <span className="text-xs font-semibold text-muted-foreground">
-                    NA: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "NA").length}
+                    NA: {checklist.filter(r => r.status === "NA").length}
                   </span>
                 </div>
               </div>
@@ -849,24 +897,68 @@ export default function DailyWorkReportDetailPage() {
             </div>
           </div>
 
-          {/* Acknowledgement */}
+          {/* ⭐ Acknowledgement (with Signatures) ⭐ */}
           <div className="border-t border-border">
             <div className="px-5 py-3 bg-muted/30 border-b border-border">
               <p className="text-xs font-semibold text-muted-foreground">ACKNOWLEDGEMENT</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 px-5 py-4">
-              <div>
-                <p className="text-[10px] text-muted-foreground">Technician Signature</p>
-                <p className="text-sm font-medium">{report.tech_sign_name ?? "-"}</p>
-                {report.tech_sign_datetime && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(report.tech_sign_datetime)}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+
+              {/* Technician */}
+              <div className="px-5 py-4 flex flex-col gap-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Technician / Engineer
+                </p>
+                <div>
+                  <p className="text-sm font-medium">{report.tech_sign_name ?? "-"}</p>
+                  {report.tech_sign_datetime && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDateTime(report.tech_sign_datetime)}
+                    </p>
+                  )}
+                </div>
+                {report.tech_sign_url ? (
+                  <div className="rounded-lg border border-border bg-white p-2 w-fit">
+                    <img
+                      src={report.tech_sign_url}
+                      alt="Technician signature"
+                      className="h-16 object-contain"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Digital Signature</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/20 h-16 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">No signature captured</p>
+                  </div>
                 )}
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">Customer Signature</p>
-                <p className="text-sm font-medium">{report.customer_sign_name ?? "-"}</p>
-                {report.customer_sign_datetime && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(report.customer_sign_datetime)}</p>
+
+              {/* Customer */}
+              <div className="px-5 py-4 flex flex-col gap-3">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Customer / Site Representative
+                </p>
+                <div>
+                  <p className="text-sm font-medium">{report.customer_sign_name ?? "-"}</p>
+                  {report.customer_sign_datetime && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDateTime(report.customer_sign_datetime)}
+                    </p>
+                  )}
+                </div>
+                {report.customer_sign_url ? (
+                  <div className="rounded-lg border border-border bg-white p-2 w-fit">
+                    <img
+                      src={report.customer_sign_url}
+                      alt="Customer signature"
+                      className="h-16 object-contain"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Digital Signature</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/20 h-16 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">No signature captured</p>
+                  </div>
                 )}
               </div>
             </div>
