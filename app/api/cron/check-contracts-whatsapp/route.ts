@@ -77,7 +77,6 @@ async function sendWA(templateName: string, phone: string, components: Record<st
 
     const result = await res.json().catch(() => ({}))
 
-    // Log full MSG91 response so failures are visible in Vercel logs
     console.log(
       `[WA] template="${templateName}" to="${cleanPhone}" httpStatus=${res.status}`,
       JSON.stringify(result)
@@ -120,7 +119,6 @@ export async function GET() {
     const errors: string[] = []
 
     if (contracts?.length) {
-      // Build owner maps
       const orgIds = [...new Set(contracts.map((c) => c.org_id).filter(Boolean))]
       const { data: orgs } = await supabase.from('organizations').select('id, owner_id').in('id', orgIds)
 
@@ -130,16 +128,22 @@ export async function GET() {
       const ownerIds = Object.values(orgOwnerMap).filter(Boolean)
       const ownerPhoneMap: Record<string, string> = {}
       const ownerNameMap: Record<string, string> = {}
+      const optedOutOwners = new Set<string>()
 
       if (ownerIds.length) {
+        // ADDED receive_whatsapp_notifications TO SELECT
         const { data: profiles } = await supabase
-          .from('profiles').select('id, phone, full_name').in('id', ownerIds)
+          .from('profiles').select('id, phone, full_name, receive_whatsapp_notifications').in('id', ownerIds)
+        
         for (const p of profiles || []) {
+          if (p.receive_whatsapp_notifications === false) {
+            optedOutOwners.add(p.id)
+            continue
+          }
           if (p.phone) ownerPhoneMap[p.id] = p.phone
           if (p.full_name) ownerNameMap[p.id] = p.full_name
         }
 
-        // Fill gaps from auth.users
         const missingIds = ownerIds.filter((id) => !ownerPhoneMap[id] || !ownerNameMap[id])
         if (missingIds.length) {
           const { data: { users } } = await supabase.auth.admin.listUsers()
@@ -153,7 +157,6 @@ export async function GET() {
         }
       }
 
-      // Process contracts one by one (sequential avoids MSG91 rate-limit)
       for (const contract of contracts) {
         const nextDate = new Date(contract.next_service_date)
         nextDate.setHours(0, 0, 0, 0)
@@ -164,6 +167,10 @@ export async function GET() {
         if (!NOTIFY_AT_DAYS.includes(daysUntil)) { skipped++; continue }
 
         const ownerId = orgOwnerMap[contract.org_id]
+        
+        // SKIP IF OPTED OUT
+        if (ownerId && optedOutOwners.has(ownerId)) { skipped++; continue }
+
         const ownerPhone = ownerId ? ownerPhoneMap[ownerId] : null
         if (!ownerPhone) { skipped++; continue }
 
@@ -194,7 +201,6 @@ export async function GET() {
           button_1: { subtype: 'url', type: 'text', value: contract.id },
         }
 
-        // Small fixed delay between sends to avoid MSG91 rate-limit
         await new Promise((r) => setTimeout(r, 300))
         const { delivered, result } = await sendWA(templateName, ownerPhone, components)
 
@@ -237,11 +243,17 @@ export async function GET() {
       const amcOwnerIds = Object.values(amcOrgOwnerMap).filter(Boolean)
       const amcOwnerPhoneMap: Record<string, string> = {}
       const amcOwnerNameMap: Record<string, string> = {}
+      const amcOptedOutOwners = new Set<string>()
 
       if (amcOwnerIds.length) {
         const { data: profiles } = await supabase
-          .from('profiles').select('id, phone, full_name').in('id', amcOwnerIds)
+          .from('profiles').select('id, phone, full_name, receive_whatsapp_notifications').in('id', amcOwnerIds)
+        
         for (const p of profiles || []) {
+          if (p.receive_whatsapp_notifications === false) {
+            amcOptedOutOwners.add(p.id)
+            continue
+          }
           if (p.phone) amcOwnerPhoneMap[p.id] = p.phone
           if (p.full_name) amcOwnerNameMap[p.id] = p.full_name
         }
@@ -272,6 +284,10 @@ export async function GET() {
         if (!isNotifyDay) { amcSkipped++; continue }
 
         const ownerId = amcOrgOwnerMap[contract.org_id]
+        
+        // SKIP IF OPTED OUT
+        if (ownerId && amcOptedOutOwners.has(ownerId)) { amcSkipped++; continue }
+
         const contractorPhone = ownerId ? amcOwnerPhoneMap[ownerId] : null
         if (!ownerId || !contractorPhone) { amcSkipped++; continue }
 
