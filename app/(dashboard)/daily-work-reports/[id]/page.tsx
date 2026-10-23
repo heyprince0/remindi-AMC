@@ -14,6 +14,7 @@ import {
   Share2,
   Stamp,
   Upload,
+  CheckSquare,
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,12 @@ import { toast } from "sonner"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const safeStr = (val: unknown) => String(val ?? "-")
+
+interface ChecklistResponse {
+  template_id: string
+  name: string
+  status: "OK" | "Not OK" | "NA"
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -369,6 +376,60 @@ export default function DailyWorkReportDetailPage() {
           margin: { left: margin, right: margin },
         })
         y = (doc as any).lastAutoTable.finalY + 6
+
+        // ⭐ ── Safety Checklist in PDF ── ⭐
+        const checklist = report.checklist_responses as ChecklistResponse[] | null
+        if (Array.isArray(checklist) && checklist.length > 0) {
+          const yAfterItems = y
+
+          doc.setFontSize(8)
+          doc.setFont("helvetica", "bold")
+          doc.setTextColor(80, 80, 80)
+          doc.text("SAFETY CHECKLIST", margin, yAfterItems + 4)
+
+          autoTable(doc, {
+            startY: yAfterItems + 7,
+            head: [["#", "Item", "Status"]],
+            body: checklist.map((item, i) => [
+              String(i + 1),
+              item.name,
+              item.status,
+            ]),
+            theme: "grid",
+            headStyles: {
+              fillColor: [tr, tg, tb],
+              textColor: [255, 255, 255],
+              fontSize: 7,
+              fontStyle: "bold",
+              halign: "center",
+            },
+            bodyStyles: { fontSize: 7 },
+            columnStyles: {
+              0: { halign: "center", cellWidth: 10 },
+              1: { cellWidth: 140 },
+              2: {
+                halign: "center",
+                cellWidth: 30,
+                fontStyle: "bold",
+              },
+            },
+            didParseCell: (data) => {
+              if (data.column.index === 2 && data.section === "body") {
+                const status = data.cell.raw as string
+                if (status === "OK") {
+                  data.cell.styles.textColor = [22, 163, 74]   // green
+                } else if (status === "Not OK") {
+                  data.cell.styles.textColor = [220, 38, 38]   // red
+                } else {
+                  data.cell.styles.textColor = [107, 114, 128] // gray
+                }
+              }
+            },
+            margin: { left: margin, right: margin },
+          })
+          y = (doc as any).lastAutoTable.finalY + 6
+        }
+        // ⭐ ────────────────────────────── ⭐
 
         // ── INSPECTION / TESTING ──
         const boxY = y; const boxH = 22
@@ -717,6 +778,55 @@ export default function DailyWorkReportDetailPage() {
               </tbody>
             </table>
           </div>
+
+          {/* ⭐ Safety Checklist UI ── ⭐ */}
+          {Array.isArray(report.checklist_responses) &&
+            report.checklist_responses.length > 0 && (
+            <div className="border-t border-border">
+              <div className="px-5 py-3 bg-muted/30 border-b border-border flex items-center gap-2">
+                <CheckSquare className="size-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground">SAFETY CHECKLIST</p>
+              </div>
+              <div className="px-5 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(report.checklist_responses as ChecklistResponse[]).map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                    >
+                      <span className="text-sm font-medium">{item.name}</span>
+                      <span
+                        className={`
+                          shrink-0 text-xs font-semibold px-2.5 py-0.5 rounded-full border
+                          ${item.status === "OK"
+                            ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800"
+                            : item.status === "Not OK"
+                              ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800"
+                              : "bg-muted text-muted-foreground border-border"}
+                        `}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Summary strip */}
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/60 flex-wrap">
+                  <span className="text-xs text-muted-foreground">Summary:</span>
+                  <span className="text-xs font-semibold text-green-700 dark:text-green-400">
+                    OK: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "OK").length}
+                  </span>
+                  <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+                    Not OK: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "Not OK").length}
+                  </span>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    NA: {(report.checklist_responses as ChecklistResponse[]).filter(r => r.status === "NA").length}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Inspection / Testing */}
           <div className="border-t border-border">
