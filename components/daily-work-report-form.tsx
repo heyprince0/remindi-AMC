@@ -231,8 +231,9 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         .from("work-report-signatures")
         .getPublicUrl(path)
       return data.publicUrl
-    } catch (err) {
+    } catch (err: any) {
       console.error("Signature upload failed:", err)
+      toast.error(`Signature upload failed. Check bucket permissions.`)
       return null
     }
   }
@@ -272,12 +273,16 @@ export function DailyWorkReportForm({ edit = false }: Props) {
       let techSignUrl     = report?.tech_sign_url    ?? null
       let customerSignUrl = report?.customer_sign_url ?? null
 
-      if (techSignDataURL) {
-        const url = await uploadSignature(techSignDataURL, "tech", reportId)
+      // ⭐ Read directly from the canvas ref to avoid asynchronous state delays
+      const currentTechSign = techSignRef.current?.getDataURL() || techSignDataURL
+      const currentCustomerSign = customerSignRef.current?.getDataURL() || customerSignDataURL
+
+      if (currentTechSign) {
+        const url = await uploadSignature(currentTechSign, "tech", reportId)
         if (url) techSignUrl = url
       }
-      if (customerSignDataURL) {
-        const url = await uploadSignature(customerSignDataURL, "customer", reportId)
+      if (currentCustomerSign) {
+        const url = await uploadSignature(currentCustomerSign, "customer", reportId)
         if (url) customerSignUrl = url
       }
 
