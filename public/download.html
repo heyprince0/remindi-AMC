@@ -5,36 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Download Remindi App – Install on Desktop & Mobile | AMC Management Software</title>
   <meta name="description" content="Install the Remindi app on your desktop or phone in seconds — no app store needed. Works on Windows, Mac, Android and iOS via PWA. Manage your AMC contracts anywhere." />
-  <meta name="keywords" content="download Remindi app, Remindi PWA, AMC management app download, AMC software install, Remindi mobile app, AMC app India" />
-  <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://www.remindi.online/download" />
   <link rel="icon" type="image/png" href="/remindi-logo-brand.png" />
-  <link rel="apple-touch-icon" href="/remindi-logo-brand.png" />
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#29ABE2" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Remindi" />
-  <meta property="og:title" content="Download Remindi – AMC Management App for Desktop & Mobile" />
-  <meta property="og:description" content="Install the Remindi PWA app on any device. No app store needed. Manage AMC contracts on the go." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://www.remindi.online/download" />
-  <meta property="og:image" content="/remindi-landing.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Download Remindi – AMC Management App" />
-  <meta name="twitter:description" content="Install on any device in seconds. No app store required." />
-  <meta name="twitter:image" content="https://www.remindi.online/remindi-landing.png" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Remindi","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android, iOS, Windows, macOS","description":"AMC management software for Indian service contractors. Install as a Progressive Web App on any device.","url":"https://www.remindi.online/download","installUrl":"https://www.remindi.online","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-
   <style>
+    /* ── RESET & VARIABLES ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --blue: #29ABE2; --blue-dark: #1e96cc; --blue-light: #4FC3F7;
@@ -42,138 +21,90 @@
       --gray-50: #F8FAFC; --gray-100: #F1F5F9; --gray-200: #E2E8F0;
       --gray-300: #CBD5E1; --gray-400: #94A3B8; --gray-500: #64748B;
       --gray-600: #475569; --gray-700: #334155; --gray-800: #1E293B; --gray-900: #0F172A;
-      --radius: 12px;
       --shadow-sm: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
       --shadow-md: 0 4px 16px rgba(0,0,0,.10);
       --shadow-lg: 0 10px 40px rgba(0,0,0,.12);
       --shadow-blue: 0 8px 32px rgba(41,171,226,.30);
     }
     html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-    body { font-family:'Poppins',sans-serif; color:var(--gray-800); background:var(--white); overflow-x:hidden; line-height:1.6; }
+    body { font-family: 'Poppins', sans-serif; color: var(--gray-800); background: var(--white); overflow-x: hidden; line-height: 1.6; }
+    section { padding: 96px 24px; }
     section[id] { scroll-margin-top: 84px; }
-
+    .container { max-width: 1200px; margin: 0 auto; }
+    .text-center { text-align: center; }
+    
     /* ── NAVBAR ── */
-    .navbar { position:fixed; top:0; left:0; right:0; z-index:1000; background:rgba(255,255,255,.96); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-bottom:1px solid var(--gray-200); transition:box-shadow .3s; }
-    .navbar.scrolled { box-shadow:var(--shadow-md); }
-    .nav-inner { max-width:1200px; margin:0 auto; padding:0 24px; height:68px; display:flex; align-items:center; justify-content:space-between; }
-    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
-    .nav-logo img { height:38px; width:38px; border-radius:8px; object-fit:cover; }
-    .nav-logo span { font-size:1.35rem; font-weight:700; color:var(--blue); letter-spacing:-.01em; }
-    .nav-links { display:flex; align-items:center; gap:32px; list-style:none; }
-    .nav-links a { text-decoration:none; color:var(--gray-600); font-size:.92rem; font-weight:500; transition:color .2s; }
-    .nav-links a:hover { color:var(--blue); }
-    .btn-nav { background:var(--blue); color:white; padding:10px 22px; border-radius:8px; font-size:.9rem; font-weight:600; text-decoration:none; transition:background .2s,transform .15s,box-shadow .2s; white-space:nowrap; }
-    .btn-nav:hover { background:var(--blue-dark); transform:translateY(-1px); box-shadow:var(--shadow-blue); }
-    .hamburger { display:none; flex-direction:column; gap:5px; cursor:pointer; padding:4px; background:none; border:none; }
-    .hamburger span { display:block; width:24px; height:2px; background:var(--gray-700); border-radius:2px; transition:all .3s; }
-    .hamburger.active span:nth-child(1) { transform:translateY(7px) rotate(45deg); }
-    .hamburger.active span:nth-child(2) { opacity:0; }
-    .hamburger.active span:nth-child(3) { transform:translateY(-7px) rotate(-45deg); }
-    .mobile-menu { display:none; flex-direction:column; padding:8px 0 16px; border-top:1px solid var(--gray-200); background:white; }
-    .mobile-menu.open { display:flex; }
-    .mobile-menu a { padding:12px 24px; text-decoration:none; color:var(--gray-700); font-weight:500; font-size:.95rem; transition:background .2s; }
-    .mobile-menu a:hover { background:var(--gray-50); }
-    .mobile-menu .btn-nav { margin:8px 24px 0; text-align:center; }
+    .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--gray-200); transition: box-shadow .3s; }
+    .navbar.scrolled { box-shadow: var(--shadow-md); }
+    .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 68px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { height: 38px; width: 38px; border-radius: 8px; object-fit: cover; }
+    .nav-logo span { font-size: 1.35rem; font-weight: 700; color: var(--blue); letter-spacing: -.01em; }
+    .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+    .nav-links a { text-decoration: none; color: var(--gray-600); font-size: .92rem; font-weight: 500; transition: color .2s; }
+    .nav-links a:hover { color: var(--blue); }
+    .btn-nav { background: var(--blue); color: white; padding: 10px 22px; border-radius: 8px; font-size: .9rem; font-weight: 600; text-decoration: none; transition: background .2s, transform .15s, box-shadow .2s; white-space: nowrap; }
+    .btn-nav:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: var(--shadow-blue); }
+    .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; background: none; border: none; }
+    .hamburger span { display: block; width: 24px; height: 2px; background: var(--gray-700); border-radius: 2px; transition: all .3s; }
+    .hamburger.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.active span:nth-child(2) { opacity: 0; }
+    .hamburger.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    .mobile-menu { display: none; flex-direction: column; padding: 8px 0 16px; border-top: 1px solid var(--gray-200); background: white; }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a { padding: 12px 24px; text-decoration: none; color: var(--gray-700); font-weight: 500; font-size: .95rem; transition: background .2s; }
+    .mobile-menu a:hover { background: var(--gray-50); }
+    .mobile-menu .btn-nav { margin: 8px 24px 0; text-align: center; }
 
     /* ── UTILS ── */
-    section { padding:96px 24px; }
-    .container { max-width:1200px; margin:0 auto; }
-    .section-badge { display:inline-block; background:rgba(41,171,226,.12); color:var(--blue-dark); padding:6px 16px; border-radius:999px; font-size:.82rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; margin-bottom:16px; }
-    .section-title { font-size:clamp(1.8rem,4vw,2.6rem); font-weight:800; color:var(--gray-900); line-height:1.2; margin-bottom:16px; letter-spacing:-.02em; }
-    .section-subtitle { font-size:1.05rem; color:var(--gray-500); max-width:600px; margin:0 auto; }
-    .text-center { text-align:center; }
-
-    /* ── INSTALL BUTTON ── */
-    .btn-install { display:inline-flex; align-items:center; justify-content:center; gap:10px; background:var(--blue); color:white; padding:16px 36px; border-radius:10px; font-family:'Poppins',sans-serif; font-size:1.05rem; font-weight:600; border:none; cursor:pointer; transition:background .2s,transform .15s,box-shadow .2s; -webkit-tap-highlight-color:transparent; }
-    .btn-install:hover { background:var(--blue-dark); transform:translateY(-2px); box-shadow:0 8px 28px rgba(41,171,226,.45); }
-    .btn-install:active { transform:translateY(0); }
-    .btn-install:disabled { opacity:.55; cursor:default; transform:none; box-shadow:none; }
-    .install-fallback { font-size:.88rem; color:var(--gray-500); display:none; max-width:440px; margin:12px auto 0; line-height:1.55; }
-    .install-badges { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:24px; }
-    .install-badge { display:inline-flex; align-items:center; gap:6px; background:var(--gray-100); color:var(--gray-600); border-radius:999px; padding:6px 14px; font-size:.8rem; font-weight:500; }
-    .install-badge svg { width:14px; height:14px; color:var(--blue); flex-shrink:0; }
+    .section-badge { display: inline-block; background: rgba(41,171,226,.12); color: var(--blue-dark); padding: 6px 16px; border-radius: 999px; font-size: .82rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 16px; }
+    .section-title { font-size: clamp(1.8rem,4vw,2.6rem); font-weight: 800; color: var(--gray-900); line-height: 1.2; margin-bottom: 16px; letter-spacing: -.02em; }
+    .section-subtitle { font-size: 1.05rem; color: var(--gray-500); max-width: 600px; margin: 0 auto; }
+    
+    .btn-install { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--blue); color: white; padding: 16px 36px; border-radius: 10px; font-family: 'Poppins',sans-serif; font-size: 1.05rem; font-weight: 600; border: none; cursor: pointer; transition: background .2s, transform .15s, box-shadow .2s; -webkit-tap-highlight-color: transparent; }
+    .btn-install:hover { background: var(--blue-dark); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(41,171,226,.45); }
+    .install-fallback { font-size: .88rem; color: var(--gray-500); display: none; max-width: 440px; margin: 12px auto 0; line-height: 1.55; }
+    .install-badges { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 24px; }
+    .install-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--gray-100); color: var(--gray-600); border-radius: 999px; padding: 6px 14px; font-size: .8rem; font-weight: 500; }
+    .install-badge svg { width: 14px; height: 14px; color: var(--blue); flex-shrink: 0; }
 
     /* ── HERO ── */
-    .hero { padding:140px 0 0; background:linear-gradient(160deg,#E8F6FD 0%,#ffffff 55%); position:relative; overflow:hidden; }
-    .hero::before { content:''; position:absolute; top:-200px; right:-200px; width:700px; height:700px; background:radial-gradient(circle,rgba(41,171,226,.08) 0%,transparent 70%); pointer-events:none; }
-    .hero-text { max-width:1200px; margin:0 auto; padding:0 24px 56px; display:flex; flex-direction:column; align-items:center; text-align:center; position:relative; z-index:2; }
-    .hero-badge { display:inline-flex; align-items:center; gap:8px; background:white; border:1px solid var(--gray-200); border-radius:999px; padding:8px 18px; font-size:.82rem; font-weight:600; color:var(--gray-700); margin-bottom:24px; box-shadow:var(--shadow-sm); }
-    .hero h1 { font-size:clamp(2.2rem,5.5vw,3.8rem); font-weight:800; color:var(--gray-900); line-height:1.12; margin-bottom:20px; letter-spacing:-.03em; }
-    .hero h1 span { color:var(--blue); }
-    .hero-sub { font-size:1.08rem; color:var(--gray-500); max-width:580px; margin-bottom:28px; line-height:1.7; }
-    .hero-note { font-size:.82rem; color:var(--gray-500); display:flex; align-items:center; gap:6px; margin-top:14px; }
-    .device-pills { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin:32px 0 8px; }
-    .device-pill { display:flex; align-items:center; gap:6px; background:white; border:1px solid var(--gray-200); border-radius:999px; padding:7px 16px; font-size:.82rem; font-weight:500; color:var(--gray-600); box-shadow:var(--shadow-sm); }
-    .device-pill svg { width:14px; height:14px; color:var(--blue); flex-shrink:0; }
+    .hero { padding: 140px 0 0; background: linear-gradient(160deg,#E8F6FD 0%,#ffffff 55%); position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; top: -200px; right: -200px; width: 700px; height: 700px; background: radial-gradient(circle,rgba(41,171,226,.08) 0%,transparent 70%); pointer-events: none; }
+    .hero-text { max-width: 1200px; margin: 0 auto; padding: 0 24px 56px; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; z-index: 2; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: white; border: 1px solid var(--gray-200); border-radius: 999px; padding: 8px 18px; font-size: .82rem; font-weight: 600; color: var(--gray-700); margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+    .hero h1 { font-size: clamp(2.2rem,5.5vw,3.8rem); font-weight: 800; color: var(--gray-900); line-height: 1.12; margin-bottom: 20px; letter-spacing: -.03em; }
+    .hero h1 span { color: var(--blue); }
+    .hero-sub { font-size: 1.08rem; color: var(--gray-500); max-width: 580px; margin-bottom: 28px; line-height: 1.7; }
+    .hero-note { font-size: .82rem; color: var(--gray-500); display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+    .device-pills { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 32px 0 8px; }
+    .device-pill { display: flex; align-items: center; gap: 6px; background: white; border: 1px solid var(--gray-200); border-radius: 999px; padding: 7px 16px; font-size: .82rem; font-weight: 500; color: var(--gray-600); box-shadow: var(--shadow-sm); }
+    .device-pill svg { width: 14px; height: 14px; color: var(--blue); flex-shrink: 0; }
 
     /* ════════════════════════════════════════
        MOCKUP STAGE
     ════════════════════════════════════════ */
-    .mockup-stage {
-      position: relative;
-      background: radial-gradient(120% 70% at 50% 0%, #16203a 0%, #0b0e18 58%), #0b0e18;
-      padding: 84px 24px 96px;
-      overflow: hidden;
-      isolation: isolate;
-    }
-    /* Grid lines */
-    .mockup-stage::before {
-      content: '';
-      position: absolute; inset: 0;
-      background-image:
-        linear-gradient(rgba(41,171,226,.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(41,171,226,.06) 1px, transparent 1px);
-      background-size: 48px 48px;
-      -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 42%, #000 25%, transparent 80%);
-      mask-image: radial-gradient(ellipse 72% 62% at 50% 42%, #000 25%, transparent 80%);
-      pointer-events: none;
-    }
-    /* Glow orbs */
+    .mockup-stage { position: relative; background: radial-gradient(120% 70% at 50% 0%, #16203a 0%, #0b0e18 58%), #0b0e18; padding: 84px 24px 96px; overflow: hidden; isolation: isolate; }
+    .mockup-stage::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(41,171,226,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(41,171,226,.06) 1px, transparent 1px); background-size: 48px 48px; -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 42%, #000 25%, transparent 80%); mask-image: radial-gradient(ellipse 72% 62% at 50% 42%, #000 25%, transparent 80%); pointer-events: none; }
     .stage-glow { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(60px); z-index: 0; }
     .stage-glow-left { width: 560px; height: 560px; top: -14%; left: -14%; background: radial-gradient(circle, rgba(41,171,226,.22), transparent 65%); }
     .stage-glow-right { width: 480px; height: 480px; top: -6%; right: -12%; background: radial-gradient(circle, rgba(79,195,247,.15), transparent 65%); }
     .stage-glow-center { width: 760px; height: 380px; bottom: 2%; left: 50%; transform: translateX(-50%); background: radial-gradient(ellipse, rgba(41,171,226,.16), transparent 70%); }
-
-    .stage-inner {
-      position: relative; z-index: 2;
-      max-width: 1160px; margin: 0 auto;
-      display: flex; align-items: flex-end; justify-content: center;
-      gap: 36px;
-    }
+    .stage-inner { position: relative; z-index: 2; max-width: 1160px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: center; gap: 36px; }
 
     /* ─── DESKTOP MOCKUP ─── */
-    .desktop-wrap {
-      flex: 1; max-width: 800px;
-      position: relative;
-      transform: perspective(1400px) rotateX(3deg);
-      transform-origin: center bottom;
-      transition: transform .5s cubic-bezier(.2,.8,.2,1);
-    }
+    .desktop-wrap { flex: 1; max-width: 800px; position: relative; transform: perspective(1400px) rotateX(3deg); transform-origin: center bottom; transition: transform .5s cubic-bezier(.2,.8,.2,1); }
     .desktop-wrap:hover { transform: perspective(1400px) rotateX(0deg) translateY(-6px); }
-
-    .desktop-shell {
-      background: linear-gradient(145deg, #2a2d3e, #1a1d2e);
-      border-radius: 16px 16px 0 0;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,.08),
-        0 -4px 60px rgba(41,171,226,.18),
-        0 40px 90px rgba(0,0,0,.65);
-      overflow: hidden;
-    }
-
-    /* Browser chrome */
+    .desktop-shell { background: linear-gradient(145deg, #2a2d3e, #1a1d2e); border-radius: 16px 16px 0 0; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 -4px 60px rgba(41,171,226,.18), 0 40px 90px rgba(0,0,0,.65); overflow: hidden; }
     .db-chrome { background: linear-gradient(180deg, #2e3148 0%, #252840 100%); padding: 10px 14px 0; }
     .db-traffic { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
     .db-dot { width: 11px; height: 11px; border-radius: 50%; }
-    .db-dot.red { background: #ff5f57; box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset; }
-    .db-dot.yellow { background: #ffbd2e; box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset; }
-    .db-dot.green { background: #28c840; box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset; }
+    .db-dot.red { background: #ff5f57; } .db-dot.yellow { background: #ffbd2e; } .db-dot.green { background: #28c840; }
     .db-tabs { display: flex; gap: 2px; align-items: flex-end; margin-left: 16px; flex: 1; }
     .db-tab { background: #1e2136; color: rgba(255,255,255,.5); border-radius: 7px 7px 0 0; padding: 6px 16px; font-size: .6rem; font-weight: 500; display: flex; align-items: center; gap: 6px; }
     .db-tab.active { background: #f8fafc; color: var(--gray-700); }
     .db-tab .favicon { width: 10px; height: 10px; border-radius: 2px; background: var(--blue); display: flex; align-items: center; justify-content: center; }
     .db-tab .favicon svg { width: 6px; height: 6px; }
-
     .db-bar-row { background: #f8fafc; padding: 6px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--gray-200); }
     .db-nav-btn { color: var(--gray-400); font-size: .65rem; font-weight: 700; background: none; border: none; cursor: default; line-height: 1; }
     .db-address { flex: 1; background: white; border: 1px solid var(--gray-200); border-radius: 6px; padding: 4px 10px; font-size: .62rem; color: var(--gray-600); font-family: ui-monospace, monospace; display: flex; align-items: center; gap: 6px; }
@@ -181,11 +112,7 @@
     .db-toolbar { display: flex; gap: 6px; }
     .db-tool { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
     .db-tool svg { width: 10px; height: 10px; color: var(--gray-400); }
-
-    /* App layout */
     .db-app { display: flex; height: 380px; background: var(--gray-50); }
-
-    /* Sidebar */
     .db-sidebar { width: 52px; background: white; border-right: 1px solid var(--gray-200); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 4px; flex-shrink: 0; }
     .db-sidebar-logo { width: 30px; height: 30px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
     .db-sidebar-logo svg { width: 16px; height: 16px; }
@@ -193,8 +120,6 @@
     .db-si svg { width: 14px; height: 14px; color: var(--gray-400); }
     .db-si.active { background: rgba(41,171,226,.12); }
     .db-si.active svg { color: var(--blue); }
-
-    /* Main */
     .db-main { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
     .db-topbar { background: white; border-bottom: 1px solid var(--gray-200); padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 10px; }
     .db-topbar-left { display: flex; flex-direction: column; min-width: 0; }
@@ -206,26 +131,19 @@
     .db-search span { font-size: .58rem; color: var(--gray-400); }
     .db-topbar-btn { background: var(--blue); color: white; border: none; border-radius: 5px; padding: 5px 10px; font-size: .58rem; font-weight: 700; cursor: default; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 4px; }
     .db-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--blue-deep)); display: flex; align-items: center; justify-content: center; font-size: .55rem; font-weight: 700; color: white; flex-shrink: 0; }
-
     .db-content { flex: 1; padding: 14px 18px; overflow: hidden; }
     .db-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 14px; }
     .db-stat { background: white; border-radius: 10px; padding: 12px 14px; border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 2px; }
     .db-stat-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
     .db-stat-icon svg { width: 12px; height: 12px; }
-    .db-stat-icon.blue { background: rgba(41,171,226,.12); }
-    .db-stat-icon.blue svg { color: var(--blue); }
-    .db-stat-icon.orange { background: #fff7ed; }
-    .db-stat-icon.orange svg { color: #f97316; }
-    .db-stat-icon.green { background: #f0fdf4; }
-    .db-stat-icon.green svg { color: #16a34a; }
-    .db-stat-icon.purple { background: #f5f3ff; }
-    .db-stat-icon.purple svg { color: #7c3aed; }
+    .db-stat-icon.blue { background: rgba(41,171,226,.12); } .db-stat-icon.blue svg { color: var(--blue); }
+    .db-stat-icon.orange { background: #fff7ed; } .db-stat-icon.orange svg { color: #f97316; }
+    .db-stat-icon.green { background: #f0fdf4; } .db-stat-icon.green svg { color: #16a34a; }
+    .db-stat-icon.purple { background: #f5f3ff; } .db-stat-icon.purple svg { color: #7c3aed; }
     .db-stat-lbl { font-size: .56rem; color: var(--gray-500); font-weight: 500; }
     .db-stat-val { font-size: 1.1rem; font-weight: 800; color: var(--gray-900); line-height: 1.2; }
     .db-stat-change { font-size: .52rem; font-weight: 600; display: flex; align-items: center; gap: 2px; }
-    .db-stat-change.up { color: #16a34a; }
-    .db-stat-change.warn { color: #f97316; }
-
+    .db-stat-change.up { color: #16a34a; } .db-stat-change.warn { color: #f97316; }
     .db-cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; }
     .db-panel { background: white; border-radius: 10px; border: 1px solid var(--gray-200); overflow: hidden; box-shadow: var(--shadow-sm); min-width: 0; }
     .db-panel-head { padding: 9px 14px; border-bottom: 1px solid var(--gray-100); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
@@ -242,11 +160,8 @@
     .db-row-type { font-size: .56rem; color: var(--gray-400); }
     .badge { font-size: .5rem; padding: 2px 7px; border-radius: 999px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
     .badge::before { content:''; width:4px; height:4px; border-radius:50%; background:currentColor; }
-    .badge-green { background:#dcfce7; color:#16a34a; }
-    .badge-orange { background:#ffedd5; color:#c2410c; }
-    .badge-blue { background:#e0f5fc; color:var(--blue-dark); }
-    .badge-red { background:#fee2e2; color:#dc2626; }
-
+    .badge-green { background:#dcfce7; color:#16a34a; } .badge-orange { background:#ffedd5; color:#c2410c; }
+    .badge-blue { background:#e0f5fc; color:var(--blue-dark); } .badge-red { background:#fee2e2; color:#dc2626; }
     .db-tasks-wrap { padding: 6px 0; }
     .db-task { padding: 7px 14px; border-bottom: 1px solid var(--gray-50); display: flex; align-items: center; gap: 8px; cursor: default; }
     .db-task:last-child { border-bottom: none; }
@@ -257,97 +172,21 @@
     .db-task-time { font-size: .52rem; color: var(--gray-400); font-weight: 600; white-space: nowrap; }
 
     /* ─── PHONE MOCKUP ─── */
-    .phone-wrap {
-      flex-shrink: 0;
-      width: 252px;
-      position: relative;
-      z-index: 3;
-      transform: translateY(16px);
-      transition: transform .5s cubic-bezier(.2,.8,.2,1);
-    }
+    .phone-wrap { flex-shrink: 0; width: 252px; position: relative; z-index: 3; transform: translateY(16px); transition: transform .5s cubic-bezier(.2,.8,.2,1); }
     .phone-wrap:hover { transform: translateY(4px); }
-
-    .phone-shell {
-      position: relative;
-      background: linear-gradient(155deg, #4a4e66 0%, #262a40 42%, #14162a 100%);
-      border-radius: 44px;
-      padding: 10px;
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,.14),
-        0 0 0 4px rgba(8,10,18,.85),
-        0 24px 60px rgba(0,0,0,.55),
-        0 0 90px rgba(41,171,226,.22);
-    }
-    /* Side buttons */
-    .phone-shell::before {
-      content: '';
-      position: absolute; left: -4px; top: 108px;
-      width: 4px; height: 30px;
-      background: linear-gradient(to right, #2a2d42, #3a3d55);
-      border-radius: 3px 0 0 3px;
-      box-shadow: 0 44px 0 #2f3247, 0 70px 0 #2f3247;
-    }
-    .phone-shell::after {
-      content: '';
-      position: absolute; right: -4px; top: 140px;
-      width: 4px; height: 52px;
-      background: linear-gradient(to left, #2a2d42, #3a3d55);
-      border-radius: 0 3px 3px 0;
-    }
-
-    /* Dynamic island */
-    .phone-island {
-      width: 78px; height: 22px;
-      background: #05060a;
-      border-radius: 20px;
-      margin: 2px auto 9px;
-      display: flex; align-items: center; justify-content: flex-end;
-      padding-right: 8px;
-    }
-    .island-cam {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #2a3550, #05060a 70%);
-      box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset;
-    }
-
-    /* Screen */
-    .phone-screen {
-      position: relative;
-      background: #f8fafc;
-      border-radius: 36px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Glass glare */
-    .phone-screen::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(125deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 32%);
-      pointer-events: none;
-      border-radius: inherit;
-      z-index: 30;
-    }
-
-    /* Status bar + header share gradient */
-    .mob-hero-bg {
-      position: relative;
-      background: linear-gradient(155deg, #33b6e8 0%, #1a7faa 100%);
-      padding: 8px 14px 16px;
-      overflow: hidden;
-    }
-    .mob-hero-bg::after {
-      content: '';
-      position: absolute; top: -46px; right: -46px;
-      width: 150px; height: 150px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,255,.2), transparent 70%);
-      pointer-events: none;
-    }
+    .phone-shell { position: relative; background: linear-gradient(155deg, #4a4e66 0%, #262a40 42%, #14162a 100%); border-radius: 44px; padding: 10px; box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 0 0 4px rgba(8,10,18,.85), 0 24px 60px rgba(0,0,0,.55), 0 0 90px rgba(41,171,226,.22); }
+    .phone-shell::before { content: ''; position: absolute; left: -4px; top: 108px; width: 4px; height: 30px; background: linear-gradient(to right, #2a2d42, #3a3d55); border-radius: 3px 0 0 3px; box-shadow: 0 44px 0 #2f3247, 0 70px 0 #2f3247; }
+    .phone-shell::after { content: ''; position: absolute; right: -4px; top: 140px; width: 4px; height: 52px; background: linear-gradient(to left, #2a2d42, #3a3d55); border-radius: 0 3px 3px 0; }
+    .phone-island { width: 78px; height: 22px; background: #05060a; border-radius: 20px; margin: 2px auto 9px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; }
+    .island-cam { width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #2a3550, #05060a 70%); box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset; }
+    .phone-screen { position: relative; background: #f8fafc; border-radius: 36px; overflow: hidden; display: flex; flex-direction: column; }
+    .phone-screen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(125deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 32%); pointer-events: none; border-radius: inherit; z-index: 30; }
+    .mob-hero-bg { position: relative; background: linear-gradient(155deg, #33b6e8 0%, #1a7faa 100%); padding: 8px 14px 16px; overflow: hidden; }
+    .mob-hero-bg::after { content: ''; position: absolute; top: -46px; right: -46px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.2), transparent 70%); pointer-events: none; }
     .mob-statusbar { display: flex; align-items: center; justify-content: space-between; color: #fff; margin-bottom: 12px; position: relative; z-index: 1; }
     .mob-time { font-size: .55rem; font-weight: 700; letter-spacing: .02em; }
     .mob-icons { display: flex; align-items: center; gap: 4px; }
     .mob-icons svg { width: 11px; height: 11px; opacity: .95; }
-
     .mob-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; position: relative; z-index: 1; }
     .mob-brand { display: flex; align-items: center; gap: 6px; font-size: .68rem; font-weight: 800; color: #fff; letter-spacing: -.01em; }
     .mob-logo { width: 21px; height: 21px; background: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
@@ -355,41 +194,28 @@
     .mob-bell { width: 27px; height: 27px; background: rgba(255,255,255,.18); border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; }
     .mob-bell svg { width: 12px; height: 12px; color: #fff; }
     .mob-bell-dot { position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; background: #ef4444; border-radius: 50%; border: 1.5px solid #2ab0e0; }
-
     .mob-hello { font-size: .56rem; color: rgba(255,255,255,.78); font-weight: 400; position: relative; z-index: 1; }
     .mob-name { font-size: .86rem; font-weight: 800; color: #fff; margin-bottom: 12px; position: relative; z-index: 1; }
-
     .mob-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; position: relative; z-index: 1; }
     .mob-sum-card { background: rgba(255,255,255,.16); border-radius: 11px; padding: 9px 11px; border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(4px); }
     .mob-sum-lbl { display: block; font-size: .49rem; color: rgba(255,255,255,.72); font-weight: 500; margin-bottom: 2px; }
     .mob-sum-val { display: block; font-size: .95rem; font-weight: 800; color: #fff; line-height: 1.1; }
     .mob-sum-sub { display: block; font-size: .45rem; color: rgba(255,255,255,.65); margin-top: 2px; }
-
-    /* Body */
     .mob-body { padding: 11px 11px 6px; flex: 1; }
     .mob-section-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
     .mob-section-title { font-size: .6rem; font-weight: 700; color: var(--gray-700); }
     .mob-see-all { font-size: .52rem; color: var(--blue); font-weight: 600; }
-
     .mob-card { display: flex; align-items: center; gap: 9px; background: #fff; border: 1px solid var(--gray-100); border-radius: 12px; padding: 8px 10px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
     .mob-card:last-child { margin-bottom: 0; }
     .mob-card-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: .82rem; flex-shrink: 0; }
-    .mob-card-icon.red { background: #fee2e2; }
-    .mob-card-icon.amber { background: #fef3c7; }
-    .mob-card-icon.sky { background: #e0f5fc; }
-    .mob-card-icon.green { background: #dcfce7; }
+    .mob-card-icon.red { background: #fee2e2; } .mob-card-icon.amber { background: #fef3c7; } .mob-card-icon.sky { background: #e0f5fc; }
     .mob-card-body { flex: 1; min-width: 0; }
     .mob-card-name { font-size: .6rem; font-weight: 700; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mob-card-sub { font-size: .51rem; color: var(--gray-400); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mob-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
     .mob-badge { font-size: .43rem; font-weight: 700; padding: 2px 6px; border-radius: 999px; white-space: nowrap; }
-    .mob-badge.red { background: #fee2e2; color: #dc2626; }
-    .mob-badge.amber { background: #fef3c7; color: #b45309; }
-    .mob-badge.sky { background: #e0f5fc; color: var(--blue-deep); }
-    .mob-badge.green { background: #dcfce7; color: #16a34a; }
+    .mob-badge.red { background: #fee2e2; color: #dc2626; } .mob-badge.amber { background: #fef3c7; color: #b45309; } .mob-badge.sky { background: #e0f5fc; color: var(--blue-deep); }
     .mob-date { font-size: .45rem; color: var(--gray-400); font-weight: 500; }
-
-    /* Footer nav */
     .mob-footer { background: #fff; border-top: 1px solid var(--gray-100); padding-bottom: 6px; }
     .mob-bottomnav { display: flex; justify-content: space-around; align-items: center; padding: 8px 8px 6px; }
     .mob-nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
@@ -400,52 +226,20 @@
     .mob-home-indicator { width: 72px; height: 4px; border-radius: 2px; background: rgba(15,23,42,.22); margin: 0 auto 2px; }
 
     /* ── FLOATING CARDS ── */
-    .float-card {
-      position: absolute;
-      background: #fff;
-      border-radius: 12px;
-      padding: 11px 14px;
-      box-shadow: 0 10px 34px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.08);
-      display: flex; align-items: center; gap: 10px;
-      z-index: 10;
-      animation: floatAnim 3.6s ease-in-out infinite;
-    }
-    @keyframes floatAnim {
-      0%,100% { transform: translateY(0); }
-      50% { transform: translateY(-8px); }
-    }
+    .float-card { position: absolute; background: #fff; border-radius: 12px; padding: 11px 14px; box-shadow: 0 10px 34px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px; z-index: 10; animation: floatAnim 3.6s ease-in-out infinite; }
+    @keyframes floatAnim { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
     .float-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: .95rem; flex-shrink: 0; }
-    .float-icon.blue { background: rgba(41,171,226,.15); }
-    .float-icon.green { background: #f0fdf4; }
-    .float-icon.red { background: #fee2e2; }
+    .float-icon.blue { background: rgba(41,171,226,.15); } .float-icon.green { background: #f0fdf4; } .float-icon.red { background: #fee2e2; }
     .float-text strong { display: block; font-size: .72rem; font-weight: 700; color: var(--gray-900); line-height: 1.3; }
     .float-text span { font-size: .62rem; color: var(--gray-500); line-height: 1.3; }
-
     .float-alert { top: -34px; right: -52px; animation-delay: .4s; }
     .float-success { bottom: 96px; left: -70px; animation-delay: 1.4s; }
     .float-renew { top: 30px; right: -78px; animation-delay: 2.2s; }
 
-    /* Device labels */
-    .device-label {
-      position: absolute; bottom: calc(100% + 14px); left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
-      border-radius: 999px; padding: 4px 13px;
-      font-size: .66rem; font-weight: 600; color: rgba(255,255,255,.75);
-      white-space: nowrap; backdrop-filter: blur(8px);
-      display: flex; align-items: center; gap: 6px;
-      letter-spacing: .02em;
-    }
+    /* Device Labels & Fades */
+    .device-label { position: absolute; bottom: calc(100% + 14px); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 4px 13px; font-size: .66rem; font-weight: 600; color: rgba(255,255,255,.75); white-space: nowrap; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; letter-spacing: .02em; }
     .device-label-dot { width: 5px; height: 5px; background: var(--blue); border-radius: 50%; box-shadow: 0 0 8px var(--blue); }
-
-    /* Bottom fade into next section */
-    .stage-bottom-fade {
-      position: absolute; left: 0; right: 0; bottom: 0;
-      height: 96px;
-      background: linear-gradient(to bottom, rgba(11,14,24,0) 0%, #0b0e18 14%, #f8fafc 100%);
-      pointer-events: none;
-      z-index: 4;
-    }
+    .stage-bottom-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: linear-gradient(to bottom, rgba(11,14,24,0) 0%, #0b0e18 14%, #f8fafc 100%); pointer-events: none; z-index: 4; }
 
     /* ── INSTALL SECTION ── */
     .install-section { background: var(--gray-50); }
@@ -457,7 +251,7 @@
     /* ── GUIDE SECTION ── */
     .guide-section { background: #fff; }
     .guide-tabs { display: flex; gap: 10px; margin-bottom: 44px; justify-content: center; flex-wrap: wrap; }
-    .guide-tab { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--gray-200); border-radius: 10px; padding: 10px 20px; font-size: .88rem; font-weight: 600; color: var(--gray-600); cursor: pointer; transition: all .2s; font-family: 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; }
+    .guide-tab { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--gray-200); border-radius: 10px; padding: 10px 20px; font-size: .88rem; font-weight: 600; color: var(--gray-600); cursor: pointer; transition: all .2s; font-family: 'Poppins', sans-serif; }
     .guide-tab.active { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
     .guide-tab svg { width: 18px; height: 18px; flex-shrink: 0; }
     .guide-tab:hover:not(.active) { border-color: var(--gray-300); color: var(--gray-700); }
@@ -465,7 +259,7 @@
     .guide-panel.active { display: block; animation: fadeUp .35s ease; }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .steps-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
-    .step-card { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 32px 26px; position: relative; transition: transform .2s, box-shadow .2s, border-color .2s; }
+    .step-card { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 12px; padding: 32px 26px; position: relative; transition: transform .2s, box-shadow .2s, border-color .2s; }
     .step-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--blue); }
     .step-num { position: absolute; top: 22px; right: 22px; width: 32px; height: 32px; border-radius: 50%; background: rgba(41,171,226,.1); color: var(--blue); display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 800; }
     .step-icon { width: 54px; height: 54px; background: rgba(41,171,226,.10); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; margin-bottom: 18px; }
@@ -473,43 +267,36 @@
     .step-card p { font-size: .85rem; color: var(--gray-500); line-height: 1.65; }
     .step-card p strong { color: var(--gray-700); }
 
-    /* ── WHY SECTION ── */
+    /* ── WHY & PLATFORM SECTIONS ── */
     .why-section { background: var(--gray-50); }
     .why-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-top: 52px; }
-    .why-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 28px; transition: transform .2s, box-shadow .2s, border-color .2s; }
+    .why-card { background: #fff; border: 1px solid var(--gray-200); border-radius: 12px; padding: 28px; transition: transform .2s, box-shadow .2s, border-color .2s; }
     .why-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); border-color: var(--blue); }
     .why-icon { width: 48px; height: 48px; background: rgba(41,171,226,.10); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 16px; }
     .why-card h3 { font-size: .95rem; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
     .why-card p { font-size: .83rem; color: var(--gray-500); line-height: 1.65; }
-
-    /* ── PLATFORM SECTION ── */
     .platform-section { background: #fff; }
     .platform-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 24px; margin-top: 48px; max-width: 900px; margin-left: auto; margin-right: auto; }
     .platform-card { background: var(--gray-50); border: 1.5px solid var(--gray-200); border-radius: 16px; padding: 30px; display: flex; align-items: flex-start; gap: 18px; transition: transform .2s, box-shadow .2s, border-color .2s; }
     .platform-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--blue); }
     .platform-icon { width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.75rem; flex-shrink: 0; }
-    .platform-icon.android { background: #e8f5e9; }
-    .platform-icon.ios { background: #f3f4f6; }
-    .platform-icon.windows { background: #eff6ff; }
-    .platform-icon.mac { background: #f9fafb; }
+    .platform-icon.android { background: #e8f5e9; } .platform-icon.ios { background: #f3f4f6; } .platform-icon.windows { background: #eff6ff; } .platform-icon.mac { background: #f9fafb; }
     .platform-info h3 { font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
     .platform-info p { font-size: .83rem; color: var(--gray-500); line-height: 1.6; margin-bottom: 14px; }
     .platform-steps { list-style: none; display: flex; flex-direction: column; gap: 5px; }
     .platform-steps li { font-size: .8rem; color: var(--gray-600); display: flex; align-items: flex-start; gap: 6px; line-height: 1.5; }
     .platform-steps li::before { content: '→'; color: var(--blue); font-weight: 700; flex-shrink: 0; }
 
-    /* ── CTA ── */
+    /* ── CTA & FOOTER ── */
     .cta-section { background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%); padding: 96px 24px; text-align: center; position: relative; overflow: hidden; }
     .cta-section::before { content: ''; position: absolute; top: -100px; right: -100px; width: 500px; height: 500px; background: radial-gradient(circle, rgba(255,255,255,.08) 0%, transparent 70%); pointer-events: none; }
     .cta-section h2 { font-size: clamp(1.8rem,4vw,2.8rem); font-weight: 800; color: #fff; margin-bottom: 16px; letter-spacing: -.02em; }
     .cta-section p { font-size: 1.05rem; color: rgba(255,255,255,.85); max-width: 520px; margin: 0 auto 36px; line-height: 1.7; }
-    .btn-cta-white { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: var(--blue); padding: 17px 38px; border-radius: 12px; font-size: 1.02rem; font-weight: 700; text-decoration: none; border: none; cursor: pointer; font-family: 'Poppins', sans-serif; transition: transform .15s, box-shadow .2s; -webkit-tap-highlight-color: transparent; }
+    .btn-cta-white { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: var(--blue); padding: 17px 38px; border-radius: 12px; font-size: 1.02rem; font-weight: 700; text-decoration: none; border: none; cursor: pointer; font-family: 'Poppins', sans-serif; transition: transform .15s, box-shadow .2s; }
     .btn-cta-white:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,.22); }
     .btn-cta-ghost { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.15); color: #fff; border: 2px solid rgba(255,255,255,.4); padding: 15px 30px; border-radius: 12px; font-size: 1rem; font-weight: 600; text-decoration: none; transition: background .2s; }
     .btn-cta-ghost:hover { background: rgba(255,255,255,.24); }
     .cta-note { margin-top: 20px; font-size: .82rem; color: rgba(255,255,255,.7); }
-
-    /* ── FOOTER ── */
     .footer { background: var(--gray-900); color: var(--gray-300); padding: 64px 24px 32px; }
     .footer-inner { max-width: 1200px; margin: 0 auto; }
     .footer-top { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
@@ -528,16 +315,13 @@
     .footer-links a { font-size: .8rem; color: var(--gray-600); text-decoration: none; transition: color .2s; }
     .footer-links a:hover { color: var(--blue); }
 
-    /* ════════════════════════════════════════
-       RESPONSIVE
-    ════════════════════════════════════════ */
+    /* ── RESPONSIVE ── */
     @media (max-width: 1080px) {
       .stage-inner { gap: 28px; }
       .desktop-wrap { max-width: 640px; }
       .phone-wrap { width: 232px; }
       .float-renew { display: none; }
     }
-
     @media (max-width: 960px) {
       .why-grid { grid-template-columns: repeat(2,1fr); }
       .platform-grid { grid-template-columns: 1fr; max-width: 520px; }
@@ -545,36 +329,21 @@
       .float-alert { right: -30px; top: -26px; }
       .float-success { left: -40px; }
     }
-
-    /* ── TABLET / MOBILE: hide desktop mockup, feature the phone ── */
     @media (max-width: 860px) {
       section { padding: 72px 20px; }
       .mockup-stage { padding: 64px 16px 88px; }
       .stage-inner { gap: 0; }
       .desktop-wrap { display: none; }
-      .phone-wrap {
-        width: min(290px, 74vw);
-        transform: translateY(0);
-        margin: 0 auto;
-      }
+      .phone-wrap { width: min(290px, 74vw); transform: translateY(0); margin: 0 auto; }
       .phone-wrap:hover { transform: translateY(0); }
       .float-alert { display: none; }
-      .float-success {
-        left: auto;
-        right: -14px;
-        bottom: 74px;
-        animation: floatMobile 3.6s ease-in-out infinite;
-      }
-      @keyframes floatMobile {
-        0%,100% { transform: translateY(0) scale(.86); }
-        50% { transform: translateY(-6px) scale(.86); }
-      }
+      .float-success { left: auto; right: -14px; bottom: 74px; animation: floatMobile 3.6s ease-in-out infinite; }
+      @keyframes floatMobile { 0%,100% { transform: translateY(0) scale(.86); } 50% { transform: translateY(-6px) scale(.86); } }
       .device-label { bottom: calc(100% + 18px); }
       .stage-glow-left { width: 380px; height: 380px; }
       .stage-glow-right { width: 320px; height: 320px; }
       .stage-glow-center { width: 520px; height: 300px; }
     }
-
     @media (max-width: 768px) {
       .nav-links { display: none; }
       .hamburger { display: flex; }
@@ -600,7 +369,6 @@
       .cta-section { padding: 72px 20px; }
       .cta-section p { margin-bottom: 28px; }
     }
-
     @media (max-width: 480px) {
       .hero h1 { font-size: 1.95rem; }
       .hero-sub { font-size: .95rem; }
@@ -612,5 +380,464 @@
       .install-badge { flex: 1 1 auto; justify-content: center; }
       .mob-card-sub { display: none; }
     }
+  </style>
+</head>
+<body>
 
-    @media (
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <img src="/remindi-logo-brand.png" alt="Remindi Logo" width="38" height="38" />
+      <span>Remindi</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="/#features">Features</a></li>
+      <li><a href="/#how-it-works">How it Works</a></li>
+      <li><a href="/#pricing">Pricing</a></li>
+      <li><a href="/download" style="color:var(--blue);font-weight:700;">Download App</a></li>
+      <li><a href="https://app.remindi.online" target="_blank" rel="noopener" class="btn-nav">Log In</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="/#features">Features</a>
+    <a href="/#how-it-works">How it Works</a>
+    <a href="/#pricing">Pricing</a>
+    <a href="/download" style="color:var(--blue);font-weight:700;">Download App</a>
+    <a href="https://app.remindi.online" target="_blank" rel="noopener" class="btn-nav">Log In</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" style="padding-left:0;padding-right:0;">
+  <div class="hero-text">
+    <div class="hero-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--blue)"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Progressive Web App — Works on Every Device
+    </div>
+    <h1>Remindi on Every <span>Device You Use</span></h1>
+    <p class="hero-sub">Install once, use everywhere. Get the full Remindi experience as a native app on your phone or desktop — no app store, no APK, just tap Install and go.</p>
+    <div class="install-badges">
+      <span class="install-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>One-Click Install</span>
+      <span class="install-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>Android &amp; Desktop</span>
+      <span class="install-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>No App Store Needed</span>
+    </div>
+    <button class="btn-install" id="pwa-install-btn">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v4h5.66V9h3.84L12 2z"/></svg>
+      Install App
+    </button>
+    <p id="install-fallback" class="install-fallback">
+      Already installed, or use your browser menu → "Install App" / "Add to Home Screen".
+    </p>
+    <p class="hero-note">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Free forever · No credit card · Works offline
+    </p>
+    <div class="device-pills">
+      <div class="device-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Android</div>
+      <div class="device-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0017 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 00-5 4.78C2 13 5 21 8 21c1.25 0 2.5-1.06 4-1.06z"/><path d="M10 2c0 2.5.5 4 1.5 4.5"/></svg>iPhone &amp; iPad</div>
+      <div class="device-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Windows &amp; Mac</div>
+      <div class="device-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Chrome &amp; Edge</div>
+    </div>
+  </div>
+
+  <!-- MOCKUP STAGE -->
+  <div class="mockup-stage">
+    <div class="stage-glow stage-glow-left"></div>
+    <div class="stage-glow stage-glow-right"></div>
+    <div class="stage-glow stage-glow-center"></div>
+    
+    <div class="stage-inner">
+      <!-- Desktop -->
+      <div class="desktop-wrap">
+        <div class="device-label"><div class="device-label-dot"></div>Desktop App</div>
+        <div class="desktop-shell">
+          <div class="db-chrome">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="db-traffic">
+                <div class="db-dot red"></div><div class="db-dot yellow"></div><div class="db-dot green"></div>
+              </div>
+              <div class="db-tabs">
+                <div class="db-tab active">
+                  <div class="favicon"><svg viewBox="0 0 24 24" fill="white"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg></div>
+                  Remindi – Dashboard
+                </div>
+                <div class="db-tab">Clients</div>
+              </div>
+            </div>
+          </div>
+          <div class="db-bar-row">
+            <span class="db-nav-btn">‹</span>
+            <span class="db-nav-btn" style="opacity:.35;">›</span>
+            <div class="db-address"><span class="lock">🔒</span>app.remindi.online/dashboard</div>
+            <div class="db-toolbar">
+              <div class="db-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+              <div class="db-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
+            </div>
+          </div>
+          <div class="db-app">
+            <div class="db-sidebar">
+              <div class="db-sidebar-logo"><svg viewBox="0 0 24 24" fill="white" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5" opacity=".7"/></svg></div>
+              <div class="db-si active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
+              <div class="db-si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+              <div class="db-si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            </div>
+            <div class="db-main">
+              <div class="db-topbar">
+                <div class="db-topbar-left">
+                  <span class="db-topbar-title">Dashboard</span>
+                  <span class="db-topbar-sub">Good morning, Rajesh 👋 — Saturday, 24 Oct 2026</span>
+                </div>
+                <div class="db-topbar-right">
+                  <div class="db-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><span>Search contracts…</span></div>
+                  <button class="db-topbar-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New AMC</button>
+                  <div class="db-avatar">RK</div>
+                </div>
+              </div>
+              <div class="db-content">
+                <div class="db-stats">
+                  <div class="db-stat">
+                    <div class="db-stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <span class="db-stat-lbl">Total AMCs</span><span class="db-stat-val">247</span><span class="db-stat-change up">▲ 12 this month</span>
+                  </div>
+                  <div class="db-stat">
+                    <div class="db-stat-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                    <span class="db-stat-lbl">Due This Week</span><span class="db-stat-val" style="color:#f97316;">18</span><span class="db-stat-change warn">3 overdue</span>
+                  </div>
+                  <div class="db-stat">
+                    <div class="db-stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+                    <span class="db-stat-lbl">Completed Today</span><span class="db-stat-val" style="color:#16a34a;">6</span><span class="db-stat-change up">On schedule</span>
+                  </div>
+                  <div class="db-stat">
+                    <div class="db-stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+                    <span class="db-stat-lbl">Revenue (Month)</span><span class="db-stat-val">₹1.84L</span><span class="db-stat-change up">▲ 8% vs last</span>
+                  </div>
+                </div>
+                <div class="db-cols">
+                  <div class="db-panel">
+                    <div class="db-panel-head"><div class="db-panel-head-title"><div class="dot"></div>Recent AMC Contracts</div><span class="db-panel-link">View all →</span></div>
+                    <div class="db-table-head"><span>Client</span><span>Service Date</span><span>Type</span><span>Status</span></div>
+                    <div class="db-row"><div class="db-row-name"><div class="db-row-avatar">SL</div>Shivam Lifts Pvt</div><span class="db-row-date">25 Oct 2026</span><span class="db-row-type">Lift</span><span><span class="badge badge-orange">Due Soon</span></span></div>
+                    <div class="db-row"><div class="db-row-name"><div class="db-row-avatar">PA</div>Priya AC Service</div><span class="db-row-date">28 Oct 2026</span><span class="db-row-type">AC</span><span><span class="badge badge-green">Scheduled</span></span></div>
+                    <div class="db-row"><div class="db-row-name"><div class="db-row-avatar">MC</div>Metro CCTV Works</div><span class="db-row-date">22 Oct 2026</span><span class="db-row-type">CCTV</span><span><span class="badge badge-red">Overdue</span></span></div>
+                    <div class="db-row"><div class="db-row-name"><div class="db-row-avatar">SR</div>Singh RO Systems</div><span class="db-row-date">30 Oct 2026</span><span class="db-row-type">RO</span><span><span class="badge badge-blue">Upcoming</span></span></div>
+                  </div>
+                  <div class="db-panel">
+                    <div class="db-panel-head"><div class="db-panel-head-title"><div class="dot" style="background:#f97316;"></div>Today's Tasks</div><span class="db-panel-link">All tasks →</span></div>
+                    <div class="db-tasks-wrap">
+                      <div class="db-task"><div class="db-task-color" style="background:#ef4444;"></div><div class="db-task-body"><div class="db-task-name">Lift inspection – Shivam Bldg</div><div class="db-task-sub">Block A · Technician: Anil K.</div></div><div class="db-task-time">9:00 AM</div></div>
+                      <div class="db-task"><div class="db-task-color" style="background:#f59e0b;"></div><div class="db-task-body"><div class="db-task-name">AC gas refill – Mehta Office</div><div class="db-task-sub">2nd floor · Pending</div></div><div class="db-task-time">11:30 AM</div></div>
+                      <div class="db-task"><div class="db-task-color" style="background:#22c55e;"></div><div class="db-task-body"><div class="db-task-name">RO filter change – Gupta Home</div><div class="db-task-sub">Completed ✓</div></div><div class="db-task-time">Done</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="float-card float-alert">
+          <div class="float-icon red">🔔</div>
+          <div class="float-text"><strong>3 Services Overdue</strong><span>Shivam Lifts · Metro CCTV +1</span></div>
+        </div>
+      </div>
+
+      <!-- Phone -->
+      <div class="phone-wrap">
+        <div class="device-label"><div class="device-label-dot"></div>Mobile App</div>
+        <div class="phone-shell">
+          <div class="phone-island"><div class="island-cam"></div></div>
+          <div class="phone-screen">
+            <div class="mob-hero-bg">
+              <div class="mob-statusbar">
+                <span class="mob-time">9:41</span>
+                <div class="mob-icons">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7H1v10h22V7zM3 15V9h16v6H3zm18-6h1v6h-1V9z"/></svg>
+                </div>
+              </div>
+              <div class="mob-topbar">
+                <div class="mob-brand">
+                  <div class="mob-logo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg></div>
+                  Remindi
+                </div>
+                <div class="mob-bell">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                  <div class="mob-bell-dot"></div>
+                </div>
+              </div>
+              <div class="mob-hello">Good morning 👋</div>
+              <div class="mob-name">Rajesh Kumar</div>
+              <div class="mob-summary">
+                <div class="mob-sum-card">
+                  <span class="mob-sum-lbl">Active AMCs</span>
+                  <span class="mob-sum-val">247</span>
+                  <span class="mob-sum-sub">▲ 12 this month</span>
+                </div>
+                <div class="mob-sum-card">
+                  <span class="mob-sum-lbl">Due Soon</span>
+                  <span class="mob-sum-val">18</span>
+                  <span class="mob-sum-sub">3 overdue</span>
+                </div>
+              </div>
+            </div>
+            <div class="mob-body">
+              <div class="mob-section-row">
+                <span class="mob-section-title">Upcoming Services</span>
+                <span class="mob-see-all">See all →</span>
+              </div>
+              <div class="mob-card">
+                <div class="mob-card-icon red">🔴</div>
+                <div class="mob-card-body">
+                  <div class="mob-card-name">Shivam Lifts Pvt Ltd</div>
+                  <div class="mob-card-sub">Lift · Due 25 Oct · Anil K.</div>
+                </div>
+                <div class="mob-card-right">
+                  <span class="mob-badge red">Overdue</span>
+                  <span class="mob-date">25 Oct</span>
+                </div>
+              </div>
+              <div class="mob-card">
+                <div class="mob-card-icon amber">🟡</div>
+                <div class="mob-card-body">
+                  <div class="mob-card-name">Priya AC Service</div>
+                  <div class="mob-card-sub">AC · Due 28 Oct · Suresh</div>
+                </div>
+                <div class="mob-card-right">
+                  <span class="mob-badge amber">Soon</span>
+                  <span class="mob-date">28 Oct</span>
+                </div>
+              </div>
+              <div class="mob-card">
+                <div class="mob-card-icon sky">📷</div>
+                <div class="mob-card-body">
+                  <div class="mob-card-name">Metro CCTV Works</div>
+                  <div class="mob-card-sub">CCTV · 30 Oct · Ravi</div>
+                </div>
+                <div class="mob-card-right">
+                  <span class="mob-badge sky">Upcoming</span>
+                  <span class="mob-date">30 Oct</span>
+                </div>
+              </div>
+            </div>
+            <div class="mob-footer">
+              <div class="mob-bottomnav">
+                <div class="mob-nav-item active">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <span class="mob-nav-label">Home</span>
+                </div>
+                <div class="mob-nav-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  <span class="mob-nav-label">Clients</span>
+                </div>
+                <div class="mob-nav-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span class="mob-nav-label">Schedule</span>
+                </div>
+                <div class="mob-nav-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span class="mob-nav-label">AMCs</span>
+                </div>
+              </div>
+              <div class="mob-home-indicator"></div>
+            </div>
+          </div>
+        </div>
+        <div class="float-card float-success">
+          <div class="float-icon green">✅</div>
+          <div class="float-text"><strong>Service Done</strong><span>RO filter · Gupta Home</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-bottom-fade"></div>
+  </div>
+</section>
+
+<!-- INSTALL CARD -->
+<section class="install-section" id="install-app">
+  <div class="container">
+    <div class="install-card">
+      <div class="install-icon-wrap">📲</div>
+      <div class="section-badge">Install App</div>
+      <h2>Get the Remindi App</h2>
+      <p>Install Remindi on your phone or desktop in one click. No app store, no APK file — just tap Install and you are done.</p>
+      <div class="install-badges" style="margin-bottom:32px;">
+        <span class="install-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>One-Click Install</span>
+        <span class="install-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>Works on Android &amp; Desktop</span>
+      </div>
+      <button class="btn-install" id="pwa-install-btn-mid">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v4h5.66V9h3.84L12 2z"/></svg>
+        Install App
+      </button>
+      <p class="install-fallback" id="install-fallback-mid">Already installed, or use your browser menu → "Install App".</p>
+    </div>
+  </div>
+</section>
+
+<!-- GUIDE SECTION -->
+<section class="guide-section" id="how-to-install">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:48px;">
+      <div class="section-badge">Step by Step</div>
+      <h2 class="section-title">Install in Under 30 Seconds</h2>
+      <p class="section-subtitle">Choose your device and follow three simple steps.</p>
+    </div>
+    <div class="guide-tabs" role="tablist">
+      <button class="guide-tab active" id="tab-android" onclick="switchGuide('android')" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg><span>Android</span>
+      </button>
+      <button class="guide-tab" id="tab-ios" onclick="switchGuide('ios')" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0017 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 00-5 4.78C2 13 5 21 8 21c1.25 0 2.5-1.06 4-1.06z"/><path d="M10 2c0 2.5.5 4 1.5 4.5"/></svg><span>iPhone / iPad</span>
+      </button>
+      <button class="guide-tab" id="tab-desktop" onclick="switchGuide('desktop')" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span>Desktop</span>
+      </button>
+    </div>
+    <div class="guide-panel active" id="guide-android">
+      <div class="steps-row">
+        <div class="step-card"><div class="step-num">1</div><div class="step-icon">🌐</div><h3>Open Chrome</h3><p>On your Android phone, open <strong>Google Chrome</strong> and go to <strong>app.remindi.online</strong>.</p></div>
+        <div class="step-card"><div class="step-num">2</div><div class="step-icon">⋮</div><h3>Tap the Menu</h3><p>Tap the three-dot menu <strong>(⋮)</strong> in the top-right corner. Look for <strong>"Add to Home screen"</strong>.</p></div>
+        <div class="step-card"><div class="step-num">3</div><div class="step-icon">✅</div><h3>Confirm &amp; Done</h3><p>Tap <strong>Install</strong> or <strong>Add</strong>. Remindi will appear on your home screen instantly.</p></div>
+      </div>
+    </div>
+    <div class="guide-panel" id="guide-ios">
+      <div class="steps-row">
+        <div class="step-card"><div class="step-num">1</div><div class="step-icon">🌐</div><h3>Open Safari</h3><p>On your iPhone or iPad, open <strong>Safari</strong> and go to <strong>app.remindi.online</strong>.</p></div>
+        <div class="step-card"><div class="step-num">2</div><div class="step-icon">📤</div><h3>Tap Share</h3><p>Tap the <strong>Share icon</strong> (box with an arrow pointing up) at the bottom of the screen.</p></div>
+        <div class="step-card"><div class="step-num">3</div><div class="step-icon">➕</div><h3>Add to Home Screen</h3><p>Tap <strong>"Add to Home Screen"</strong> then tap <strong>Add</strong> top-right.</p></div>
+      </div>
+    </div>
+    <div class="guide-panel" id="guide-desktop">
+      <div class="steps-row">
+        <div class="step-card"><div class="step-num">1</div><div class="step-icon">🖥️</div><h3>Open Chrome or Edge</h3><p>On Windows or Mac, open <strong>Chrome</strong> or <strong>Edge</strong> and go to <strong>app.remindi.online</strong>.</p></div>
+        <div class="step-card"><div class="step-num">2</div><div class="step-icon">📥</div><h3>Click Install Icon</h3><p>Look for a <strong>computer icon with a down arrow (⬇)</strong> in the address bar on the right.</p></div>
+        <div class="step-card"><div class="step-num">3</div><div class="step-icon">🚀</div><h3>Install &amp; Launch</h3><p>Click <strong>Install</strong>. Remindi opens in its own window and sends desktop notifications.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY SECTION -->
+<section class="why-section">
+  <div class="container">
+    <div class="text-center">
+      <div class="section-badge">Why Install?</div>
+      <h2 class="section-title">More Than Just a Website</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card"><div class="why-icon">⚡</div><h3>Instant Load</h3><p>The app caches your data locally so it opens in under a second, even on a slow network.</p></div>
+      <div class="why-card"><div class="why-icon">🔔</div><h3>Screen Reminders</h3><p>Get push notifications directly to your device when a service is overdue or expiring.</p></div>
+      <div class="why-card"><div class="why-icon">📶</div><h3>Works Offline</h3><p>View your client list and upcoming schedules offline. Changes sync when you reconnect.</p></div>
+      <div class="why-card"><div class="why-icon">🏠</div><h3>Home Screen App</h3><p>One tap from your phone or desktop taskbar — no browser, no typing URLs.</p></div>
+      <div class="why-card"><div class="why-icon">📲</div><h3>No App Store</h3><p>No Play Store approvals, no 100 MB download, no forced updates. Just tap and go.</p></div>
+      <div class="why-card"><div class="why-icon">🔒</div><h3>Always Up to Date</h3><p>Every time we ship a new feature, your app updates silently in the background.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PLATFORM SECTION -->
+<section class="platform-section">
+  <div class="container">
+    <div class="text-center">
+      <div class="section-badge">All Platforms</div>
+      <h2 class="section-title">Detailed Steps for Every Device</h2>
+    </div>
+    <div class="platform-grid">
+      <div class="platform-card"><div class="platform-icon android">🤖</div><div class="platform-info"><h3>Android</h3><p>Works on all Android devices with Chrome 76+. Supports home screen install and offline access.</p><ul class="platform-steps"><li>Open Chrome → app.remindi.online</li><li>Tap ⋮ menu → "Add to Home screen"</li><li>Tap Install on the popup → done</li></ul></div></div>
+      <div class="platform-card"><div class="platform-icon ios">🍎</div><div class="platform-info"><h3>iPhone &amp; iPad</h3><p>iOS 16.4+ supports full PWA. Must use Safari — Chrome on iOS does not support install.</p><ul class="platform-steps"><li>Open Safari → app.remindi.online</li><li>Tap Share button (box with up arrow)</li><li>Tap "Add to Home Screen" → Add</li></ul></div></div>
+      <div class="platform-card"><div class="platform-icon windows">🪟</div><div class="platform-info"><h3>Windows PC</h3><p>Install via Chrome or Edge on Windows 10/11. Runs as a standalone window.</p><ul class="platform-steps"><li>Open Chrome or Edge → app.remindi.online</li><li>Click the install icon (⬇) in the address bar</li><li>Click Install → Remindi opens</li></ul></div></div>
+      <div class="platform-card"><div class="platform-icon mac">🍏</div><div class="platform-info"><h3>Mac</h3><p>Works on macOS 10.15+ via Chrome or Edge. Appears in your Launchpad and Dock.</p><ul class="platform-steps"><li>Open Chrome or Edge → app.remindi.online</li><li>Click the ⬇ icon in the address bar</li><li>Click Install → pin to Dock</li></ul></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div style="position:relative;z-index:1;">
+    <h2>Ready to Install Remindi?</h2>
+    <p>Join hundreds of Indian service contractors who manage their AMC contracts from any device, anytime.</p>
+    <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+      <button class="btn-cta-white" id="pwa-install-btn-cta">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h3.84v4h5.66V9h3.84L12 2z"/></svg>
+        Install the App
+      </button>
+      <a href="https://app.remindi.online" target="_blank" rel="noopener" class="btn-cta-ghost">Open in Browser</a>
+    </div>
+    <p class="cta-note">Free plan available · No credit card · Cancel any time</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="/" class="logo"><img src="/remindi-logo-brand.png" alt="Remindi" width="36" height="36" /><span>Remindi</span></a>
+        <p>AMC management software built for Indian lift, AC, CCTV, and RO service contractors.</p>
+      </div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="/#features">Features</a></li><li><a href="/#how-it-works">How it Works</a></li><li><a href="/#pricing">Pricing</a></li><li><a href="/download">Download App</a></li></ul></div>
+      <div class="footer-col"><h4>Company</h4><ul><li><a href="/about">About</a></li><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul></div>
+      <div class="footer-col"><h4>Legal</h4><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Service</a></li><li><a href="/refund">Refund Policy</a></li></ul></div>
+    </div>
+    <hr class="footer-divider" />
+    <div class="footer-bottom">
+      <p>© 2026 Remindi by Cosmos. All rights reserved.</p>
+      <div class="footer-links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="mailto:support@remindi.online">support@remindi.online</a></div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Navbar scroll
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => navbar.classList.toggle('scrolled', window.scrollY > 10));
+
+  // Hamburger
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobile-menu');
+  hamburger.addEventListener('click', () => { hamburger.classList.toggle('active'); mobileMenu.classList.toggle('open'); });
+  function closeMobileMenu() { hamburger.classList.remove('active'); mobileMenu.classList.remove('open'); }
+  mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobileMenu));
+
+  // Guide tabs
+  function switchGuide(name) {
+    document.querySelectorAll('.guide-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    document.querySelectorAll('.guide-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.getElementById('tab-' + name).setAttribute('aria-selected','true');
+    document.getElementById('guide-' + name).classList.add('active');
+  }
+  (function autoGuide() {
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua)) switchGuide('ios');
+    else if (!/Android/.test(ua)) switchGuide('desktop');
+  })();
+
+  // PWA Install
+  let deferredPrompt;
+  const installBtns = document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-mid, #pwa-install-btn-cta');
+  const fallbackTexts = document.querySelectorAll('#install-fallback, #install-fallback-mid');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  async function handleInstall() {
+    if (!deferredPrompt) { fallbackTexts.forEach(el => el.style.display = 'block'); return; }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  }
+
+  installBtns.forEach(btn => btn.addEventListener('click', handleInstall));
+
+  window.addEventListener('appinstalled', () => {
+    installBtns.forEach(btn => btn.style.display = 'none');
+    fallbackTexts.forEach(el => el.style.display = 'none');
+  });
+</script>
+</body>
+</html>
