@@ -18,8 +18,9 @@ import autoTable from "jspdf-autotable"
 type DateRange = "today" | "week" | "seven_days" | "thirty_days" | "month" | "last_month" | "year"
 const RANGE_LABELS: Record<DateRange, string> = { today: "Today", week: "This Week", seven_days: "7 Days", thirty_days: "30 Days", month: "This Month", last_month: "Last Month", year: "This Year" }
 
-type ContractRow = { id: string; status: string; contracts_price: number | null; customer_id: string; next_service_date: string }
+type ContractRow = { id: string; status: string; contracts_price: number | null; customer_id: string; next_service_date: string; frequency_days: number | null }
 type HistoryRow = { id: string; contract_id: string; status: string; service_date: string }
+type PaymentRow = { id: string; contract_id: string; amount: number; payment_date: string }
 type Movement = { id: string; item_id: string; movement_type: string; reason: string; quantity: number; technician_id: string | null; created_at: string }
 type Item = { id: string; name: string; current_stock: number; min_stock_level: number; purchase_price: number | null; selling_price: number | null; category_id?: string | null }
 type ProductSale = { name: string; quantity: number; revenue: number; profit: number }
@@ -44,8 +45,67 @@ function getPreviousRange(range: DateRange) { const current = getDateRange(range
 function formatINR(value: number) { return `₹${Math.round(value).toLocaleString("en-IN")}` }
 function trend(current: number, previous: number) { return previous === 0 ? (current ? 100 : null) : Math.round(((current - previous) / previous) * 100) }
 function TrendBadge({ current, previous }: { current: number; previous: number }) { const value = trend(current, previous); if (value === null) return <span className="text-xs text-muted-foreground">No previous data</span>; return <span className={`flex items-center gap-1 text-xs font-medium ${value >= 0 ? "text-green-600" : "text-red-500"}`}>{value >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}{value >= 0 ? "+" : ""}{value}% vs previous</span> }
-function getContractStats(history: HistoryRow[], contracts: ContractRow[]) { const map = new Map(contracts.map((c) => [c.id, c])); const completed = history.filter((h) => h.status === "completed"); const earned = new Set(completed.map((h) => h.contract_id)); return { services: history.length, completed: completed.length, earnings: [...earned].reduce((sum, id) => sum + (map.get(id)?.contracts_price || 0), 0) } }
-function getMonthlyData(history: HistoryRow[], contracts: ContractRow[]): MonthlyData[] { const map = new Map(contracts.map((c) => [c.id, c])); const now = new Date(); return Array.from({ length: 6 }, (_, index) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1); const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); const records = history.filter((h) => h.service_date >= toDateStr(d) && h.service_date <= toDateStr(end)); const stats = getContractStats(records, contracts); return { month: d.toLocaleString("default", { month: "short" }), completed: stats.completed, scheduled: records.filter((h) => h.status !== "completed" && h.status !== "cancelled").length, earnings: stats.earnings } }) }
+// Returns the set of contract IDs that have at least one payment record ever.
+// These contracts use actual payment amounts for earnings; others fall back to contracts_price.
+function getTrackedContractIds(allPayments: PaymentRow[]): Set<string> {
+  return new Set(allPayments.map((p) => p.contract_id))
+}
+
+function getContractStats(
+  history: HistoryRow[],
+  contracts: ContractRow[],
+  paymentsInPeriod: PaymentRow[],
+  trackedContractIds: Set<string>
+) {
+  const map = new Map(contracts.map((c) => [c.id, c]))
+  const completed = history.filter((h) => h.status === "completed")
+
+  // Unique contract IDs with a completed service in this period that are NOT payment-tracked.
+  // For these we use contracts_price as the earning indicator.
+  const priceBasedIds = new Set(
+    completed.map((h) => h.contract_id).filter((id) => !trackedContractIds.has(id))
+  )
+  const priceEarnings = [...priceBasedIds].reduce(
+    (sum, id) => sum + (map.get(id)?.contracts_price || 0), 0
+  )
+
+  // For payment-tracked contracts: sum actual payments whose payment_date falls in this period.
+  const paymentEarnings = paymentsInPeriod
+    .filter((p) => trackedContractIds.has(p.contract_id))
+    .reduce((sum, p) => sum + Number(p.amount), 0)
+
+  return {
+    services: history.length,
+    completed: completed.length,
+    earnings: priceEarnings + paymentEarnings,
+  }
+}
+
+function getMonthlyData(
+  history: HistoryRow[],
+  contracts: ContractRow[],
+  allPayments: PaymentRow[],
+  trackedContractIds: Set<string>
+): MonthlyData[] {
+  const now = new Date()
+  return Array.from({ length: 6 }, (_, index) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    const records = history.filter(
+      (h) => h.service_date >= toDateStr(d) && h.service_date <= toDateStr(end)
+    )
+    const paymentsThisMonth = allPayments.filter(
+      (p) => p.payment_date >= toDateStr(d) && p.payment_date <= toDateStr(end)
+    )
+    const stats = getContractStats(records, contracts, paymentsThisMonth, trackedContractIds)
+    return {
+      month: d.toLocaleString("default", { month: "short" }),
+      completed: stats.completed,
+      scheduled: records.filter((h) => h.status !== "completed" && h.status !== "cancelled").length,
+      earnings: stats.earnings,
+    }
+  })
+}
 
 function StatCard({ title, value, detail, icon: Icon, tone = "primary", previous, current }: { title: string; value: string | number; detail: string; icon: typeof Activity; tone?: "primary" | "amber"; previous?: number; current?: number }) {
   const toneClasses = tone === "amber" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
@@ -123,10 +183,10 @@ export default function ReportsPage() {
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
       sixMonthsAgo.setDate(1)
 
-      const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes] = await Promise.all([
+      const [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes, paymentsRes] = await Promise.all([
         supabase
           .from("contracts")
-          .select("id, status, contracts_price, customer_id, next_service_date")
+          .select("id, status, contracts_price, customer_id, next_service_date, frequency_days")
           .eq("org_id", orgId),
         supabase
           .from("service_history")
@@ -155,11 +215,19 @@ export default function ReportsPage() {
           .select("id, item_id, movement_type, reason, quantity, technician_id, created_at")
           .eq("org_id", orgId)
           .gte("created_at", toDateStr(sixMonthsAgo)),
+        // Fetch ALL org payments (lightweight: only 4 cols).
+        // We filter by date in JS — one query covers current period, previous period, and 6-month chart.
+        supabase
+          .from("contract_payments")
+          .select("id, contract_id, amount, payment_date")
+          .eq("org_id", orgId),
       ])
 
       for (const result of [contractsRes, historyRes, previousHistoryRes, allHistoryRes, itemsRes, movementsRes]) {
         if (result.error) throw result.error
       }
+      // paymentsRes failure is non-fatal — earnings just fall back to price-based for all contracts
+      if (paymentsRes.error) console.warn("contract_payments fetch failed:", paymentsRes.error)
 
       const contracts = (contractsRes.data || []) as ContractRow[]
       const history = (historyRes.data || []) as HistoryRow[]
@@ -167,14 +235,27 @@ export default function ReportsPage() {
       const allHistory = (allHistoryRes.data || []) as HistoryRow[]
       const items = (itemsRes.data || []) as Item[]
       const allMovements = (movementsRes.data || []) as Movement[]
+
+      // ── Payment tracking data ────────────────────────────────────────────
+      const allPayments = (paymentsRes.data || []) as PaymentRow[]
+      // Which contracts have payment tracking set up (any payment ever recorded)
+      const trackedContractIds = getTrackedContractIds(allPayments)
+      // Payments in the selected period
+      const paymentsInPeriod = allPayments.filter(
+        (p) => p.payment_date >= toDateStr(start) && p.payment_date <= toDateStr(end)
+      )
+      // Payments in the previous period (for trend comparison)
+      const paymentsInPreviousPeriod = allPayments.filter(
+        (p) => p.payment_date >= toDateStr(previous.start) && p.payment_date <= toDateStr(previous.end)
+      )
       const itemMap = new Map(items.map((item) => [item.id, item]))
 
       const movements = allMovements.filter((m) => m.created_at >= start.toISOString() && m.created_at <= end.toISOString())
       const sold = movements.filter((m) => m.movement_type === "out" && m.reason === "Sold")
 
-      // Contract stats
-      const current = getContractStats(history, contracts)
-      const prev = getContractStats(previousHistory, contracts)
+      // Contract stats — payment-aware
+      const current = getContractStats(history, contracts, paymentsInPeriod, trackedContractIds)
+      const prev = getContractStats(previousHistory, contracts, paymentsInPreviousPeriod, trackedContractIds)
       setStats({
         totalServices: current.services,
         completedServices: current.completed,
@@ -185,7 +266,7 @@ export default function ReportsPage() {
         prevCompletedServices: prev.completed,
         prevTotalEarnings: prev.earnings,
       })
-      setMonthlyData(getMonthlyData(allHistory, contracts))
+      setMonthlyData(getMonthlyData(allHistory, contracts, allPayments, trackedContractIds))
 
       // Inventory stats
       const sales = sold.reduce((sum, m) => {
