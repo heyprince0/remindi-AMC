@@ -85,6 +85,9 @@ export function AddContractModal({
     startYear: '',
     endYear: '',
     location: '',
+    // ── NEW: payment tracking fields ──
+    paymentFrequencyMonths: '',
+    paymentInstallmentAmount: '',
   })
 
   useEffect(() => {
@@ -146,16 +149,12 @@ export function AddContractModal({
   // Populate form when editing
   useEffect(() => {
     if (editingContract && open) {
-      // Convert stored days back to months (divide by 30)
+      const ec = editingContract as any
       const months = editingContract.frequency_days ? Math.round(editingContract.frequency_days / 30) : ''
       const mode = editingContract.contract_type || 'new'
       setContractMode(mode)
-      
+
       if (mode === 'old' && editingContract.end_date && editingContract.duration_years != null) {
-        // Derive the exact years the user originally typed: end_date was saved as
-        // `${endYear}-12-31`, so its year IS endYear, and duration_years was saved as
-        // (endYear - startYear), so startYear = endYear - duration_years. This is an
-        // exact round‑trip with no recalculation drift.
         const endYear = new Date(editingContract.end_date).getFullYear()
         const startYear = endYear - editingContract.duration_years
         setFormData({
@@ -170,6 +169,8 @@ export function AddContractModal({
           startYear: startYear.toString(),
           endYear: endYear.toString(),
           location: editingContract.location || '',
+          paymentFrequencyMonths: ec.payment_frequency_months != null ? ec.payment_frequency_months.toString() : '',
+          paymentInstallmentAmount: ec.payment_installment_amount != null ? ec.payment_installment_amount.toString() : '',
         })
       } else {
         setFormData({
@@ -184,10 +185,11 @@ export function AddContractModal({
           startYear: '',
           endYear: '',
           location: editingContract.location || '',
+          paymentFrequencyMonths: ec.payment_frequency_months != null ? ec.payment_frequency_months.toString() : '',
+          paymentInstallmentAmount: ec.payment_installment_amount != null ? ec.payment_installment_amount.toString() : '',
         })
       }
       setNextServiceDate(editingContract.next_service_date)
-      // Compute end date
       if (editingContract.start_date && editingContract.duration_years) {
         const start = new Date(editingContract.start_date)
         const end = new Date(start)
@@ -211,6 +213,8 @@ export function AddContractModal({
         startYear: '',
         endYear: '',
         location: '',
+        paymentFrequencyMonths: '',
+        paymentInstallmentAmount: '',
       })
       setNextServiceDate('')
       setEndDate('')
@@ -265,7 +269,7 @@ export function AddContractModal({
       }
     }
     if (!formData.startDate) newErrors.startDate = 'Start Date is required'
-    
+
     if (contractMode === 'new') {
       if (!formData.durationYears) {
         newErrors.durationYears = 'Duration is required'
@@ -276,7 +280,6 @@ export function AddContractModal({
         }
       }
     } else {
-      // Old mode validation
       if (!formData.startYear) {
         newErrors.startYear = 'Start Year is required'
       } else {
@@ -298,6 +301,21 @@ export function AddContractModal({
         }
       }
     }
+
+    // ── Payment fields — optional but if one is filled both must be valid ──
+    if (formData.paymentFrequencyMonths) {
+      const pf = parseInt(formData.paymentFrequencyMonths)
+      if (isNaN(pf) || pf < 1 || pf > 12) {
+        newErrors.paymentFrequencyMonths = 'Must be between 1 and 12 months'
+      }
+    }
+    if (formData.paymentInstallmentAmount) {
+      const pa = parseFloat(formData.paymentInstallmentAmount)
+      if (isNaN(pa) || pa < 0) {
+        newErrors.paymentInstallmentAmount = 'Must be a positive amount'
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -311,8 +329,13 @@ export function AddContractModal({
       const months = parseInt(formData.frequencyMonths)
       const frequencyDays = months * 30
 
+      // ── Shared payment fields ──
+      const paymentFields = {
+        payment_frequency_months: formData.paymentFrequencyMonths ? parseInt(formData.paymentFrequencyMonths) : null,
+        payment_installment_amount: formData.paymentInstallmentAmount ? parseFloat(formData.paymentInstallmentAmount) : null,
+      }
+
       if (contractMode === 'new') {
-        // New mode: keep existing behavior unchanged
         const contractData = {
           user_id: userId,
           customer_id: formData.customerId,
@@ -327,6 +350,7 @@ export function AddContractModal({
           location: formData.location.trim() || null,
           org_id: orgId,
           contract_type: 'new',
+          ...paymentFields,
         }
 
         if (editingContract) {
@@ -346,7 +370,6 @@ export function AddContractModal({
         onOpenChange(false)
         onSuccess()
       } else {
-        // Old mode: compute end_date and duration_years from years
         const startYear = parseInt(formData.startYear)
         const endYear = parseInt(formData.endYear)
         const durationYears = endYear - startYear
@@ -367,6 +390,7 @@ export function AddContractModal({
           location: formData.location.trim() || null,
           org_id: orgId,
           contract_type: 'old',
+          ...paymentFields,
         }
 
         let contractId: string
@@ -388,7 +412,6 @@ export function AddContractModal({
           if (!contractId) throw new Error('Failed to get contract ID')
         }
 
-        // Bulk insert pending old services
         if (pendingOldServices.length > 0) {
           const serviceHistoryData = pendingOldServices.map((service) => ({
             contract_id: contractId,
@@ -424,7 +447,6 @@ export function AddContractModal({
     }
   }
 
-  // ========== FIX: Keep sub‑modal open and show toast ==========
   const handleAddOldService = () => {
     const subErrors: Record<string, string> = {}
     if (!subModal.startDate) subErrors.startDate = 'Service Done Date is required'
@@ -445,10 +467,8 @@ export function AddContractModal({
       },
     ])
 
-    // Show toast confirmation
     toast.success('1 old service added')
 
-    // Keep sub‑modal open, reset fields for next entry
     setSubModal({
       open: true,
       startDate: '',
@@ -456,7 +476,6 @@ export function AddContractModal({
       errors: {},
     })
   }
-  // =====================================================================
 
   const handleRemoveOldService = (index: number) => {
     setPendingOldServices((prev) => prev.filter((_, i) => i !== index))
@@ -495,6 +514,7 @@ export function AddContractModal({
             </div>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-6">
+
           {/* Contract Name */}
           <div className="space-y-2">
             <Label htmlFor="contractName">Contract Name <span className="text-red-500">*</span></Label>
@@ -591,7 +611,7 @@ export function AddContractModal({
             {errors.customerId && <p className="text-xs text-red-500">{errors.customerId}</p>}
           </div>
 
-          {/* Frequency (months) – limited to 1–12 */}
+          {/* Frequency (months) */}
           <div className="space-y-2">
             <Label htmlFor="frequencyMonths">Service Frequency (months) <span className="text-red-500">*</span></Label>
             <Input
@@ -711,10 +731,72 @@ export function AddContractModal({
               type="number"
               min="0"
               step="0.01"
-              placeholder="e.g., 5000"
+              placeholder="e.g., 10000"
               value={formData.contractPrice}
               onChange={(e) => setFormData({ ...formData, contractPrice: e.target.value })}
             />
+          </div>
+
+          {/* ── Payment Tracking ── */}
+          <div className="rounded-lg border border-dashed border-border p-4 space-y-4 bg-muted/30">
+            <div>
+              <p className="text-sm font-medium text-foreground">Payment Collection (Optional)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Set this if the customer pays in installments — e.g. ₹2,500 every 3 months.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentFrequencyMonths">Collect Every (months)</Label>
+                <Input
+                  id="paymentFrequencyMonths"
+                  type="number"
+                  min="1"
+                  max="12"
+                  step="1"
+                  placeholder="e.g., 3"
+                  value={formData.paymentFrequencyMonths}
+                  onChange={(e) => setFormData({ ...formData, paymentFrequencyMonths: e.target.value })}
+                  className={errors.paymentFrequencyMonths ? 'border-red-500' : ''}
+                />
+                {errors.paymentFrequencyMonths && (
+                  <p className="text-xs text-red-500">{errors.paymentFrequencyMonths}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentInstallmentAmount">Amount per Installment (₹)</Label>
+                <Input
+                  id="paymentInstallmentAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g., 2500"
+                  value={formData.paymentInstallmentAmount}
+                  onChange={(e) => setFormData({ ...formData, paymentInstallmentAmount: e.target.value })}
+                  className={errors.paymentInstallmentAmount ? 'border-red-500' : ''}
+                />
+                {errors.paymentInstallmentAmount && (
+                  <p className="text-xs text-red-500">{errors.paymentInstallmentAmount}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Notes */}
@@ -733,8 +815,7 @@ export function AddContractModal({
           {contractMode === 'old' && (
             <div className="border rounded-lg p-4 space-y-4">
               <h3 className="font-semibold text-sm">Add Completed Services (optional)</h3>
-              
-              {/* Pending Services List */}
+
               {pendingOldServices.length > 0 && (
                 <div className="space-y-2 bg-gray-50 p-3 rounded">
                   {pendingOldServices.map((service, index) => (
@@ -774,61 +855,58 @@ export function AddContractModal({
               {editingContract ? 'Update Contract' : 'Save Contract'}
             </Button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-    {/* Sub-Modal for Adding Old Service */}
-    <Dialog open={subModal.open} onOpenChange={(isOpen) => setSubModal({ ...subModal, open: isOpen, errors: {} })}>
-      {/* HIDE the default close (X) button */}
-      <DialogContent className="max-w-md [&>button]:hidden">
-        <DialogHeader>
-          <DialogTitle>Add Old Service</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          {/* Service Done Date */}
-          <div className="space-y-2">
-            <Label htmlFor="serviceStartDate">Service Done Date <span className="text-red-500">*</span></Label>
-            <Input
-              id="serviceStartDate"
-              type="date"
-              value={subModal.startDate}
-              onChange={(e) => setSubModal({ ...subModal, startDate: e.target.value })}
-              className={subModal.errors.startDate ? 'border-red-500' : ''}
-            />
-            {subModal.errors.startDate && <p className="text-xs text-red-500">{subModal.errors.startDate}</p>}
+      {/* Sub-Modal for Adding Old Service */}
+      <Dialog open={subModal.open} onOpenChange={(isOpen) => setSubModal({ ...subModal, open: isOpen, errors: {} })}>
+        <DialogContent className="max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle>Add Old Service</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="serviceStartDate">Service Done Date <span className="text-red-500">*</span></Label>
+              <Input
+                id="serviceStartDate"
+                type="date"
+                value={subModal.startDate}
+                onChange={(e) => setSubModal({ ...subModal, startDate: e.target.value })}
+                className={subModal.errors.startDate ? 'border-red-500' : ''}
+              />
+              {subModal.errors.startDate && <p className="text-xs text-red-500">{subModal.errors.startDate}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subModalTechnician">Technician <span className="text-red-500">*</span></Label>
+              <Select value={subModal.technicianId} onValueChange={(value) => setSubModal({ ...subModal, technicianId: value })}>
+                <SelectTrigger className={subModal.errors.technicianId ? 'border-red-500' : ''}>
+                  <SelectValue placeholder={loadingTechnicians ? 'Loading...' : 'Select technician'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingTechnicians ? (
+                    <SelectItem disabled value="loading">Loading technicians...</SelectItem>
+                  ) : technicians.length === 0 ? (
+                    <SelectItem disabled value="empty">No technicians available</SelectItem>
+                  ) : (
+                    technicians.map((tech) => (
+                      <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {subModal.errors.technicianId && <p className="text-xs text-red-500">{subModal.errors.technicianId}</p>}
+            </div>
           </div>
 
-          {/* Technician */}
-          <div className="space-y-2">
-            <Label htmlFor="subModalTechnician">Technician <span className="text-red-500">*</span></Label>
-            <Select value={subModal.technicianId} onValueChange={(value) => setSubModal({ ...subModal, technicianId: value })}>
-              <SelectTrigger className={subModal.errors.technicianId ? 'border-red-500' : ''}>
-                <SelectValue placeholder={loadingTechnicians ? 'Loading...' : 'Select technician'} />
-              </SelectTrigger>
-              <SelectContent>
-                {loadingTechnicians ? (
-                  <SelectItem disabled value="loading">Loading technicians...</SelectItem>
-                ) : technicians.length === 0 ? (
-                  <SelectItem disabled value="empty">No technicians available</SelectItem>
-                ) : (
-                  technicians.map((tech) => (
-                    <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {subModal.errors.technicianId && <p className="text-xs text-red-500">{subModal.errors.technicianId}</p>}
+          <div className="flex pt-4">
+            <Button type="button" onClick={handleAddOldService} className="w-full">
+              Add to List
+            </Button>
           </div>
-        </div>
-
-        <div className="flex pt-4">
-          <Button type="button" onClick={handleAddOldService} className="w-full">
-            Add to List
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
