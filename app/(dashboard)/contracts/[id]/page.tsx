@@ -4,10 +4,20 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -18,7 +28,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer, Download, Share2, Loader2 } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer, Download, Share2, Loader2, Banknote, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, buildReminderMessage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
@@ -26,15 +36,38 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
 
+// ── Extended contract type with payment fields ──────────────────────────────
 interface ContractDisplay extends Contract {
   daysUntilService: number
   endDate: string | null
   customerName: string
+  payment_frequency_months?: number | null
+  payment_installment_amount?: number | null
 }
 
 interface ServiceRecord extends ServiceHistory {
   technicianName: string
 }
+
+// ── Payment record type ──────────────────────────────────────────────────────
+interface ContractPayment {
+  id: string
+  contract_id: string
+  org_id: string
+  payment_date: string
+  amount: number
+  payment_mode: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+const PAYMENT_MODES = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cheque', label: 'Cheque' },
+]
 
 const safeStr = (val: any) => String(val ?? "-")
 
@@ -68,7 +101,6 @@ function getStatusBadge(days: number, status: string) {
   return <Badge variant="outline">{status}</Badge>
 }
 
-// Desktop table badge — normal size
 function getServiceStatusBadge(status: string) {
   switch (status) {
     case "completed": return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20">Completed</Badge>
@@ -78,7 +110,6 @@ function getServiceStatusBadge(status: string) {
   }
 }
 
-// Mobile timeline badge — compact size
 function getMobileServiceBadge(status: string) {
   switch (status) {
     case "completed": return <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20 text-[11px] px-1.5 py-0">Completed</Badge>
@@ -86,6 +117,22 @@ function getMobileServiceBadge(status: string) {
     case "cancelled": return <Badge className="bg-alert-overdue/10 text-alert-overdue border-alert-overdue/20 text-[11px] px-1.5 py-0">Cancelled</Badge>
     default: return <Badge variant="outline" className="text-[11px] px-1.5 py-0">{status}</Badge>
   }
+}
+
+// ── Calculate next expected payment date ─────────────────────────────────────
+function getNextPaymentDate(
+  payments: ContractPayment[],
+  frequencyMonths: number | null | undefined,
+  contractStartDate: string | null | undefined
+): string | null {
+  if (!frequencyMonths) return null
+  const baseDate = payments.length > 0
+    ? payments.slice().sort((a, b) => b.payment_date.localeCompare(a.payment_date))[0].payment_date
+    : contractStartDate
+  if (!baseDate) return null
+  const d = new Date(baseDate)
+  d.setMonth(d.getMonth() + frequencyMonths)
+  return d.toISOString().split('T')[0]
 }
 
 export default function ContractDetailPage() {
@@ -109,6 +156,19 @@ export default function ContractDetailPage() {
   const [renewModalOpen, setRenewModalOpen] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
+
+  // ── Payment state ──────────────────────────────────────────────────────────
+  const [payments, setPayments] = useState<ContractPayment[]>([])
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [savingPayment, setSavingPayment] = useState(false)
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
+  const [paymentForm, setPaymentForm] = useState({
+    payment_date: new Date().toISOString().split('T')[0],
+    amount: '',
+    payment_mode: 'cash',
+    notes: '',
+  })
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -207,7 +267,7 @@ export default function ContractDetailPage() {
         : getContractEndDate(contractData.start_date, contractData.duration_years)
 
       setCustomer(customerData as Customer)
-      setContract({ ...contractData as Contract, daysUntilService, endDate, customerName: customerData?.name || 'Unknown' })
+      setContract({ ...contractData as Contract, daysUntilService, endDate, customerName: customerData?.name || 'Unknown' } as ContractDisplay)
 
       const { data: historyData, error: historyError } = await supabase
         .from('service_history').select('*').eq('contract_id', contractId).eq('org_id', currentOrgId)
@@ -223,6 +283,18 @@ export default function ContractDetailPage() {
       }) || []
 
       setServiceHistory(historyWithTechnicianNames)
+
+      // ── Load payments ──────────────────────────────────────────────────────
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('contract_payments')
+        .select('*')
+        .eq('contract_id', contractId)
+        .eq('org_id', currentOrgId)
+        .order('payment_date', { ascending: false })
+
+      if (!paymentsError && paymentsData) {
+        setPayments(paymentsData as ContractPayment[])
+      }
     } catch (error) {
       console.error('Error loading contract details:', error)
       toast.error('Failed to load contract details')
@@ -231,35 +303,97 @@ export default function ContractDetailPage() {
     }
   }
 
-  // Step 1: validate the phone number, then open the language dialog
+  // ── Payment handlers ────────────────────────────────────────────────────────
+  const openPaymentModal = () => {
+    setPaymentForm({
+      payment_date: new Date().toISOString().split('T')[0],
+      amount: contract?.payment_installment_amount?.toString() ?? '',
+      payment_mode: 'cash',
+      notes: '',
+    })
+    setPaymentErrors({})
+    setPaymentModalOpen(true)
+  }
+
+  const validatePaymentForm = () => {
+    const errs: Record<string, string> = {}
+    if (!paymentForm.payment_date) errs.payment_date = 'Date is required'
+    if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) errs.amount = 'Enter a valid amount'
+    setPaymentErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
+  const handleSavePayment = async () => {
+    if (!validatePaymentForm() || !currentOrgId || !user?.id) return
+    setSavingPayment(true)
+    try {
+      const { data, error } = await supabase
+        .from('contract_payments')
+        .insert([{
+          contract_id: contractId,
+          org_id: currentOrgId,
+          payment_date: paymentForm.payment_date,
+          amount: parseFloat(paymentForm.amount),
+          payment_mode: paymentForm.payment_mode,
+          notes: paymentForm.notes.trim() || null,
+          created_by: user.id,
+        }])
+        .select()
+      if (error) throw error
+      setPayments(prev => [data[0] as ContractPayment, ...prev])
+      toast.success('Payment recorded')
+      setPaymentModalOpen(false)
+    } catch (err) {
+      console.error('Error saving payment:', err)
+      toast.error('Failed to save payment')
+    } finally {
+      setSavingPayment(false)
+    }
+  }
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!currentOrgId) return
+    setDeletingPaymentId(paymentId)
+    try {
+      const { error } = await supabase
+        .from('contract_payments')
+        .delete()
+        .eq('id', paymentId)
+        .eq('org_id', currentOrgId)
+      if (error) throw error
+      setPayments(prev => prev.filter(p => p.id !== paymentId))
+      toast.success('Payment removed')
+    } catch (err) {
+      console.error('Error deleting payment:', err)
+      toast.error('Failed to remove payment')
+    } finally {
+      setDeletingPaymentId(null)
+    }
+  }
+
+  // ── WhatsApp ────────────────────────────────────────────────────────────────
   const handleSendWhatsApp = () => {
     if (!contract || !customer) return
-
     const rawPhone = customer.phone?.trim()
     if (!rawPhone) {
       toast.error("No phone number found for this customer")
       return
     }
-
     setSelectedLang(defaultLang)
     setLangDialogOpen(true)
   }
 
-  // Step 2: build the message in the chosen language and open WhatsApp
   const sendWhatsAppInLanguage = (lang: WhatsAppLanguage) => {
     if (!contract || !customer) return
-
     const rawPhone = customer.phone?.trim()
     if (!rawPhone) {
       toast.error("No phone number found for this customer")
       return
     }
-
     let phone = rawPhone.replace(/[\s\-().]/g, '')
     if (phone.startsWith('0')) phone = '91' + phone.slice(1)
     if (!phone.startsWith('+')) phone = phone.startsWith('91') ? phone : '91' + phone
     phone = phone.replace(/^\+/, '')
-
     const message = buildReminderMessage({
       lang,
       days: contract.daysUntilService,
@@ -269,13 +403,12 @@ export default function ContractDetailPage() {
       lastService: formatDate(contract.start_date),
       nextService: formatDate(contract.next_service_date),
     })
-
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
     window.open(url, '_blank')
     setLangDialogOpen(false)
   }
 
-  // ── Shared PDF builder — same pattern as quotation page ────────────────────
+  // ── PDF ─────────────────────────────────────────────────────────────────────
   const buildContractReportPdf = async (): Promise<{ doc: jsPDF; filename: string } | null> => {
     if (!contract) return null
 
@@ -283,7 +416,6 @@ export default function ContractDetailPage() {
     const margin = 15
     const [tr, tg, tb] = hexToRgb(profile?.theme_color ?? "#185FA5")
 
-    // Load logo
     let logoBase64: string | null = null
     let logoFormat: "JPEG" | "PNG" = "PNG"
     if (profile?.logo_url) {
@@ -299,7 +431,6 @@ export default function ContractDetailPage() {
       } catch { /* skip logo */ }
     }
 
-    // Load stamp
     let stampBase64: string | null = null
     let stampFormat: "JPEG" | "PNG" = "PNG"
     if (profile?.stamp_url) {
@@ -329,7 +460,6 @@ export default function ContractDetailPage() {
         y += 12
       }
 
-      // Title
       doc.setFontSize(15)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
@@ -339,8 +469,6 @@ export default function ContractDetailPage() {
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(80, 80, 80)
-      
-      // Removed the Ref number here, just showing Generated Date right-aligned
       doc.text(
         "Generated: " + new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
         pageW - margin, y, { align: "right" }
@@ -351,7 +479,6 @@ export default function ContractDetailPage() {
       doc.line(margin, y, pageW - margin, y)
       y += 6
 
-      // Contract & customer details
       autoTable(doc, {
         startY: y,
         head: [["CONTRACT & CUSTOMER DETAILS", ""]],
@@ -375,7 +502,6 @@ export default function ContractDetailPage() {
       })
       y = (doc as any).lastAutoTable.finalY + 6
 
-      // Dates strip
       autoTable(doc, {
         startY: y,
         head: [["LAST SERVICE", "NEXT SERVICE", "CONTRACT END"]],
@@ -391,7 +517,6 @@ export default function ContractDetailPage() {
       })
       y = (doc as any).lastAutoTable.finalY + 6
 
-      // Notes
       if (contract.notes) {
         doc.setFontSize(9)
         doc.setFont("helvetica", "bold")
@@ -405,7 +530,6 @@ export default function ContractDetailPage() {
         y += lines.length * 4 + 4
       }
 
-      // Service history
       doc.setFontSize(9)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
@@ -444,7 +568,6 @@ export default function ContractDetailPage() {
         y = (doc as any).lastAutoTable.finalY + 8
       }
 
-      // Signature block
       let sigY = y + 6
       if (stampBase64) {
         doc.addImage(stampBase64, stampFormat, pageW - margin - 30, sigY, 30, 30)
@@ -470,7 +593,6 @@ export default function ContractDetailPage() {
       return footerY + 6
     }
 
-    // Measure then render — same trick as quotation
     const scratch = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
     const measuredHeight = Math.max(renderReport(scratch), 100)
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, measuredHeight] })
@@ -529,11 +651,11 @@ export default function ContractDetailPage() {
     }
   }
 
+  // ── Loading skeleton ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex flex-col gap-6 pb-20 md:pb-0">
-          {/* Header skeleton */}
           <div className="flex items-center gap-4">
             <div className="size-9 rounded-md bg-muted animate-pulse shrink-0" />
             <div className="flex-1 space-y-2">
@@ -541,9 +663,7 @@ export default function ContractDetailPage() {
               <div className="h-4 bg-muted rounded w-1/4 animate-pulse" />
             </div>
           </div>
-          {/* Banner skeleton */}
           <div className="h-20 rounded-xl bg-muted animate-pulse" />
-          {/* Card skeleton */}
           <div className="rounded-xl border bg-card p-6 space-y-4 animate-pulse">
             {[1,2,3,4,5,6].map(i => (
               <div key={i} className="flex items-center gap-3">
@@ -586,7 +706,6 @@ export default function ContractDetailPage() {
   const isUpcoming = days > 0 && days <= 3
   const isActive = !isOverdue && !isDueToday && !isUpcoming
 
-  // Countdown banner config
   const bannerConfig = isOverdue
     ? { bg: "bg-alert-overdue/10 border-alert-overdue/20", icon: <AlertTriangle className="size-5 text-alert-overdue shrink-0" />, text: `Service overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`, sub: "Contact the customer immediately", accent: "text-alert-overdue" }
     : isDueToday
@@ -594,6 +713,13 @@ export default function ContractDetailPage() {
     : isUpcoming
     ? { bg: "bg-alert-due-today/10 border-alert-due-today/20", icon: <Clock className="size-5 text-alert-due-today shrink-0" />, text: `Service in ${days} day${days !== 1 ? 's' : ''}`, sub: `Scheduled for ${formatDate(contract.next_service_date)}`, accent: "text-alert-due-today" }
     : { bg: "bg-alert-success/10 border-alert-success/20", icon: <CheckCircle2 className="size-5 text-alert-success shrink-0" />, text: `Next service in ${days} days`, sub: `Scheduled for ${formatDate(contract.next_service_date)}`, accent: "text-alert-success" }
+
+  // ── Payment derived values ──────────────────────────────────────────────────
+  const totalReceived = payments.reduce((sum, p) => sum + Number(p.amount), 0)
+  const totalValue = Number(contract.contracts_price ?? 0)
+  const outstanding = totalValue - totalReceived
+  const nextPaymentDate = getNextPaymentDate(payments, contract.payment_frequency_months, contract.start_date)
+  const paymentPercent = totalValue > 0 ? Math.min(100, Math.round((totalReceived / totalValue) * 100)) : 0
 
   return (
     <DashboardLayout>
@@ -679,7 +805,6 @@ export default function ContractDetailPage() {
             <p className={`font-semibold text-sm ${bannerConfig.accent}`}>{bannerConfig.text}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{bannerConfig.sub}</p>
           </div>
-          {/* Mobile: WhatsApp quick action in banner */}
           {customer?.phone && (
             <Button
               size="sm"
@@ -859,41 +984,283 @@ export default function ContractDetailPage() {
               </div>
             </div>
 
-            {/* Location & Notes */}
-            {(contract.location || contract.notes) && (
+            {/* Section: Location (if present) */}
+            {contract.location && (
               <>
                 <div className="border-t border-border" />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {contract.location && (
-                    <div className="flex items-start gap-2.5">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
-                        <MapPin className="size-3.5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Location</p>
-                        <p className="font-medium text-foreground text-sm">{contract.location}</p>
-                      </div>
-                    </div>
-                  )}
-                  {contract.notes && (
-                    <div className="flex items-start gap-2.5 sm:col-span-2">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
-                        <StickyNote className="size-3.5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Notes</p>
-                        <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{contract.notes}</p>
-                      </div>
-                    </div>
-                  )}
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
+                    <MapPin className="size-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Location</p>
+                    <p className="font-medium text-foreground text-sm">{contract.location}</p>
+                  </div>
                 </div>
               </>
             )}
 
+            {/* Section: Notes (if present) */}
+            {contract.notes && (
+              <>
+                <div className="border-t border-border" />
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
+                    <StickyNote className="size-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Notes</p>
+                    <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{contract.notes}</p>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
-        {/* ── Service History — shared header ── */}
+        {/* ═══════════════════════════════════════════════════════════════════
+            ── PAYMENT TRACKING SECTION ──
+        ═══════════════════════════════════════════════════════════════════ */}
+
+        {/* ── Payment Summary Card ── */}
+        {(contract.contracts_price != null || payments.length > 0 || contract.payment_frequency_months) && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
+                    <Banknote className="size-4 text-primary" />
+                  </span>
+                  Payment Summary
+                </CardTitle>
+                {!isTechnician && (
+                  <Button size="sm" onClick={openPaymentModal} className="gap-1.5 h-8">
+                    <Plus className="size-3.5" />
+                    Record Payment
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+
+              {/* Total / Received / Outstanding */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/50 px-3 py-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Value</p>
+                  <p className="font-semibold text-foreground text-sm">
+                    {contract.contracts_price != null ? `₹${Number(contract.contracts_price).toLocaleString('en-IN')}` : '—'}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-alert-success/10 px-3 py-2.5 text-center">
+                  <p className="text-[10px] text-alert-success uppercase tracking-wide mb-1">Received</p>
+                  <p className="font-semibold text-alert-success text-sm">₹{totalReceived.toLocaleString('en-IN')}</p>
+                </div>
+                <div className={`rounded-lg px-3 py-2.5 text-center ${outstanding > 0 ? 'bg-alert-overdue/10' : 'bg-muted/50'}`}>
+                  <p className={`text-[10px] uppercase tracking-wide mb-1 ${outstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>Outstanding</p>
+                  <p className={`font-semibold text-sm ${outstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>
+                    ₹{Math.max(0, outstanding).toLocaleString('en-IN')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar — only if total value is set */}
+              {contract.contracts_price != null && totalValue > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs text-muted-foreground">{paymentPercent}% collected</p>
+                    <p className="text-xs text-muted-foreground">{payments.length} payment{payments.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${paymentPercent >= 100 ? 'bg-alert-success' : 'bg-primary'}`}
+                      style={{ width: `${paymentPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Payment schedule info */}
+              {contract.payment_frequency_months && (
+                <div className="flex items-center justify-between rounded-lg border border-dashed border-border px-3 py-2.5">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Collect every <span className="font-medium text-foreground">{contract.payment_frequency_months} month{contract.payment_frequency_months !== 1 ? 's' : ''}</span>
+                      {contract.payment_installment_amount != null && (
+                        <> · <span className="font-medium text-foreground">₹{Number(contract.payment_installment_amount).toLocaleString('en-IN')}</span> per installment</>
+                      )}
+                    </p>
+                    {nextPaymentDate && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Next due ~ <span className="font-medium text-foreground">{formatDate(nextPaymentDate)}</span>
+                      </p>
+                    )}
+                  </div>
+                  <Banknote className="size-4 text-muted-foreground shrink-0" />
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── Payment History header ── */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <Banknote className="size-4 text-muted-foreground" />
+              Payment History
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {payments.length} payment{payments.length !== 1 ? 's' : ''} recorded
+            </p>
+          </div>
+          {!isTechnician && payments.length === 0 && (
+            <Button size="sm" variant="outline" onClick={openPaymentModal} className="gap-1.5 h-8">
+              <Plus className="size-3.5" />
+              Record Payment
+            </Button>
+          )}
+        </div>
+
+        {/* ── DESKTOP: Payment History Table ── */}
+        <Card className="hidden md:block -mt-2">
+          <CardContent className="p-0">
+            {payments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <Banknote className="size-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No payments recorded yet</p>
+                {!isTechnician && (
+                  <Button size="sm" variant="outline" onClick={openPaymentModal} className="gap-1.5 mt-1">
+                    <Plus className="size-3.5" />
+                    Record first payment
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="font-semibold text-foreground">Date</TableHead>
+                      <TableHead className="font-semibold text-foreground">Amount</TableHead>
+                      <TableHead className="font-semibold text-foreground">Mode</TableHead>
+                      <TableHead className="font-semibold text-foreground max-w-[200px]">Notes</TableHead>
+                      {!isTechnician && <TableHead className="w-10" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((p, i) => (
+                      <TableRow key={p.id} className={i % 2 === 0 ? "" : "bg-muted/20"}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                            {formatDate(p.payment_date)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-semibold text-alert-success">
+                            ₹{Number(p.amount).toLocaleString('en-IN')}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize text-xs">
+                            {PAYMENT_MODES.find(m => m.value === p.payment_mode)?.label ?? p.payment_mode}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          <span className="text-sm text-muted-foreground line-clamp-2">{p.notes || '—'}</span>
+                        </TableCell>
+                        {!isTechnician && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-muted-foreground hover:text-alert-overdue"
+                              disabled={deletingPaymentId === p.id}
+                              onClick={() => handleDeletePayment(p.id)}
+                            >
+                              {deletingPaymentId === p.id
+                                ? <Loader2 className="size-3.5 animate-spin" />
+                                : <Trash2 className="size-3.5" />
+                              }
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── MOBILE: Payment History — timeline ── */}
+        <div className="md:hidden -mt-2">
+          {payments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-10 gap-3 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <Banknote className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">No payments recorded yet</p>
+              {!isTechnician && (
+                <Button size="sm" variant="outline" onClick={openPaymentModal} className="gap-1.5 mt-1">
+                  <Plus className="size-3.5" />
+                  Record first payment
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-card divide-y divide-border overflow-hidden">
+              {payments.map((p) => (
+                <div key={p.id} className="flex items-start gap-3 px-4 py-3.5">
+                  <div className="flex flex-col items-center gap-1 shrink-0 mt-1">
+                    <div className="size-2.5 rounded-full bg-alert-success" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">{formatDate(p.payment_date)}</p>
+                      <span className="font-semibold text-alert-success text-sm shrink-0">
+                        ₹{Number(p.amount).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <Badge variant="outline" className="text-[11px] px-1.5 py-0 capitalize">
+                        {PAYMENT_MODES.find(m => m.value === p.payment_mode)?.label ?? p.payment_mode}
+                      </Badge>
+                      {!isTechnician && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 text-muted-foreground hover:text-alert-overdue -mr-1"
+                          disabled={deletingPaymentId === p.id}
+                          onClick={() => handleDeletePayment(p.id)}
+                        >
+                          {deletingPaymentId === p.id
+                            ? <Loader2 className="size-3 animate-spin" />
+                            : <Trash2 className="size-3" />
+                          }
+                        </Button>
+                      )}
+                    </div>
+                    {p.notes && (
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2 italic">
+                        "{p.notes}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            ── SERVICE HISTORY SECTION (unchanged) ──
+        ═══════════════════════════════════════════════════════════════════ */}
+
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-foreground flex items-center gap-2">
@@ -975,7 +1342,6 @@ export default function ContractDetailPage() {
                   record.status === 'cancelled' ? 'bg-alert-overdue' : 'bg-muted-foreground'
                 return (
                   <div key={record.id} className="flex items-start gap-3 px-4 py-3.5">
-                    {/* Status-colored dot */}
                     <div className="flex flex-col items-center gap-1 shrink-0 mt-1">
                       <div className={`size-2.5 rounded-full ${dotColor}`} />
                     </div>
@@ -1017,7 +1383,93 @@ export default function ContractDetailPage() {
           }}
         />
 
-        {/* Language selection dialog for WhatsApp message */}
+        {/* ── Record Payment Modal ── */}
+        <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Banknote className="size-4" />
+                Record Payment
+              </DialogTitle>
+              <DialogDescription>
+                Log a payment received from {contract.customerName}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+
+              {/* Date */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-date">Payment Date <span className="text-red-500">*</span></Label>
+                <Input
+                  id="pay-date"
+                  type="date"
+                  value={paymentForm.payment_date}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+                  className={paymentErrors.payment_date ? 'border-red-500' : ''}
+                />
+                {paymentErrors.payment_date && <p className="text-xs text-red-500">{paymentErrors.payment_date}</p>}
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-amount">Amount (₹) <span className="text-red-500">*</span></Label>
+                <Input
+                  id="pay-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g., 2500"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  className={paymentErrors.amount ? 'border-red-500' : ''}
+                />
+                {paymentErrors.amount && <p className="text-xs text-red-500">{paymentErrors.amount}</p>}
+              </div>
+
+              {/* Mode */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-mode">Payment Mode</Label>
+                <Select
+                  value={paymentForm.payment_mode}
+                  onValueChange={(v) => setPaymentForm({ ...paymentForm, payment_mode: v })}
+                >
+                  <SelectTrigger id="pay-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_MODES.map(m => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="pay-notes">Notes (Optional)</Label>
+                <Textarea
+                  id="pay-notes"
+                  placeholder="e.g., post-dated cheque, partial payment..."
+                  rows={2}
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setPaymentModalOpen(false)} disabled={savingPayment}>
+                Cancel
+              </Button>
+              <Button onClick={handleSavePayment} disabled={savingPayment} className="gap-1.5">
+                {savingPayment && <Loader2 className="size-4 animate-spin" />}
+                Save Payment
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Language selection dialog for WhatsApp message ── */}
         <Dialog open={langDialogOpen} onOpenChange={setLangDialogOpen}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
