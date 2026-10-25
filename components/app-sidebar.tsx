@@ -40,8 +40,8 @@ import { usePwaInstall } from "@/hooks/use-pwa-install"
 
 const memberNavItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/" },
-  { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Customers", icon: Users, href: "/customers" },
+  { title: "Contracts", icon: FileText, href: "/contracts" },
   { title: "Quotations", icon: FileCheck, href: "/quotations" },
   { title: "Invoices", icon: Receipt, href: "/invoices" },
   { title: "Delivery Challans", icon: FileText, href: "/delivery-challans" },
