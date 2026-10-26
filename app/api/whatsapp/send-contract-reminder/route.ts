@@ -11,7 +11,6 @@ function getSupabaseAdmin() {
   return createClient(url, serviceRoleKey)
 }
 
-// Returns a 12-digit Indian number like 919123456789, or null if invalid
 function formatPhone(phone: string): string | null {
   let digits = String(phone ?? '').replace(/\D/g, '')
   digits = digits.replace(/^0+/, '')
@@ -20,7 +19,6 @@ function formatPhone(phone: string): string | null {
   return null
 }
 
-// WhatsApp template variables: no line breaks, no tabs, no long space runs, never empty
 function clean(value: unknown, fallback = '-'): string {
   const s = String(value ?? '')
     .replace(/[\r\n\t]+/g, ' ')
@@ -43,16 +41,11 @@ interface ReminderBody {
   dedupKey?: string
 }
 
-// ── Language code per template ──────────────────────────────────────────────
-// IMPORTANT: Open MSG91 dashboard → WhatsApp → Templates and verify the
-// language shown for each template. Set the exact value here.
-// Common values: 'en' / 'en_US' / 'en_IN'
-// A mismatch causes MSG91 to return HTTP 200 with hasError:true — silent fail.
 const TEMPLATE_LANGUAGE: Record<string, string> = {
-  soon_service:         'en',   // ← verify in MSG91 dashboard
-  service_notcompleted: 'en',   // ← verify in MSG91 dashboard
-  contract_ending_soon: 'en',   // ← verify in MSG91 dashboard
-  contract_end:         'en',   // ← verify in MSG91 dashboard
+  soon_service:         'en',
+  service_notcompleted: 'en',
+  contract_ending_soon: 'en',
+  contract_end:         'en',
 }
 
 async function isAuthorized(
@@ -129,6 +122,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Contract not found for this organization' }, { status: 404 })
     }
 
+    // ── Check if contractor has WhatsApp notifications enabled ──
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('owner_id')
+      .eq('id', orgId)
+      .maybeSingle()
+
+    if (org?.owner_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('whatsapp_notifications_enabled')
+        .eq('id', org.owner_id)
+        .maybeSingle()
+
+      if (profile?.whatsapp_notifications_enabled === false) {
+        return NextResponse.json({ skipped: true, reason: 'WhatsApp notifications disabled for this user' })
+      }
+    }
+
     const authkey = process.env.MSG91_AUTHKEY
     if (!authkey) {
       return NextResponse.json({ error: 'MSG91_AUTHKEY is missing' }, { status: 500 })
@@ -194,7 +206,6 @@ export async function POST(request: NextRequest) {
             template: {
               name: templateName,
               language: {
-                // FIX: per-template language map — must match MSG91 dashboard exactly
                 code: TEMPLATE_LANGUAGE[templateName] ?? 'en',
                 policy: 'deterministic',
               },
