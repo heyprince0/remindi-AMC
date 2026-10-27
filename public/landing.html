@@ -1922,55 +1922,6 @@
       line-height: 1;
     }
 
-
-    /* AI Agent FAB — first in the floating stack */
-    .ai-fab {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 1500;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 999px;
-      background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dark) 100%);
-      color: #fff;
-      font-family: 'Poppins', sans-serif;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow: var(--shadow-blue), 0 2px 8px rgba(0,0,0,.12);
-      transition: transform .2s, box-shadow .2s;
-      opacity: 0;
-      animation: wa-pop-in .5s cubic-bezier(.34,1.56,.64,1) .8s forwards;
-      overflow: visible;
-    }
-    .ai-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(41,171,226,.45); }
-    .ai-fab:active { transform: translateY(0) scale(.98); }
-    .ai-fab svg { width: 22px; height: 22px; flex-shrink: 0; }
-    .ai-fab span { white-space: nowrap; line-height: 1; }
-    .ai-fab::before {
-      content: '';
-      position: absolute;
-      inset: -4px;
-      border-radius: 999px;
-      border: 3px solid rgba(41, 171, 226, 0.5);
-      animation: ai-pulse 2.5s ease-out infinite;
-      animation-delay: 1.4s;
-      pointer-events: none;
-    }
-    @keyframes ai-pulse {
-      0%   { opacity: .8; transform: scale(1); }
-      70%  { opacity: 0;  transform: scale(1.15); }
-      100% { opacity: 0;  transform: scale(1.15); }
-    }
-    body.modal-open .ai-fab { opacity: 0; visibility: hidden; pointer-events: none; }
-    @media (max-width: 600px) {
-      .ai-fab { bottom: 16px; right: 16px; padding: 10px 18px; font-size: 0.88rem; }
-    }
-
     @keyframes wa-pop-in {
       from { opacity: 0; transform: scale(.5); }
       to   { opacity: 1; transform: scale(1); }
@@ -2078,19 +2029,6 @@
       }
       #whatsappFab svg { width: 24px; height: 24px; }
       #whatsappFab span { display: none; }
-
-      .ai-fab {
-        bottom: 20px;
-        right: 16px;
-        padding: 14px;
-        gap: 0;
-        border-radius: 50%;
-        width: 52px;
-        height: 52px;
-        justify-content: center;
-      }
-      .ai-fab svg { width: 24px; height: 24px; }
-      .ai-fab span { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2875,17 +2813,6 @@
 <!-- ═══════════════════════════════════════════════════════════
      FLOATING BUTTONS (FABs)
      ═══════════════════════════════════════════════════════════ -->
-<button type="button" class="ai-fab" id="aiAgentFab" aria-label="Ask Remindi AI">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    <path d="M9.5 9h.01" stroke-width="2.5" stroke-linecap="round"></path>
-    <path d="M14.5 9h.01" stroke-width="2.5" stroke-linecap="round"></path>
-    <path d="M9.5 13s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5"></path>
-  </svg>
-  <span>Ask Remindi</span>
-</button>
-
 <a
   id="whatsappFab"
   href="https://wa.me/918149463918?text=Hi%2C%20I%27m%20interested%20in%20Remindi%20AMC%20management%20software.%20Can%20you%20tell%20me%20more%3F"
@@ -3002,17 +2929,6 @@
   window.addEventListener('scroll', () => {
     navbar.classList.toggle('scrolled', window.scrollY > 10);
   });
-
-
-  // AI Agent FAB — opens the Botpress webchat
-  const aiAgentFab = document.getElementById('aiAgentFab');
-  if (aiAgentFab) {
-    aiAgentFab.addEventListener('click', () => {
-      if (window.botpress && typeof window.botpress.open === 'function') {
-        window.botpress.open();
-      }
-    });
-  }
 
   // Hamburger menu
   const hamburger = document.getElementById('hamburger');
@@ -3236,179 +3152,4 @@
       showError('Please enter your name.'); return;
     }
     if (payload.phone.replace(/\D/g, '').length < 10) {
-      document.getElementById('demoPhone').classList.add('field-error');
-      showError('Please enter a valid 10-digit mobile number.'); return;
-    }
-    if (!payload.service_type) {
-      document.getElementById('demoServiceType').classList.add('field-error');
-      showError('Please select your type of company.'); return;
-    }
-    if (!payload.preferred_date) {
-      document.getElementById('demoDate').classList.add('field-error');
-      showError('Please pick a preferred date.'); return;
-    }
-    if (!payload.preferred_time) {
-      document.getElementById('demoTime').classList.add('field-error');
-      showError('Please pick a preferred time.'); return;
-    }
-
-    setLoading(true);
-
-    try {
-      const client = await getSupabase();
-      const { error } = await client.from('demo_bookings').insert(payload);
-      if (error) throw error;
-
-      fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'demo-booking-notification',
-          userEmail: 'prakash6977z@gmail.com',
-          data: {
-            full_name:      payload.full_name,
-            phone:          payload.phone,
-            company_name:   payload.company_name  ?? '',
-            service_type:   payload.service_type  ?? '',
-            message:        payload.message       ?? '',
-            preferred_date: payload.preferred_date,
-            preferred_time: payload.preferred_time,
-            created_at:     new Date().toISOString(),
-          },
-        }),
-      }).catch(err => console.warn('[Demo] Email notification failed silently:', err));
-
-      modalForm.reset();
-      showSuccess(payload.phone);
-
-    } catch (err) {
-      console.error('Demo booking failed:', err);
-      showError('Something went wrong. Please try again or email support@remindi.online');
-    } finally {
-      setLoading(false);
-    }
-  });
-
-
-  // ─── Inline Form Logic ───
-  const inlineForm = document.getElementById('inlineDemoForm');
-  if (inlineForm) {
-    const inlineBody         = document.getElementById('inlineDemoBody');
-    const inlineSuccess      = document.getElementById('inlineDemoSuccess');
-    const inlineSuccessPhone = document.getElementById('inlineDemoSuccessPhone');
-    const inlineErrorBox     = document.getElementById('inlineDemoErrorBox');
-    const inlineSubmitBtn    = document.getElementById('inlineDemoSubmitBtn');
-    const inlineSubmitText   = document.getElementById('inlineDemoSubmitText');
-    const inlineSpinner      = document.getElementById('inlineDemoSpinner');
-    const inlineDateInput    = document.getElementById('inlineDemoDate');
-    const inlineTimeInput    = document.getElementById('inlineDemoTime');
-
-    inlineDateInput.min = localDate();
-    if (!inlineDateInput.value) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      inlineDateInput.value = localDate(tomorrow);
-    }
-    if (!inlineTimeInput.value) inlineTimeInput.value = '11:00';
-
-    function setInlineLoading(on) {
-      inlineSubmitBtn.disabled = on;
-      inlineSubmitText.textContent = on ? 'Booking…' : 'Confirm Booking →';
-      inlineSpinner.classList.toggle('show', on);
-    }
-
-    function showInlineError(msg) {
-      inlineErrorBox.textContent = msg;
-      inlineErrorBox.classList.add('show');
-      inlineErrorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    function clearInlineError() {
-      inlineErrorBox.classList.remove('show');
-      inlineErrorBox.textContent = '';
-      document.querySelectorAll('#inlineDemoForm .field-error').forEach(el => el.classList.remove('field-error'));
-    }
-
-    inlineForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      clearInlineError();
-
-      const el = inlineForm.elements;
-      const payload = {
-        full_name:      el.full_name.value.trim(),
-        phone:          el.phone.value.trim(),
-        company_name:   el.company_name.value.trim() || null,
-        service_type:   el.service_type.value || null,
-        preferred_date: el.preferred_date.value,
-        preferred_time: el.preferred_time.value,
-        message:        el.message.value.trim() || null,
-        source:         'landing_page_inline'
-      };
-
-      if (!payload.full_name) {
-        document.getElementById('inlineDemoName').classList.add('field-error');
-        showInlineError('Please enter your name.'); return;
-      }
-      if (payload.phone.replace(/\D/g, '').length < 10) {
-        document.getElementById('inlineDemoPhone').classList.add('field-error');
-        showInlineError('Please enter a valid 10-digit mobile number.'); return;
-      }
-      if (!payload.service_type) {
-        document.getElementById('inlineDemoServiceType').classList.add('field-error');
-        showInlineError('Please select your type of company.'); return;
-      }
-      if (!payload.preferred_date) {
-        document.getElementById('inlineDemoDate').classList.add('field-error');
-        showInlineError('Please pick a preferred date.'); return;
-      }
-      if (!payload.preferred_time) {
-        document.getElementById('inlineDemoTime').classList.add('field-error');
-        showInlineError('Please pick a preferred time.'); return;
-      }
-
-      setInlineLoading(true);
-
-      try {
-        const client = await getSupabase();
-        const { error } = await client.from('demo_bookings').insert(payload);
-        if (error) throw error;
-
-        fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'demo-booking-notification',
-            userEmail: 'prakash6977z@gmail.com',
-            data: {
-              full_name:      payload.full_name,
-              phone:          payload.phone,
-              company_name:   payload.company_name  ?? '',
-              service_type:   payload.service_type  ?? '',
-              message:        payload.message       ?? '',
-              preferred_date: payload.preferred_date,
-              preferred_time: payload.preferred_time,
-              created_at:     new Date().toISOString(),
-            },
-          }),
-        }).catch(err => console.warn('[Inline Demo] Email notification failed silently:', err));
-
-        inlineForm.reset();
-        inlineBody.style.display = 'none';
-        inlineSuccessPhone.textContent = payload.phone;
-        inlineSuccess.classList.add('show');
-
-      } catch (err) {
-        console.error('Inline demo booking failed:', err);
-        showInlineError('Something went wrong. Please try again or email support@remindi.online');
-      } finally {
-        setInlineLoading(false);
-      }
-    });
-  }
-
-</script>
-
-<script src="https://cdn.botpress.cloud/webchat/v5.0/inject.js"></script>
-<script src="https://files.bpcontent.cloud/2026/10/27/16/20261027165605-ZWJ776CO.js" defer></script>
-</body>
-</html>
+     
