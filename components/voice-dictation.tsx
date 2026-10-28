@@ -19,8 +19,25 @@ export function VoiceDictation() {
       recognitionRef.current = null
       activeFieldRef.current = null
       buttonRef.current?.removeAttribute('data-listening')
-      if (buttonRef.current) buttonRef.current.innerHTML = ''
+      if (buttonRef.current) setButtonContent(buttonRef.current, false)
       buttonRef.current = null
+    }
+
+    const setButtonContent = (button: HTMLButtonElement, listening: boolean) => {
+      button.replaceChildren()
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      icon.setAttribute('viewBox', '0 0 24 24')
+      icon.setAttribute('fill', 'none')
+      icon.setAttribute('stroke', 'currentColor')
+      icon.setAttribute('stroke-width', '2')
+      icon.setAttribute('stroke-linecap', 'round')
+      icon.setAttribute('stroke-linejoin', 'round')
+      icon.setAttribute('aria-hidden', 'true')
+      icon.classList.add('voice-dictation-icon')
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('d', listening ? 'M18 6 6 18M6 6l12 12' : 'M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z M19 10v2a7 7 0 0 1-14 0v-2 M12 19v3 M8 22h8')
+      icon.append(path)
+      button.append(icon, document.createTextNode(listening ? 'Stop' : 'Dictate'))
     }
 
     const dictate = (field: DictationField, button: HTMLButtonElement) => {
@@ -59,8 +76,7 @@ export function VoiceDictation() {
       activeFieldRef.current = field
       buttonRef.current = button
       button.setAttribute('data-listening', 'true')
-      button.innerHTML = ''
-      button.append(Object.assign(document.createElement('span'), { textContent: 'Listening...' }))
+      setButtonContent(button, true)
       recognition.start()
     }
 
@@ -72,7 +88,7 @@ export function VoiceDictation() {
       button.type = 'button'
       button.className = 'voice-dictation-button'
       button.setAttribute('aria-label', 'Dictate into this field')
-      button.textContent = 'Dictate'
+      setButtonContent(button, false)
       button.addEventListener('click', () => dictate(field, button))
       field.insertAdjacentElement('afterend', button)
     }
