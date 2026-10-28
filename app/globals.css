@@ -140,7 +140,13 @@ body {
   }
 
 .voice-dictation-button {
-  @apply ml-2 inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground;
+  @apply ml-2 inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground;
+}
+
+.voice-dictation-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
 }
 
 .voice-dictation-button[data-listening='true'] {
