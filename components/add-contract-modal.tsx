@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { supabase, type Customer, type Contract, type Technician, calculateNextServiceDate } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { Loader2, X, Search, ChevronsUpDown } from 'lucide-react'
+import { Loader2, X, Search, ChevronsUpDown, Mic, MicOff } from 'lucide-react'
 
 interface AddContractModalProps {
   open: boolean
@@ -72,6 +72,8 @@ export function AddContractModal({
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const customerDropdownRef = useRef<HTMLDivElement>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const recognitionRef = useRef<any>(null)
 
   const [formData, setFormData] = useState({
     contractName: '',
@@ -254,6 +256,52 @@ export function AddContractModal({
     } finally {
       setLoadingTechnicians(false)
     }
+  }
+
+  const toggleRecording = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      toast.error('Speech recognition is not supported in this browser. Try Chrome or Edge.')
+      return
+    }
+
+    if (isRecording) {
+      recognitionRef.current?.stop()
+      setIsRecording(false)
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'en-IN'
+    recognition.continuous = true
+    recognition.interimResults = false
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join(' ')
+      setFormData((prev) => ({
+        ...prev,
+        notes: prev.notes ? prev.notes + ' ' + transcript : transcript,
+      }))
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      if (event.error !== 'aborted') {
+        toast.error('Microphone error: ' + event.error)
+      }
+      setIsRecording(false)
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+    setIsRecording(true)
   }
 
   const validateForm = () => {
@@ -801,14 +849,45 @@ export function AddContractModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes (Optional)</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <button
+                type="button"
+                onClick={toggleRecording}
+                title={isRecording ? 'Stop recording' : 'Dictate notes'}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isRecording
+                    ? 'bg-red-100 text-red-600 hover:bg-red-200 animate-pulse'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                }`}
+              >
+                {isRecording ? (
+                  <>
+                    <MicOff className="size-3.5" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Mic className="size-3.5" />
+                    Dictate
+                  </>
+                )}
+              </button>
+            </div>
             <Textarea
               id="notes"
-              placeholder="Add any additional notes..."
+              placeholder={isRecording ? '🎙 Listening...' : 'Add any additional notes, or use Dictate to speak them.'}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
+              className={isRecording ? 'border-red-400 ring-1 ring-red-300' : ''}
             />
+            {isRecording && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <span className="inline-block size-2 rounded-full bg-red-500 animate-pulse" />
+                Recording — speak now. Click Stop when done.
+              </p>
+            )}
           </div>
 
           {/* Add Completed Services (Old mode only) */}
