@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { Toaster } from 'sonner'
+import { VoiceDictation } from '@/components/voice-dictation'
 import Script from 'next/script'   // ✅ added
 import './globals.css'
 
@@ -38,6 +39,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           {children}
+          <VoiceDictation />
           <Toaster />
         </AuthProvider>
         <Analytics />

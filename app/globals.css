@@ -135,7 +135,15 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
+body {
+  @apply bg-background text-foreground;
   }
+
+.voice-dictation-button {
+  @apply ml-2 inline-flex items-center rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground;
 }
+
+.voice-dictation-button[data-listening='true'] {
+  @apply animate-pulse bg-red-100 text-red-600 hover:bg-red-200;
+}
+  }
