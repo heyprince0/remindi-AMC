@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Customer, type Contract, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2 } from "lucide-react"
+import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2, Banknote } from "lucide-react"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -29,6 +29,19 @@ interface ServiceRecord extends ServiceHistory {
 interface ContractDisplay extends Contract {
   daysUntilService: number
   endDate: string | null
+}
+
+// ── Payment record type (mirrors contract_payments table) ────────────────────
+interface ContractPayment {
+  id: string
+  contract_id: string
+  org_id: string
+  payment_date: string
+  amount: number
+  payment_mode: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
 }
 
 const safeStr = (val: any) => String(val ?? "-")
@@ -86,6 +99,9 @@ export default function CustomerDetailPage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
+
+  // ── Payment state: keyed by contract_id ─────────────────────────────────────
+  const [payments, setPayments] = useState<Record<string, ContractPayment[]>>({})
 
   useEffect(() => {
     if (user?.id) {
@@ -155,6 +171,7 @@ export default function CustomerDetailPage() {
       if (contractsData && contractsData.length > 0) {
         const contractIds = (contractsData as Contract[]).map(c => c.id)
 
+        // ── Service history ──────────────────────────────────────────────────
         const { data: historyData, error: historyError } = await supabase
           .from('service_history').select('*').in('contract_id', contractIds).eq('org_id', currentOrgId)
 
@@ -169,6 +186,23 @@ export default function CustomerDetailPage() {
         })
 
         setServiceHistory(historyWithTechnicianNames)
+
+        // ── Payments for all contracts ────────────────────────────────────────
+        const { data: paymentsData, error: paymentsError } = await supabase
+          .from('contract_payments')
+          .select('*')
+          .in('contract_id', contractIds)
+          .eq('org_id', currentOrgId)
+          .order('payment_date', { ascending: false })
+
+        if (!paymentsError && paymentsData) {
+          const grouped: Record<string, ContractPayment[]> = {}
+          for (const p of paymentsData as ContractPayment[]) {
+            if (!grouped[p.contract_id]) grouped[p.contract_id] = []
+            grouped[p.contract_id].push(p)
+          }
+          setPayments(grouped)
+        }
       }
     } catch (error) {
       console.error('Error loading customer details:', error)
@@ -178,7 +212,7 @@ export default function CustomerDetailPage() {
     }
   }
 
-  // ── Shared PDF builder — same pattern as contract page ────────────────────
+  // ── Shared PDF builder ────────────────────────────────────────────────────
   const buildCustomerReportPdf = async (): Promise<{ doc: jsPDF; filename: string } | null> => {
     if (!customer) return null
 
@@ -186,7 +220,6 @@ export default function CustomerDetailPage() {
     const margin = 15
     const [tr, tg, tb] = hexToRgb(profile?.theme_color ?? "#185FA5")
 
-    // Load logo
     let logoBase64: string | null = null
     let logoFormat: "JPEG" | "PNG" = "PNG"
     if (profile?.logo_url) {
@@ -202,7 +235,6 @@ export default function CustomerDetailPage() {
       } catch { /* skip logo */ }
     }
 
-    // Load stamp
     let stampBase64: string | null = null
     let stampFormat: "JPEG" | "PNG" = "PNG"
     if (profile?.stamp_url) {
@@ -222,6 +254,8 @@ export default function CustomerDetailPage() {
       String(b.service_date || "").localeCompare(String(a.service_date || ""))
     )
 
+    const allPaymentsList = Object.values(payments).flat()
+
     const renderReport = (doc: jsPDF): number => {
       let y = margin
 
@@ -231,7 +265,6 @@ export default function CustomerDetailPage() {
         y += 12
       }
 
-      // Title
       doc.setFontSize(15)
       doc.setFont("helvetica", "bold")
       doc.setTextColor(tr, tg, tb)
@@ -241,7 +274,6 @@ export default function CustomerDetailPage() {
       doc.setFontSize(9)
       doc.setFont("helvetica", "normal")
       doc.setTextColor(80, 80, 80)
-      
       doc.text(
         "Generated: " + new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
         pageW - margin, y, { align: "right" }
@@ -259,7 +291,6 @@ export default function CustomerDetailPage() {
         body: [
           ["Name", safeStr(customer.name)],
           ["Phone", safeStr(customer.phone)],
-          // "Email" line removed as requested
           ["Address", safeStr(customer.address)],
           ["Notes", safeStr(customer.notes)],
         ],
@@ -273,6 +304,64 @@ export default function CustomerDetailPage() {
         margin: { left: margin, right: margin },
       })
       y = (doc as any).lastAutoTable.finalY + 6
+
+      // ── Payment Summary table in PDF ─────────────────────────────────────
+      const totalValue = contracts.reduce((sum, c) => sum + Number(c.contracts_price ?? 0), 0)
+      const totalReceived = allPaymentsList.reduce((sum, p) => sum + Number(p.amount), 0)
+      const totalOutstanding = Math.max(0, totalValue - totalReceived)
+
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(tr, tg, tb)
+      doc.text("PAYMENT SUMMARY", margin, y)
+      y += 3
+
+      autoTable(doc, {
+        startY: y,
+        head: [["TOTAL VALUE", "RECEIVED", "OUTSTANDING"]],
+        body: [[
+          totalValue > 0 ? `Rs. ${totalValue.toLocaleString("en-IN")}` : "—",
+          `Rs. ${totalReceived.toLocaleString("en-IN")}`,
+          totalOutstanding > 0 ? `Rs. ${totalOutstanding.toLocaleString("en-IN")}` : "—",
+        ]],
+        theme: "grid",
+        headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontSize: 8, fontStyle: "bold", halign: "center" },
+        bodyStyles: { fontSize: 9, textColor: [40, 40, 40], halign: "center" },
+        margin: { left: margin, right: margin },
+      })
+      y = (doc as any).lastAutoTable.finalY + 4
+
+      // Per-contract payment breakdown
+      if (contracts.length > 0) {
+        autoTable(doc, {
+          startY: y,
+          head: [["CONTRACT", "PRICE", "RECEIVED", "OUTSTANDING"]],
+          body: contracts.map(c => {
+            const cPayments = payments[c.id] ?? []
+            const cReceived = cPayments.reduce((s, p) => s + Number(p.amount), 0)
+            const cValue = Number(c.contracts_price ?? 0)
+            const cOutstanding = Math.max(0, cValue - cReceived)
+            return [
+              safeStr(c.contract_name),
+              cValue > 0 ? `Rs. ${cValue.toLocaleString("en-IN")}` : "—",
+              `Rs. ${cReceived.toLocaleString("en-IN")}`,
+              cOutstanding > 0 ? `Rs. ${cOutstanding.toLocaleString("en-IN")}` : "Paid",
+            ]
+          }),
+          theme: "striped",
+          headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontSize: 8, fontStyle: "bold" },
+          bodyStyles: { fontSize: 8, textColor: [40, 40, 40] },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { cellWidth: "auto" },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 30 },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 8
+      }
 
       // Contracts Table
       doc.setFontSize(9)
@@ -444,7 +533,6 @@ export default function CustomerDetailPage() {
     return (
       <DashboardLayout>
         <div className="flex flex-col gap-5 pb-20 md:pb-0">
-          {/* Header skeleton */}
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-md bg-muted animate-pulse shrink-0" />
             <div className="flex size-14 rounded-xl bg-muted animate-pulse shrink-0" />
@@ -453,12 +541,10 @@ export default function CustomerDetailPage() {
               <div className="h-4 bg-muted rounded w-1/4 animate-pulse" />
             </div>
           </div>
-          {/* Action buttons skeleton */}
           <div className="flex gap-2 ml-[108px]">
             <div className="h-9 w-24 bg-muted rounded-md animate-pulse" />
             <div className="h-9 w-28 bg-muted rounded-md animate-pulse" />
           </div>
-          {/* Info card skeleton */}
           <div className="rounded-xl border bg-card p-5 space-y-4 animate-pulse">
             {[1,2,3].map(i => (
               <div key={i} className="flex items-center gap-3">
@@ -470,7 +556,6 @@ export default function CustomerDetailPage() {
               </div>
             ))}
           </div>
-          {/* Contract cards skeleton */}
           <div className="h-4 bg-muted rounded w-1/3 animate-pulse" />
           {[1,2].map(i => (
             <div key={i} className="h-28 rounded-xl bg-muted animate-pulse" />
@@ -502,7 +587,16 @@ export default function CustomerDetailPage() {
   const activeContracts = contracts.filter(c => c.status === 'active').length
   const overdueContracts = contracts.filter(c => c.daysUntilService < 0).length
 
-  // Build WhatsApp URL for the customer
+  // ── Payment derived values (aggregate across all contracts) ──────────────
+  const allPaymentsList = Object.values(payments).flat()
+  const totalContractValue = contracts.reduce((sum, c) => sum + Number(c.contracts_price ?? 0), 0)
+  const totalReceived = allPaymentsList.reduce((sum, p) => sum + Number(p.amount), 0)
+  const totalOutstanding = Math.max(0, totalContractValue - totalReceived)
+  const overallPercent = totalContractValue > 0
+    ? Math.min(100, Math.round((totalReceived / totalContractValue) * 100))
+    : 0
+  const hasPaymentData = allPaymentsList.length > 0 || totalContractValue > 0
+
   const buildWhatsAppUrl = () => {
     if (!customer.phone) return null
     let phone = customer.phone.trim().replace(/[\s\-().]/g, '')
@@ -526,7 +620,6 @@ export default function CustomerDetailPage() {
             </Button>
           )}
 
-          {/* Large avatar initial */}
           <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
             <span className="text-2xl font-bold text-primary leading-none">
               {customer.name.charAt(0).toUpperCase()}
@@ -554,7 +647,7 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          {/* Desktop actions in header */}
+          {/* Desktop actions */}
           <div className="hidden md:flex items-center gap-2 shrink-0">
             <Button
               onClick={handleDownloadPdf}
@@ -641,7 +734,6 @@ export default function CustomerDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
 
-            {/* Phone — tappable */}
             <div className="flex items-center gap-3">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
                 <PhoneCall className="size-3.5 text-muted-foreground" />
@@ -654,7 +746,6 @@ export default function CustomerDetailPage() {
               </div>
             </div>
 
-            {/* Email — tappable */}
             {customer.email && (
               <div className="flex items-center gap-3">
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -669,7 +760,6 @@ export default function CustomerDetailPage() {
               </div>
             )}
 
-            {/* Address */}
             <div className="flex items-start gap-3">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
                 <MapPin className="size-3.5 text-muted-foreground" />
@@ -680,7 +770,6 @@ export default function CustomerDetailPage() {
               </div>
             </div>
 
-            {/* Notes */}
             {customer.notes && (
               <div className="flex items-start gap-3">
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
@@ -695,6 +784,203 @@ export default function CustomerDetailPage() {
 
           </CardContent>
         </Card>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            ── PAYMENT SUMMARY SECTION ──
+        ═══════════════════════════════════════════════════════════════════ */}
+
+        {hasPaymentData && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="flex size-7 items-center justify-center rounded-md bg-primary/10">
+                  <Banknote className="size-3.5 text-primary" />
+                </span>
+                Payment Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+
+              {/* ── Aggregate totals: 3-column grid ── */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/50 px-3 py-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Total Value</p>
+                  <p className="font-semibold text-foreground text-sm">
+                    {totalContractValue > 0 ? `₹${totalContractValue.toLocaleString('en-IN')}` : '—'}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-alert-success/10 px-3 py-2.5 text-center">
+                  <p className="text-[10px] text-alert-success uppercase tracking-wide mb-1">Received</p>
+                  <p className="font-semibold text-alert-success text-sm">
+                    ₹{totalReceived.toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div className={`rounded-lg px-3 py-2.5 text-center ${totalOutstanding > 0 ? 'bg-alert-overdue/10' : 'bg-muted/50'}`}>
+                  <p className={`text-[10px] uppercase tracking-wide mb-1 ${totalOutstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>
+                    Outstanding
+                  </p>
+                  <p className={`font-semibold text-sm ${totalOutstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>
+                    {totalOutstanding > 0 ? `₹${totalOutstanding.toLocaleString('en-IN')}` : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* ── Overall progress bar ── */}
+              {totalContractValue > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs text-muted-foreground">{overallPercent}% collected across all contracts</p>
+                    <p className="text-xs text-muted-foreground">{allPaymentsList.length} payment{allPaymentsList.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${overallPercent >= 100 ? 'bg-alert-success' : 'bg-primary'}`}
+                      style={{ width: `${overallPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── DESKTOP: Per-contract payment breakdown table ── */}
+              {contracts.length > 0 && (
+                <div className="hidden md:block">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                    Per-Contract Breakdown
+                  </p>
+                  <div className="rounded-lg border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/40 hover:bg-muted/40">
+                          <TableHead className="font-semibold text-foreground text-xs">Contract</TableHead>
+                          <TableHead className="font-semibold text-foreground text-xs">Price</TableHead>
+                          <TableHead className="font-semibold text-foreground text-xs">Received</TableHead>
+                          <TableHead className="font-semibold text-foreground text-xs">Outstanding</TableHead>
+                          <TableHead className="font-semibold text-foreground text-xs w-[120px]">Progress</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {contracts.map((contract, i) => {
+                          const cPayments = payments[contract.id] ?? []
+                          const cReceived = cPayments.reduce((s, p) => s + Number(p.amount), 0)
+                          const cValue = Number(contract.contracts_price ?? 0)
+                          const cOutstanding = Math.max(0, cValue - cReceived)
+                          const cPercent = cValue > 0 ? Math.min(100, Math.round((cReceived / cValue) * 100)) : 0
+                          return (
+                            <TableRow
+                              key={contract.id}
+                              className={`cursor-pointer ${i % 2 !== 0 ? 'bg-muted/20' : ''}`}
+                              onClick={() => router.push(`/contracts/${contract.id}`)}
+                            >
+                              <TableCell className="font-medium text-sm">
+                                <div className="flex items-center gap-1.5">
+                                  <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                                  <span className="truncate max-w-[140px]">{contract.contract_name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {cValue > 0 ? `₹${cValue.toLocaleString('en-IN')}` : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm font-medium text-alert-success">
+                                  ₹{cReceived.toLocaleString('en-IN')}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {cOutstanding > 0 ? (
+                                  <span className="text-sm font-medium text-alert-overdue">
+                                    ₹{cOutstanding.toLocaleString('en-IN')}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-alert-success font-medium">Paid</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {cValue > 0 ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${cPercent >= 100 ? 'bg-alert-success' : 'bg-primary'}`}
+                                        style={{ width: `${cPercent}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground w-7 text-right">{cPercent}%</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── MOBILE: Per-contract payment breakdown cards ── */}
+              {contracts.length > 0 && (
+                <div className="md:hidden space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Per-Contract Breakdown
+                  </p>
+                  {contracts.map((contract) => {
+                    const cPayments = payments[contract.id] ?? []
+                    const cReceived = cPayments.reduce((s, p) => s + Number(p.amount), 0)
+                    const cValue = Number(contract.contracts_price ?? 0)
+                    const cOutstanding = Math.max(0, cValue - cReceived)
+                    const cPercent = cValue > 0 ? Math.min(100, Math.round((cReceived / cValue) * 100)) : 0
+                    return (
+                      <div
+                        key={contract.id}
+                        className="rounded-lg border bg-card px-3 py-3 cursor-pointer active:scale-[0.99] transition-transform"
+                        onClick={() => router.push(`/contracts/${contract.id}`)}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                            <p className="text-sm font-medium truncate">{contract.contract_name}</p>
+                          </div>
+                          <ArrowUpRight className="size-3.5 text-muted-foreground shrink-0" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center mb-2.5">
+                          <div>
+                            <p className="text-[9px] text-muted-foreground uppercase tracking-wide mb-0.5">Value</p>
+                            <p className="text-xs font-medium">{cValue > 0 ? `₹${cValue.toLocaleString('en-IN')}` : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] text-alert-success uppercase tracking-wide mb-0.5">Received</p>
+                            <p className="text-xs font-semibold text-alert-success">₹{cReceived.toLocaleString('en-IN')}</p>
+                          </div>
+                          <div>
+                            <p className={`text-[9px] uppercase tracking-wide mb-0.5 ${cOutstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>
+                              Due
+                            </p>
+                            <p className={`text-xs font-semibold ${cOutstanding > 0 ? 'text-alert-overdue' : 'text-muted-foreground'}`}>
+                              {cOutstanding > 0 ? `₹${cOutstanding.toLocaleString('en-IN')}` : 'Paid'}
+                            </p>
+                          </div>
+                        </div>
+                        {cValue > 0 && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${cPercent >= 100 ? 'bg-alert-success' : 'bg-primary'}`}
+                                style={{ width: `${cPercent}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">{cPercent}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Shared section header: Contracts ── */}
         <div className="flex items-center justify-between">
