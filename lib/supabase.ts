@@ -170,6 +170,15 @@ export type Quotation = {
   invoice_id: string | null
   created_at: string
   updated_at: string
+  is_comparative_quotation?: boolean
+  comparative_details?: { label: string; value: string }[]
+  comparative_attached_pages?: string[]
+  payment_terms?: string | null
+  order_no?: string | null
+  order_date?: string | null
+  discount_amount?: number
+  discount_type?: string | null
+  discount_value?: number
 }
 
 export type CompanyProfile = {
