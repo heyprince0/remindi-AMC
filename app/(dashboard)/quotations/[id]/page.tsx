@@ -36,6 +36,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
+import { GitCompare } from "lucide-react"
+import ComparativePanel from "@/components/quotations/comparative-panel"
+import { mergePdfs, downloadPdfBytes } from "@/lib/comparative-pdf"
 
 const safeStr = (val: any) => String(val ?? "-")
 const safeNum = (val: any) => Number(val ?? 0).toLocaleString("en-IN")
@@ -106,6 +109,10 @@ export default function ViewQuotationPage() {
   const [stampFile, setStampFile] = useState<File | null>(null)
   const [stampPreview, setStampPreview] = useState<string | null>(null)
   const [uploadingStamp, setUploadingStamp] = useState(false)
+  const [showComparativeDialog, setShowComparativeDialog] = useState(false)
+  const [isComparative, setIsComparative] = useState(false)
+  const [comparativeDetails, setComparativeDetails] = useState<{ label: string; value: string }[]>([])
+  const [comparativeAttachedPages, setComparativeAttachedPages] = useState<string[]>([])
 
   const { status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
 
@@ -173,6 +180,9 @@ export default function ViewQuotationPage() {
         .single()
 
       setQuotation(qData as Quotation)
+      setIsComparative(qData.is_comparative_quotation ?? false)
+      setComparativeDetails(qData.comparative_details ?? [])
+      setComparativeAttachedPages(qData.comparative_attached_pages ?? [])
       if (pData) setProfile(pData as CompanyProfile)
     } catch (err) {
       console.error(err)
@@ -632,37 +642,57 @@ export default function ViewQuotationPage() {
         doc.text(('RUPEES ' + toWords(Math.round(inWordsAmount)) + ' ONLY').toUpperCase(), margin, y)
         y += 20
 
-        if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
-          y += 10
-          doc.setFontSize(9)
+        if (isComparative && comparativeDetails.length > 0) {
+          y += 4
           doc.setFont("helvetica", "bold")
+          doc.setFontSize(9)
           doc.setTextColor(0, 0, 0)
-          doc.text("Payment Details:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(40, 40, 40)
-          if (profile?.bank_name) { doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y); y += 4 }
-          if (profile?.account_no) { doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y); y += 4 }
-          if (profile?.ifsc_code) { doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y); y += 4 }
-          if (profile?.upi_id) { doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y); y += 4 }
-          if (quotation.payment_terms) { doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y); y += 4 }
+          doc.text("Contract Specifications:", margin, y)
+          y += 2
+          autoTable(doc, {
+            startY: y,
+            body: comparativeDetails.map((detail) => [detail.label, detail.value]),
+            theme: "plain",
+            styles: { fontSize: 8.5, textColor: [30, 30, 30] },
+            columnStyles: { 0: { fontStyle: "bold", cellWidth: 75, textColor: [40, 40, 40] }, 1: { cellWidth: "auto" } },
+            alternateRowStyles: { fillColor: [248, 248, 248] },
+            margin: { left: margin, right: margin },
+          })
+          y = (doc as any).lastAutoTable.finalY + 4
+        } else {
+          if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || quotation.payment_terms) {
+            y += 10
+            doc.setFontSize(9)
+            doc.setFont("helvetica", "bold")
+            doc.setTextColor(0, 0, 0)
+            doc.text("Payment Details:", margin, y)
+            y += 5
+            doc.setFont("helvetica", "normal")
+            doc.setTextColor(40, 40, 40)
+            if (profile?.bank_name) { doc.text(`Bank: ${safeStr(profile.bank_name)}`, margin, y); y += 4 }
+            if (profile?.account_no) { doc.text(`Account No: ${safeStr(profile.account_no)}`, margin, y); y += 4 }
+            if (profile?.ifsc_code) { doc.text(`IFSC: ${safeStr(profile.ifsc_code)}`, margin, y); y += 4 }
+            if (profile?.upi_id) { doc.text(`UPI: ${safeStr(profile.upi_id)}`, margin, y); y += 4 }
+            if (quotation.payment_terms) { doc.text(`Payment Terms: ${safeStr(quotation.payment_terms)}`, margin, y); y += 4 }
+          }
+
+          if (quotation.include_gst) {
+            y += 6
+            doc.setFontSize(9)
+            doc.setFont("helvetica", "bold")
+            doc.setTextColor(0, 0, 0)
+            doc.text("Tax Information:", margin, y)
+            y += 5
+            doc.setFont("helvetica", "normal")
+            doc.setTextColor(40, 40, 40)
+            if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
+            if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
+            doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
+            y += 4
+            y += 6
+          }
         }
 
-        if (quotation.include_gst) {
-          y += 6
-          doc.setFontSize(9)
-          doc.setFont("helvetica", "bold")
-          doc.setTextColor(0, 0, 0)
-          doc.text("Tax Information:", margin, y)
-          y += 5
-          doc.setFont("helvetica", "normal")
-          doc.setTextColor(40, 40, 40)
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
-          if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
-          doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
-          y += 4
-          y += 6
-        }
 
         if (quotation.notes) {
           y += 3
@@ -738,7 +768,12 @@ export default function ViewQuotationPage() {
     try {
       const result = await buildPdfDoc(stampToggle)
       if (!result) return
-      result.doc.save(result.filename)
+      if (isComparative && comparativeAttachedPages.length > 0) {
+        const mergedBytes = await mergePdfs(result.doc.output("arraybuffer"), comparativeAttachedPages)
+        downloadPdfBytes(mergedBytes, result.filename)
+      } else {
+        result.doc.save(result.filename)
+      }
       toast.success("PDF downloaded")
     } catch (err) {
       toast.error("PDF failed: " + (err instanceof Error ? err.message : "Unknown error"))
@@ -851,6 +886,11 @@ export default function ViewQuotationPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant={isComparative ? "default" : "outline"} size="sm" onClick={() => setShowComparativeDialog(true)}>
+              <GitCompare className="mr-1.5 size-3.5" />
+              {isComparative ? "Comparative on" : "Comparative"}
+            </Button>
+
             {/* Stamp toggle */}
             <Button
               onClick={handleStampToggle}
@@ -1156,7 +1196,7 @@ export default function ViewQuotationPage() {
         </div>
       </div>
 
-      {/* ── Convert to Invoice dialog ─────────────────────────────────────────── */}
+      {/* ── Convert to Invoice dialog ────────��────────────────────────────────── */}
       <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1301,6 +1341,22 @@ export default function ViewQuotationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ComparativePanel
+        open={showComparativeDialog}
+        onClose={() => setShowComparativeDialog(false)}
+        quotationId={Number(id)}
+        orgId={currentOrgId ?? "unknown"}
+        isComparative={isComparative}
+        details={comparativeDetails}
+        attachedPages={comparativeAttachedPages}
+        onSave={({ isComparative: nextMode, details, attachedPages }) => {
+          setIsComparative(nextMode)
+          setComparativeDetails(details)
+          setComparativeAttachedPages(attachedPages)
+          setQuotation((current) => current ? { ...current, is_comparative_quotation: nextMode, comparative_details: details, comparative_attached_pages: attachedPages } : current)
+        }}
+      />
 
       {/* ── Subscription alert ───────────────────────────────────────────────── */}
       <Dialog open={subscriptionAlertOpen} onOpenChange={setSubscriptionAlertOpen}>
