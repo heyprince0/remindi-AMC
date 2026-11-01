@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,7 +18,10 @@ import { supabase, type Quotation } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, Trash2, Edit, Settings, MoreHorizontal, FileText, ArrowUpRight } from "lucide-react"
+import {
+  Plus, Search, Trash2, Edit, Settings, MoreHorizontal,
+  FileText, ArrowUpRight, Upload, Loader2, X, GitCompare,
+} from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import {
@@ -58,7 +61,6 @@ export default function QuotationsPage() {
   const [deleting, setDeleting] = useState(false)
   const [profileSetupDialogOpen, setProfileSetupDialogOpen] = useState(false)
   const [checkingProfile, setCheckingProfile] = useState(false)
-
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
 
   const { maxQuotationsMonthly, currentQuotationsThisMonth, status, planName, isLoading: limitsLoading } = usePlanLimits(currentOrgId)
@@ -66,9 +68,14 @@ export default function QuotationsPage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [limitModalType, setLimitModalType] = useState<'expired' | 'resource-limit'>('expired')
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
-
-  // ── Auto-show modal once on load ──
   const [autoShown, setAutoShown] = useState(false)
+
+  // ── Comparative PDF dialog state ──────────────────────────────────────────
+  const [showComparativePdfDialog, setShowComparativePdfDialog] = useState(false)
+  const [orgDefaultPages, setOrgDefaultPages] = useState<string[]>([])
+  const [uploadingOrgPdf, setUploadingOrgPdf] = useState(false)
+  const [loadingOrgPages, setLoadingOrgPages] = useState(false)
+  const orgPdfInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -94,13 +101,19 @@ export default function QuotationsPage() {
     }
   }, [currentOrgId])
 
-  // ── Auto-show subscription alert on page load ──
   useEffect(() => {
     if (!limitsLoading && currentOrgId && !autoShown) {
       const blocked = checkAndShowLimitModal()
       if (blocked) setAutoShown(true)
     }
   }, [limitsLoading, currentOrgId, status, autoShown])
+
+  // Load org default pages whenever the dialog opens
+  useEffect(() => {
+    if (showComparativePdfDialog && currentOrgId) {
+      loadOrgDefaultPages()
+    }
+  }, [showComparativePdfDialog, currentOrgId])
 
   const handleFilter = () => {
     let filtered = quotations
@@ -117,6 +130,84 @@ export default function QuotationsPage() {
   useEffect(() => {
     handleFilter()
   }, [searchTerm, quotations])
+
+  // ── Org default pages helpers ─────────────────────────────────────────────
+
+  const loadOrgDefaultPages = async () => {
+    if (!currentOrgId) return
+    setLoadingOrgPages(true)
+    try {
+      const { data } = await supabase
+        .from("company_profile")
+        .select("comparative_default_pages")
+        .eq("org_id", currentOrgId)
+        .single()
+      setOrgDefaultPages(data?.comparative_default_pages ?? [])
+    } catch {
+      setOrgDefaultPages([])
+    } finally {
+      setLoadingOrgPages(false)
+    }
+  }
+
+  const handleUploadOrgPdf = async (file: File) => {
+    if (!file || !currentOrgId) return
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Only PDF files are allowed")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("PDF must be under 10 MB")
+      return
+    }
+    setUploadingOrgPdf(true)
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+      const path = `comparative/org-default/${currentOrgId}/${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage
+        .from("comparative-pages")
+        .upload(path, file, { contentType: "application/pdf" })
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage
+        .from("comparative-pages")
+        .getPublicUrl(path)
+
+      const newPages = [...orgDefaultPages, urlData.publicUrl]
+
+      const { error: updateError } = await supabase
+        .from("company_profile")
+        .update({ comparative_default_pages: newPages })
+        .eq("org_id", currentOrgId)
+      if (updateError) throw updateError
+
+      setOrgDefaultPages(newPages)
+      toast.success("PDF attached — it will auto-load in all comparative quotations")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload PDF")
+    } finally {
+      setUploadingOrgPdf(false)
+      if (orgPdfInputRef.current) orgPdfInputRef.current.value = ""
+    }
+  }
+
+  const handleRemoveOrgPdf = async (index: number) => {
+    if (!currentOrgId) return
+    const newPages = orgDefaultPages.filter((_, i) => i !== index)
+    try {
+      const { error } = await supabase
+        .from("company_profile")
+        .update({ comparative_default_pages: newPages })
+        .eq("org_id", currentOrgId)
+      if (error) throw error
+      setOrgDefaultPages(newPages)
+      toast.success("PDF removed from defaults")
+    } catch {
+      toast.error("Failed to remove PDF")
+    }
+  }
+
+  // ── Quotation list helpers ────────────────────────────────────────────────
 
   const handleDelete = async () => {
     if (!quotationToDelete || !currentOrgId) return
@@ -143,15 +234,12 @@ export default function QuotationsPage() {
   const loadQuotations = async () => {
     try {
       if (!currentOrgId) return
-
       const { data, error } = await supabase
         .from("quotations")
         .select("*")
         .eq("org_id", currentOrgId)
         .order("created_at", { ascending: false })
-
       if (error) throw error
-
       setQuotations((data as Quotation[]) || [])
       setFilteredQuotations((data as Quotation[]) || [])
     } catch (error) {
@@ -186,14 +274,11 @@ export default function QuotationsPage() {
 
   const handleNewQuotationClick = async () => {
     if (!user?.id || !currentOrgId) return
-
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
       return
     }
-
     if (checkAndShowLimitModal()) return
-
     setCheckingProfile(true)
     try {
       const { data, error } = await supabase
@@ -201,15 +286,12 @@ export default function QuotationsPage() {
         .select("company_name, address, phone")
         .eq("org_id", currentOrgId)
         .maybeSingle()
-
       if (error && error.code !== "PGRST116") throw error
-
       const isComplete = !!(
         data?.company_name?.trim() &&
         data?.address?.trim() &&
         data?.phone?.trim()
       )
-
       if (isComplete) {
         router.push("/quotations/new")
       } else {
@@ -223,7 +305,6 @@ export default function QuotationsPage() {
     }
   }
 
-  // ── Use LimitReachedModal for edit too (unified UI, no separate dialog) ──
   const handleEditClick = (quotation: Quotation) => {
     if (limitsLoading) {
       toast.error("Checking your plan status, please try again in a moment...")
@@ -241,26 +322,49 @@ export default function QuotationsPage() {
     return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
   }
 
+  // ── Helper to display a clean filename from a storage URL ─────────────────
+  const displayFileName = (url: string) => {
+    const name = decodeURIComponent(url.split("/").pop() ?? "PDF")
+    return name.replace(/^\d+-/, "")
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
-        {/* Page Header */}
+
+        {/* ── Page Header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Quotation</h1>
             <p className="text-muted-foreground">Create and manage customers quotations</p>
           </div>
-          <Button
-            onClick={handleNewQuotationClick}
-            disabled={checkingProfile || limitsLoading}
-            className="hidden md:inline-flex"
-          >
-            <Plus className="mr-2 size-4" />
-            New Quotation
-          </Button>
+          <div className="hidden md:flex items-center gap-2">
+            {/* Comparative PDF button */}
+            <Button
+              variant="outline"
+              onClick={() => setShowComparativePdfDialog(true)}
+            >
+              <GitCompare className="mr-2 size-4" />
+              Comparative PDF
+              {orgDefaultPages.length > 0 && (
+                <span className="ml-2 flex size-5 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                  {orgDefaultPages.length}
+                </span>
+              )}
+            </Button>
+
+            {/* New Quotation button */}
+            <Button
+              onClick={handleNewQuotationClick}
+              disabled={checkingProfile || limitsLoading}
+            >
+              <Plus className="mr-2 size-4" />
+              New Quotation
+            </Button>
+          </div>
         </div>
 
-        {/* ── Standalone Search ── */}
+        {/* ── Search ───────────────────────────────────────────────────────── */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -272,7 +376,7 @@ export default function QuotationsPage() {
           />
         </div>
 
-        {/* Desktop: All Quotations Table */}
+        {/* ── Desktop Table ─────────────────────────────────────────────────── */}
         <Card className="hidden md:block">
           <CardHeader>
             <CardTitle>All Quotations</CardTitle>
@@ -318,7 +422,6 @@ export default function QuotationsPage() {
                         <TableCell>{formatCurrency(quotation.grand_total)}</TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
-                            {/* NEW ARROW BUTTON */}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -332,7 +435,6 @@ export default function QuotationsPage() {
                               <ArrowUpRight className="size-4" />
                               <span className="sr-only">View Details</span>
                             </Button>
-
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="size-8" onClick={(e) => e.stopPropagation()}>
@@ -374,8 +476,23 @@ export default function QuotationsPage() {
           </CardContent>
         </Card>
 
-        {/* Mobile: Quotation Cards */}
+        {/* ── Mobile Cards ──────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 md:hidden pb-44">
+          {/* Mobile comparative PDF button */}
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowComparativePdfDialog(true)}
+          >
+            <GitCompare className="mr-2 size-4" />
+            Comparative PDF
+            {orgDefaultPages.length > 0 && (
+              <span className="ml-2 flex size-5 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                {orgDefaultPages.length}
+              </span>
+            )}
+          </Button>
+
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading quotations...</div>
           ) : filteredQuotations.length === 0 ? (
@@ -387,10 +504,8 @@ export default function QuotationsPage() {
               <p className="text-sm text-muted-foreground">
                 You have{" "}
                 <span className="font-medium text-foreground">{filteredQuotations.length}</span>{" "}
-                quotations{" "}
-                {searchTerm ? 'matching filters' : 'in total'}
+                quotations{searchTerm ? " matching filters" : " in total"}
               </p>
-
               {filteredQuotations.map((quotation) => (
                 <Card
                   key={quotation.id}
@@ -408,7 +523,7 @@ export default function QuotationsPage() {
                             {quotation.quote_no}
                           </CardTitle>
                           <CardDescription className="text-xs truncate mt-0.5">
-                            {quotation.client_name || 'No client'}
+                            {quotation.client_name || "No client"}
                           </CardDescription>
                         </div>
                       </div>
@@ -459,7 +574,7 @@ export default function QuotationsPage() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-0.5">Client</p>
-                        <p className="text-sm font-medium truncate">{quotation.client_name || '—'}</p>
+                        <p className="text-sm font-medium truncate">{quotation.client_name || "—"}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-0.5">Date</p>
@@ -477,10 +592,7 @@ export default function QuotationsPage() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <div className="text-xs text-muted-foreground truncate">
-                        &nbsp;
-                      </div>
-                      {/* ✅ NEW: Arrow icon added here */}
+                      <div className="text-xs text-muted-foreground">&nbsp;</div>
                       <ArrowUpRight className="size-4 text-muted-foreground shrink-0" />
                     </div>
                   </CardContent>
@@ -490,7 +602,7 @@ export default function QuotationsPage() {
           )}
         </div>
 
-        {/* ── MOBILE FAB — New Quotation ── */}
+        {/* ── Mobile FAB ───────────────────────────────────────────────────── */}
         <button
           className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
           onClick={handleNewQuotationClick}
@@ -502,7 +614,95 @@ export default function QuotationsPage() {
         </button>
       </div>
 
-      {/* Delete Dialog */}
+      {/* ── Comparative PDF dialog ────────────────────────────────────────── */}
+      <Dialog open={showComparativePdfDialog} onOpenChange={setShowComparativePdfDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitCompare className="size-4" />
+              Default Comparative PDFs
+            </DialogTitle>
+            <DialogDescription>
+              PDFs uploaded here will automatically appear in the Comparative Quotation
+              panel when you open any quotation — so you don't have to re-upload them
+              every time.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {orgDefaultPages.length} PDF{orgDefaultPages.length !== 1 ? "s" : ""} saved
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={uploadingOrgPdf}
+                onClick={() => orgPdfInputRef.current?.click()}
+              >
+                {uploadingOrgPdf ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 size-3.5" />
+                )}
+                Upload PDF
+              </Button>
+              <input
+                ref={orgPdfInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleUploadOrgPdf(file)
+                  e.target.value = ""
+                }}
+              />
+            </div>
+
+            {loadingOrgPages ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : orgDefaultPages.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                <FileText className="size-8 opacity-40" />
+                <p className="text-sm font-medium">No default PDFs yet</p>
+                <p className="text-xs max-w-xs">
+                  Upload a PDF and it will auto-load inside the Comparative Quotation
+                  panel on every quotation.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {orgDefaultPages.map((url, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5 bg-muted/20"
+                  >
+                    <FileText className="size-4 shrink-0 text-purple-500" />
+                    <span className="flex-1 truncate text-sm">{displayFileName(url)}</span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50 shrink-0"
+                      onClick={() => handleRemoveOrgPdf(idx)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setShowComparativePdfDialog(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Dialog ─────────────────────────────────────────────────── */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -524,7 +724,7 @@ export default function QuotationsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Profile Setup Dialog */}
+      {/* ── Profile Setup Dialog ──────────────────────────────────────────── */}
       <Dialog open={profileSetupDialogOpen} onOpenChange={setProfileSetupDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -546,7 +746,7 @@ export default function QuotationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Unified Limit/Subscription Modal */}
+      {/* ── Limit Modal ───────────────────────────────────────────────────── */}
       <LimitReachedModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
