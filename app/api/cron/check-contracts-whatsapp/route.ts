@@ -77,7 +77,6 @@ async function sendWA(templateName: string, phone: string, components: Record<st
 
     const result = await res.json().catch(() => ({}))
 
-    // Log full MSG91 response so failures are visible in Vercel logs
     console.log(
       `[WA] template="${templateName}" to="${cleanPhone}" httpStatus=${res.status}`,
       JSON.stringify(result)
@@ -130,17 +129,28 @@ export async function GET() {
       const ownerIds = Object.values(orgOwnerMap).filter(Boolean)
       const ownerPhoneMap: Record<string, string> = {}
       const ownerNameMap: Record<string, string> = {}
+      // Owners who turned WhatsApp notifications off
+      const disabledOwnerIds = new Set<string>()
 
       if (ownerIds.length) {
         const { data: profiles } = await supabase
-          .from('profiles').select('id, phone, full_name').in('id', ownerIds)
+          .from('profiles')
+          .select('id, phone, full_name, whatsapp_notifications_enabled')
+          .in('id', ownerIds)
+
         for (const p of profiles || []) {
+          if (p.whatsapp_notifications_enabled === false) {
+            disabledOwnerIds.add(p.id)
+            continue
+          }
           if (p.phone) ownerPhoneMap[p.id] = p.phone
           if (p.full_name) ownerNameMap[p.id] = p.full_name
         }
 
-        // Fill gaps from auth.users
-        const missingIds = ownerIds.filter((id) => !ownerPhoneMap[id] || !ownerNameMap[id])
+        // Fill gaps from auth.users (never for disabled owners)
+        const missingIds = ownerIds.filter(
+          (id) => !disabledOwnerIds.has(id) && (!ownerPhoneMap[id] || !ownerNameMap[id])
+        )
         if (missingIds.length) {
           const { data: { users } } = await supabase.auth.admin.listUsers()
           for (const u of users || []) {
@@ -164,6 +174,8 @@ export async function GET() {
         if (!NOTIFY_AT_DAYS.includes(daysUntil)) { skipped++; continue }
 
         const ownerId = orgOwnerMap[contract.org_id]
+        if (ownerId && disabledOwnerIds.has(ownerId)) { skipped++; continue }
+
         const ownerPhone = ownerId ? ownerPhoneMap[ownerId] : null
         if (!ownerPhone) { skipped++; continue }
 
@@ -237,16 +249,27 @@ export async function GET() {
       const amcOwnerIds = Object.values(amcOrgOwnerMap).filter(Boolean)
       const amcOwnerPhoneMap: Record<string, string> = {}
       const amcOwnerNameMap: Record<string, string> = {}
+      // Owners who turned WhatsApp notifications off
+      const amcDisabledOwnerIds = new Set<string>()
 
       if (amcOwnerIds.length) {
         const { data: profiles } = await supabase
-          .from('profiles').select('id, phone, full_name').in('id', amcOwnerIds)
+          .from('profiles')
+          .select('id, phone, full_name, whatsapp_notifications_enabled')
+          .in('id', amcOwnerIds)
+
         for (const p of profiles || []) {
+          if (p.whatsapp_notifications_enabled === false) {
+            amcDisabledOwnerIds.add(p.id)
+            continue
+          }
           if (p.phone) amcOwnerPhoneMap[p.id] = p.phone
           if (p.full_name) amcOwnerNameMap[p.id] = p.full_name
         }
 
-        const missingIds = amcOwnerIds.filter((id) => !amcOwnerPhoneMap[id] || !amcOwnerNameMap[id])
+        const missingIds = amcOwnerIds.filter(
+          (id) => !amcDisabledOwnerIds.has(id) && (!amcOwnerPhoneMap[id] || !amcOwnerNameMap[id])
+        )
         if (missingIds.length) {
           const { data: { users } } = await supabase.auth.admin.listUsers()
           for (const u of users || []) {
@@ -272,12 +295,13 @@ export async function GET() {
         if (!isNotifyDay) { amcSkipped++; continue }
 
         const ownerId = amcOrgOwnerMap[contract.org_id]
+        if (ownerId && amcDisabledOwnerIds.has(ownerId)) { amcSkipped++; continue }
+
         const contractorPhone = ownerId ? amcOwnerPhoneMap[ownerId] : null
         if (!ownerId || !contractorPhone) { amcSkipped++; continue }
 
         const contractorName = amcOwnerNameMap[ownerId] || 'Contractor'
         const customerName = contract.customers?.name || 'Customer'
-        const customerPhone = contract.customers?.phone || 'Not available'
         const serviceType = contract.contract_name || 'Service'
         const reminderType = daysUntilEnd <= 0 ? 'contract_end' : 'contract_ending_soon'
         const dedupKey = `${reminderType}_${contract.id}`
