@@ -1,21 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { supabase, type Customer } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Search, ChevronsUpDown, X } from 'lucide-react'
 
 interface AddTechnicianJobModalProps {
   open: boolean
@@ -40,6 +33,10 @@ export function AddTechnicianJobModal({
   const [customers, setCustomers] = useState<Customer[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
 
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const customerDropdownRef = useRef<HTMLDivElement>(null)
+
   const [formData, setFormData] = useState({
     title: '',
     notes: '',
@@ -56,9 +53,27 @@ export function AddTechnicianJobModal({
         customerId: '',
       })
       setErrors({})
+      setCustomerSearch('')
+      setCustomerDropdownOpen(false)
       loadCustomers()
+    } else {
+      setCustomerSearch('')
+      setCustomerDropdownOpen(false)
     }
   }, [open])
+
+  // Close the customer search dropdown when clicking outside it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+        setCustomerDropdownOpen(false)
+      }
+    }
+    if (customerDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [customerDropdownOpen])
 
   const loadCustomers = async () => {
     if (!orgId) return
@@ -123,6 +138,11 @@ export function AddTechnicianJobModal({
     }
   }
 
+  const selectedCustomer = customers.find((c) => c.id === formData.customerId)
+  const filteredCustomers = customers.filter((customer) =>
+    customer.name.toLowerCase().includes(customerSearch.toLowerCase())
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -142,24 +162,93 @@ export function AddTechnicianJobModal({
             {errors.title && <p className="text-xs text-red-500">{errors.title}</p>}
           </div>
 
+          {/* Customer (searchable, optional) */}
           <div className="space-y-2">
-            <Label htmlFor="customer">Customer <span className="text-xs text-muted-foreground">(optional)</span></Label>
-            <Select
-              value={formData.customerId || undefined}
-              onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-              disabled={customersLoading}
-            >
-              <SelectTrigger id="customer">
-                <SelectValue placeholder={customersLoading ? 'Loading customers...' : 'Select a customer (optional)'} />
-              </SelectTrigger>
-              <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="customer">
+              Customer <span className="text-xs text-muted-foreground">(optional)</span>
+            </Label>
+            <div className="relative" ref={customerDropdownRef}>
+              <button
+                type="button"
+                id="customer"
+                onClick={() => !customersLoading && setCustomerDropdownOpen((v) => !v)}
+                disabled={customersLoading}
+                className={`flex w-full items-center justify-between rounded-md border bg-transparent px-3 py-2 text-sm ${
+                  errors.customerId ? 'border-red-500' : 'border-input'
+                } ${customersLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                <span className={selectedCustomer ? '' : 'text-muted-foreground'}>
+                  {customersLoading
+                    ? 'Loading customers...'
+                    : selectedCustomer?.name || 'Select a customer (optional)'}
+                </span>
+                <div className="flex items-center gap-1">
+                  {selectedCustomer && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setFormData({ ...formData, customerId: '' })
+                        setCustomerSearch('')
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation()
+                          setFormData({ ...formData, customerId: '' })
+                          setCustomerSearch('')
+                        }
+                      }}
+                      className="rounded p-0.5 hover:bg-muted"
+                      aria-label="Clear customer selection"
+                    >
+                      <X className="size-3.5 opacity-60" />
+                    </span>
+                  )}
+                  <ChevronsUpDown className="size-4 opacity-50" />
+                </div>
+              </button>
+
+              {customerDropdownOpen && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+                  <div className="flex items-center gap-2 border-b px-3 py-2">
+                    <Search className="size-4 opacity-50" />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      placeholder="Search customers..."
+                      className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-1">
+                    {customers.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No customers available</div>
+                    ) : filteredCustomers.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">No matching customers</div>
+                    ) : (
+                      filteredCustomers.map((customer) => (
+                        <button
+                          type="button"
+                          key={customer.id}
+                          onClick={() => {
+                            setFormData({ ...formData, customerId: customer.id })
+                            setCustomerDropdownOpen(false)
+                            setCustomerSearch('')
+                          }}
+                          className={`block w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
+                            customer.id === formData.customerId ? 'bg-accent' : ''
+                          }`}
+                        >
+                          {customer.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
