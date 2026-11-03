@@ -125,7 +125,7 @@ export default function TechnicianDetailPage() {
   const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // ── Customer info popup state (NEW) ─────────────────────────────────────
+  // ── Customer info popup state ───────────────────────────────────────────
   const [customerInfoOpen, setCustomerInfoOpen] = useState(false)
   const [customerInfo, setCustomerInfo] = useState<Customer | null>(null)
   const [customerInfoLoading, setCustomerInfoLoading] = useState(false)
@@ -134,6 +134,9 @@ export default function TechnicianDetailPage() {
   const [funds, setFunds] = useState<TechnicianFund[]>([])
   const [expenses, setExpenses] = useState<TechnicianExpense[]>([])
   const [loadingExpenses, setLoadingExpenses] = useState(false)
+
+  // ── Month filter (NEW) ──────────────────────────────────────────────────
+  const [monthFilter, setMonthFilter] = useState<string>('all')
 
   // Give Funds dialog
   const [fundDialogOpen, setFundDialogOpen] = useState(false)
@@ -160,14 +163,38 @@ export default function TechnicianDetailPage() {
   // Receipt lightbox
   const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null)
 
-  // ── Computed expense summary ─────────────────────────────────────────────
+  // ── Month filter helpers (NEW) ──────────────────────────────────────────
+  const formatMonthLabel = (ym: string) => {
+    const [y, m] = ym.split('-')
+    const d = new Date(parseInt(y), parseInt(m) - 1, 1)
+    return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  }
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    funds.forEach((f) => { if (f.given_at) months.add(f.given_at.slice(0, 7)) })
+    expenses.forEach((e) => { if (e.expense_date) months.add(e.expense_date.slice(0, 7)) })
+    return Array.from(months).sort((a, b) => b.localeCompare(a))
+  }, [funds, expenses])
+
+  const filteredFunds = useMemo(() => {
+    if (monthFilter === 'all') return funds
+    return funds.filter((f) => f.given_at.slice(0, 7) === monthFilter)
+  }, [funds, monthFilter])
+
+  const filteredExpenses = useMemo(() => {
+    if (monthFilter === 'all') return expenses
+    return expenses.filter((e) => e.expense_date.slice(0, 7) === monthFilter)
+  }, [expenses, monthFilter])
+
+  // ── Computed expense summary (now based on filtered data) ───────────────
   const totalFundsGiven = useMemo(
-    () => funds.reduce((sum, f) => sum + Number(f.amount), 0),
-    [funds]
+    () => filteredFunds.reduce((sum, f) => sum + Number(f.amount), 0),
+    [filteredFunds]
   )
   const totalSpent = useMemo(
-    () => expenses.reduce((sum, e) => sum + Number(e.amount), 0),
-    [expenses]
+    () => filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
+    [filteredExpenses]
   )
   const balance = totalFundsGiven - totalSpent
 
@@ -388,7 +415,7 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  // ── Customer info popup (NEW) ──────────────────────────────────────────
+  // ── Customer info popup ────────────────────────────────────────────────
   const openCustomerInfo = async (customerId: string) => {
     if (!currentOrgId) return
     setCustomerInfoOpen(true)
@@ -412,7 +439,7 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  // ── Photo helpers (existing) ───────────────────────────────────────────
+  // ── Photo helpers ──────────────────────────────────────────────────────
   const compressPhoto = (file: File): Promise<Blob> =>
     new Promise((resolve, reject) => {
       const image = new Image()
@@ -586,7 +613,7 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  // ── Job actions (existing) ────────────────────────────────────────────
+  // ── Job actions ────────────────────────────────────────────────────────
   const openCompleteDialog = (job: JobWithCustomer) => {
     setJobToComplete(job)
     setFeedbackNotes('')
@@ -958,6 +985,34 @@ export default function TechnicianDetailPage() {
             EXPENSES TRACKING SECTION
         ════════════════════════════════════════════════════════════════ */}
 
+        {/* ── Month filter row (NEW) ──────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Receipt className="size-4 text-muted-foreground shrink-0" />
+            <h2 className="text-base font-semibold truncate">Expense Tracker</h2>
+            {monthFilter !== 'all' && (
+              <Badge variant="outline" className="text-[10px] font-normal shrink-0">
+                {formatMonthLabel(monthFilter)}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground hidden sm:inline">Period:</span>
+            <Select value={monthFilter} onValueChange={setMonthFilter}>
+              <SelectTrigger className="w-[170px] h-9">
+                <CalendarIcon className="mr-2 size-3.5 text-muted-foreground shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                {availableMonths.map((ym) => (
+                  <SelectItem key={ym} value={ym}>{formatMonthLabel(ym)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* ── Summary strip ────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
           <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
@@ -967,7 +1022,7 @@ export default function TechnicianDetailPage() {
                 <p className="text-xs font-medium">Funds Given</p>
               </div>
               <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{formatCurrency(totalFundsGiven)}</p>
-              <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{funds.length} transaction{funds.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{filteredFunds.length} transaction{filteredFunds.length !== 1 ? 's' : ''}</p>
             </CardContent>
           </Card>
           <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
@@ -977,7 +1032,7 @@ export default function TechnicianDetailPage() {
                 <p className="text-xs font-medium">Total Spent</p>
               </div>
               <p className="text-xl font-bold text-red-800 dark:text-red-300">{formatCurrency(totalSpent)}</p>
-              <p className="text-xs text-red-600/70 dark:text-red-500 mt-0.5">{expenses.length} expense{expenses.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-red-600/70 dark:text-red-500 mt-0.5">{filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''}</p>
             </CardContent>
           </Card>
           <Card className={`${balance >= 0 ? 'border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900' : 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900'}`}>
@@ -1002,7 +1057,7 @@ export default function TechnicianDetailPage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Receipt className="size-5" />
-                Expense Tracker
+                {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
               </CardTitle>
               <CardDescription>
                 Funds issued and expenses logged for this technician
@@ -1039,6 +1094,10 @@ export default function TechnicianDetailPage() {
                   <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
                     No funds given to this technician yet
                   </div>
+                ) : filteredFunds.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                    No funds given in {formatMonthLabel(monthFilter)}
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>
@@ -1049,7 +1108,7 @@ export default function TechnicianDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {funds.map((fund) => (
+                      {filteredFunds.map((fund) => (
                         <TableRow key={fund.id}>
                           <TableCell className="text-sm">{new Date(fund.given_at).toLocaleDateString('en-IN')}</TableCell>
                           <TableCell>
@@ -1075,6 +1134,10 @@ export default function TechnicianDetailPage() {
                 <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
                   No expenses recorded yet
                 </div>
+              ) : filteredExpenses.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                  No expenses in {formatMonthLabel(monthFilter)}
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -1088,7 +1151,7 @@ export default function TechnicianDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.map((expense) => (
+                    {filteredExpenses.map((expense) => (
                       <TableRow key={expense.id}>
                         <TableCell className="text-sm">
                           {new Date(expense.expense_date).toLocaleDateString('en-IN')}
@@ -1150,10 +1213,10 @@ export default function TechnicianDetailPage() {
             <div>
               <h2 className="text-base font-semibold flex items-center gap-1.5">
                 <Receipt className="size-4 text-muted-foreground" />
-                Expense Tracker
+                {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {expenses.length} expense{expenses.length !== 1 ? 's' : ''} logged
+                {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''} logged
               </p>
             </div>
             <div className="flex gap-2">
@@ -1183,20 +1246,26 @@ export default function TechnicianDetailPage() {
           {isAdmin && funds.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Funds Issued</p>
-              <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
-                {funds.map((fund) => (
-                  <div key={fund.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                      <IndianRupee className="size-4 text-blue-600" />
+              {filteredFunds.length === 0 ? (
+                <div className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+                  No funds in {formatMonthLabel(monthFilter)}
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+                  {filteredFunds.map((fund) => (
+                    <div key={fund.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                        <IndianRupee className="size-4 text-blue-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-blue-700">{formatCurrency(fund.amount)}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(fund.given_at).toLocaleDateString('en-IN')}</p>
+                        {fund.notes && <p className="text-xs text-muted-foreground italic truncate">{fund.notes}</p>}
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-blue-700">{formatCurrency(fund.amount)}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(fund.given_at).toLocaleDateString('en-IN')}</p>
-                      {fund.notes && <p className="text-xs text-muted-foreground italic truncate">{fund.notes}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1211,9 +1280,13 @@ export default function TechnicianDetailPage() {
               <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
                 No expenses recorded yet
               </div>
+            ) : filteredExpenses.length === 0 ? (
+              <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                No expenses in {formatMonthLabel(monthFilter)}
+              </div>
             ) : (
               <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
-                {expenses.map((expense) => (
+                {filteredExpenses.map((expense) => (
                   <div key={expense.id} className="flex items-start gap-3 px-4 py-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100 mt-0.5">
                       <TrendingDown className="size-4 text-red-600" />
@@ -1261,7 +1334,7 @@ export default function TechnicianDetailPage() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            JOBS SECTION (existing)
+            JOBS SECTION
         ════════════════════════════════════════════════════════════════ */}
 
         {/* Desktop jobs table */}
@@ -1570,7 +1643,7 @@ export default function TechnicianDetailPage() {
           />
         )}
 
-        {/* Customer info popup (NEW) */}
+        {/* Customer info popup */}
         <Dialog open={customerInfoOpen} onOpenChange={setCustomerInfoOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
