@@ -8,6 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -28,11 +36,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { supabase, type Technician, type TechnicianJob, type Customer, type Contract, type ServiceHistory } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import { ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2, CalendarIcon, X, ScanBarcode, Camera, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2,
+  CalendarIcon, X, ScanBarcode, Camera, Loader2,
+  Wallet, Receipt, IndianRupee, TrendingDown, TrendingUp,
+  ImageIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
 import { Input } from '@/components/ui/input'
 import ScanBarcodeDialog from '../../stocks/components/ScanBarcodeDialog'
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface JobWithCustomer extends TechnicianJob {
   customerName: string | null
@@ -49,12 +64,42 @@ interface HistoryDisplayItem {
   contractId: string | null
 }
 
+interface TechnicianFund {
+  id: string
+  amount: number
+  notes: string | null
+  given_at: string
+  given_by: string | null
+}
+
+interface TechnicianExpense {
+  id: string
+  amount: number
+  category: string
+  description: string | null
+  receipt_url: string | null
+  expense_date: string
+  created_at: string
+}
+
+const EXPENSE_CATEGORIES = [
+  'Fuel',
+  'Food',
+  'Transport',
+  'Tools',
+  'Spare Parts',
+  'Other',
+]
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export default function TechnicianDetailPage() {
   const router = useRouter()
   const params = useParams()
   const { user, role } = useAuth()
   const technicianId = params.id as string
 
+  // ── Core state ──────────────────────────────────────────────────────────
   const [technician, setTechnician] = useState<Technician | null>(null)
   const [assignedJobs, setAssignedJobs] = useState<JobWithCustomer[]>([])
   const [jobHistory, setJobHistory] = useState<HistoryDisplayItem[]>([])
@@ -76,11 +121,52 @@ export default function TechnicianDetailPage() {
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const [scanDialogOpen, setScanDialogOpen] = useState(false)
-
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // ── Expenses state ──────────────────────────────────────────────────────
+  const [funds, setFunds] = useState<TechnicianFund[]>([])
+  const [expenses, setExpenses] = useState<TechnicianExpense[]>([])
+  const [loadingExpenses, setLoadingExpenses] = useState(false)
+
+  // Give Funds dialog
+  const [fundDialogOpen, setFundDialogOpen] = useState(false)
+  const [fundAmount, setFundAmount] = useState('')
+  const [fundNotes, setFundNotes] = useState('')
+  const [isSubmittingFund, setIsSubmittingFund] = useState(false)
+
+  // Add Expense dialog
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseCategory, setExpenseCategory] = useState('')
+  const [expenseDescription, setExpenseDescription] = useState('')
+  const [expenseDate, setExpenseDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [expenseReceiptFile, setExpenseReceiptFile] = useState<File | null>(null)
+  const [expenseReceiptPreview, setExpenseReceiptPreview] = useState<string | null>(null)
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false)
+  const receiptInputRef = useRef<HTMLInputElement>(null)
+
+  // Delete expense
+  const [deleteExpenseDialogOpen, setDeleteExpenseDialogOpen] = useState(false)
+  const [expenseToDelete, setExpenseToDelete] = useState<TechnicianExpense | null>(null)
+  const [deletingExpense, setDeletingExpense] = useState(false)
+
+  // Receipt lightbox
+  const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null)
+
+  // ── Computed expense summary ─────────────────────────────────────────────
+  const totalFundsGiven = useMemo(
+    () => funds.reduce((sum, f) => sum + Number(f.amount), 0),
+    [funds]
+  )
+  const totalSpent = useMemo(
+    () => expenses.reduce((sum, e) => sum + Number(e.amount), 0),
+    [expenses]
+  )
+  const balance = totalFundsGiven - totalSpent
+
+  // ── Org ID loader ────────────────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -119,13 +205,16 @@ export default function TechnicianDetailPage() {
             }
             setIsOwnProfile(data.linked_user_id === user.id)
             loadTechnicianDetails()
+            loadExpenses()
           })
       } else {
         loadTechnicianDetails()
+        loadExpenses()
       }
     }
   }, [currentOrgId, technicianId, role, user?.id, router])
 
+  // ── Data loaders ─────────────────────────────────────────────────────────
   const loadTechnicianDetails = async () => {
     try {
       if (!currentOrgId) return
@@ -166,10 +255,7 @@ export default function TechnicianDetailPage() {
 
       const assignedJobsWithCustomer = (assignedJobsData as TechnicianJob[]).map((job) => {
         const customer = (customersData as Customer[])?.find((c) => c.id === job.customer_id)
-        return {
-          ...job,
-          customerName: customer?.name || null,
-        }
+        return { ...job, customerName: customer?.name || null }
       })
 
       setAssignedJobs(assignedJobsWithCustomer)
@@ -228,7 +314,6 @@ export default function TechnicianDetailPage() {
         const customer = contract
           ? (customersData as Customer[])?.find((c) => c.id === contract.customer_id)
           : undefined
-
         return {
           id: `sh-${record.id}`,
           completedDate: record.service_date,
@@ -266,6 +351,39 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  const loadExpenses = async () => {
+    if (!currentOrgId) return
+    setLoadingExpenses(true)
+    try {
+      const [{ data: fundsData, error: fundsError }, { data: expensesData, error: expensesError }] = await Promise.all([
+        supabase
+          .from('technician_funds')
+          .select('*')
+          .eq('technician_id', technicianId)
+          .eq('org_id', currentOrgId)
+          .order('given_at', { ascending: false }),
+        supabase
+          .from('technician_expenses')
+          .select('*')
+          .eq('technician_id', technicianId)
+          .eq('org_id', currentOrgId)
+          .order('expense_date', { ascending: false }),
+      ])
+
+      if (fundsError) throw fundsError
+      if (expensesError) throw expensesError
+
+      setFunds((fundsData as TechnicianFund[]) || [])
+      setExpenses((expensesData as TechnicianExpense[]) || [])
+    } catch (error) {
+      console.error('Error loading expenses:', error)
+      toast.error('Failed to load expense data')
+    } finally {
+      setLoadingExpenses(false)
+    }
+  }
+
+  // ── Photo helpers (existing) ───────────────────────────────────────────
   const compressPhoto = (file: File): Promise<Blob> =>
     new Promise((resolve, reject) => {
       const image = new Image()
@@ -275,10 +393,7 @@ export default function TechnicianDetailPage() {
         canvas.width = Math.round(image.width * scale)
         canvas.height = Math.round(image.height * scale)
         const context = canvas.getContext('2d')
-        if (!context) {
-          reject(new Error('Could not prepare image'))
-          return
-        }
+        if (!context) { reject(new Error('Could not prepare image')); return }
         context.drawImage(image, 0, 0, canvas.width, canvas.height)
         canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not compress image')), 'image/jpeg', 0.75)
       }
@@ -301,6 +416,148 @@ export default function TechnicianDetailPage() {
     if (photoInputRef.current) photoInputRef.current.value = ''
   }
 
+  // ── Receipt helpers ────────────────────────────────────────────────────
+  const handleReceiptChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (expenseReceiptPreview) URL.revokeObjectURL(expenseReceiptPreview)
+    setExpenseReceiptFile(file)
+    setExpenseReceiptPreview(URL.createObjectURL(file))
+  }
+
+  const clearReceipt = () => {
+    if (expenseReceiptPreview) URL.revokeObjectURL(expenseReceiptPreview)
+    setExpenseReceiptFile(null)
+    setExpenseReceiptPreview(null)
+    if (receiptInputRef.current) receiptInputRef.current.value = ''
+  }
+
+  const resetExpenseDialog = () => {
+    setExpenseAmount('')
+    setExpenseCategory('')
+    setExpenseDescription('')
+    setExpenseDate(new Date().toISOString().split('T')[0])
+    clearReceipt()
+  }
+
+  const resetFundDialog = () => {
+    setFundAmount('')
+    setFundNotes('')
+  }
+
+  // ── Give Funds ────────────────────────────────────────────────────────
+  const handleGiveFunds = async () => {
+    if (!currentOrgId || !user) return
+    const amt = parseFloat(fundAmount)
+    if (!fundAmount || isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+    setIsSubmittingFund(true)
+    try {
+      const { error } = await supabase.from('technician_funds').insert({
+        org_id: currentOrgId,
+        technician_id: technicianId,
+        amount: amt,
+        notes: fundNotes.trim() || null,
+        given_by: user.id,
+        given_at: new Date().toISOString(),
+      })
+      if (error) throw error
+      toast.success('Funds given successfully')
+      setFundDialogOpen(false)
+      resetFundDialog()
+      loadExpenses()
+    } catch (error) {
+      console.error('Error giving funds:', error)
+      toast.error('Failed to record funds')
+    } finally {
+      setIsSubmittingFund(false)
+    }
+  }
+
+  // ── Add Expense ───────────────────────────────────────────────────────
+  const handleAddExpense = async () => {
+    if (!currentOrgId || !user) return
+    const amt = parseFloat(expenseAmount)
+    if (!expenseAmount || isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+    if (!expenseCategory) {
+      toast.error('Please select a category')
+      return
+    }
+    if (!expenseDate) {
+      toast.error('Please select a date')
+      return
+    }
+    setIsSubmittingExpense(true)
+    try {
+      let receiptUrl: string | null = null
+
+      if (expenseReceiptFile) {
+        try {
+          const compressed = await compressPhoto(expenseReceiptFile)
+          const path = `${currentOrgId}/${technicianId}-${Date.now()}.jpg`
+          const { error: uploadError } = await supabase.storage
+            .from('expense-receipts')
+            .upload(path, compressed, { contentType: 'image/jpeg', upsert: false })
+          if (uploadError) throw uploadError
+          receiptUrl = supabase.storage.from('expense-receipts').getPublicUrl(path).data.publicUrl
+        } catch (uploadErr) {
+          console.error('Receipt upload failed:', uploadErr)
+          toast.warning('Expense will be saved, but the receipt photo failed to upload')
+        }
+      }
+
+      const { error } = await supabase.from('technician_expenses').insert({
+        org_id: currentOrgId,
+        technician_id: technicianId,
+        amount: amt,
+        category: expenseCategory,
+        description: expenseDescription.trim() || null,
+        receipt_url: receiptUrl,
+        expense_date: expenseDate,
+        created_by: user.id,
+      })
+      if (error) throw error
+      toast.success('Expense added successfully')
+      setExpenseDialogOpen(false)
+      resetExpenseDialog()
+      loadExpenses()
+    } catch (error) {
+      console.error('Error adding expense:', error)
+      toast.error('Failed to add expense')
+    } finally {
+      setIsSubmittingExpense(false)
+    }
+  }
+
+  // ── Delete Expense ────────────────────────────────────────────────────
+  const handleConfirmDeleteExpense = async () => {
+    if (!currentOrgId || !expenseToDelete || deletingExpense) return
+    setDeletingExpense(true)
+    try {
+      const { error } = await supabase
+        .from('technician_expenses')
+        .delete()
+        .eq('id', expenseToDelete.id)
+        .eq('org_id', currentOrgId)
+      if (error) throw error
+      toast.success('Expense deleted')
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseToDelete.id))
+      setDeleteExpenseDialogOpen(false)
+      setExpenseToDelete(null)
+    } catch (error) {
+      console.error('Error deleting expense:', error)
+      toast.error('Failed to delete expense')
+    } finally {
+      setDeletingExpense(false)
+    }
+  }
+
+  // ── Job actions (existing) ────────────────────────────────────────────
   const openCompleteDialog = (job: JobWithCustomer) => {
     setJobToComplete(job)
     setFeedbackNotes('')
@@ -346,34 +603,28 @@ export default function TechnicianDetailPage() {
       if (jobToComplete.contract_id) {
         try {
           const today = new Date().toISOString().split('T')[0]
-
           const { data: contractData, error: contractFetchError } = await supabase
             .from('contracts')
             .select('*')
             .eq('id', jobToComplete.contract_id)
             .eq('org_id', currentOrgId)
             .single()
-
           if (contractFetchError) throw contractFetchError
 
-          const { error: historyError } = await supabase
-            .from('service_history')
-            .insert({
-              contract_id: jobToComplete.contract_id,
-              technician_id: technicianId,
-              service_date: today,
-              status: 'completed',
-              notes: completionNotes || null,
-              photo_url: photoUrl,
-              org_id: currentOrgId,
-            })
-
+          const { error: historyError } = await supabase.from('service_history').insert({
+            contract_id: jobToComplete.contract_id,
+            technician_id: technicianId,
+            service_date: today,
+            status: 'completed',
+            notes: completionNotes || null,
+            photo_url: photoUrl,
+            org_id: currentOrgId,
+          })
           if (historyError) throw historyError
 
           if (contractData?.frequency_days != null) {
             const nextServiceDate = new Date(today)
             nextServiceDate.setDate(nextServiceDate.getDate() + contractData.frequency_days)
-
             const { error: contractUpdateError } = await supabase
               .from('contracts')
               .update({
@@ -383,7 +634,6 @@ export default function TechnicianDetailPage() {
               })
               .eq('id', jobToComplete.contract_id)
               .eq('org_id', currentOrgId)
-
             if (contractUpdateError) throw contractUpdateError
           }
         } catch (linkError) {
@@ -420,7 +670,6 @@ export default function TechnicianDetailPage() {
         .delete()
         .eq('id', jobToDelete.id)
         .eq('org_id', currentOrgId)
-
       if (error) throw error
       toast.success('Job deleted successfully')
       setAssignedJobs(assignedJobs.filter((job) => job.id !== jobToDelete.id))
@@ -434,26 +683,17 @@ export default function TechnicianDetailPage() {
     }
   }
 
-  // --- WhatsApp Notification Logic ---
-  // Plain fetch + separate customer lookup (same pattern as the rest of the app).
   const sendWorkWhatsApp = async (jobId: string) => {
     try {
       if (!currentOrgId) return
-
-      // 1. Job — plain select, no PostgREST embed
       const { data: job, error: jobErr } = await supabase
         .from('technician_jobs')
         .select('*')
         .eq('id', jobId)
         .eq('org_id', currentOrgId)
         .single()
+      if (jobErr || !job) { console.error('notify(work): job fetch failed', jobErr); return }
 
-      if (jobErr || !job) {
-        console.error('notify(work): job fetch failed', jobErr)
-        return
-      }
-
-      // 2. Customer — separate lookup, filtered by org
       let customerName = 'Customer'
       let customerPhone = ''
       if (job.customer_id) {
@@ -468,7 +708,6 @@ export default function TechnicianDetailPage() {
         customerPhone = customer?.phone || ''
       }
 
-      // 3. POST to the route — surface any failure
       const res = await fetch('/api/whatsapp/notify-technician', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -484,7 +723,6 @@ export default function TechnicianDetailPage() {
           orgId: currentOrgId,
         }),
       })
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         console.error('notify(work): API failed', res.status, err)
@@ -497,8 +735,6 @@ export default function TechnicianDetailPage() {
 
   const handleModalSuccess = async () => {
     await loadTechnicianDetails()
-
-    // Wait briefly for DB transaction to commit, then fetch latest job
     setTimeout(async () => {
       if (!currentOrgId) return
       const { data: latestJob } = await supabase
@@ -509,23 +745,18 @@ export default function TechnicianDetailPage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
-
-      if (latestJob?.id) {
-        await sendWorkWhatsApp(latestJob.id)
-      }
+      if (latestJob?.id) await sendWorkWhatsApp(latestJob.id)
     }, 800)
   }
 
   const handleStatusSave = async () => {
     try {
       if (!currentOrgId || !technician) return
-
       const { error } = await supabase
         .from('technicians')
         .update({ status: statusValue })
         .eq('id', technicianId)
         .eq('org_id', currentOrgId)
-
       if (error) throw error
       toast.success('Status updated successfully')
       setStatusEditMode(false)
@@ -537,6 +768,7 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────
   const getStatusDotColor = (status: string) => {
     switch (status) {
       case 'available': return 'bg-green-500'
@@ -554,26 +786,34 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'Fuel': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'Food': return 'bg-green-100 text-green-800 border-green-200'
+      case 'Transport': return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'Tools': return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'Spare Parts': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      default: return 'bg-gray-100 text-gray-700 border-gray-200'
+    }
+  }
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount)
+
   const filteredHistory = useMemo(() => {
     if (!historyDateFilter) return jobHistory
-    return jobHistory.filter(item => item.completedDate === historyDateFilter)
+    return jobHistory.filter((item) => item.completedDate === historyDateFilter)
   }, [jobHistory, historyDateFilter])
 
-  const visibleHistory = useMemo(() => {
-    return filteredHistory.slice(0, historyVisibleCount)
-  }, [filteredHistory, historyVisibleCount])
-
+  const visibleHistory = useMemo(() => filteredHistory.slice(0, historyVisibleCount), [filteredHistory, historyVisibleCount])
   const hasMoreHistory = filteredHistory.length > historyVisibleCount
 
-  const handleLoadMoreHistory = () => {
-    setHistoryVisibleCount((prev) => prev + HISTORY_PAGE_SIZE)
-  }
+  const handleLoadMoreHistory = () => setHistoryVisibleCount((prev) => prev + HISTORY_PAGE_SIZE)
+  const clearDateFilter = () => { setHistoryDateFilter(''); setHistoryVisibleCount(HISTORY_PAGE_SIZE) }
 
-  const clearDateFilter = () => {
-    setHistoryDateFilter('')
-    setHistoryVisibleCount(HISTORY_PAGE_SIZE)
-  }
+  const isAdmin = role === 'admin' || role === 'owner'
 
+  // ── Guards ────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -596,18 +836,16 @@ export default function TechnicianDetailPage() {
 
   const showBackButton = !(role === 'technician' && isOwnProfile)
 
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
+
+        {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {showBackButton && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.push('/technicians')}
-                className="size-9"
-              >
+              <Button variant="ghost" size="icon" onClick={() => router.push('/technicians')} className="size-9">
                 <ArrowLeft className="size-4" />
                 <span className="sr-only">Back to technicians</span>
               </Button>
@@ -625,13 +863,12 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
+        {/* ── Contact card ─────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
-                <span className="text-lg font-semibold text-primary">
-                  {technician.name.charAt(0)}
-                </span>
+                <span className="text-lg font-semibold text-primary">{technician.name.charAt(0)}</span>
               </span>
               Contact Information
             </CardTitle>
@@ -670,30 +907,13 @@ export default function TechnicianDetailPage() {
                           <option value="busy">Busy</option>
                           <option value="on-leave">On Leave</option>
                         </select>
-                        <Button size="sm" onClick={handleStatusSave} className="gap-1">
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setStatusEditMode(false)
-                            setStatusValue(technician.status)
-                          }}
-                        >
-                          Cancel
-                        </Button>
+                        <Button size="sm" onClick={handleStatusSave} className="gap-1">Save</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setStatusEditMode(false); setStatusValue(technician.status) }}>Cancel</Button>
                       </div>
                     ) : (
                       <div className="flex gap-2 items-center">
                         <p className="font-medium text-foreground capitalize">{technician.status.replace('-', ' ')}</p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setStatusEditMode(true)}
-                        >
-                          Edit
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setStatusEditMode(true)}>Edit</Button>
                       </div>
                     )
                   ) : (
@@ -705,6 +925,317 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
+        {/* ═══════════════════════════════════════════════════════════════
+            EXPENSES TRACKING SECTION
+        ════════════════════════════════════════════════════════════════ */}
+
+        {/* ── Summary strip ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-1">
+                <TrendingUp className="size-4" />
+                <p className="text-xs font-medium">Funds Given</p>
+              </div>
+              <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{formatCurrency(totalFundsGiven)}</p>
+              <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{funds.length} transaction{funds.length !== 1 ? 's' : ''}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-1">
+                <TrendingDown className="size-4" />
+                <p className="text-xs font-medium">Total Spent</p>
+              </div>
+              <p className="text-xl font-bold text-red-800 dark:text-red-300">{formatCurrency(totalSpent)}</p>
+              <p className="text-xs text-red-600/70 dark:text-red-500 mt-0.5">{expenses.length} expense{expenses.length !== 1 ? 's' : ''}</p>
+            </CardContent>
+          </Card>
+          <Card className={`${balance >= 0 ? 'border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900' : 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900'}`}>
+            <CardContent className="p-4">
+              <div className={`flex items-center gap-2 mb-1 ${balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
+                <Wallet className="size-4" />
+                <p className="text-xs font-medium">Balance</p>
+              </div>
+              <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'}`}>
+                {formatCurrency(Math.abs(balance))}
+              </p>
+              <p className={`text-xs mt-0.5 ${balance >= 0 ? 'text-green-600/70 dark:text-green-500' : 'text-orange-600/70 dark:text-orange-500'}`}>
+                {balance >= 0 ? 'Remaining' : 'Overspent'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Desktop: Expenses table ────────────────────────────────────── */}
+        <Card className="hidden md:block">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="size-5" />
+                Expense Tracker
+              </CardTitle>
+              <CardDescription>
+                Funds issued and expenses logged for this technician
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
+                >
+                  <IndianRupee className="size-4" />
+                  Give Funds
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
+              >
+                <Plus className="size-4" />
+                Add Expense
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Funds sub-table */}
+            {isAdmin && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Funds Issued</h3>
+                {funds.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                    No funds given to this technician yet
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {funds.map((fund) => (
+                        <TableRow key={fund.id}>
+                          <TableCell className="text-sm">{new Date(fund.given_at).toLocaleDateString('en-IN')}</TableCell>
+                          <TableCell>
+                            <span className="font-semibold text-blue-700">{formatCurrency(fund.amount)}</span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{fund.notes || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            )}
+
+            {/* Expenses sub-table */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Expenses Logged</h3>
+              {loadingExpenses ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : expenses.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                  No expenses recorded yet
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Receipt</TableHead>
+                      {isAdmin && <TableHead />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {expenses.map((expense) => (
+                      <TableRow key={expense.id}>
+                        <TableCell className="text-sm">
+                          {new Date(expense.expense_date).toLocaleDateString('en-IN')}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs font-normal ${getCategoryColor(expense.category)}`}>
+                            {expense.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                          {expense.description || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-semibold text-red-700">{formatCurrency(expense.amount)}</span>
+                        </TableCell>
+                        <TableCell>
+                          {expense.receipt_url ? (
+                            <button
+                              type="button"
+                              onClick={() => setReceiptModalUrl(expense.receipt_url)}
+                              className="block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label="View receipt"
+                            >
+                              <img
+                                src={expense.receipt_url}
+                                alt="Receipt"
+                                className="size-10 rounded-md object-cover border"
+                              />
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Delete expense</span>
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Mobile: Expenses section ───────────────────────────────────── */}
+        <div className="flex flex-col gap-3 md:hidden">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold flex items-center gap-1.5">
+                <Receipt className="size-4 text-muted-foreground" />
+                Expense Tracker
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {expenses.length} expense{expenses.length !== 1 ? 's' : ''} logged
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
+                >
+                  <IndianRupee className="size-3.5" />
+                  Give
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="gap-1"
+                onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
+              >
+                <Plus className="size-3.5" />
+                Expense
+              </Button>
+            </div>
+          </div>
+
+          {/* Funds (mobile) — admin only */}
+          {isAdmin && funds.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Funds Issued</p>
+              <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+                {funds.map((fund) => (
+                  <div key={fund.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                      <IndianRupee className="size-4 text-blue-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-blue-700">{formatCurrency(fund.amount)}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(fund.given_at).toLocaleDateString('en-IN')}</p>
+                      {fund.notes && <p className="text-xs text-muted-foreground italic truncate">{fund.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Expenses (mobile) */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expenses</p>
+            {loadingExpenses ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : expenses.length === 0 ? (
+              <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                No expenses recorded yet
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+                {expenses.map((expense) => (
+                  <div key={expense.id} className="flex items-start gap-3 px-4 py-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100 mt-0.5">
+                      <TrendingDown className="size-4 text-red-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-red-700">{formatCurrency(expense.amount)}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(expense.expense_date).toLocaleDateString('en-IN')}</p>
+                        </div>
+                        <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 font-normal ${getCategoryColor(expense.category)}`}>
+                          {expense.category}
+                        </Badge>
+                      </div>
+                      {expense.description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{expense.description}</p>
+                      )}
+                      {expense.receipt_url && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptModalUrl(expense.receipt_url)}
+                          className="mt-2 flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+                        >
+                          <ImageIcon className="size-3" />
+                          View Receipt
+                        </button>
+                      )}
+                    </div>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
+                        onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="sr-only">Delete</span>
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            JOBS SECTION (existing)
+        ════════════════════════════════════════════════════════════════ */}
+
+        {/* Desktop jobs table */}
         <Card className="hidden md:block">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
@@ -725,9 +1256,7 @@ export default function TechnicianDetailPage() {
           </CardHeader>
           <CardContent>
             {assignedJobs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No jobs assigned to this technician
-              </div>
+              <div className="text-center py-8 text-muted-foreground">No jobs assigned to this technician</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -750,42 +1279,26 @@ export default function TechnicianDetailPage() {
                         <TableCell>{job.due_date || '—'}</TableCell>
                         <TableCell>{job.customerName || '—'}</TableCell>
                         <TableCell>
-                          <span className="text-sm text-muted-foreground line-clamp-2">
-                            {job.notes || '—'}
-                          </span>
+                          <span className="text-sm text-muted-foreground line-clamp-2">{job.notes || '—'}</span>
                         </TableCell>
                         <TableCell>
                           <Badge className="bg-blue-100 text-blue-800 border-blue-200">Pending</Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => openCompleteDialog(job)}
-                            >
+                            <Button size="sm" variant="outline" className="gap-2" onClick={() => openCompleteDialog(job)}>
                               <CheckCircle2 className="size-4" />
                               Complete
                             </Button>
                             {job.customer_id && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-2"
-                                onClick={() => router.push(`/customers/${job.customer_id}`)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => router.push(`/customers/${job.customer_id}`)}>
                                 View
                               </Button>
                             )}
                             {role !== 'technician' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-2 text-red-600 hover:text-red-600"
-                                onClick={() => openDeleteDialog(job)}
-                              >
+                              <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-600" onClick={() => openDeleteDialog(job)}>
                                 <Trash2 className="size-4" />
+                                <span className="sr-only">Delete job</span>
                               </Button>
                             )}
                           </div>
@@ -799,26 +1312,28 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col gap-4 md:hidden">
+        {/* Mobile jobs cards */}
+        <div className="flex flex-col gap-3 md:hidden">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Assigned Jobs</h2>
-              <p className="text-sm text-muted-foreground">
-                {assignedJobs.length} job{assignedJobs.length !== 1 ? 's' : ''} assigned
+              <h2 className="text-base font-semibold flex items-center gap-1.5">
+                <Wrench className="size-4 text-muted-foreground" />
+                Assigned Jobs
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {assignedJobs.length} job{assignedJobs.length !== 1 ? 's' : ''} pending
               </p>
             </div>
             {role !== 'technician' && (
-              <Button onClick={() => setModalOpen(true)} size="sm" className="gap-2">
-                <Plus className="size-4" />
+              <Button onClick={() => setModalOpen(true)} size="sm" className="gap-1">
+                <Plus className="size-3.5" />
                 Add Job
               </Button>
             )}
           </div>
 
           {assignedJobs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No jobs assigned to this technician
-            </div>
+            <div className="text-center py-8 text-muted-foreground">No jobs assigned to this technician</div>
           ) : (
             assignedJobs.map((job) => (
               <Card key={job.id}>
@@ -855,6 +1370,7 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
+        {/* ── Desktop Job History ───────────────────────────────────────── */}
         <Card className="hidden md:block">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -873,20 +1389,12 @@ export default function TechnicianDetailPage() {
                 <Input
                   type="date"
                   value={historyDateFilter}
-                  onChange={(e) => {
-                    setHistoryDateFilter(e.target.value)
-                    setHistoryVisibleCount(HISTORY_PAGE_SIZE)
-                  }}
+                  onChange={(e) => { setHistoryDateFilter(e.target.value); setHistoryVisibleCount(HISTORY_PAGE_SIZE) }}
                   className="pl-8 w-[200px]"
                 />
               </div>
               {historyDateFilter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearDateFilter}
-                  className="gap-1"
-                >
+                <Button variant="outline" size="sm" onClick={clearDateFilter} className="gap-1">
                   <X className="size-3" />
                   Clear
                 </Button>
@@ -895,9 +1403,7 @@ export default function TechnicianDetailPage() {
 
             {filteredHistory.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {historyDateFilter
-                  ? 'No completed jobs on this date'
-                  : 'No completed jobs yet for this technician'}
+                {historyDateFilter ? 'No completed jobs on this date' : 'No completed jobs yet for this technician'}
               </div>
             ) : (
               <>
@@ -920,23 +1426,14 @@ export default function TechnicianDetailPage() {
                           <TableCell className="font-medium">{job.title}</TableCell>
                           <TableCell>{job.customerName || '—'}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {getSourceBadgeLabel(job.source)}
-                            </Badge>
+                            <Badge variant="outline" className="text-xs font-normal">{getSourceBadgeLabel(job.source)}</Badge>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm text-muted-foreground line-clamp-2">
-                              {job.notes || '—'}
-                            </span>
+                            <span className="text-sm text-muted-foreground line-clamp-2">{job.notes || '—'}</span>
                           </TableCell>
                           <TableCell>
                             {job.photoUrl ? (
-                              <button
-                                type="button"
-                                onClick={() => setPhotoModalUrl(job.photoUrl)}
-                                className="block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                aria-label={`View photo for ${job.title}`}
-                              >
+                              <button type="button" onClick={() => setPhotoModalUrl(job.photoUrl)} className="block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`View photo for ${job.title}`}>
                                 <img src={job.photoUrl} alt="Completed work" className="size-10 rounded-md object-cover" />
                               </button>
                             ) : '—'}
@@ -948,11 +1445,7 @@ export default function TechnicianDetailPage() {
                 </div>
                 {hasMoreHistory && (
                   <div className="flex justify-center mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleLoadMoreHistory}
-                    >
+                    <Button variant="outline" size="sm" onClick={handleLoadMoreHistory}>
                       View More ({filteredHistory.length - historyVisibleCount} remaining)
                     </Button>
                   </div>
@@ -962,6 +1455,7 @@ export default function TechnicianDetailPage() {
           </CardContent>
         </Card>
 
+        {/* ── Mobile Job History ────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 md:hidden">
           <div>
             <h2 className="text-base font-semibold flex items-center gap-1.5">
@@ -980,20 +1474,12 @@ export default function TechnicianDetailPage() {
               <Input
                 type="date"
                 value={historyDateFilter}
-                onChange={(e) => {
-                  setHistoryDateFilter(e.target.value)
-                  setHistoryVisibleCount(HISTORY_PAGE_SIZE)
-                }}
+                onChange={(e) => { setHistoryDateFilter(e.target.value); setHistoryVisibleCount(HISTORY_PAGE_SIZE) }}
                 className="pl-8 w-full"
               />
             </div>
             {historyDateFilter && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearDateFilter}
-                className="gap-1 shrink-0"
-              >
+              <Button variant="outline" size="sm" onClick={clearDateFilter} className="gap-1 shrink-0">
                 <X className="size-3" />
                 Clear
               </Button>
@@ -1002,9 +1488,7 @@ export default function TechnicianDetailPage() {
 
           {filteredHistory.length === 0 ? (
             <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-              {historyDateFilter
-                ? 'No completed jobs on this date'
-                : 'No completed jobs yet for this technician'}
+              {historyDateFilter ? 'No completed jobs on this date' : 'No completed jobs yet for this technician'}
             </div>
           ) : (
             <>
@@ -1014,57 +1498,28 @@ export default function TechnicianDetailPage() {
                     <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted mt-0.5">
                       <CheckCircle2 className="size-3 text-muted-foreground" />
                     </div>
-
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium leading-snug break-words">{job.title}</p>
-                        <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">
-                          {getSourceBadgeLabel(job.source)}
-                        </Badge>
+                        <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">{getSourceBadgeLabel(job.source)}</Badge>
                       </div>
-
                       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
                         <span>{job.completedDate || '—'}</span>
-                        {job.customerName && (
-                          <>
-                            <span className="opacity-40">•</span>
-                            <span className="truncate">{job.customerName}</span>
-                          </>
-                        )}
+                        {job.customerName && (<><span className="opacity-40">•</span><span className="truncate">{job.customerName}</span></>)}
                       </div>
-
-                      {job.notes && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">
-                          {job.notes}
-                        </p>
-                      )}
-
+                      {job.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 italic">{job.notes}</p>}
                       {job.photoUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setPhotoModalUrl(job.photoUrl)}
-                          className="mt-2 block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label={`View photo for ${job.title}`}
-                        >
-                          <img
-                            src={job.photoUrl}
-                            alt={`Photo for ${job.title}`}
-                            className="h-16 w-16 rounded-md object-cover"
-                          />
+                        <button type="button" onClick={() => setPhotoModalUrl(job.photoUrl)} className="mt-2 block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`View photo for ${job.title}`}>
+                          <img src={job.photoUrl} alt={`Photo for ${job.title}`} className="h-16 w-16 rounded-md object-cover" />
                         </button>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
-
               {hasMoreHistory && (
                 <div className="flex justify-center mt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLoadMoreHistory}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleLoadMoreHistory}>
                     View More ({filteredHistory.length - historyVisibleCount} remaining)
                   </Button>
                 </div>
@@ -1072,6 +1527,8 @@ export default function TechnicianDetailPage() {
             </>
           )}
         </div>
+
+        {/* ─── Modals ────────────────────────────────────────────────────── */}
 
         {user && currentOrgId && (
           <AddTechnicianJobModal
@@ -1084,6 +1541,152 @@ export default function TechnicianDetailPage() {
           />
         )}
 
+        {/* Give Funds dialog */}
+        <Dialog open={fundDialogOpen} onOpenChange={setFundDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <IndianRupee className="size-5 text-blue-600" />
+                Give Funds to {technician.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fund-amount">Amount (₹) <span className="text-red-500">*</span></Label>
+                <Input
+                  id="fund-amount"
+                  type="number"
+                  placeholder="e.g. 500"
+                  min="1"
+                  step="1"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fund-notes">Notes (optional)</Label>
+                <Textarea
+                  id="fund-notes"
+                  placeholder="e.g. Travel advance for site visit..."
+                  value={fundNotes}
+                  onChange={(e) => setFundNotes(e.target.value)}
+                  className="min-h-20 resize-none"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setFundDialogOpen(false); resetFundDialog() }}>Cancel</Button>
+                <Button onClick={handleGiveFunds} disabled={isSubmittingFund} className="gap-2 bg-blue-600 hover:bg-blue-700">
+                  {isSubmittingFund ? <Loader2 className="size-4 animate-spin" /> : <IndianRupee className="size-4" />}
+                  {isSubmittingFund ? 'Saving...' : 'Give Funds'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Expense dialog */}
+        <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Receipt className="size-5 text-red-600" />
+                Add Expense
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="expense-amount">Amount (₹) <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="expense-amount"
+                    type="number"
+                    placeholder="e.g. 200"
+                    min="1"
+                    step="1"
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expense-date">Date <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="expense-date"
+                    type="date"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="expense-category">Category <span className="text-red-500">*</span></Label>
+                <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                  <SelectTrigger id="expense-category">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="expense-description">Description</Label>
+                <Textarea
+                  id="expense-description"
+                  placeholder="e.g. Petrol for site visit to customer location..."
+                  value={expenseDescription}
+                  onChange={(e) => setExpenseDescription(e.target.value)}
+                  className="min-h-20 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              {/* Receipt upload */}
+              <div className="space-y-2">
+                <Label>Receipt Photo (optional)</Label>
+                <input
+                  ref={receiptInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleReceiptChange}
+                  className="sr-only"
+                />
+                {expenseReceiptPreview ? (
+                  <div className="relative overflow-hidden rounded-lg border border-border">
+                    <img src={expenseReceiptPreview} alt="Receipt preview" className="max-h-48 w-full object-cover" />
+                    <Button type="button" variant="secondary" size="sm" onClick={clearReceipt} className="absolute right-2 top-2">
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => receiptInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-input px-4 py-6 text-center text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Camera className="size-6" />
+                    <span className="text-sm">Tap to capture or upload receipt</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setExpenseDialogOpen(false); resetExpenseDialog() }}>Cancel</Button>
+                <Button onClick={handleAddExpense} disabled={isSubmittingExpense} className="gap-2">
+                  {isSubmittingExpense ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                  {isSubmittingExpense ? 'Saving...' : 'Add Expense'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Complete Job dialog */}
         <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -1104,9 +1707,7 @@ export default function TechnicianDetailPage() {
                 {photoPreviewUrl ? (
                   <div className="relative overflow-hidden rounded-lg border border-border">
                     <img src={photoPreviewUrl} alt="Selected completed work" className="max-h-56 w-full object-cover" />
-                    <Button type="button" variant="secondary" size="sm" onClick={clearSelectedPhoto} className="absolute right-2 top-2">
-                      Remove
-                    </Button>
+                    <Button type="button" variant="secondary" size="sm" onClick={clearSelectedPhoto} className="absolute right-2 top-2">Remove</Button>
                   </div>
                 ) : (
                   <button
@@ -1120,18 +1721,7 @@ export default function TechnicianDetailPage() {
                 )}
               </div>
               <div className="flex gap-2 justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setCompleteDialogOpen(false)
-                    setJobToComplete(null)
-                    setFeedbackNotes('')
-                    clearSelectedPhoto()
-                  }}
-                >
-                  Cancel
-                </Button>
+                <Button type="button" variant="outline" onClick={() => { setCompleteDialogOpen(false); setJobToComplete(null); setFeedbackNotes(''); clearSelectedPhoto() }}>Cancel</Button>
                 <Button type="button" onClick={handleConfirmComplete} className="gap-2" disabled={isCompleting}>
                   {isCompleting ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
                   {isCompleting ? 'Uploading...' : 'Complete'}
@@ -1141,17 +1731,23 @@ export default function TechnicianDetailPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Job photo lightbox */}
         <Dialog open={!!photoModalUrl} onOpenChange={(open) => !open && setPhotoModalUrl(null)}>
           <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Completed Work Photo</DialogTitle>
-            </DialogHeader>
-            {photoModalUrl && (
-              <img src={photoModalUrl} alt="Full-size completed work" className="max-h-[70vh] w-full rounded-lg object-contain" />
-            )}
+            <DialogHeader><DialogTitle>Completed Work Photo</DialogTitle></DialogHeader>
+            {photoModalUrl && <img src={photoModalUrl} alt="Full-size completed work" className="max-h-[70vh] w-full rounded-lg object-contain" />}
           </DialogContent>
         </Dialog>
 
+        {/* Receipt lightbox */}
+        <Dialog open={!!receiptModalUrl} onOpenChange={(open) => !open && setReceiptModalUrl(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Expense Receipt</DialogTitle></DialogHeader>
+            {receiptModalUrl && <img src={receiptModalUrl} alt="Expense receipt" className="max-h-[75vh] w-full rounded-lg object-contain" />}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete job dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -1162,12 +1758,26 @@ export default function TechnicianDetailPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmDelete}
-                disabled={deleting}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {deleting ? "Deleting..." : "Delete"}
+              <AlertDialogAction onClick={handleConfirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete expense dialog */}
+        <AlertDialog open={deleteExpenseDialogOpen} onOpenChange={setDeleteExpenseDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Expense</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this {expenseToDelete?.category} expense of {expenseToDelete ? formatCurrency(expenseToDelete.amount) : ''}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmDeleteExpense} disabled={deletingExpense} className="bg-red-600 hover:bg-red-700">
+                {deletingExpense ? 'Deleting...' : 'Delete'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1182,6 +1792,7 @@ export default function TechnicianDetailPage() {
             onRefresh={loadTechnicianDetails}
           />
         )}
+
       </div>
     </DashboardLayout>
   )
