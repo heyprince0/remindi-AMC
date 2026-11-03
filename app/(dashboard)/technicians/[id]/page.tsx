@@ -40,7 +40,7 @@ import {
   ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2,
   CalendarIcon, X, ScanBarcode, Camera, Loader2,
   Wallet, Receipt, IndianRupee, TrendingDown, TrendingUp,
-  ImageIcon,
+  ImageIcon, MapPin, StickyNote,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
@@ -124,6 +124,11 @@ export default function TechnicianDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // ── Customer info popup state (NEW) ─────────────────────────────────────
+  const [customerInfoOpen, setCustomerInfoOpen] = useState(false)
+  const [customerInfo, setCustomerInfo] = useState<Customer | null>(null)
+  const [customerInfoLoading, setCustomerInfoLoading] = useState(false)
 
   // ── Expenses state ──────────────────────────────────────────────────────
   const [funds, setFunds] = useState<TechnicianFund[]>([])
@@ -380,6 +385,30 @@ export default function TechnicianDetailPage() {
       toast.error('Failed to load expense data')
     } finally {
       setLoadingExpenses(false)
+    }
+  }
+
+  // ── Customer info popup (NEW) ──────────────────────────────────────────
+  const openCustomerInfo = async (customerId: string) => {
+    if (!currentOrgId) return
+    setCustomerInfoOpen(true)
+    setCustomerInfoLoading(true)
+    setCustomerInfo(null)
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', customerId)
+        .eq('org_id', currentOrgId)
+        .single()
+      if (error) throw error
+      setCustomerInfo(data as Customer)
+    } catch (err) {
+      console.error('Error loading customer info:', err)
+      toast.error('Failed to load customer info')
+      setCustomerInfoOpen(false)
+    } finally {
+      setCustomerInfoLoading(false)
     }
   }
 
@@ -1291,7 +1320,7 @@ export default function TechnicianDetailPage() {
                               Complete
                             </Button>
                             {job.customer_id && (
-                              <Button size="sm" variant="outline" onClick={() => router.push(`/customers/${job.customer_id}`)}>
+                              <Button size="sm" variant="outline" onClick={() => job.customer_id && openCustomerInfo(job.customer_id)}>
                                 View
                               </Button>
                             )}
@@ -1360,7 +1389,7 @@ export default function TechnicianDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" className="gap-2" onClick={() => openCompleteDialog(job)}><CheckCircle2 className="size-4" />Complete</Button>
-                      {job.customer_id && <Button size="sm" variant="outline" onClick={() => router.push(`/customers/${job.customer_id}`)}>View</Button>}
+                      {job.customer_id && <Button size="sm" variant="outline" onClick={() => job.customer_id && openCustomerInfo(job.customer_id)}>View</Button>}
                       {role !== 'technician' && <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-600" onClick={() => openDeleteDialog(job)}><Trash2 className="size-4" /><span className="sr-only">Delete job</span></Button>}
                     </div>
                   </div>
@@ -1540,6 +1569,77 @@ export default function TechnicianDetailPage() {
             userId={user.id}
           />
         )}
+
+        {/* Customer info popup (NEW) */}
+        <Dialog open={customerInfoOpen} onOpenChange={setCustomerInfoOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Phone className="size-5 text-primary" />
+                Customer Details
+              </DialogTitle>
+            </DialogHeader>
+            {customerInfoLoading || !customerInfo ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 pb-2 border-b border-border">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <span className="text-base font-semibold text-primary">
+                      {customerInfo.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-lg font-semibold text-foreground">{customerInfo.name}</p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Phone className="size-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Phone</p>
+                    <a
+                      href={`tel:${customerInfo.phone}`}
+                      className="font-medium text-primary hover:underline text-sm"
+                    >
+                      {customerInfo.phone}
+                    </a>
+                  </div>
+                </div>
+
+                {customerInfo.address && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <MapPin className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Address</p>
+                      <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{customerInfo.address}</p>
+                    </div>
+                  </div>
+                )}
+
+                {customerInfo.notes && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <StickyNote className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Notes</p>
+                      <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{customerInfo.notes}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2">
+                  <Button variant="outline" onClick={() => setCustomerInfoOpen(false)}>Close</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Give Funds dialog */}
         <Dialog open={fundDialogOpen} onOpenChange={setFundDialogOpen}>
