@@ -127,6 +127,10 @@ export default function TechnicianDetailPage() {
   const [jobToDelete, setJobToDelete] = useState<JobWithCustomer | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // ── Attendance popup states ─────────────────────────────────────────────
+  const [attendanceCalendarOpen, setAttendanceCalendarOpen] = useState(false)
+  const [attendanceScannerOpen, setAttendanceScannerOpen] = useState(false)
+
   // ── Customer info popup state ───────────────────────────────────────────
   const [customerInfoOpen, setCustomerInfoOpen] = useState(false)
   const [customerInfo, setCustomerInfo] = useState<Customer | null>(null)
@@ -979,43 +983,28 @@ export default function TechnicianDetailPage() {
                   )}
                 </div>
               </div>
+              
+              {/* ⭐ Attendance Button just below Status */}
+              {role === 'technician' && isOwnProfile && (
+                <div className="flex items-center gap-3">
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Attendance</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 h-8 gap-1.5 text-xs"
+                      onClick={() => setAttendanceCalendarOpen(true)}
+                    >
+                      <CalendarDays className="size-3.5" />
+                      Your Attendance
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-
-        {/* ── Mark Attendance (own profile only) ─────────────────────── */}
-        {role === 'technician' && isOwnProfile && (
-          <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <QrCode className="size-5 text-orange-600" />
-                Mark Attendance
-              </CardTitle>
-              <CardDescription>
-                Scan the QR code at your office entrance to log today's attendance.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TechnicianAttendanceScanner technicianId={technicianId} />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ── My Attendance (own profile only) ───────────────────────── */}
-        {role === 'technician' && isOwnProfile && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="size-5" />
-                My Attendance
-              </CardTitle>
-              <CardDescription>Your check-in history</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TechnicianAttendanceCalendar technicianId={technicianId} />
-            </CardContent>
-          </Card>
-        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             EXPENSES TRACKING SECTION
@@ -1666,7 +1655,53 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
+        {/* ═══════════════════════════════════════════════════════════════
+            FAB (Floating Action Button) for Attendance Scanning
+        ════════════════════════════════════════════════════════════════ */}
+        {role === 'technician' && isOwnProfile && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <Button
+              size="icon"
+              onClick={() => setAttendanceScannerOpen(true)}
+              className="size-14 rounded-full shadow-xl bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              <Camera className="size-6" />
+              <span className="sr-only">Mark Attendance</span>
+            </Button>
+          </div>
+        )}
+
         {/* ─── Modals ────────────────────────────────────────────────────── */}
+
+        {/* Attendance Calendar Dialog */}
+        <Dialog open={attendanceCalendarOpen} onOpenChange={setAttendanceCalendarOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CalendarDays className="size-5 text-primary" />
+                My Attendance
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2">
+              <TechnicianAttendanceCalendar technicianId={technicianId} />
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Attendance Scanner Dialog */}
+        <Dialog open={attendanceScannerOpen} onOpenChange={setAttendanceScannerOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <QrCode className="size-5 text-orange-600" />
+                Mark Attendance
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2">
+              <TechnicianAttendanceScanner technicianId={technicianId} />
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {user && currentOrgId && (
           <AddTechnicianJobModal
