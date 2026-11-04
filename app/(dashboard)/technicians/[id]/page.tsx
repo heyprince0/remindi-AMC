@@ -40,12 +40,14 @@ import {
   ArrowLeft, Phone, Wrench, Plus, CheckCircle2, Trash2,
   CalendarIcon, X, ScanBarcode, Camera, Loader2,
   Wallet, Receipt, IndianRupee, TrendingDown, TrendingUp,
-  ImageIcon, MapPin, StickyNote,
+  ImageIcon, MapPin, StickyNote, QrCode, CalendarDays,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AddTechnicianJobModal } from '@/components/add-technician-job-modal'
 import { Input } from '@/components/ui/input'
 import ScanBarcodeDialog from '../../stocks/components/ScanBarcodeDialog'
+import { TechnicianAttendanceScanner } from '@/components/technician-attendance-scanner'
+import { TechnicianAttendanceCalendar } from '@/components/technician-attendance-calendar'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -980,6 +982,40 @@ export default function TechnicianDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ── Mark Attendance (own profile only) ─────────────────────── */}
+        {role === 'technician' && isOwnProfile && (
+          <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <QrCode className="size-5 text-orange-600" />
+                Mark Attendance
+              </CardTitle>
+              <CardDescription>
+                Scan the QR code at your office entrance to log today's attendance.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TechnicianAttendanceScanner technicianId={technicianId} />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── My Attendance (own profile only) ───────────────────────── */}
+        {role === 'technician' && isOwnProfile && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarDays className="size-5" />
+                My Attendance
+              </CardTitle>
+              <CardDescription>Your check-in history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TechnicianAttendanceCalendar technicianId={technicianId} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             EXPENSES TRACKING SECTION
