@@ -20,6 +20,7 @@ import {
   UserCircle,
   Package,
   ClipboardList,
+  CalendarDays,
 } from "lucide-react"
 import {
   Sidebar,
@@ -47,6 +48,7 @@ const memberNavItems = [
   { title: "Delivery Challans", icon: FileText, href: "/delivery-challans" },
   { title: "Work Reports", icon: ClipboardList, href: "/daily-work-reports" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
+  { title: "Attendance", icon: CalendarDays, href: "/attendance" },
   { title: "Inventory", icon: Package, href: "/stocks" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
@@ -59,7 +61,9 @@ const adminOnlyNavItems = [
   { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
-const technicianNavItems: typeof memberNavItems = []
+const technicianNavItems: typeof memberNavItems = [
+  { title: "My Attendance", icon: CalendarDays, href: "/attendance" },
+]
 
 type CachedProfile = {
   companyName: string
