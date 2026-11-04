@@ -1663,7 +1663,7 @@ export default function TechnicianDetailPage() {
             <Button
               size="icon"
               onClick={() => setAttendanceScannerOpen(true)}
-              className="size-14 rounded-full shadow-xl bg-orange-500 hover:bg-orange-600 text-white"
+              className="size-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               <Camera className="size-6" />
               <span className="sr-only">Mark Attendance</span>
