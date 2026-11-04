@@ -61,9 +61,8 @@ const adminOnlyNavItems = [
   { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
-const technicianNavItems: typeof memberNavItems = [
-  { title: "My Attendance", icon: CalendarDays, href: "/attendance" },
-]
+// Emptied out so technicians don't see the attendance link in the sidebar
+const technicianNavItems: typeof memberNavItems = []
 
 type CachedProfile = {
   companyName: string
