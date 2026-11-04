@@ -483,7 +483,7 @@ export default function DeliveryChallansPage() {
             <h1 className="text-2xl font-bold">Delivery Challans</h1>
             <p className="text-muted-foreground">Create and manage delivery challans</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             <Button variant="outline" onClick={handleOpenBlankDialog}>
               <FileDown className="mr-2 size-4" />
               Blank PDF
