@@ -477,7 +477,7 @@ export default function DeliveryChallansPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 pb-24 md:pb-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Delivery Challans</h1>
@@ -657,6 +657,18 @@ export default function DeliveryChallansPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── Mobile FAB ── */}
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <Button
+          size="icon"
+          onClick={newChallan}
+          className="size-14 rounded-full shadow-xl"
+        >
+          <Plus className="size-6" />
+          <span className="sr-only">New Challan</span>
+        </Button>
       </div>
 
       {/* ── Blank PDF Dialog ── */}
