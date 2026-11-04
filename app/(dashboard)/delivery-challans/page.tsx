@@ -476,6 +476,16 @@ export default function DeliveryChallansPage() {
     }
   }
 
+  // ⭐ Edit click with subscription check
+  const handleEditClick = (row: DeliveryChallan) => {
+    if (limitsLoading) {
+      toast.error("Checking your plan status, please try again in a moment...")
+      return
+    }
+    if (checkAndShowLimitModal()) return
+    router.push(`/delivery-challans/${row.id}/edit`)
+  }
+
   const remove = async () => {
     if (!deleteRow || !orgId) return
     const { error } = await supabase
@@ -621,6 +631,7 @@ export default function DeliveryChallansPage() {
                             <ChallanActions
                               row={row}
                               onDelete={setDeleteRow}
+                              onEdit={handleEditClick}
                             />
                           </div>
                         </TableCell>
@@ -676,6 +687,7 @@ export default function DeliveryChallansPage() {
                         <ChallanActions
                           row={row}
                           onDelete={setDeleteRow}
+                          onEdit={handleEditClick}
                         />
                       </div>
                     </div>
@@ -920,9 +932,11 @@ export default function DeliveryChallansPage() {
 function ChallanActions({
   row,
   onDelete,
+  onEdit,
 }: {
   row: DeliveryChallan
   onDelete: (r: DeliveryChallan) => void
+  onEdit: (r: DeliveryChallan) => void
 }) {
   const router = useRouter()
   return (
@@ -944,7 +958,7 @@ function ChallanActions({
           <FileText className="mr-2 size-4" />
           View
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push(`/delivery-challans/${row.id}/edit`)}>
+        <DropdownMenuItem onClick={() => onEdit(row)}>
           <Pencil className="mr-2 size-4" />
           Edit
         </DropdownMenuItem>
