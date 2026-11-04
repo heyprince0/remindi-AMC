@@ -656,7 +656,7 @@ export default function DailyWorkReportsPage() {
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
             <p className="text-muted-foreground">Create and manage daily work completion reports</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden md:flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => setChecklistDialog(true)}
