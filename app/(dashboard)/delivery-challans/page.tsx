@@ -477,7 +477,7 @@ export default function DeliveryChallansPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6 pb-24 md:pb-0">
+      <div className="flex flex-col gap-6 pb-44 md:pb-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Delivery Challans</h1>
@@ -659,17 +659,15 @@ export default function DeliveryChallansPage() {
         </div>
       </div>
 
-      {/* ── Mobile FAB ── */}
-      <div className="md:hidden fixed bottom-6 right-6 z-50">
-        <Button
-          size="icon"
-          onClick={newChallan}
-          className="size-14 rounded-full shadow-xl"
-        >
-          <Plus className="size-6" />
-          <span className="sr-only">New Challan</span>
-        </Button>
-      </div>
+      {/* ── MOBILE FAB — New Challan ── */}
+      <button
+        className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-primary text-primary-foreground shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+        onClick={newChallan}
+        aria-label="New Challan"
+      >
+        <Plus className="size-4" />
+        New Challan
+      </button>
 
       {/* ── Blank PDF Dialog ── */}
       <Dialog open={blankDialog} onOpenChange={(open) => { if (!generatingBlank) setBlankDialog(open) }}>
