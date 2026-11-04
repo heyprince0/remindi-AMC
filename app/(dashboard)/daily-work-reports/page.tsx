@@ -650,7 +650,7 @@ export default function DailyWorkReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 pb-24 md:pb-0">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
@@ -846,6 +846,19 @@ export default function DailyWorkReportsPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── Mobile FAB ── */}
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <Button
+          size="icon"
+          onClick={checkProfile}
+          disabled={checking || limitsLoading}
+          className="size-14 rounded-full shadow-xl"
+        >
+          <Plus className="size-6" />
+          <span className="sr-only">New Report</span>
+        </Button>
       </div>
 
       {/* ── Blank PDF Dialog ── */}
