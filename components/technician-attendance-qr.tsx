@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import QRCode from 'qrcode'
 import { Download, QrCode, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -26,7 +27,6 @@ export function TechnicianAttendanceQr({ orgId, companyName }: Props) {
 
     async function generate() {
       try {
-        const QRCode = (await import('qrcode')).default
         const canvas = canvasRef.current
         if (!canvas) return
 
@@ -85,8 +85,7 @@ export function TechnicianAttendanceQr({ orgId, companyName }: Props) {
     return (
       <div className="flex flex-col items-center gap-3 py-6 text-center text-sm text-muted-foreground">
         <QrCode className="size-10 opacity-30" />
-        <p>Could not generate QR code. Install the <code className="text-xs">qrcode</code> package:</p>
-        <code className="rounded bg-muted px-2 py-1 text-xs">npm install qrcode @types/qrcode</code>
+        <p>Could not generate the attendance QR code. Please try again.</p>
       </div>
     )
   }
