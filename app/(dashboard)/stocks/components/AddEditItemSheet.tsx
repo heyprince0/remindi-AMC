@@ -109,11 +109,11 @@ export default function AddEditItemSheet({
   // Determine initial mode:
   // - editing an inventory item → lock to inventory
   // - editing a catalog product → lock to catalog
-  // - new → default to catalog (Price List), user can switch
+  // - new → default to inventory (Track Stock), user can switch
   const getInitialMode = (): Mode => {
     if (editingItem) return "inventory"
     if (editingProduct) return "catalog"
-    return "catalog"
+    return "inventory"
   }
 
   const [mode, setMode] = useState<Mode>(getInitialMode)
@@ -320,7 +320,7 @@ export default function AddEditItemSheet({
     ? mode === "catalog"
       ? "Update this product in your price list"
       : "Update this inventory item"
-    : "Choose how you want to add this — price list only, or with stock tracking."
+    : "Add a new stock item, or just add it to your price list without stock tracking."
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -339,29 +339,7 @@ export default function AddEditItemSheet({
               What do you want to do?
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {/* Price List button */}
-              <button
-                type="button"
-                onClick={() => setMode("catalog")}
-                className={`
-                  flex flex-col items-start gap-1.5 rounded-xl border-2 p-3 text-left transition-all
-                  ${mode === "catalog"
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-border bg-muted/30 text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/60"}
-                `}
-              >
-                <div className={`rounded-lg p-1.5 ${mode === "catalog" ? "bg-primary/10" : "bg-muted"}`}>
-                  <Tag className="size-4" />
-                </div>
-                <span className="text-sm font-semibold leading-tight text-foreground">
-                  Price List
-                </span>
-                <span className="text-xs leading-snug text-muted-foreground">
-                  Just name + price. Autofills in quotations.
-                </span>
-              </button>
-
-              {/* Track Stock button */}
+              {/* Track Stock button — first / default */}
               <button
                 type="button"
                 onClick={() => setMode("inventory")}
@@ -380,6 +358,28 @@ export default function AddEditItemSheet({
                 </span>
                 <span className="text-xs leading-snug text-muted-foreground">
                   Qty, low stock alerts, movements.
+                </span>
+              </button>
+
+              {/* Price List button — second */}
+              <button
+                type="button"
+                onClick={() => setMode("catalog")}
+                className={`
+                  flex flex-col items-start gap-1.5 rounded-xl border-2 p-3 text-left transition-all
+                  ${mode === "catalog"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:border-muted-foreground/40 hover:bg-muted/60"}
+                `}
+              >
+                <div className={`rounded-lg p-1.5 ${mode === "catalog" ? "bg-primary/10" : "bg-muted"}`}>
+                  <Tag className="size-4" />
+                </div>
+                <span className="text-sm font-semibold leading-tight text-foreground">
+                  Price List
+                </span>
+                <span className="text-xs leading-snug text-muted-foreground">
+                  Just name + price. Autofills in quotations.
                 </span>
               </button>
             </div>
