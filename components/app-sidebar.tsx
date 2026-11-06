@@ -61,8 +61,10 @@ const adminOnlyNavItems = [
   { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
-// Emptied out so technicians don't see the attendance link in the sidebar
-const technicianNavItems: typeof memberNavItems = []
+// ── Technician nav: only their personal service alerts ────────────────────────
+const technicianNavItems = [
+  { title: "My Alerts", icon: Bell, href: "/technician-alerts" },
+]
 
 type CachedProfile = {
   companyName: string
@@ -165,7 +167,6 @@ export function AppSidebar() {
     if (linkedTechnicianId) {
       router.push(`/technicians/${linkedTechnicianId}`)
     } else {
-      // No link: go to the technicians list page
       router.push('/technicians')
     }
   }
@@ -212,6 +213,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* "My Work" profile link — only for technicians */}
               {role === 'technician' && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -234,14 +236,14 @@ export function AppSidebar() {
                     tooltip={item.title}
                   >
                     <Link href={item.href}>
-                      <item.icon className={`size-4 ${'className' in item ? item.className : ''}`} />
+                      <item.icon className={`size-4 ${'className' in item ? (item as any).className : ''}`} />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
 
-              {/* Only visible when installable, hides once installed */}
+              {/* PWA install button — only when installable and not yet installed */}
               {isInstallable && !isInstalled && (
                 <SidebarMenuItem>
                   <button
