@@ -1657,11 +1657,11 @@ export default function TechnicianDetailPage() {
 
         {/* ─── FAB for Attendance Scanning ─────────────────────────────── */}
         {role === 'technician' && isOwnProfile && (
-          <div className="fixed bottom-6 right-6 z-50">
+          <div className="fixed z-50 right-4 bottom-[84px] md:right-6 md:bottom-6">
             <Button
               size="icon"
               onClick={() => setAttendanceScannerOpen(true)}
-              className="size-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+              className="size-14 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground active:scale-95 transition-all"
             >
               <Camera className="size-6" />
               <span className="sr-only">Mark Attendance</span>
