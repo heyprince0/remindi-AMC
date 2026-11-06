@@ -9,7 +9,9 @@ import {
   FileText,
   LayoutDashboard,
   Package,
+  UserCircle,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -22,7 +24,7 @@ interface NavigationItem {
   icon: LucideIcon
 }
 
-const navigationItems: readonly NavigationItem[] = [
+const memberNavItems: readonly NavigationItem[] = [
   { href: "/",           label: "Dashboard", icon: LayoutDashboard },
   { href: "/contracts",  label: "Contracts",  icon: FileText        },
   { href: "/customers",  label: "Customers",  icon: Users           },
@@ -40,6 +42,7 @@ export function MobileBottomNav() {
   const { user } = useAuth()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [roleLoaded, setRoleLoaded] = useState(false)
+  const [linkedTechId, setLinkedTechId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user?.id) {
@@ -59,10 +62,37 @@ export function MobileBottomNav() {
       })
   }, [user?.id])
 
-  // Hide the entire nav for technicians
-  if (roleLoaded && userRole === "technician") {
+  // Technicians: resolve their linked technician id so we can link to their profile
+  useEffect(() => {
+    if (userRole !== "technician" || !user?.id) return
+    supabase
+      .from("technicians")
+      .select("id")
+      .eq("linked_user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.id) setLinkedTechId(data.id)
+      })
+  }, [userRole, user?.id])
+
+  // Prevent flashing the wrong nav while role is loading
+  if (user?.id && !roleLoaded) {
     return null
   }
+
+  const isTechnician = userRole === "technician"
+
+  const navItems: readonly NavigationItem[] = isTechnician
+    ? [
+        { href: "/technician-alerts",   label: "Services", icon: Bell       },
+        { href: "/technician-expenses", label: "Expenses", icon: Wallet     },
+        {
+          href: linkedTechId ? `/technicians/${linkedTechId}` : "/technicians",
+          label: "Profile",
+          icon: UserCircle,
+        },
+      ]
+    : memberNavItems
 
   return (
     <nav
@@ -76,12 +106,12 @@ export function MobileBottomNav() {
       )}
     >
       <div className="flex h-16 w-full items-center">
-        {navigationItems.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = isActiveRoute(pathname, href)
 
           return (
             <Link
-              key={href}
+              key={label}
               href={href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
