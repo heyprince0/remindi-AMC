@@ -152,18 +152,24 @@ function TechnicianExpensesContent() {
   }, [user?.id])
 
   // ── Resolve technician ID ──────────────────────────────────────────────
+  // ⚠️ DO NOT set loading=false here for technician-success / admin-with-query
+  // paths. Those still need the load effect below to fetch technician data.
   useEffect(() => {
     if (!currentOrgId || !user?.id) return
 
     const resolve = async () => {
       // Technician role: auto-detect their own linked technician
       if (isTechnician) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('technicians')
           .select('id')
           .eq('linked_user_id', user.id)
           .eq('org_id', currentOrgId)
           .maybeSingle()
+
+        if (error) {
+          console.error('Failed to look up linked technician:', error)
+        }
 
         if (!data?.id) {
           setNotLinked(true)
@@ -171,6 +177,7 @@ function TechnicianExpensesContent() {
           return
         }
         setEffectiveTechnicianId(data.id)
+        // ⚠️ loading stays true → load effect below will end it
         return
       }
 
@@ -187,9 +194,12 @@ function TechnicianExpensesContent() {
         const techFromQuery = searchParams.get('tech')
         if (techFromQuery && techs?.some((t) => t.id === techFromQuery)) {
           setEffectiveTechnicianId(techFromQuery)
+          // ⚠️ loading stays true → load effect will end it
+          return
         }
       }
 
+      // Admin with no query (show picker), or unknown role
       setLoading(false)
     }
 
@@ -197,6 +207,7 @@ function TechnicianExpensesContent() {
   }, [currentOrgId, user?.id, isTechnician, isAdmin, searchParams])
 
   // ── Load technician + expenses when ID resolves ───────────────────────
+  // ⚠️ Always sets loading=false when done (success or failure).
   useEffect(() => {
     if (!effectiveTechnicianId || !currentOrgId) return
 
@@ -216,10 +227,14 @@ function TechnicianExpensesContent() {
       } catch (err) {
         console.error('Error loading technician:', err)
         toast.error('Failed to load technician data')
+      } finally {
+        // ⭐ THIS was missing — that's why the loader hung forever
+        setLoading(false)
       }
     }
 
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTechnicianId, currentOrgId])
 
   const loadExpenses = async (techId: string) => {
@@ -428,8 +443,8 @@ function TechnicianExpensesContent() {
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount)
 
   const handleTechnicianSwitch = (techId: string) => {
-    router.replace(`/technician-expenses?tech=${techId}`)
     setEffectiveTechnicianId(techId)
+    router.replace(`/technician-expenses?tech=${techId}`)
   }
 
   // ── Loading / guards ──────────────────────────────────────────────────
