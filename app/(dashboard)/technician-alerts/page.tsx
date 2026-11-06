@@ -8,11 +8,16 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { supabase, type Contract, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { AlertTriangle, Clock, CalendarClock, CheckCircle2, MessageSquare, History } from "lucide-react"
+import {
+  AlertTriangle, Clock, CalendarClock, CheckCircle2,
+  History, Loader2, Download, Share2, MapPin, StickyNote,
+} from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 import { toast } from "sonner"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TechnicianAlert {
   jobId: string
@@ -33,21 +38,22 @@ interface CompletedRecord {
   contractName: string
   customer: string
   serviceDate: string
+  serviceType: string
+  location: string
   notes: string | null
+  completedAt: string | null
 }
 
-// ── Alert Card ───────────────────────────────────────────────────────────────
+// ── Pending Alert Card (NO WhatsApp button) ───────────────────────────────────
 
 function TechnicianAlertCard({
   alert,
   variant,
   onMarkComplete,
-  onWhatsApp,
 }: {
   alert: TechnicianAlert
   variant: "overdue" | "due-today" | "upcoming"
   onMarkComplete: (alert: TechnicianAlert) => void
-  onWhatsApp: (alert: TechnicianAlert) => void
 }) {
   const styles = {
     overdue: {
@@ -82,30 +88,21 @@ function TechnicianAlertCard({
             </div>
             <p className="text-sm text-muted-foreground">{alert.contractName}</p>
             {alert.location && (
-              <p className="text-xs text-muted-foreground">{alert.location}</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <MapPin className="size-3 shrink-0" />{alert.location}
+              </p>
             )}
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            {alert.customerPhone && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 md:flex-none gap-1.5 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
-                onClick={() => onWhatsApp(alert)}
-              >
-                <MessageSquare className="size-3.5 shrink-0" />
-                <span>WhatsApp</span>
-              </Button>
-            )}
+          <div className="flex">
             <Button
               variant="outline"
               size="sm"
-              className="flex-1 md:flex-none gap-1.5"
+              className="gap-1.5"
               onClick={() => onMarkComplete(alert)}
             >
               <CheckCircle2 className="size-3.5 shrink-0" />
-              <span>Mark Complete</span>
+              Mark Complete
             </Button>
           </div>
         </div>
@@ -114,7 +111,92 @@ function TechnicianAlertCard({
   )
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Completed Service Card ────────────────────────────────────────────────────
+
+function CompletedCard({
+  record,
+  technicianName,
+  orgName,
+  onShare,
+  generating,
+}: {
+  record: CompletedRecord
+  technicianName: string
+  orgName: string
+  onShare: (record: CompletedRecord) => void
+  generating: boolean
+}) {
+  return (
+    <Card className="border-l-4 border-l-alert-success bg-alert-success/5">
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-3">
+
+          {/* Top row: customer + date */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="size-2 rounded-full bg-alert-success shrink-0" />
+                <p className="font-semibold text-card-foreground">{record.customer}</p>
+                <Badge className="bg-alert-success/10 text-alert-success border-alert-success/20 text-xs">
+                  Completed
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">{record.contractName}</p>
+            </div>
+            <p className="text-xs text-muted-foreground shrink-0 mt-0.5">
+              {formatDateShort(record.serviceDate)}
+            </p>
+          </div>
+
+          {/* Meta: type + location */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {record.serviceType && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-foreground">{record.serviceType}</span>
+              </span>
+            )}
+            {record.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="size-3 shrink-0" />{record.location}
+              </span>
+            )}
+          </div>
+
+          {/* Notes */}
+          {record.notes && (
+            <div className="flex items-start gap-1.5 rounded-md bg-muted/50 px-3 py-2">
+              <StickyNote className="size-3 text-muted-foreground shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 italic">
+                "{record.notes}"
+              </p>
+            </div>
+          )}
+
+          {/* Action: Share Report */}
+          <div className="flex items-center gap-2 pt-0.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10"
+              onClick={() => onShare(record)}
+              disabled={generating}
+            >
+              {generating
+                ? <Loader2 className="size-3.5 animate-spin" />
+                : <Share2 className="size-3.5" />}
+              {generating ? "Generating…" : "Share Report"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              PDF downloads · then pick contact in WhatsApp
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDateShort(dateStr: string | null | undefined): string {
   if (!dateStr) return "—"
@@ -123,44 +205,146 @@ function formatDateShort(dateStr: string | null | undefined): string {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-function buildCompletionMessage(customerName: string, contractName: string, technicianName: string): string {
-  const today = new Date().toLocaleDateString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-  })
-  return (
-    `Dear ${customerName},\n\n` +
-    `Your *${contractName}* service has been successfully completed on ${today} by technician *${technicianName}*.\n\n` +
-    `Thank you for trusting us with your service. We will notify you again before the next scheduled service.\n\n` +
-    `For any queries, feel free to contact us.`
+function safeStr(val: unknown): string {
+  return String(val ?? "—")
+}
+
+// ── PDF builder ───────────────────────────────────────────────────────────────
+
+function buildServiceReportPdf(
+  record: CompletedRecord,
+  technicianName: string,
+  orgName: string,
+): { blob: Blob; filename: string } {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+  const pageW = 210
+  const margin = 15
+  const blue: [number, number, number] = [24, 95, 165]
+
+  // ── Header band ────────────────────────────────────────────────────────────
+  doc.setFillColor(...blue)
+  doc.rect(0, 0, pageW, 28, "F")
+
+  doc.setFontSize(16)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(255, 255, 255)
+  doc.text("SERVICE COMPLETION REPORT", margin, 12)
+
+  doc.setFontSize(8)
+  doc.setFont("helvetica", "normal")
+  doc.text(orgName || "Remindi", margin, 20)
+  doc.text(
+    "Generated: " + new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+    pageW - margin,
+    20,
+    { align: "right" },
   )
+
+  // ── Status pill ────────────────────────────────────────────────────────────
+  let y = 40
+  doc.setFillColor(220, 252, 231)   // light green
+  doc.setDrawColor(34, 197, 94)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(margin, y - 5, 42, 10, 3, 3, "FD")
+  doc.setFontSize(9)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(21, 128, 61)
+  doc.text("✓  COMPLETED", margin + 4, y + 1.5)
+
+  // ── Service Details table ──────────────────────────────────────────────────
+  y = 55
+  doc.setTextColor(40, 40, 40)
+  autoTable(doc, {
+    startY: y,
+    head: [["SERVICE DETAILS", ""]],
+    body: [
+      ["Customer",      safeStr(record.customer)],
+      ["Contract",      safeStr(record.contractName)],
+      ["Service Type",  safeStr(record.serviceType)],
+      ["Service Date",  formatDateShort(record.serviceDate)],
+      ["Location",      safeStr(record.location) || "—"],
+      ["Technician",    safeStr(technicianName)],
+      ["Status",        "Completed"],
+    ],
+    theme: "grid",
+    headStyles: {
+      fillColor: blue,
+      textColor: 255,
+      fontSize: 9,
+      fontStyle: "bold",
+    },
+    bodyStyles: { fontSize: 9, textColor: [40, 40, 40] },
+    columnStyles: {
+      0: { cellWidth: 50, fontStyle: "bold", fillColor: [248, 250, 252] },
+      1: { cellWidth: "auto" },
+    },
+    margin: { left: margin, right: margin },
+  })
+
+  y = (doc as any).lastAutoTable.finalY + 8
+
+  // ── Notes / Remarks ────────────────────────────────────────────────────────
+  if (record.notes) {
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(...blue)
+    doc.text("NOTES / REMARKS", margin, y)
+    y += 5
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(220, 220, 220)
+    doc.setLineWidth(0.3)
+    const noteLines = doc.splitTextToSize(record.notes, pageW - 2 * margin - 8)
+    const noteBoxH = noteLines.length * 5 + 8
+    doc.roundedRect(margin, y, pageW - 2 * margin, noteBoxH, 2, 2, "FD")
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(80, 80, 80)
+    doc.text(noteLines, margin + 4, y + 6)
+    y += noteBoxH + 8
+  }
+
+  // ── Signature line ─────────────────────────────────────────────────────────
+  y = Math.max(y, 220)
+  doc.setDrawColor(200, 200, 200)
+  doc.setLineWidth(0.4)
+  doc.line(pageW - margin - 55, y, pageW - margin, y)
+  y += 4
+  doc.setFontSize(8)
+  doc.setFont("helvetica", "normal")
+  doc.setTextColor(120, 120, 120)
+  doc.text("Technician Signature", pageW - margin, y, { align: "right" })
+  doc.text(technicianName, pageW - margin, y + 4, { align: "right" })
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
+  doc.setFontSize(7.5)
+  doc.setTextColor(160, 160, 160)
+  doc.text("Generated by Remindi · remindi.online", pageW / 2, 285, { align: "center" })
+
+  const safeName = (record.contractName || "service").replace(/[^a-z0-9]/gi, "_")
+  const filename  = `Service-Report-${safeName}-${record.serviceDate || "date"}.pdf`
+  return { blob: doc.output("blob"), filename }
 }
 
-function normalizePhone(raw: string): string {
-  let phone = raw.replace(/[\s\-().]/g, "")
-  if (phone.startsWith("0")) phone = "91" + phone.slice(1)
-  if (!phone.startsWith("+")) phone = phone.startsWith("91") ? phone : "91" + phone
-  return phone.replace(/^\+/, "")
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TechnicianAlertsPage() {
   const { user } = useAuth()
 
-  const [currentOrgId, setCurrentOrgId]       = useState<string | null>(null)
-  const [linkedTechId, setLinkedTechId]        = useState<string | null>(null)
-  const [linkedTechName, setLinkedTechName]    = useState<string>("")
+  const [currentOrgId, setCurrentOrgId]         = useState<string | null>(null)
+  const [linkedTechId, setLinkedTechId]          = useState<string | null>(null)
+  const [linkedTechName, setLinkedTechName]      = useState<string>("")
+  const [orgName, setOrgName]                    = useState<string>("")
 
-  const [overdueAlerts, setOverdueAlerts]      = useState<TechnicianAlert[]>([])
-  const [dueTodayAlerts, setDueTodayAlerts]    = useState<TechnicianAlert[]>([])
-  const [upcomingAlerts, setUpcomingAlerts]    = useState<TechnicianAlert[]>([])
-  const [completedRecords, setCompletedRecords] = useState<CompletedRecord[]>([])
+  const [overdueAlerts, setOverdueAlerts]        = useState<TechnicianAlert[]>([])
+  const [dueTodayAlerts, setDueTodayAlerts]      = useState<TechnicianAlert[]>([])
+  const [upcomingAlerts, setUpcomingAlerts]      = useState<TechnicianAlert[]>([])
+  const [completedRecords, setCompletedRecords]  = useState<CompletedRecord[]>([])
 
-  const [loading, setLoading]                  = useState(true)
-  const [modalOpen, setModalOpen]              = useState(false)
-  const [selectedAlert, setSelectedAlert]      = useState<TechnicianAlert | null>(null)
+  const [loading, setLoading]                    = useState(true)
+  const [modalOpen, setModalOpen]                = useState(false)
+  const [selectedAlert, setSelectedAlert]        = useState<TechnicianAlert | null>(null)
+  const [generatingReportFor, setGeneratingReportFor] = useState<string | null>(null)
 
-  // ── Org ────────────────────────────────────────────────────────────────────
+  // ── Org ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return
     supabase
@@ -171,7 +355,18 @@ export default function TechnicianAlertsPage() {
       .then(({ data }) => { if (data?.org_id) setCurrentOrgId(data.org_id) })
   }, [user?.id])
 
-  // ── Linked technician ──────────────────────────────────────────────────────
+  // ── Org name for PDF ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentOrgId) return
+    supabase
+      .from("company_profile")
+      .select("company_name")
+      .eq("org_id", currentOrgId)
+      .maybeSingle()
+      .then(({ data }) => { if (data?.company_name) setOrgName(data.company_name) })
+  }, [currentOrgId])
+
+  // ── Linked technician ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return
     supabase
@@ -189,7 +384,7 @@ export default function TechnicianAlertsPage() {
       })
   }, [user?.id])
 
-  // ── Load alerts once both IDs are ready ───────────────────────────────────
+  // ── Load once both IDs ready ──────────────────────────────────────────────
   useEffect(() => {
     if (currentOrgId && linkedTechId) loadMyAlerts()
   }, [currentOrgId, linkedTechId])
@@ -198,7 +393,7 @@ export default function TechnicianAlertsPage() {
     if (!currentOrgId || !linkedTechId) return
     setLoading(true)
     try {
-      // 1. All pending jobs assigned to this technician
+      // 1. Pending jobs
       const { data: pendingJobs } = await supabase
         .from("technician_jobs")
         .select("*")
@@ -206,15 +401,15 @@ export default function TechnicianAlertsPage() {
         .eq("technician_id", linkedTechId)
         .eq("status", "pending")
 
-      // 2. Recent completed jobs for history (last 20)
+      // 2. Completed jobs — fetch completed_at too
       const { data: completedJobs } = await supabase
         .from("technician_jobs")
-        .select("id, title, customer_id, contract_id, assigned_date, notes")
+        .select("id, title, customer_id, contract_id, assigned_date, notes, completed_at")
         .eq("org_id", currentOrgId)
         .eq("technician_id", linkedTechId)
         .eq("status", "completed")
         .order("completed_at", { ascending: false })
-        .limit(20)
+        .limit(30)
 
       if (!pendingJobs?.length && !completedJobs?.length) {
         setOverdueAlerts([])
@@ -225,8 +420,8 @@ export default function TechnicianAlertsPage() {
         return
       }
 
-      // 3. Collect unique IDs to batch-fetch
-      const allJobs = [...(pendingJobs ?? []), ...(completedJobs ?? [])]
+      // 3. Batch-fetch contracts + customers
+      const allJobs    = [...(pendingJobs ?? []), ...(completedJobs ?? [])]
       const contractIds = [...new Set(allJobs.map(j => j.contract_id).filter(Boolean))]
       const customerIds = [...new Set(allJobs.map(j => j.customer_id).filter(Boolean))]
 
@@ -235,7 +430,7 @@ export default function TechnicianAlertsPage() {
         supabase.from("customers").select("id, name, phone").in("id", customerIds).eq("org_id", currentOrgId),
       ])
 
-      // 4. Build alert list from pending jobs
+      // 4. Build pending alert lists
       const overdue: TechnicianAlert[]  = []
       const dueToday: TechnicianAlert[] = []
       const upcoming: TechnicianAlert[] = []
@@ -259,27 +454,29 @@ export default function TechnicianAlertsPage() {
           location: contract.location ?? "",
         }
 
-        if (days < 0)       overdue.push({ ...alert, daysOverdue: Math.abs(days) })
+        if (days < 0)        overdue.push({ ...alert, daysOverdue: Math.abs(days) })
         else if (days === 0) dueToday.push(alert)
         else                 upcoming.push(alert)
       }
 
-      // Sort upcoming by nearest date first
       upcoming.sort((a, b) => a.daysUntilService - b.daysUntilService)
-
       setOverdueAlerts(overdue)
       setDueTodayAlerts(dueToday)
       setUpcomingAlerts(upcoming)
 
-      // 5. Build history list from completed jobs
+      // 5. Build completed history with contract details for PDF
       const history: CompletedRecord[] = (completedJobs ?? []).map(job => {
+        const contract = contractsData?.find(c => c.id === job.contract_id)
         const customer = customersData?.find(c => c.id === job.customer_id)
         return {
-          id: job.id,
-          contractName: job.title ?? "—",
-          customer: customer?.name ?? "Unknown",
-          serviceDate: job.assigned_date ?? "—",
-          notes: job.notes ?? null,
+          id:           job.id,
+          contractName: job.title ?? contract?.contract_name ?? "—",
+          customer:     customer?.name ?? "Unknown",
+          serviceDate:  job.assigned_date ?? "—",
+          serviceType:  contract?.service_type ?? "Service",
+          location:     contract?.location ?? "",
+          notes:        job.notes ?? null,
+          completedAt:  job.completed_at ?? null,
         }
       })
       setCompletedRecords(history)
@@ -291,56 +488,56 @@ export default function TechnicianAlertsPage() {
     }
   }
 
-  // ── Mark complete ──────────────────────────────────────────────────────────
+  // ── Mark complete ─────────────────────────────────────────────────────────
   const handleMarkComplete = (alert: TechnicianAlert) => {
     setSelectedAlert(alert)
     setModalOpen(true)
   }
 
-  // ── After modal success: reload + WhatsApp ─────────────────────────────────
   const handleModalSuccess = async () => {
     await loadMyAlerts()
-    if (!selectedAlert?.customerPhone) return
-
-    const phone = normalizePhone(selectedAlert.customerPhone)
-    const message = buildCompletionMessage(
-      selectedAlert.customer,
-      selectedAlert.contractName,
-      linkedTechName,
-    )
-    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-
-    toast.success("Service marked complete!", {
-      description: `Tap below to notify ${selectedAlert.customer} via WhatsApp.`,
-      action: {
-        label: "Send WhatsApp",
-        onClick: () => window.open(waUrl, "_blank"),
-      },
-      duration: 10000,
-    })
+    toast.success("Service marked complete! Check the History tab to share the report.")
   }
 
-  // ── Reminder WhatsApp ──────────────────────────────────────────────────────
-  const handleWhatsApp = (alert: TechnicianAlert) => {
-    if (!alert.customerPhone) return
-    const phone = normalizePhone(alert.customerPhone)
-    const daysText =
-      alert.daysUntilService < 0
-        ? `was due ${Math.abs(alert.daysUntilService)} day${Math.abs(alert.daysUntilService) !== 1 ? "s" : ""} ago`
-        : alert.daysUntilService === 0
-        ? "is due today"
-        : `is coming up on ${formatDateShort(alert.nextServiceDate)}`
+  // ── Share report: PDF download + open WhatsApp (no number) ───────────────
+  const handleShareReport = async (record: CompletedRecord) => {
+    setGeneratingReportFor(record.id)
+    try {
+      const { blob, filename } = buildServiceReportPdf(record, linkedTechName, orgName)
 
-    const message =
-      `Dear ${alert.customer},\n\n` +
-      `This is a reminder that your *${alert.contractName}* service ${daysText}.\n\n` +
-      `Our technician *${linkedTechName}* will be visiting you. Please ensure someone is available at the premises.\n\n` +
-      `Thank you.`
+      // 1. Trigger PDF download
+      const url = URL.createObjectURL(blob)
+      const a   = document.createElement("a")
+      a.href     = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
 
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+      // 2. Brief pause so download registers, then open WhatsApp (no number)
+      setTimeout(() => {
+        const waText = encodeURIComponent(
+          `Hi, please find the service completion report for *${record.contractName}* ` +
+          `(completed on ${formatDateShort(record.serviceDate)}) attached as a PDF.\n\n` +
+          `Technician: ${linkedTechName}`
+        )
+        window.open(`https://wa.me/?text=${waText}`, "_blank")
+      }, 600)
+
+      toast.success("PDF downloaded!", {
+        description: "Select the contact in WhatsApp and attach the PDF from your downloads.",
+        duration: 8000,
+      })
+    } catch (err) {
+      console.error("Report generation failed:", err)
+      toast.error("Could not generate the report. Please try again.")
+    } finally {
+      setGeneratingReportFor(null)
+    }
   }
 
-  // ── Not linked ─────────────────────────────────────────────────────────────
+  // ── Not linked guard ──────────────────────────────────────────────────────
   if (!loading && !linkedTechId) {
     return (
       <DashboardLayout>
@@ -422,76 +619,74 @@ export default function TechnicianAlertsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Overdue */}
+          {/* ── Overdue ── */}
           <TabsContent value="overdue" className="mt-4">
             <div className="flex flex-col gap-3">
               {loading ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">Loading...</div>
+                <EmptyState icon={<Loader2 className="size-5 animate-spin text-muted-foreground" />} label="Loading..." />
               ) : overdueAlerts.length === 0 ? (
                 <EmptyState icon={<CheckCircle2 className="size-5 text-muted-foreground" />} label="No overdue services" />
               ) : (
                 overdueAlerts.map(a => (
                   <TechnicianAlertCard key={a.jobId} alert={a} variant="overdue"
-                    onMarkComplete={handleMarkComplete} onWhatsApp={handleWhatsApp} />
+                    onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
           </TabsContent>
 
-          {/* Today */}
+          {/* ── Today ── */}
           <TabsContent value="today" className="mt-4">
             <div className="flex flex-col gap-3">
               {loading ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">Loading...</div>
+                <EmptyState icon={<Loader2 className="size-5 animate-spin text-muted-foreground" />} label="Loading..." />
               ) : dueTodayAlerts.length === 0 ? (
                 <EmptyState icon={<CalendarClock className="size-5 text-muted-foreground" />} label="No services due today" />
               ) : (
                 dueTodayAlerts.map(a => (
                   <TechnicianAlertCard key={a.jobId} alert={a} variant="due-today"
-                    onMarkComplete={handleMarkComplete} onWhatsApp={handleWhatsApp} />
+                    onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
           </TabsContent>
 
-          {/* Upcoming */}
+          {/* ── Upcoming ── */}
           <TabsContent value="upcoming" className="mt-4">
             <div className="flex flex-col gap-3">
               {loading ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">Loading...</div>
+                <EmptyState icon={<Loader2 className="size-5 animate-spin text-muted-foreground" />} label="Loading..." />
               ) : upcomingAlerts.length === 0 ? (
                 <EmptyState icon={<Clock className="size-5 text-muted-foreground" />} label="No upcoming services" />
               ) : (
                 upcomingAlerts.map(a => (
                   <TechnicianAlertCard key={a.jobId} alert={a} variant="upcoming"
-                    onMarkComplete={handleMarkComplete} onWhatsApp={handleWhatsApp} />
+                    onMarkComplete={handleMarkComplete} />
                 ))
               )}
             </div>
           </TabsContent>
 
-          {/* History */}
+          {/* ── History ── */}
           <TabsContent value="history" className="mt-4">
             {loading ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">Loading...</div>
+              <EmptyState icon={<Loader2 className="size-5 animate-spin text-muted-foreground" />} label="Loading..." />
             ) : completedRecords.length === 0 ? (
               <EmptyState icon={<History className="size-5 text-muted-foreground" />} label="No completed services yet" />
             ) : (
-              <div className="rounded-xl border bg-card divide-y divide-border overflow-hidden">
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground px-0.5">
+                  Tap <span className="font-medium text-foreground">Share Report</span> to download the PDF and send it to your manager or owner via WhatsApp.
+                </p>
                 {completedRecords.map(record => (
-                  <div key={record.id} className="flex items-start gap-3 px-4 py-3.5">
-                    <div className="flex size-2.5 rounded-full bg-alert-success mt-1.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground">{record.customer}</p>
-                        <p className="text-xs text-muted-foreground shrink-0">{formatDateShort(record.serviceDate)}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{record.contractName}</p>
-                      {record.notes && (
-                        <p className="text-xs text-muted-foreground mt-1 italic line-clamp-1">"{record.notes}"</p>
-                      )}
-                    </div>
-                  </div>
+                  <CompletedCard
+                    key={record.id}
+                    record={record}
+                    technicianName={linkedTechName}
+                    orgName={orgName}
+                    onShare={handleShareReport}
+                    generating={generatingReportFor === record.id}
+                  />
                 ))}
               </div>
             )}
