@@ -63,7 +63,7 @@ const adminOnlyNavItems = [
 
 // ── Technician nav: only their personal service alerts ────────────────────────
 const technicianNavItems = [
-  { title: "My Alerts", icon: Bell, href: "/technician-alerts" },
+  { title: "My Services", icon: Bell, href: "/technician-alerts" },
 ]
 
 type CachedProfile = {
