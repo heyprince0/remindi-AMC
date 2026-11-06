@@ -10,7 +10,7 @@ import { supabase, type Contract, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import {
   AlertTriangle, Clock, CalendarClock, CheckCircle2,
-  History, Loader2, Download, Share2, MapPin, StickyNote,
+  History, Loader2, Share2, MapPin, StickyNote,
 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 import { toast } from "sonner"
@@ -44,7 +44,7 @@ interface CompletedRecord {
   completedAt: string | null
 }
 
-// ── Pending Alert Card (NO WhatsApp button) ───────────────────────────────────
+// ── Pending Alert Card ────────────────────────────────────────────────────────
 
 function TechnicianAlertCard({
   alert,
@@ -52,7 +52,7 @@ function TechnicianAlertCard({
   onMarkComplete,
 }: {
   alert: TechnicianAlert
-  variant: "overdue" | "due-today" | "upcoming"
+  variant: "overdue" | "due-today"
   onMarkComplete: (alert: TechnicianAlert) => void
 }) {
   const styles = {
@@ -67,12 +67,6 @@ function TechnicianAlertCard({
       bg: "bg-alert-due-today/5",
       badge: "bg-alert-due-today/10 text-alert-due-today border-alert-due-today/20",
       label: "Due today",
-    },
-    upcoming: {
-      border: "border-l-alert-upcoming",
-      bg: "bg-alert-upcoming/5",
-      badge: "bg-alert-upcoming/10 text-alert-upcoming border-alert-upcoming/20",
-      label: formatDateShort(alert.nextServiceDate),
     },
   }[variant]
 
@@ -115,14 +109,10 @@ function TechnicianAlertCard({
 
 function CompletedCard({
   record,
-  technicianName,
-  orgName,
   onShare,
   generating,
 }: {
   record: CompletedRecord
-  technicianName: string
-  orgName: string
   onShare: (record: CompletedRecord) => void
   generating: boolean
 }) {
@@ -187,7 +177,7 @@ function CompletedCard({
               {generating ? "Generating…" : "Share Report"}
             </Button>
             <p className="text-[11px] text-muted-foreground">
-              PDF downloads · then pick contact in WhatsApp
+              PDF · pick contact in WhatsApp
             </p>
           </div>
         </div>
@@ -242,7 +232,7 @@ function buildServiceReportPdf(
 
   // ── Status pill ────────────────────────────────────────────────────────────
   let y = 40
-  doc.setFillColor(220, 252, 231)   // light green
+  doc.setFillColor(220, 252, 231)
   doc.setDrawColor(34, 197, 94)
   doc.setLineWidth(0.3)
   doc.roundedRect(margin, y - 5, 42, 10, 3, 3, "FD")
@@ -336,7 +326,6 @@ export default function TechnicianAlertsPage() {
 
   const [overdueAlerts, setOverdueAlerts]        = useState<TechnicianAlert[]>([])
   const [dueTodayAlerts, setDueTodayAlerts]      = useState<TechnicianAlert[]>([])
-  const [upcomingAlerts, setUpcomingAlerts]      = useState<TechnicianAlert[]>([])
   const [completedRecords, setCompletedRecords]  = useState<CompletedRecord[]>([])
 
   const [loading, setLoading]                    = useState(true)
@@ -401,7 +390,7 @@ export default function TechnicianAlertsPage() {
         .eq("technician_id", linkedTechId)
         .eq("status", "pending")
 
-      // 2. Completed jobs — fetch completed_at too
+      // 2. Completed jobs
       const { data: completedJobs } = await supabase
         .from("technician_jobs")
         .select("id, title, customer_id, contract_id, assigned_date, notes, completed_at")
@@ -414,7 +403,6 @@ export default function TechnicianAlertsPage() {
       if (!pendingJobs?.length && !completedJobs?.length) {
         setOverdueAlerts([])
         setDueTodayAlerts([])
-        setUpcomingAlerts([])
         setCompletedRecords([])
         setLoading(false)
         return
@@ -430,10 +418,9 @@ export default function TechnicianAlertsPage() {
         supabase.from("customers").select("id, name, phone").in("id", customerIds).eq("org_id", currentOrgId),
       ])
 
-      // 4. Build pending alert lists
+      // 4. Build pending alert lists — ONLY overdue + due today
       const overdue: TechnicianAlert[]  = []
       const dueToday: TechnicianAlert[] = []
-      const upcoming: TechnicianAlert[] = []
 
       for (const job of pendingJobs ?? []) {
         const contract = contractsData?.find(c => c.id === job.contract_id)
@@ -456,15 +443,13 @@ export default function TechnicianAlertsPage() {
 
         if (days < 0)        overdue.push({ ...alert, daysOverdue: Math.abs(days) })
         else if (days === 0) dueToday.push(alert)
-        else                 upcoming.push(alert)
+        // Upcoming (days > 0) intentionally ignored
       }
 
-      upcoming.sort((a, b) => a.daysUntilService - b.daysUntilService)
       setOverdueAlerts(overdue)
       setDueTodayAlerts(dueToday)
-      setUpcomingAlerts(upcoming)
 
-      // 5. Build completed history with contract details for PDF
+      // 5. Build completed history
       const history: CompletedRecord[] = (completedJobs ?? []).map(job => {
         const contract = contractsData?.find(c => c.id === job.contract_id)
         const customer = customersData?.find(c => c.id === job.customer_id)
@@ -499,37 +484,47 @@ export default function TechnicianAlertsPage() {
     toast.success("Service marked complete! Check the History tab to share the report.")
   }
 
-  // ── Share report: PDF download + open WhatsApp (no number) ───────────────
+  // ── Share report — matches quotation flow ─────────────────────────────────
+  //  • Mobile (native share available): opens share sheet with the PDF file
+  //  • Desktop fallback: downloads PDF, then opens WhatsApp Web with text
   const handleShareReport = async (record: CompletedRecord) => {
     setGeneratingReportFor(record.id)
     try {
       const { blob, filename } = buildServiceReportPdf(record, linkedTechName, orgName)
+      const file = new File([blob], filename, { type: "application/pdf" })
 
-      // 1. Trigger PDF download
-      const url = URL.createObjectURL(blob)
-      const a   = document.createElement("a")
-      a.href     = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      // Mobile (Android Chrome, iOS Safari 15.1+): native share sheet
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: `Service Report — ${record.contractName}`,
+          text: `Hi, please find the service completion report for ${record.contractName} (completed on ${formatDateShort(record.serviceDate)}).`,
+        })
+      } else {
+        // Desktop fallback: download PDF + open WhatsApp Web with pre-filled text
+        const url = URL.createObjectURL(blob)
+        const a   = document.createElement("a")
+        a.href     = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
 
-      // 2. Brief pause so download registers, then open WhatsApp (no number)
-      setTimeout(() => {
         const waText = encodeURIComponent(
           `Hi, please find the service completion report for *${record.contractName}* ` +
           `(completed on ${formatDateShort(record.serviceDate)}) attached as a PDF.\n\n` +
           `Technician: ${linkedTechName}`
         )
         window.open(`https://wa.me/?text=${waText}`, "_blank")
-      }, 600)
-
-      toast.success("PDF downloaded!", {
-        description: "Select the contact in WhatsApp and attach the PDF from your downloads.",
-        duration: 8000,
-      })
-    } catch (err) {
+        toast.info("PDF saved. Open WhatsApp and attach it there.")
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return // user dismissed the share sheet — not an error
       console.error("Report generation failed:", err)
       toast.error("Could not generate the report. Please try again.")
     } finally {
@@ -554,7 +549,7 @@ export default function TechnicianAlertsPage() {
     )
   }
 
-  const totalPending = overdueAlerts.length + dueTodayAlerts.length + upcomingAlerts.length
+  const totalPending = overdueAlerts.length + dueTodayAlerts.length
 
   return (
     <DashboardLayout>
@@ -566,12 +561,12 @@ export default function TechnicianAlertsPage() {
           <p className="text-xs text-muted-foreground md:text-sm">
             {loading
               ? "Loading..."
-              : `${totalPending} service${totalPending !== 1 ? "s" : ""} pending${linkedTechName ? ` · ${linkedTechName}` : ""}`}
+              : `${totalPending} service${totalPending !== 1 ? "s" : ""} need attention${linkedTechName ? ` · ${linkedTechName}` : ""}`}
           </p>
         </div>
 
-        {/* ── Summary strip ── */}
-        <div className="grid grid-cols-3 gap-2 md:gap-4">
+        {/* ── Summary strip — Overdue + Today only ── */}
+        <div className="grid grid-cols-2 gap-2 md:gap-4">
           <div className="rounded-lg border-l-4 border-l-alert-overdue bg-alert-overdue/5 p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <AlertTriangle className="size-3.5 text-alert-overdue shrink-0" />
@@ -586,18 +581,11 @@ export default function TechnicianAlertsPage() {
             </div>
             <p className="text-2xl font-bold">{loading ? "—" : dueTodayAlerts.length}</p>
           </div>
-          <div className="rounded-lg border-l-4 border-l-alert-upcoming bg-alert-upcoming/5 p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Clock className="size-3.5 text-alert-upcoming shrink-0" />
-              <p className="text-[11px] text-muted-foreground">Upcoming</p>
-            </div>
-            <p className="text-2xl font-bold">{loading ? "—" : upcomingAlerts.length}</p>
-          </div>
         </div>
 
-        {/* ── Tabs ── */}
+        {/* ── Tabs — 3 tabs: Overdue, Today, History ── */}
         <Tabs defaultValue="overdue" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overdue" className="flex items-center gap-1 text-xs sm:text-sm">
               <span className="size-2 rounded-full bg-alert-overdue shrink-0" />
               <span className="hidden sm:inline">Overdue </span>
@@ -606,11 +594,6 @@ export default function TechnicianAlertsPage() {
             <TabsTrigger value="today" className="flex items-center gap-1 text-xs sm:text-sm">
               <span className="size-2 rounded-full bg-alert-due-today shrink-0" />
               Today ({dueTodayAlerts.length})
-            </TabsTrigger>
-            <TabsTrigger value="upcoming" className="flex items-center gap-1 text-xs sm:text-sm">
-              <span className="size-2 rounded-full bg-alert-upcoming shrink-0" />
-              <span className="hidden sm:inline">Upcoming </span>
-              <span>({upcomingAlerts.length})</span>
             </TabsTrigger>
             <TabsTrigger value="history" className="flex items-center gap-1 text-xs sm:text-sm">
               <History className="size-3.5 shrink-0" />
@@ -651,22 +634,6 @@ export default function TechnicianAlertsPage() {
             </div>
           </TabsContent>
 
-          {/* ── Upcoming ── */}
-          <TabsContent value="upcoming" className="mt-4">
-            <div className="flex flex-col gap-3">
-              {loading ? (
-                <EmptyState icon={<Loader2 className="size-5 animate-spin text-muted-foreground" />} label="Loading..." />
-              ) : upcomingAlerts.length === 0 ? (
-                <EmptyState icon={<Clock className="size-5 text-muted-foreground" />} label="No upcoming services" />
-              ) : (
-                upcomingAlerts.map(a => (
-                  <TechnicianAlertCard key={a.jobId} alert={a} variant="upcoming"
-                    onMarkComplete={handleMarkComplete} />
-                ))
-              )}
-            </div>
-          </TabsContent>
-
           {/* ── History ── */}
           <TabsContent value="history" className="mt-4">
             {loading ? (
@@ -676,14 +643,12 @@ export default function TechnicianAlertsPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 <p className="text-xs text-muted-foreground px-0.5">
-                  Tap <span className="font-medium text-foreground">Share Report</span> to download the PDF and send it to your manager or owner via WhatsApp.
+                  Tap <span className="font-medium text-foreground">Share Report</span> to send the PDF to your manager or owner via WhatsApp.
                 </p>
                 {completedRecords.map(record => (
                   <CompletedCard
                     key={record.id}
                     record={record}
-                    technicianName={linkedTechName}
-                    orgName={orgName}
                     onShare={handleShareReport}
                     generating={generatingReportFor === record.id}
                   />
