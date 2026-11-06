@@ -30,6 +30,8 @@ interface MarkCompleteModalProps {
   userId: string
   orgId: string
   customerId?: string
+  /** Pre-select a technician in the dropdown (used from technician's own view) */
+  preselectedTechnicianId?: string
   onSuccess: () => void
 }
 
@@ -40,27 +42,28 @@ export function MarkCompleteModal({
   userId,
   orgId,
   customerId,
+  preselectedTechnicianId,
   onSuccess,
 }: MarkCompleteModalProps) {
-  const [serviceDate, setServiceDate] = useState("")
-  const [technicianId, setTechnicianId] = useState("")
-  const [notes, setNotes] = useState("")
-  const [technicians, setTechnicians] = useState<Technician[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loadingTechs, setLoadingTechs] = useState(false)
-  const [customerName, setCustomerName] = useState("")
+  const [serviceDate, setServiceDate]     = useState("")
+  const [technicianId, setTechnicianId]   = useState("")
+  const [notes, setNotes]                 = useState("")
+  const [technicians, setTechnicians]     = useState<Technician[]>([])
+  const [loading, setLoading]             = useState(false)
+  const [loadingTechs, setLoadingTechs]   = useState(false)
+  const [customerName, setCustomerName]   = useState("")
   const [customerHasPhone, setCustomerHasPhone] = useState(false)
 
   useEffect(() => {
     if (open) {
       loadTechnicians()
       loadCustomerPreview()
-      const today = new Date().toISOString().split("T")[0]
-      setServiceDate(today)
+      setServiceDate(new Date().toISOString().split("T")[0])
       setNotes("")
-      setTechnicianId("")
+      // Pre-select the passed technician (e.g. the logged-in technician)
+      setTechnicianId(preselectedTechnicianId ?? "")
     }
-  }, [open])
+  }, [open, preselectedTechnicianId])
 
   const loadCustomerPreview = async () => {
     try {
@@ -106,6 +109,7 @@ export function MarkCompleteModal({
 
       setLoading(true)
 
+      // ── 1. Insert service history record ───────────────────────────────────
       const { error: historyError } = await supabase
         .from("service_history")
         .insert({
@@ -119,11 +123,33 @@ export function MarkCompleteModal({
 
       if (historyError) throw historyError
 
-      // Insert into technician_jobs if technician is assigned
+      // ── 2. Compute next service date ───────────────────────────────────────
+      const serviceDateObj  = new Date(serviceDate)
+      const nextServiceDate = new Date(serviceDateObj)
+      nextServiceDate.setDate(nextServiceDate.getDate() + contract.frequency_days)
+      const nextServiceDateStr = nextServiceDate.toISOString().split("T")[0]
+
+      // ── 3. Close all existing pending jobs for this contract ───────────────
+      //       This removes the alert from the technician's My Alerts view.
+      const { error: closeJobsError } = await supabase
+        .from("technician_jobs")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("contract_id", contract.id)
+        .eq("org_id", orgId)
+        .eq("status", "pending")
+
+      if (closeJobsError) {
+        console.error("Warning: could not close pending jobs:", closeJobsError)
+      }
+
+      // ── 4. Insert a completed job record (audit trail) ─────────────────────
       if (technicianId) {
         try {
           const { error: jobError } = await supabase
-            .from('technician_jobs')
+            .from("technician_jobs")
             .insert({
               org_id: orgId,
               technician_id: technicianId,
@@ -133,29 +159,54 @@ export function MarkCompleteModal({
               notes: notes || null,
               assigned_date: serviceDate,
               due_date: null,
-              status: 'completed',
-              source: 'service_alert',
+              status: "completed",
+              source: "service_alert",
               completed_at: new Date().toISOString(),
             })
 
           if (jobError) {
-            console.error('Error inserting technician job:', jobError)
-            toast.warning('Service marked complete but job history record failed')
+            console.error("Error inserting completed job:", jobError)
+            toast.warning("Service marked complete but job history record failed")
           }
         } catch (jobInsertError) {
-          console.error('Error creating technician job record:', jobInsertError)
-          toast.warning('Service marked complete but could not create technician job record')
+          console.error("Error creating completed job record:", jobInsertError)
+          toast.warning("Service marked complete but could not create technician job record")
         }
       }
 
-      const serviceDateObj = new Date(serviceDate)
-      const nextServiceDate = new Date(serviceDateObj)
-      nextServiceDate.setDate(nextServiceDate.getDate() + contract.frequency_days)
+      // ── 5. Auto-create the NEXT recurring pending job for the same tech ────
+      //       This makes alerts recur automatically without admin re-assigning
+      //       every month.
+      if (technicianId) {
+        try {
+          const { error: nextJobError } = await supabase
+            .from("technician_jobs")
+            .insert({
+              org_id: orgId,
+              technician_id: technicianId,
+              customer_id: contract.customer_id,
+              contract_id: contract.id,
+              title: contract.contract_name,
+              notes: null,
+              assigned_date: nextServiceDateStr,
+              due_date: nextServiceDateStr,
+              status: "pending",
+              source: "service_alert",
+            })
 
+          if (nextJobError) {
+            console.error("Warning: could not create next recurring job:", nextJobError)
+          }
+        } catch (err) {
+          console.error("Warning: next recurring job creation failed:", err)
+        }
+      }
+
+      // ── 6. Advance contract next_service_date ──────────────────────────────
       const { error: contractError } = await supabase
         .from("contracts")
         .update({
-          next_service_date: nextServiceDate.toISOString().split("T")[0],
+          next_service_date: nextServiceDateStr,
           status: "active",
         })
         .eq("id", contract.id)
