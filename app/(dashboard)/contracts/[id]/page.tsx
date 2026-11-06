@@ -28,10 +28,11 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Contract, type Customer, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, AlertTriangle, CheckCircle2, Timer, Download, Share2, Loader2, Banknote, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, FileText, Phone, MapPin, Calendar, CalendarDays, CalendarRange, DollarSign, StickyNote, Wrench, ArrowUpRight, MessageSquare, PhoneCall, Clock, RefreshCw, UserPlus, AlertTriangle, CheckCircle2, Timer, Download, Share2, Loader2, Banknote, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { WHATSAPP_LANGUAGES, DEFAULT_WHATSAPP_LANGUAGE, normalizeWhatsAppLanguage, buildReminderMessage, type WhatsAppLanguage } from "@/lib/whatsapp-messages"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
+import { AssignTechnicianModal } from "@/components/assign-technician-modal"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
@@ -154,6 +155,7 @@ export default function ContractDetailPage() {
   const [defaultLang, setDefaultLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
   const [selectedLang, setSelectedLang] = useState<WhatsAppLanguage>(DEFAULT_WHATSAPP_LANGUAGE)
   const [renewModalOpen, setRenewModalOpen] = useState(false)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
 
@@ -788,6 +790,17 @@ export default function ContractDetailPage() {
             {!isTechnician && (
               <Button
                 size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setAssignModalOpen(true)}
+              >
+                <UserPlus className="size-4" />
+                Assign
+              </Button>
+            )}
+            {!isTechnician && (
+              <Button
+                size="sm"
                 className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => setRenewModalOpen(true)}
               >
@@ -845,6 +858,16 @@ export default function ContractDetailPage() {
             {sharingPdf ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
             Share
           </Button>
+          {!isTechnician && (
+            <Button
+              variant="outline"
+              className="flex-1 gap-1.5 h-10 text-xs"
+              onClick={() => setAssignModalOpen(true)}
+            >
+              <UserPlus className="size-3.5" />
+              Assign
+            </Button>
+          )}
           {!isTechnician && (
             <Button
               className="flex-1 gap-1.5 h-10 text-xs bg-blue-600 hover:bg-blue-700 text-white"
@@ -1382,6 +1405,21 @@ export default function ContractDetailPage() {
             loadContractDetails()
           }}
         />
+
+        {/* ── Assign Technician Modal ── */}
+        {currentOrgId && (
+          <AssignTechnicianModal
+            open={assignModalOpen}
+            onOpenChange={setAssignModalOpen}
+            contract={contract}
+            orgId={currentOrgId}
+            onSuccess={() => {
+              setAssignModalOpen(false)
+              // Reload contract details so the assigned technician shows in service history
+              loadContractDetails()
+            }}
+          />
+        )}
 
         {/* ── Record Payment Modal ── */}
         <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
