@@ -21,6 +21,7 @@ import {
   Package,
   ClipboardList,
   CalendarDays,
+  Wallet,
 } from "lucide-react"
 import {
   Sidebar,
@@ -61,9 +62,10 @@ const adminOnlyNavItems = [
   { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
-// ── Technician nav: only their personal service alerts ────────────────────────
+// ── Technician nav: personal service alerts + personal expenses ───────────────
 const technicianNavItems = [
   { title: "My Services", icon: Bell, href: "/technician-alerts" },
+  { title: "My Expenses", icon: Wallet, href: "/technician-expenses" },
 ]
 
 type CachedProfile = {
