@@ -136,12 +136,12 @@ export default function TechnicianDetailPage() {
   const [customerInfo, setCustomerInfo] = useState<Customer | null>(null)
   const [customerInfoLoading, setCustomerInfoLoading] = useState(false)
 
-  // ── Expenses state ──────────────────────────────────────────────────────
+  // ── Expenses state (admin/owner only — see /technician-expenses for technicians) ──
   const [funds, setFunds] = useState<TechnicianFund[]>([])
   const [expenses, setExpenses] = useState<TechnicianExpense[]>([])
   const [loadingExpenses, setLoadingExpenses] = useState(false)
 
-  // ── Month filter (NEW) ──────────────────────────────────────────────────
+  // ── Month filter ────────────────────────────────────────────────────────
   const [monthFilter, setMonthFilter] = useState<string>('all')
 
   // Give Funds dialog
@@ -169,7 +169,7 @@ export default function TechnicianDetailPage() {
   // Receipt lightbox
   const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null)
 
-  // ── Month filter helpers (NEW) ──────────────────────────────────────────
+  // ── Month filter helpers ────────────────────────────────────────────────
   const formatMonthLabel = (ym: string) => {
     const [y, m] = ym.split('-')
     const d = new Date(parseInt(y), parseInt(m) - 1, 1)
@@ -193,7 +193,7 @@ export default function TechnicianDetailPage() {
     return expenses.filter((e) => e.expense_date.slice(0, 7) === monthFilter)
   }, [expenses, monthFilter])
 
-  // ── Computed expense summary (now based on filtered data) ───────────────
+  // ── Computed expense summary ────────────────────────────────────────────
   const totalFundsGiven = useMemo(
     () => filteredFunds.reduce((sum, f) => sum + Number(f.amount), 0),
     [filteredFunds]
@@ -204,7 +204,7 @@ export default function TechnicianDetailPage() {
   )
   const balance = totalFundsGiven - totalSpent
 
-  // ── Org ID loader ────────────────────────────────────────────────────────
+  // ── Org ID loader ───────────────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -243,7 +243,7 @@ export default function TechnicianDetailPage() {
             }
             setIsOwnProfile(data.linked_user_id === user.id)
             loadTechnicianDetails()
-            loadExpenses()
+            // Note: expenses not loaded for technicians — they use /technician-expenses
           })
       } else {
         loadTechnicianDetails()
@@ -252,7 +252,7 @@ export default function TechnicianDetailPage() {
     }
   }, [currentOrgId, technicianId, role, user?.id, router])
 
-  // ── Data loaders ─────────────────────────────────────────────────────────
+  // ── Data loaders ────────────────────────────────────────────────────────
   const loadTechnicianDetails = async () => {
     try {
       if (!currentOrgId) return
@@ -983,8 +983,8 @@ export default function TechnicianDetailPage() {
                   )}
                 </div>
               </div>
-              
-              {/* ⭐ Attendance Button just below Status */}
+
+              {/* Attendance Button just below Status */}
               {role === 'technician' && isOwnProfile && (
                 <div className="flex items-center gap-3">
                   <CalendarDays className="size-4 text-muted-foreground" />
@@ -1007,356 +1007,356 @@ export default function TechnicianDetailPage() {
         </Card>
 
         {/* ═══════════════════════════════════════════════════════════════
-            EXPENSES TRACKING SECTION
+            EXPENSES TRACKING SECTION — hidden for technicians
+            (technicians use the dedicated /technician-expenses page)
         ════════════════════════════════════════════════════════════════ */}
-
-        {/* ── Month filter row (NEW) ──────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Receipt className="size-4 text-muted-foreground shrink-0" />
-            <h2 className="text-base font-semibold truncate">Expense Tracker</h2>
-            {monthFilter !== 'all' && (
-              <Badge variant="outline" className="text-[10px] font-normal shrink-0">
-                {formatMonthLabel(monthFilter)}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-muted-foreground hidden sm:inline">Period:</span>
-            <Select value={monthFilter} onValueChange={setMonthFilter}>
-              <SelectTrigger className="w-[170px] h-9">
-                <CalendarIcon className="mr-2 size-3.5 text-muted-foreground shrink-0" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                {availableMonths.map((ym) => (
-                  <SelectItem key={ym} value={ym}>{formatMonthLabel(ym)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* ── Summary strip ────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-1">
-                <TrendingUp className="size-4" />
-                <p className="text-xs font-medium">Funds Given</p>
-              </div>
-              <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{formatCurrency(totalFundsGiven)}</p>
-              <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{filteredFunds.length} transaction{filteredFunds.length !== 1 ? 's' : ''}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-1">
-                <TrendingDown className="size-4" />
-                <p className="text-xs font-medium">Total Spent</p>
-              </div>
-              <p className="text-xl font-bold text-red-800 dark:text-red-300">{formatCurrency(totalSpent)}</p>
-              <p className="text-xs text-red-600/70 dark:text-red-500 mt-0.5">{filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''}</p>
-            </CardContent>
-          </Card>
-          <Card className={`${balance >= 0 ? 'border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900' : 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900'}`}>
-            <CardContent className="p-4">
-              <div className={`flex items-center gap-2 mb-1 ${balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
-                <Wallet className="size-4" />
-                <p className="text-xs font-medium">Balance</p>
-              </div>
-              <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'}`}>
-                {formatCurrency(Math.abs(balance))}
-              </p>
-              <p className={`text-xs mt-0.5 ${balance >= 0 ? 'text-green-600/70 dark:text-green-500' : 'text-orange-600/70 dark:text-orange-500'}`}>
-                {balance >= 0 ? 'Remaining' : 'Overspent'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ── Desktop: Expenses table ────────────────────────────────────── */}
-        <Card className="hidden md:block">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="size-5" />
-                {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
-              </CardTitle>
-              <CardDescription>
-                Funds issued and expenses logged for this technician
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
-                  onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
-                >
-                  <IndianRupee className="size-4" />
-                  Give Funds
-                </Button>
-              )}
-              <Button
-                size="sm"
-                className="gap-2"
-                onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
-              >
-                <Plus className="size-4" />
-                Add Expense
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Funds sub-table */}
-            {isAdmin && (
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Funds Issued</h3>
-                {funds.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
-                    No funds given to this technician yet
-                  </div>
-                ) : filteredFunds.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
-                    No funds given in {formatMonthLabel(monthFilter)}
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredFunds.map((fund) => (
-                        <TableRow key={fund.id}>
-                          <TableCell className="text-sm">{new Date(fund.given_at).toLocaleDateString('en-IN')}</TableCell>
-                          <TableCell>
-                            <span className="font-semibold text-blue-700">{formatCurrency(fund.amount)}</span>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{fund.notes || '—'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+        {role !== 'technician' && (
+          <>
+            {/* ── Month filter row ──────────────────────────────────── */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Receipt className="size-4 text-muted-foreground shrink-0" />
+                <h2 className="text-base font-semibold truncate">Expense Tracker</h2>
+                {monthFilter !== 'all' && (
+                  <Badge variant="outline" className="text-[10px] font-normal shrink-0">
+                    {formatMonthLabel(monthFilter)}
+                  </Badge>
                 )}
               </div>
-            )}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground hidden sm:inline">Period:</span>
+                <Select value={monthFilter} onValueChange={setMonthFilter}>
+                  <SelectTrigger className="w-[170px] h-9">
+                    <CalendarIcon className="mr-2 size-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    {availableMonths.map((ym) => (
+                      <SelectItem key={ym} value={ym}>{formatMonthLabel(ym)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-            {/* Expenses sub-table */}
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Expenses Logged</h3>
-              {loadingExpenses ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            {/* ── Summary strip ─────────────────────────────────────── */}
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-1">
+                    <TrendingUp className="size-4" />
+                    <p className="text-xs font-medium">Funds Given</p>
+                  </div>
+                  <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{formatCurrency(totalFundsGiven)}</p>
+                  <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{filteredFunds.length} transaction{filteredFunds.length !== 1 ? 's' : ''}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 mb-1">
+                    <TrendingDown className="size-4" />
+                    <p className="text-xs font-medium">Total Spent</p>
+                  </div>
+                  <p className="text-xl font-bold text-red-800 dark:text-red-300">{formatCurrency(totalSpent)}</p>
+                  <p className="text-xs text-red-600/70 dark:text-red-500 mt-0.5">{filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''}</p>
+                </CardContent>
+              </Card>
+              <Card className={`${balance >= 0 ? 'border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-900' : 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900'}`}>
+                <CardContent className="p-4">
+                  <div className={`flex items-center gap-2 mb-1 ${balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
+                    <Wallet className="size-4" />
+                    <p className="text-xs font-medium">Balance</p>
+                  </div>
+                  <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'}`}>
+                    {formatCurrency(Math.abs(balance))}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${balance >= 0 ? 'text-green-600/70 dark:text-green-500' : 'text-orange-600/70 dark:text-orange-500'}`}>
+                    {balance >= 0 ? 'Remaining' : 'Overspent'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ── Desktop: Expenses table ───────────────────────────── */}
+            <Card className="hidden md:block">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="size-5" />
+                    {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
+                  </CardTitle>
+                  <CardDescription>
+                    Funds issued and expenses logged for this technician
+                  </CardDescription>
                 </div>
-              ) : expenses.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
-                  No expenses recorded yet
+                <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
+                    >
+                      <IndianRupee className="size-4" />
+                      Give Funds
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
+                  >
+                    <Plus className="size-4" />
+                    Add Expense
+                  </Button>
                 </div>
-              ) : filteredExpenses.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
-                  No expenses in {formatMonthLabel(monthFilter)}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {isAdmin && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Funds Issued</h3>
+                    {funds.length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                        No funds given to this technician yet
+                      </div>
+                    ) : filteredFunds.length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                        No funds given in {formatMonthLabel(monthFilter)}
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Notes</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredFunds.map((fund) => (
+                            <TableRow key={fund.id}>
+                              <TableCell className="text-sm">{new Date(fund.given_at).toLocaleDateString('en-IN')}</TableCell>
+                              <TableCell>
+                                <span className="font-semibold text-blue-700">{formatCurrency(fund.amount)}</span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{fund.notes || '—'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Expenses Logged</h3>
+                  {loadingExpenses ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : expenses.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                      No expenses recorded yet
+                    </div>
+                  ) : filteredExpenses.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                      No expenses in {formatMonthLabel(monthFilter)}
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Receipt</TableHead>
+                          {isAdmin && <TableHead />}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredExpenses.map((expense) => (
+                          <TableRow key={expense.id}>
+                            <TableCell className="text-sm">
+                              {new Date(expense.expense_date).toLocaleDateString('en-IN')}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={`text-xs font-normal ${getCategoryColor(expense.category)}`}>
+                                {expense.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                              {expense.description || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-semibold text-red-700">{formatCurrency(expense.amount)}</span>
+                            </TableCell>
+                            <TableCell>
+                              {expense.receipt_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setReceiptModalUrl(expense.receipt_url)}
+                                  className="block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  aria-label="View receipt"
+                                >
+                                  <img
+                                    src={expense.receipt_url}
+                                    alt="Receipt"
+                                    className="size-10 rounded-md object-cover border"
+                                  />
+                                </button>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                            {isAdmin && (
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-600 hover:text-red-600 hover:bg-red-50"
+                                  onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
+                                >
+                                  <Trash2 className="size-4" />
+                                  <span className="sr-only">Delete expense</span>
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Receipt</TableHead>
-                      {isAdmin && <TableHead />}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              </CardContent>
+            </Card>
+
+            {/* ── Mobile: Expenses section ───────────────────────────── */}
+            <div className="flex flex-col gap-3 md:hidden">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold flex items-center gap-1.5">
+                    <Receipt className="size-4 text-muted-foreground" />
+                    {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''} logged
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
+                    >
+                      <IndianRupee className="size-3.5" />
+                      Give
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
+                  >
+                    <Plus className="size-3.5" />
+                    Expense
+                  </Button>
+                </div>
+              </div>
+
+              {isAdmin && funds.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Funds Issued</p>
+                  {filteredFunds.length === 0 ? (
+                    <div className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+                      No funds in {formatMonthLabel(monthFilter)}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+                      {filteredFunds.map((fund) => (
+                        <div key={fund.id} className="flex items-center gap-3 px-4 py-3">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                            <IndianRupee className="size-4 text-blue-600" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-blue-700">{formatCurrency(fund.amount)}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(fund.given_at).toLocaleDateString('en-IN')}</p>
+                            {fund.notes && <p className="text-xs text-muted-foreground italic truncate">{fund.notes}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expenses</p>
+                {loadingExpenses ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : expenses.length === 0 ? (
+                  <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                    No expenses recorded yet
+                  </div>
+                ) : filteredExpenses.length === 0 ? (
+                  <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                    No expenses in {formatMonthLabel(monthFilter)}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
                     {filteredExpenses.map((expense) => (
-                      <TableRow key={expense.id}>
-                        <TableCell className="text-sm">
-                          {new Date(expense.expense_date).toLocaleDateString('en-IN')}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs font-normal ${getCategoryColor(expense.category)}`}>
-                            {expense.category}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                          {expense.description || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-semibold text-red-700">{formatCurrency(expense.amount)}</span>
-                        </TableCell>
-                        <TableCell>
-                          {expense.receipt_url ? (
+                      <div key={expense.id} className="flex items-start gap-3 px-4 py-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100 mt-0.5">
+                          <TrendingDown className="size-4 text-red-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-red-700">{formatCurrency(expense.amount)}</p>
+                              <p className="text-xs text-muted-foreground">{new Date(expense.expense_date).toLocaleDateString('en-IN')}</p>
+                            </div>
+                            <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 font-normal ${getCategoryColor(expense.category)}`}>
+                              {expense.category}
+                            </Badge>
+                          </div>
+                          {expense.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{expense.description}</p>
+                          )}
+                          {expense.receipt_url && (
                             <button
                               type="button"
                               onClick={() => setReceiptModalUrl(expense.receipt_url)}
-                              className="block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="View receipt"
+                              className="mt-2 flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
                             >
-                              <img
-                                src={expense.receipt_url}
-                                alt="Receipt"
-                                className="size-10 rounded-md object-cover border"
-                              />
+                              <ImageIcon className="size-3" />
+                              View Receipt
                             </button>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
                           )}
-                        </TableCell>
-                        {isAdmin && (
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Delete expense</span>
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Mobile: Expenses section ───────────────────────────────────── */}
-        <div className="flex flex-col gap-3 md:hidden">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold flex items-center gap-1.5">
-                <Receipt className="size-4 text-muted-foreground" />
-                {monthFilter === 'all' ? 'All Transactions' : formatMonthLabel(monthFilter)}
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''} logged
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
-                  onClick={() => { resetFundDialog(); setFundDialogOpen(true) }}
-                >
-                  <IndianRupee className="size-3.5" />
-                  Give
-                </Button>
-              )}
-              <Button
-                size="sm"
-                className="gap-1"
-                onClick={() => { resetExpenseDialog(); setExpenseDialogOpen(true) }}
-              >
-                <Plus className="size-3.5" />
-                Expense
-              </Button>
-            </div>
-          </div>
-
-          {/* Funds (mobile) — admin only */}
-          {isAdmin && funds.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Funds Issued</p>
-              {filteredFunds.length === 0 ? (
-                <div className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-                  No funds in {formatMonthLabel(monthFilter)}
-                </div>
-              ) : (
-                <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
-                  {filteredFunds.map((fund) => (
-                    <div key={fund.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                        <IndianRupee className="size-4 text-blue-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-blue-700">{formatCurrency(fund.amount)}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(fund.given_at).toLocaleDateString('en-IN')}</p>
-                        {fund.notes && <p className="text-xs text-muted-foreground italic truncate">{fund.notes}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Expenses (mobile) */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expenses</p>
-            {loadingExpenses ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : expenses.length === 0 ? (
-              <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-                No expenses recorded yet
-              </div>
-            ) : filteredExpenses.length === 0 ? (
-              <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-                No expenses in {formatMonthLabel(monthFilter)}
-              </div>
-            ) : (
-              <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
-                {filteredExpenses.map((expense) => (
-                  <div key={expense.id} className="flex items-start gap-3 px-4 py-3">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-red-100 mt-0.5">
-                      <TrendingDown className="size-4 text-red-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-red-700">{formatCurrency(expense.amount)}</p>
-                          <p className="text-xs text-muted-foreground">{new Date(expense.expense_date).toLocaleDateString('en-IN')}</p>
                         </div>
-                        <Badge variant="outline" className={`shrink-0 text-[10px] px-1.5 py-0 font-normal ${getCategoryColor(expense.category)}`}>
-                          {expense.category}
-                        </Badge>
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
+                            onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
+                          >
+                            <Trash2 className="size-4" />
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        )}
                       </div>
-                      {expense.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{expense.description}</p>
-                      )}
-                      {expense.receipt_url && (
-                        <button
-                          type="button"
-                          onClick={() => setReceiptModalUrl(expense.receipt_url)}
-                          className="mt-2 flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
-                        >
-                          <ImageIcon className="size-3" />
-                          View Receipt
-                        </button>
-                      )}
-                    </div>
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
-                        onClick={() => { setExpenseToDelete(expense); setDeleteExpenseDialogOpen(true) }}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             JOBS SECTION
@@ -1655,9 +1655,7 @@ export default function TechnicianDetailPage() {
           )}
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════
-            FAB (Floating Action Button) for Attendance Scanning
-        ════════════════════════════════════════════════════════════════ */}
+        {/* ─── FAB for Attendance Scanning ─────────────────────────────── */}
         {role === 'technician' && isOwnProfile && (
           <div className="fixed bottom-6 right-6 z-50">
             <Button
@@ -1889,7 +1887,6 @@ export default function TechnicianDetailPage() {
                 />
               </div>
 
-              {/* Receipt upload */}
               <div className="space-y-2">
                 <Label>Receipt Photo (optional)</Label>
                 <input
