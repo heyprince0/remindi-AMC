@@ -93,6 +93,7 @@ interface TechnicianCollection {
   contract_id: string | null
   notes: string | null
   created_at: string
+  received_at: string | null
   customer_name?: string | null
 }
 
@@ -234,12 +235,13 @@ export default function TechnicianDetailPage() {
     () => filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
     [filteredExpenses]
   )
+  // Only unreceived collections count — once owner marks received, it's settled
   const totalCollected = useMemo(
-    () => filteredCollections.reduce((sum, c) => sum + Number(c.amount), 0),
+    () => filteredCollections.filter((c) => !c.received_at).reduce((sum, c) => sum + Number(c.amount), 0),
     [filteredCollections]
   )
-  // Balance = what the technician currently holds that is unaccounted:
-  // (funds given by company + cash collected from customers) - expenses spent
+  // Balance = what the technician currently holds:
+  // (funds from company + unreceived cash from customers) - expenses spent
   const balance = totalFundsGiven + totalCollected - totalSpent
 
   // ── Org ID loader ───────────────────────────────────────────────────────
