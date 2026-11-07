@@ -20,7 +20,6 @@ import {
   UserCircle,
   Package,
   ClipboardList,
-  CalendarDays,
   Wallet,
 } from "lucide-react"
 import {
@@ -49,7 +48,7 @@ const memberNavItems = [
   { title: "Delivery Challans", icon: FileText, href: "/delivery-challans" },
   { title: "Work Reports", icon: ClipboardList, href: "/daily-work-reports" },
   { title: "Technicians", icon: Wrench, href: "/technicians" },
-  { title: "Attendance", icon: CalendarDays, href: "/attendance" },
+  // Attendance removed from sidebar — owners/managers reach it from the Technicians page.
   { title: "Inventory", icon: Package, href: "/stocks" },
   { title: "Service Alerts", icon: Bell, href: "/alerts" },
   { title: "Service History", icon: History, href: "/history" },
