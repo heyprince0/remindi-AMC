@@ -483,11 +483,6 @@ export default function DailyWorkReportsPage() {
     }
   }, [user?.id])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Load reports + company profile.
-  //  • Technician   → only rows they created (user_id = auth user id)
-  //  • Admin/Member → every non-deleted report in the org
-  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!orgId || !user?.id) return
     setLoading(true)
@@ -500,7 +495,6 @@ export default function DailyWorkReportsPage() {
       .order("created_at", { ascending: false })
 
     if (role === "technician") {
-      // ⭐ FIX: ownership column is `user_id` — NOT `created_by`
       reportsQuery = reportsQuery.eq("user_id", user.id)
     }
 
@@ -524,8 +518,7 @@ export default function DailyWorkReportsPage() {
     })
   }, [orgId, user?.id, role])
 
-  // ⭐ Bridge for legacy rows: if a technician has old reports where `user_id`
-  // was never written, also match on technician_name = their own technician name.
+  // Legacy bridge — recover reports where `user_id` was never written
   useEffect(() => {
     if (!orgId || role !== "technician" || !user?.id) return
 
@@ -687,6 +680,14 @@ export default function DailyWorkReportsPage() {
     ? `${filtered.length} report${filtered.length === 1 ? "" : "s"} you created`
     : `${filtered.length} report${filtered.length === 1 ? "" : "s"} in total`
 
+  // ⭐ "Created By" label — "You" when the viewer created the report,
+  //    otherwise the technician's name, otherwise "—"
+  const createdByLabel = (r: DailyWorkReport): string => {
+    if (user?.id && r.user_id === user.id) return "You"
+    if (r.technician_name && r.technician_name.trim().length > 0) return r.technician_name
+    return "—"
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 pb-44 md:pb-0">
@@ -723,7 +724,7 @@ export default function DailyWorkReportsPage() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search by report no, customer, or site..."
+            placeholder="Search by report no or customer..."
             className="pl-10"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -753,9 +754,10 @@ export default function DailyWorkReportsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Report No</TableHead>
-                      <TableHead>Customer / Site</TableHead>
+                      <TableHead>Customer</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Technician</TableHead>
+                      {!isTechnician && <TableHead>Created By</TableHead>}
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -767,10 +769,7 @@ export default function DailyWorkReportsPage() {
                         onClick={() => router.push(`/daily-work-reports/${r.id}`)}
                       >
                         <TableCell className="font-medium">{r.report_no}</TableCell>
-                        <TableCell>
-                          <div>{r.customer_name || "-"}</div>
-                          <div className="text-muted-foreground text-xs">{(r as any).site_name || "-"}</div>
-                        </TableCell>
+                        <TableCell>{r.customer_name || "-"}</TableCell>
                         <TableCell>
                           {new Date(r.report_date).toLocaleDateString("en-IN", {
                             day: "2-digit",
@@ -779,6 +778,17 @@ export default function DailyWorkReportsPage() {
                           })}
                         </TableCell>
                         <TableCell>{r.technician_name || "-"}</TableCell>
+                        {!isTechnician && (
+                          <TableCell>
+                            {user?.id && r.user_id === user.id ? (
+                              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                You
+                              </span>
+                            ) : (
+                              <span className="text-sm text-foreground">{createdByLabel(r)}</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <Button
@@ -876,10 +886,18 @@ export default function DailyWorkReportsPage() {
                         <p className="text-xs text-muted-foreground mb-0.5">Technician</p>
                         <p className="text-sm font-medium truncate">{r.technician_name || "—"}</p>
                       </div>
-                      <div className="col-span-2">
-                        <p className="text-xs text-muted-foreground mb-0.5">Site</p>
-                        <p className="text-sm font-medium truncate">{(r as any).site_name || "—"}</p>
-                      </div>
+                      {!isTechnician && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground mb-0.5">Created By</p>
+                          {user?.id && r.user_id === user.id ? (
+                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                              You
+                            </span>
+                          ) : (
+                            <p className="text-sm font-medium truncate">{createdByLabel(r)}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div className="text-xs text-muted-foreground">&nbsp;</div>
