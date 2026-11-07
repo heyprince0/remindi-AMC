@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/auth-context'
 import {
   ArrowLeft, Plus, Trash2, CalendarIcon, Loader2, UserCircle,
   Wallet, Receipt, IndianRupee, TrendingDown, TrendingUp,
-  ImageIcon, Camera,
+  ImageIcon, Camera, HandCoins,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -49,7 +49,17 @@ interface TechnicianExpense {
   created_at: string
 }
 
+interface TechnicianCollection {
+  id: string
+  amount: number
+  payment_mode: string
+  collected_date: string
+  notes: string | null
+  created_at: string
+}
+
 const EXPENSE_CATEGORIES = ['Fuel', 'Food', 'Transport', 'Tools', 'Spare Parts', 'Other']
+const PAYMENT_MODES = ['Cash', 'UPI', 'Cheque', 'Bank Transfer', 'Other']
 
 // ─── Inner content (uses searchParams) ─────────────────────────────────────
 
@@ -99,6 +109,18 @@ function TechnicianExpensesContent() {
 
   const [receiptModalUrl, setReceiptModalUrl] = useState<string | null>(null)
 
+  // ── Collections state ─────────────────────────────────────────────────
+  const [collections, setCollections] = useState<TechnicianCollection[]>([])
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false)
+  const [collectionAmount, setCollectionAmount] = useState('')
+  const [collectionMode, setCollectionMode] = useState('Cash')
+  const [collectionDate, setCollectionDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [collectionNotes, setCollectionNotes] = useState('')
+  const [isSubmittingCollection, setIsSubmittingCollection] = useState(false)
+  const [deleteCollectionDialogOpen, setDeleteCollectionDialogOpen] = useState(false)
+  const [collectionToDelete, setCollectionToDelete] = useState<TechnicianCollection | null>(null)
+  const [deletingCollection, setDeletingCollection] = useState(false)
+
   // ── Month filter helpers ───────────────────────────────────────────────
   const formatMonthLabel = (ym: string) => {
     const [y, m] = ym.split('-')
@@ -110,8 +132,9 @@ function TechnicianExpensesContent() {
     const months = new Set<string>()
     funds.forEach((f) => { if (f.given_at) months.add(f.given_at.slice(0, 7)) })
     expenses.forEach((e) => { if (e.expense_date) months.add(e.expense_date.slice(0, 7)) })
+    collections.forEach((c) => { if (c.collected_date) months.add(c.collected_date.slice(0, 7)) })
     return Array.from(months).sort((a, b) => b.localeCompare(a))
-  }, [funds, expenses])
+  }, [funds, expenses, collections])
 
   const filteredFunds = useMemo(() => {
     if (monthFilter === 'all') return funds
@@ -123,6 +146,11 @@ function TechnicianExpensesContent() {
     return expenses.filter((e) => e.expense_date.slice(0, 7) === monthFilter)
   }, [expenses, monthFilter])
 
+  const filteredCollections = useMemo(() => {
+    if (monthFilter === 'all') return collections
+    return collections.filter((c) => c.collected_date.slice(0, 7) === monthFilter)
+  }, [collections, monthFilter])
+
   const totalFundsGiven = useMemo(
     () => filteredFunds.reduce((sum, f) => sum + Number(f.amount), 0),
     [filteredFunds]
@@ -131,7 +159,13 @@ function TechnicianExpensesContent() {
     () => filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0),
     [filteredExpenses]
   )
-  const balance = totalFundsGiven - totalSpent
+  const totalCollected = useMemo(
+    () => filteredCollections.reduce((sum, c) => sum + Number(c.amount), 0),
+    [filteredCollections]
+  )
+  // Balance = what the technician currently holds:
+  // (funds from company + cash collected from customers) - expenses spent
+  const balance = totalFundsGiven + totalCollected - totalSpent
 
   // ── Load org ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -241,7 +275,11 @@ function TechnicianExpensesContent() {
     if (!currentOrgId) return
     setLoadingExpenses(true)
     try {
-      const [{ data: fundsData, error: fundsError }, { data: expensesData, error: expensesError }] = await Promise.all([
+      const [
+        { data: fundsData, error: fundsError },
+        { data: expensesData, error: expensesError },
+        { data: collectionsData, error: collectionsError },
+      ] = await Promise.all([
         supabase
           .from('technician_funds')
           .select('*')
@@ -254,13 +292,21 @@ function TechnicianExpensesContent() {
           .eq('technician_id', techId)
           .eq('org_id', currentOrgId)
           .order('expense_date', { ascending: false }),
+        supabase
+          .from('technician_collections')
+          .select('*')
+          .eq('technician_id', techId)
+          .eq('org_id', currentOrgId)
+          .order('collected_date', { ascending: false }),
       ])
 
       if (fundsError) throw fundsError
       if (expensesError) throw expensesError
+      if (collectionsError) throw collectionsError
 
       setFunds((fundsData as TechnicianFund[]) || [])
       setExpenses((expensesData as TechnicianExpense[]) || [])
+      setCollections((collectionsData as TechnicianCollection[]) || [])
     } catch (error) {
       console.error('Error loading expenses:', error)
       toast.error('Failed to load expense data')
@@ -313,6 +359,73 @@ function TechnicianExpensesContent() {
   const resetFundDialog = () => {
     setFundAmount('')
     setFundNotes('')
+  }
+
+  const resetCollectionDialog = () => {
+    setCollectionAmount('')
+    setCollectionMode('Cash')
+    setCollectionDate(new Date().toISOString().split('T')[0])
+    setCollectionNotes('')
+  }
+
+  // ── Log Collection ────────────────────────────────────────────────────
+  // Both technicians and admins can log a collection
+  const handleLogCollection = async () => {
+    if (!currentOrgId || !user || !effectiveTechnicianId) return
+    const amt = parseFloat(collectionAmount)
+    if (!collectionAmount || isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+    if (!collectionDate) {
+      toast.error('Please select a date')
+      return
+    }
+    setIsSubmittingCollection(true)
+    try {
+      const { error } = await supabase.from('technician_collections').insert({
+        org_id: currentOrgId,
+        technician_id: effectiveTechnicianId,
+        amount: amt,
+        payment_mode: collectionMode,
+        collected_date: collectionDate,
+        notes: collectionNotes.trim() || null,
+        created_by: user.id,
+      })
+      if (error) throw error
+      toast.success('Collection recorded successfully')
+      setCollectionDialogOpen(false)
+      resetCollectionDialog()
+      loadExpenses(effectiveTechnicianId)
+    } catch (error) {
+      console.error('Error logging collection:', error)
+      toast.error('Failed to record collection')
+    } finally {
+      setIsSubmittingCollection(false)
+    }
+  }
+
+  // ── Delete Collection (admin only) ────────────────────────────────────
+  const handleConfirmDeleteCollection = async () => {
+    if (!currentOrgId || !collectionToDelete || deletingCollection) return
+    setDeletingCollection(true)
+    try {
+      const { error } = await supabase
+        .from('technician_collections')
+        .delete()
+        .eq('id', collectionToDelete.id)
+        .eq('org_id', currentOrgId)
+      if (error) throw error
+      toast.success('Collection deleted')
+      setCollections((prev) => prev.filter((c) => c.id !== collectionToDelete.id))
+      setDeleteCollectionDialogOpen(false)
+      setCollectionToDelete(null)
+    } catch (error) {
+      console.error('Error deleting collection:', error)
+      toast.error('Failed to delete collection')
+    } finally {
+      setDeletingCollection(false)
+    }
   }
 
   // ── Give Funds ────────────────────────────────────────────────────────
@@ -593,7 +706,7 @@ function TechnicianExpensesContent() {
       </div>
 
       {/* ── Summary strip ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-1">
@@ -602,6 +715,16 @@ function TechnicianExpensesContent() {
             </div>
             <p className="text-xl font-bold text-blue-800 dark:text-blue-300">{formatCurrency(totalFundsGiven)}</p>
             <p className="text-xs text-blue-600/70 dark:text-blue-500 mt-0.5">{filteredFunds.length} transaction{filteredFunds.length !== 1 ? 's' : ''}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 mb-1">
+              <HandCoins className="size-4" />
+              <p className="text-xs font-medium">Collected</p>
+            </div>
+            <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300">{formatCurrency(totalCollected)}</p>
+            <p className="text-xs text-emerald-600/70 dark:text-emerald-500 mt-0.5">{filteredCollections.length} collection{filteredCollections.length !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
         <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
@@ -618,13 +741,13 @@ function TechnicianExpensesContent() {
           <CardContent className="p-4">
             <div className={`flex items-center gap-2 mb-1 ${balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-orange-700 dark:text-orange-400'}`}>
               <Wallet className="size-4" />
-              <p className="text-xs font-medium">Balance</p>
+              <p className="text-xs font-medium">Net Balance</p>
             </div>
             <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-800 dark:text-green-300' : 'text-orange-800 dark:text-orange-300'}`}>
               {formatCurrency(Math.abs(balance))}
             </p>
             <p className={`text-xs mt-0.5 ${balance >= 0 ? 'text-green-600/70 dark:text-green-500' : 'text-orange-600/70 dark:text-orange-500'}`}>
-              {balance >= 0 ? 'Remaining' : 'Overspent'}
+              {balance >= 0 ? 'With you' : 'Overspent'}
             </p>
           </CardContent>
         </Card>
@@ -640,7 +763,7 @@ function TechnicianExpensesContent() {
             </CardTitle>
             <CardDescription>Funds issued and expenses logged</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {isAdmin && (
               <Button
                 variant="outline"
@@ -652,6 +775,15 @@ function TechnicianExpensesContent() {
                 Give Funds
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => { resetCollectionDialog(); setCollectionDialogOpen(true) }}
+            >
+              <HandCoins className="size-4" />
+              Log Collection
+            </Button>
             <Button
               size="sm"
               className="gap-2"
@@ -698,6 +830,64 @@ function TechnicianExpensesContent() {
               )}
             </div>
           )}
+
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Customer Collections</h3>
+            {loadingExpenses ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : collections.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                No collections recorded yet — tap &quot;Log Collection&quot; to record cash received from a customer
+              </div>
+            ) : filteredCollections.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground border rounded-lg text-sm">
+                No collections in {formatMonthLabel(monthFilter)}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Mode</TableHead>
+                    <TableHead>Notes</TableHead>
+                    {isAdmin && <TableHead />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCollections.map((col) => (
+                    <TableRow key={col.id}>
+                      <TableCell className="text-sm">{new Date(col.collected_date).toLocaleDateString('en-IN')}</TableCell>
+                      <TableCell>
+                        <span className="font-semibold text-emerald-700">{formatCurrency(col.amount)}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs font-normal bg-emerald-50 text-emerald-800 border-emerald-200">
+                          {col.payment_mode}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{col.notes || '—'}</TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
+                          >
+                            <Trash2 className="size-4" />
+                            <span className="sr-only">Delete collection</span>
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
 
           <div>
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Expenses Logged</h3>
@@ -794,7 +984,7 @@ function TechnicianExpensesContent() {
               {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''} logged
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             {isAdmin && (
               <Button
                 variant="outline"
@@ -806,6 +996,15 @@ function TechnicianExpensesContent() {
                 Give
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => { resetCollectionDialog(); setCollectionDialogOpen(true) }}
+            >
+              <HandCoins className="size-3.5" />
+              Collect
+            </Button>
             <Button
               size="sm"
               className="gap-1"
@@ -842,6 +1041,58 @@ function TechnicianExpensesContent() {
             )}
           </div>
         )}
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer Collections</p>
+          {loadingExpenses ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : collections.length === 0 ? (
+            <div className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+              No collections yet — tap &quot;Collect&quot; to record cash from a customer
+            </div>
+          ) : filteredCollections.length === 0 ? (
+            <div className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+              No collections in {formatMonthLabel(monthFilter)}
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
+              {filteredCollections.map((col) => (
+                <div key={col.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 mt-0.5">
+                    <HandCoins className="size-4 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700">{formatCurrency(col.amount)}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(col.collected_date).toLocaleDateString('en-IN')}</p>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal bg-emerald-50 text-emerald-800 border-emerald-200">
+                        {col.payment_mode}
+                      </Badge>
+                    </div>
+                    {col.notes && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{col.notes}</p>
+                    )}
+                  </div>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
+                      onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
+                    >
+                      <Trash2 className="size-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expenses</p>
@@ -1051,6 +1302,104 @@ function TechnicianExpensesContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Log Collection dialog */}
+      <Dialog open={collectionDialogOpen} onOpenChange={setCollectionDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HandCoins className="size-5 text-emerald-600" />
+              Log Customer Collection
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Record cash or payment received from a customer on-site.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="col-amount">Amount (₹) <span className="text-red-500">*</span></Label>
+              <Input
+                id="col-amount"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="e.g. 2500"
+                value={collectionAmount}
+                onChange={(e) => setCollectionAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="col-mode">Payment Mode <span className="text-red-500">*</span></Label>
+              <Select value={collectionMode} onValueChange={setCollectionMode}>
+                <SelectTrigger id="col-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_MODES.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="col-date">Date <span className="text-red-500">*</span></Label>
+              <Input
+                id="col-date"
+                type="date"
+                value={collectionDate}
+                onChange={(e) => setCollectionDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="col-notes">Notes (optional)</Label>
+              <Textarea
+                id="col-notes"
+                placeholder="e.g. AMC renewal payment for 3rd floor..."
+                value={collectionNotes}
+                onChange={(e) => setCollectionNotes(e.target.value)}
+                className="min-h-20 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setCollectionDialogOpen(false); resetCollectionDialog() }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleLogCollection}
+                disabled={isSubmittingCollection}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+              >
+                {isSubmittingCollection ? <Loader2 className="size-4 animate-spin" /> : <HandCoins className="size-4" />}
+                {isSubmittingCollection ? 'Saving...' : 'Log Collection'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete collection dialog (admin only) */}
+      <AlertDialog open={deleteCollectionDialogOpen} onOpenChange={setDeleteCollectionDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Collection</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this {collectionToDelete?.payment_mode} collection of{' '}
+              {collectionToDelete ? formatCurrency(collectionToDelete.amount) : ''}? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteCollection}
+              disabled={deletingCollection}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingCollection ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Receipt lightbox */}
       <Dialog open={!!receiptModalUrl} onOpenChange={(open) => !open && setReceiptModalUrl(null)}>
