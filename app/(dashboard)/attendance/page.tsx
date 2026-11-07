@@ -29,7 +29,7 @@ import { useAuth } from '@/lib/auth-context'
 import { TechnicianAttendanceCalendar } from '@/components/technician-attendance-calendar'
 import {
   Users, CalendarDays, ChevronDown, ChevronRight,
-  Trash2, Loader2, Search, CheckCircle2,
+  Trash2, Loader2, Search, CheckCircle2, ArrowLeft,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -239,12 +239,23 @@ export default function AttendancePage() {
     <DashboardLayout>
       <div className="flex flex-col gap-6">
 
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Track daily check-ins for all technicians
-          </p>
+        {/* Header with back button */}
+        <div className="flex items-start gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 -ml-2 mt-0.5"
+            onClick={() => router.push('/technicians')}
+            aria-label="Back to Technicians"
+          >
+            <ArrowLeft className="size-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Track daily check-ins for all technicians
+            </p>
+          </div>
         </div>
 
         {/* Summary cards */}
