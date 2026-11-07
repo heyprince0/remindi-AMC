@@ -348,16 +348,12 @@ export default function DailyWorkReportDetailPage() {
         doc.text("CUSTOMER NAME", margin, y + 14)
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.customer_name), margin, y + 23)
-        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
-        doc.line(margin, y + 24, margin + 60, y + 24)
 
         // work order (right)
         doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120)
         doc.text("WORK ORDER NO.", pageW - margin, y + 14, { align: "right" })
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.work_order_no || "-"), pageW - margin, y + 23, { align: "right" })
-        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
-        doc.line(pageW - margin - 50, y + 24, pageW - margin, y + 24)
 
         y += 38
 
@@ -366,8 +362,6 @@ export default function DailyWorkReportDetailPage() {
         doc.text("EQUIPMENT", margin, y)
         doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0)
         doc.text(safeStr(report.lift_no || "-"), margin, y + 11)
-        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3)
-        doc.line(margin, y + 12, margin + 100, y + 12)
         y += 18
 
         // ── WORK ITEMS TABLE ──
