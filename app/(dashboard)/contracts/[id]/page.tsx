@@ -159,6 +159,9 @@ export default function ContractDetailPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
 
+  // ⭐ Assigned technician name (resolved from contract field or latest service record)
+  const [assignedTechnicianName, setAssignedTechnicianName] = useState<string | null>(null)
+
   // ── Payment state ──────────────────────────────────────────────────────────
   const [payments, setPayments] = useState<ContractPayment[]>([])
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
@@ -285,6 +288,29 @@ export default function ContractDetailPage() {
       }) || []
 
       setServiceHistory(historyWithTechnicianNames)
+
+      // ── Resolve assigned technician name ──────────────────────────────────
+      // Priority 1: contract-level technician field (technician_id / assigned_technician_id)
+      // Priority 2: technician of the most recent service record
+      const assignedTechId =
+        (contractData as any).technician_id ??
+        (contractData as any).assigned_technician_id ??
+        null
+
+      let resolvedName: string | null = null
+      if (assignedTechId) {
+        const tech = (techniciansData as Technician[])?.find(t => t.id === assignedTechId)
+        if (tech?.name) resolvedName = tech.name
+      }
+      if (!resolvedName && historyWithTechnicianNames.length > 0) {
+        const latest = historyWithTechnicianNames
+          .slice()
+          .sort((a, b) => String(b.service_date || "").localeCompare(String(a.service_date || "")))[0]
+        if (latest?.technicianName && latest.technicianName !== 'Unknown') {
+          resolvedName = latest.technicianName
+        }
+      }
+      setAssignedTechnicianName(resolvedName)
 
       // ── Load payments ──────────────────────────────────────────────────────
       const { data: paymentsData, error: paymentsError } = await supabase
@@ -1007,6 +1033,27 @@ export default function ContractDetailPage() {
               </div>
             </div>
 
+            {/* ⭐ Section: Assigned Technician (only when known) */}
+            {assignedTechnicianName && (
+              <>
+                <div className="border-t border-border" />
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 mt-0.5">
+                    <Wrench className="size-3.5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Assigned Technician</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+                        {assignedTechnicianName.charAt(0).toUpperCase()}
+                      </div>
+                      <p className="font-medium text-foreground text-sm truncate">{assignedTechnicianName}</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* Section: Location (if present) */}
             {contract.location && (
               <>
@@ -1415,7 +1462,7 @@ export default function ContractDetailPage() {
             orgId={currentOrgId}
             onSuccess={() => {
               setAssignModalOpen(false)
-              // Reload contract details so the assigned technician shows in service history
+              // Reload so the newly assigned technician is reflected
               loadContractDetails()
             }}
           />
