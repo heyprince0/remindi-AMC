@@ -12,6 +12,7 @@ import {
   UserCircle,
   Users,
   Wallet,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -84,8 +85,9 @@ export function MobileBottomNav() {
 
   const navItems: readonly NavigationItem[] = isTechnician
     ? [
-        { href: "/technician-alerts",   label: "Services", icon: Bell       },
-        { href: "/technician-expenses", label: "Expenses", icon: Wallet     },
+        { href: "/technician-alerts",   label: "Services", icon: Bell          },
+        { href: "/daily-work-reports",  label: "Reports",  icon: ClipboardList },
+        { href: "/technician-expenses", label: "Expenses", icon: Wallet        },
         {
           href: linkedTechId ? `/technicians/${linkedTechId}` : "/technicians",
           label: "Profile",
