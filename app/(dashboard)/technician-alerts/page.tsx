@@ -6,11 +6,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { supabase, type Contract, getDaysUntilService } from "@/lib/supabase"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { supabase, type Contract, type Customer, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import {
   AlertTriangle, Clock, CalendarClock, CheckCircle2,
-  History, Loader2, Share2, MapPin, StickyNote,
+  History, Loader2, Share2, MapPin, StickyNote, Phone,
 } from "lucide-react"
 import { MarkCompleteModal } from "@/components/mark-complete-modal"
 import { toast } from "sonner"
@@ -22,6 +28,7 @@ import autoTable from "jspdf-autotable"
 interface TechnicianAlert {
   jobId: string
   contractId: string
+  customerId: string | null
   customer: string
   customerPhone: string
   contractName: string
@@ -50,10 +57,12 @@ function TechnicianAlertCard({
   alert,
   variant,
   onMarkComplete,
+  onViewCustomer,
 }: {
   alert: TechnicianAlert
   variant: "overdue" | "due-today"
   onMarkComplete: (alert: TechnicianAlert) => void
+  onViewCustomer: (customerId: string) => void
 }) {
   const styles = {
     overdue: {
@@ -88,7 +97,7 @@ function TechnicianAlertCard({
             )}
           </div>
 
-          <div className="flex">
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -98,6 +107,15 @@ function TechnicianAlertCard({
               <CheckCircle2 className="size-3.5 shrink-0" />
               Mark Complete
             </Button>
+            {alert.customerId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onViewCustomer(alert.customerId!)}
+              >
+                View
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -327,6 +345,11 @@ export default function TechnicianAlertsPage() {
   const [selectedAlert, setSelectedAlert]        = useState<TechnicianAlert | null>(null)
   const [generatingReportFor, setGeneratingReportFor] = useState<string | null>(null)
 
+  // ── Customer info popup state ───────────────────────────────────────────
+  const [customerInfoOpen, setCustomerInfoOpen] = useState(false)
+  const [customerInfo, setCustomerInfo] = useState<Customer | null>(null)
+  const [customerInfoLoading, setCustomerInfoLoading] = useState(false)
+
   useEffect(() => {
     if (!user?.id) return
     supabase
@@ -497,6 +520,7 @@ export default function TechnicianAlertsPage() {
         const alert: TechnicianAlert = {
           jobId: job.id,
           contractId: contract.id,
+          customerId: job.customer_id || null,
           customer: customer?.name ?? "Unknown Customer",
           customerPhone: customer?.phone ?? "",
           contractName: contract.contract_name,
@@ -540,6 +564,30 @@ export default function TechnicianAlertsPage() {
       toast.error("Failed to load your service alerts")
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── Customer info popup ────────────────────────────────────────────────
+  const openCustomerInfo = async (customerId: string) => {
+    if (!currentOrgId) return
+    setCustomerInfoOpen(true)
+    setCustomerInfoLoading(true)
+    setCustomerInfo(null)
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', customerId)
+        .eq('org_id', currentOrgId)
+        .single()
+      if (error) throw error
+      setCustomerInfo(data as Customer)
+    } catch (err) {
+      console.error('Error loading customer info:', err)
+      toast.error('Failed to load customer info')
+      setCustomerInfoOpen(false)
+    } finally {
+      setCustomerInfoLoading(false)
     }
   }
 
@@ -670,8 +718,13 @@ export default function TechnicianAlertsPage() {
                 <EmptyState icon={<CheckCircle2 className="size-5 text-muted-foreground" />} label="No overdue services assigned to you" />
               ) : (
                 overdueAlerts.map(a => (
-                  <TechnicianAlertCard key={a.jobId} alert={a} variant="overdue"
-                    onMarkComplete={handleMarkComplete} />
+                  <TechnicianAlertCard
+                    key={a.jobId}
+                    alert={a}
+                    variant="overdue"
+                    onMarkComplete={handleMarkComplete}
+                    onViewCustomer={openCustomerInfo}
+                  />
                 ))
               )}
             </div>
@@ -685,8 +738,13 @@ export default function TechnicianAlertsPage() {
                 <EmptyState icon={<CalendarClock className="size-5 text-muted-foreground" />} label="No services due today" />
               ) : (
                 dueTodayAlerts.map(a => (
-                  <TechnicianAlertCard key={a.jobId} alert={a} variant="due-today"
-                    onMarkComplete={handleMarkComplete} />
+                  <TechnicianAlertCard
+                    key={a.jobId}
+                    alert={a}
+                    variant="due-today"
+                    onMarkComplete={handleMarkComplete}
+                    onViewCustomer={openCustomerInfo}
+                  />
                 ))
               )}
             </div>
@@ -726,6 +784,77 @@ export default function TechnicianAlertsPage() {
             onSuccess={handleModalSuccess}
           />
         )}
+
+        {/* Customer Info Dialog */}
+        <Dialog open={customerInfoOpen} onOpenChange={setCustomerInfoOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Phone className="size-5 text-primary" />
+                Customer Details
+              </DialogTitle>
+            </DialogHeader>
+            {customerInfoLoading || !customerInfo ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 pb-2 border-b border-border">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <span className="text-base font-semibold text-primary">
+                      {customerInfo.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-lg font-semibold text-foreground">{customerInfo.name}</p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Phone className="size-3.5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Phone</p>
+                    <a
+                      href={`tel:${customerInfo.phone}`}
+                      className="font-medium text-primary hover:underline text-sm"
+                    >
+                      {customerInfo.phone}
+                    </a>
+                  </div>
+                </div>
+
+                {customerInfo.address && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <MapPin className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Address</p>
+                      <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{customerInfo.address}</p>
+                    </div>
+                  </div>
+                )}
+
+                {customerInfo.notes && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <StickyNote className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Notes</p>
+                      <p className="font-medium text-foreground text-sm whitespace-pre-wrap">{customerInfo.notes}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2">
+                  <Button variant="outline" onClick={() => setCustomerInfoOpen(false)}>Close</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   )
