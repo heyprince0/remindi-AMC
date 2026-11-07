@@ -680,14 +680,6 @@ export default function DailyWorkReportsPage() {
     ? `${filtered.length} report${filtered.length === 1 ? "" : "s"} you created`
     : `${filtered.length} report${filtered.length === 1 ? "" : "s"} in total`
 
-  // ⭐ "Created By" label — "You" when the viewer created the report,
-  //    otherwise the technician's name, otherwise "—"
-  const createdByLabel = (r: DailyWorkReport): string => {
-    if (user?.id && r.user_id === user.id) return "You"
-    if (r.technician_name && r.technician_name.trim().length > 0) return r.technician_name
-    return "—"
-  }
-
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 pb-44 md:pb-0">
@@ -757,7 +749,6 @@ export default function DailyWorkReportsPage() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Technician</TableHead>
-                      {!isTechnician && <TableHead>Created By</TableHead>}
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -778,17 +769,6 @@ export default function DailyWorkReportsPage() {
                           })}
                         </TableCell>
                         <TableCell>{r.technician_name || "-"}</TableCell>
-                        {!isTechnician && (
-                          <TableCell>
-                            {user?.id && r.user_id === user.id ? (
-                              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                You
-                              </span>
-                            ) : (
-                              <span className="text-sm text-foreground">{createdByLabel(r)}</span>
-                            )}
-                          </TableCell>
-                        )}
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <Button
@@ -886,18 +866,6 @@ export default function DailyWorkReportsPage() {
                         <p className="text-xs text-muted-foreground mb-0.5">Technician</p>
                         <p className="text-sm font-medium truncate">{r.technician_name || "—"}</p>
                       </div>
-                      {!isTechnician && (
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground mb-0.5">Created By</p>
-                          {user?.id && r.user_id === user.id ? (
-                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                              You
-                            </span>
-                          ) : (
-                            <p className="text-sm font-medium truncate">{createdByLabel(r)}</p>
-                          )}
-                        </div>
-                      )}
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div className="text-xs text-muted-foreground">&nbsp;</div>
