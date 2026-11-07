@@ -464,7 +464,7 @@ async function downloadBlankDwr(
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function DailyWorkReportsPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const router = useRouter()
   const [orgId, setOrgId] = useState<string | null>(null)
   const [reports, setReports] = useState<DailyWorkReport[]>([])
@@ -502,15 +502,26 @@ export default function DailyWorkReportsPage() {
     }
   }, [user?.id])
 
+  // Load reports + company profile.
+  // ⭐ Technicians only see reports they created (created_by = their user id).
+  // ⭐ Admin / managers see every report in the org (unchanged).
   useEffect(() => {
-    if (!orgId) return
+    if (!orgId || !user?.id) return
+    setLoading(true)
+
+    let reportsQuery = supabase
+      .from("daily_work_reports")
+      .select("*")
+      .eq("org_id", orgId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+
+    if (role === "technician") {
+      reportsQuery = reportsQuery.eq("created_by", user.id)
+    }
+
     Promise.all([
-      supabase
-        .from("daily_work_reports")
-        .select("*")
-        .eq("org_id", orgId)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false }),
+      reportsQuery,
       supabase
         .from("company_profile")
         .select("*")
@@ -522,7 +533,7 @@ export default function DailyWorkReportsPage() {
       if (!p.error && p.data) setProfile(p.data as CompanyProfile)
       setLoading(false)
     })
-  }, [orgId])
+  }, [orgId, user?.id, role])
 
   useEffect(() => {
     if (!limitsLoading && orgId && !autoShown) {
@@ -647,6 +658,10 @@ export default function DailyWorkReportsPage() {
   }
 
   const hasStamp = !!profile?.stamp_url
+  const isTechnician = role === "technician"
+  const summaryLabel = isTechnician
+    ? `${filtered.length} report${filtered.length === 1 ? "" : "s"} you created`
+    : `${filtered.length} report${filtered.length === 1 ? "" : "s"} in total`
 
   return (
     <DashboardLayout>
@@ -654,7 +669,11 @@ export default function DailyWorkReportsPage() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Daily Work Reports</h1>
-            <p className="text-muted-foreground">Create and manage daily work completion reports</p>
+            <p className="text-muted-foreground">
+              {isTechnician
+                ? "Create and manage your own daily work reports"
+                : "Create and manage daily work completion reports"}
+            </p>
           </div>
           <div className="hidden md:flex flex-wrap items-center gap-2">
             <Button
@@ -690,10 +709,8 @@ export default function DailyWorkReportsPage() {
         {/* Desktop Table */}
         <Card className="hidden md:block">
           <CardHeader>
-            <CardTitle>All Reports</CardTitle>
-            <CardDescription>
-              You have {filtered.length} report{filtered.length === 1 ? "" : "s"} in total
-            </CardDescription>
+            <CardTitle>{isTechnician ? "My Reports" : "All Reports"}</CardTitle>
+            <CardDescription>You have {summaryLabel}</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -783,7 +800,7 @@ export default function DailyWorkReportsPage() {
                 You have{" "}
                 <span className="font-medium text-foreground">{filtered.length}</span>{" "}
                 report{filtered.length === 1 ? "" : "s"}{" "}
-                {search ? "matching filters" : "in total"}
+                {search ? "matching filters" : isTechnician ? "you created" : "in total"}
               </p>
               {filtered.map((r) => (
                 <Card
