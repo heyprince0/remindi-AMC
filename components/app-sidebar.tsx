@@ -61,8 +61,9 @@ const adminOnlyNavItems = [
   { title: "Billing & Subscription", icon: CreditCard, href: "/billing" },
 ]
 
-// ── Technician nav: personal service alerts + personal expenses ───────────────
+// ── Technician nav: personal service alerts + personal expenses + work reports ─
 const technicianNavItems = [
+  { title: "Work Reports", icon: ClipboardList, href: "/daily-work-reports" },
   { title: "My Services", icon: Bell, href: "/technician-alerts" },
   { title: "My Expenses", icon: Wallet, href: "/technician-expenses" },
 ]
