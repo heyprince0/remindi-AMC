@@ -159,7 +159,7 @@ export default function ContractDetailPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
 
-  // ⭐ Assigned technician name (resolved from contract field or latest service record)
+  // ⭐ Assigned technician name (resolved from pending technician_jobs row)
   const [assignedTechnicianName, setAssignedTechnicianName] = useState<string | null>(null)
 
   // ── Payment state ──────────────────────────────────────────────────────────
@@ -289,27 +289,60 @@ export default function ContractDetailPage() {
 
       setServiceHistory(historyWithTechnicianNames)
 
-      // ── Resolve assigned technician name ──────────────────────────────────
-      // Priority 1: contract-level technician field (technician_id / assigned_technician_id)
-      // Priority 2: technician of the most recent service record
-      const assignedTechId =
+      // ── Resolve ASSIGNED (current) technician name ──────────────────────
+      // Priority 1: contract-level technician field (if you ever add one)
+      // Priority 2: latest PENDING technician_jobs row for this contract
+      //             ← this is what AssignTechnicianModal writes on reassignment
+      // Priority 3: most recent service_history record (historical fallback)
+      const assignedTechIdFromContract =
         (contractData as any).technician_id ??
         (contractData as any).assigned_technician_id ??
         null
 
       let resolvedName: string | null = null
-      if (assignedTechId) {
-        const tech = (techniciansData as Technician[])?.find(t => t.id === assignedTechId)
-        if (tech?.name) resolvedName = tech.name
+      let resolvedId: string | null = null
+
+      // Priority 1
+      if (assignedTechIdFromContract) {
+        const tech = (techniciansData as Technician[])?.find(t => t.id === assignedTechIdFromContract)
+        if (tech?.name) {
+          resolvedName = tech.name
+          resolvedId = tech.id
+        }
       }
+
+      // Priority 2 — latest pending technician_jobs row
+      if (!resolvedName) {
+        const { data: latestPendingJob } = await supabase
+          .from('technician_jobs')
+          .select('technician_id, created_at, status')
+          .eq('org_id', currentOrgId)
+          .eq('contract_id', contractId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (latestPendingJob?.technician_id) {
+          const tech = (techniciansData as Technician[])?.find(t => t.id === latestPendingJob.technician_id)
+          if (tech?.name) {
+            resolvedName = tech.name
+            resolvedId = tech.id
+          }
+        }
+      }
+
+      // Priority 3 — most recent service record
       if (!resolvedName && historyWithTechnicianNames.length > 0) {
         const latest = historyWithTechnicianNames
           .slice()
           .sort((a, b) => String(b.service_date || "").localeCompare(String(a.service_date || "")))[0]
         if (latest?.technicianName && latest.technicianName !== 'Unknown') {
           resolvedName = latest.technicianName
+          resolvedId = latest.technician_id || null
         }
       }
+
       setAssignedTechnicianName(resolvedName)
 
       // ── Load payments ──────────────────────────────────────────────────────
@@ -1033,7 +1066,7 @@ export default function ContractDetailPage() {
               </div>
             </div>
 
-            {/* ⭐ Section: Assigned Technician (only when known) */}
+            {/* ⭐ Section: Assigned Technician — reflects reassignment */}
             {assignedTechnicianName && (
               <>
                 <div className="border-t border-border" />
@@ -1328,7 +1361,7 @@ export default function ContractDetailPage() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            ── SERVICE HISTORY SECTION (unchanged) ──
+            ── SERVICE HISTORY SECTION ──
         ═══════════════════════════════════════════════════════════════════ */}
 
         <div className="flex items-center justify-between">
@@ -1482,7 +1515,6 @@ export default function ContractDetailPage() {
             </DialogHeader>
             <div className="space-y-4 py-2">
 
-              {/* Date */}
               <div className="space-y-2">
                 <Label htmlFor="pay-date">Payment Date <span className="text-red-500">*</span></Label>
                 <Input
@@ -1495,7 +1527,6 @@ export default function ContractDetailPage() {
                 {paymentErrors.payment_date && <p className="text-xs text-red-500">{paymentErrors.payment_date}</p>}
               </div>
 
-              {/* Amount */}
               <div className="space-y-2">
                 <Label htmlFor="pay-amount">Amount (₹) <span className="text-red-500">*</span></Label>
                 <Input
@@ -1511,7 +1542,6 @@ export default function ContractDetailPage() {
                 {paymentErrors.amount && <p className="text-xs text-red-500">{paymentErrors.amount}</p>}
               </div>
 
-              {/* Mode */}
               <div className="space-y-2">
                 <Label htmlFor="pay-mode">Payment Mode</Label>
                 <Select
@@ -1529,7 +1559,6 @@ export default function ContractDetailPage() {
                 </Select>
               </div>
 
-              {/* Notes */}
               <div className="space-y-2">
                 <Label htmlFor="pay-notes">Notes (Optional)</Label>
                 <Textarea
