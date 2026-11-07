@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/auth-context'
 import {
   ArrowLeft, Plus, Trash2, CalendarIcon, Loader2, UserCircle,
   Wallet, Receipt, IndianRupee, TrendingDown, TrendingUp,
-  ImageIcon, Camera, HandCoins,
+  ImageIcon, Camera, HandCoins, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
