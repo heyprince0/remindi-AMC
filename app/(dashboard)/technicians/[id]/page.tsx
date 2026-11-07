@@ -625,6 +625,31 @@ export default function TechnicianDetailPage() {
     }
   }
 
+  // ── Mark Received ─────────────────────────────────────────────────────
+  const [markingReceivedId, setMarkingReceivedId] = useState<string | null>(null)
+
+  const handleMarkReceived = async (col: TechnicianCollection) => {
+    if (!currentOrgId || markingReceivedId) return
+    setMarkingReceivedId(col.id)
+    try {
+      const { error } = await supabase
+        .from('technician_collections')
+        .update({ received_at: new Date().toISOString() })
+        .eq('id', col.id)
+        .eq('org_id', currentOrgId)
+      if (error) throw error
+      toast.success(`${formatCurrency(col.amount)} marked as received`)
+      setCollections((prev) =>
+        prev.map((c) => c.id === col.id ? { ...c, received_at: new Date().toISOString() } : c)
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to mark as received')
+    } finally {
+      setMarkingReceivedId(null)
+    }
+  }
+
   // ── Give Funds ────────────────────────────────────────────────────────
   const handleGiveFunds = async () => {
     if (!currentOrgId || !user) return
@@ -1177,7 +1202,9 @@ export default function TechnicianDetailPage() {
                     <p className="text-xs font-medium">Collected</p>
                   </div>
                   <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300">{formatCurrency(totalCollected)}</p>
-                  <p className="text-xs text-emerald-600/70 dark:text-emerald-500 mt-0.5">{filteredCollections.length} collection{filteredCollections.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-emerald-600/70 dark:text-emerald-500 mt-0.5">
+                    {filteredCollections.filter((c) => !c.received_at).length} pending
+                  </p>
                 </CardContent>
               </Card>
               <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900">
@@ -1307,15 +1334,18 @@ export default function TechnicianDetailPage() {
                             <TableHead>Amount</TableHead>
                             <TableHead>Mode</TableHead>
                             <TableHead>Notes</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead />
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {filteredCollections.map((col) => (
-                            <TableRow key={col.id}>
+                            <TableRow key={col.id} className={col.received_at ? 'opacity-60' : ''}>
                               <TableCell className="text-sm">{new Date(col.collected_date).toLocaleDateString('en-IN')}</TableCell>
                               <TableCell>
-                                <span className="font-semibold text-emerald-700">{formatCurrency(col.amount)}</span>
+                                <span className={`font-semibold ${col.received_at ? 'text-muted-foreground line-through' : 'text-emerald-700'}`}>
+                                  {formatCurrency(col.amount)}
+                                </span>
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline" className="text-xs font-normal bg-emerald-50 text-emerald-800 border-emerald-200">
@@ -1324,15 +1354,38 @@ export default function TechnicianDetailPage() {
                               </TableCell>
                               <TableCell className="text-muted-foreground text-sm">{col.notes || '—'}</TableCell>
                               <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-600 hover:text-red-600 hover:bg-red-50"
-                                  onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
-                                >
-                                  <Trash2 className="size-4" />
-                                  <span className="sr-only">Delete collection</span>
-                                </Button>
+                                {col.received_at ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                                    <CheckCircle2 className="size-3.5" />
+                                    Received
+                                  </span>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                    disabled={markingReceivedId === col.id}
+                                    onClick={() => handleMarkReceived(col)}
+                                  >
+                                    {markingReceivedId === col.id
+                                      ? <Loader2 className="size-3 animate-spin" />
+                                      : <CheckCircle2 className="size-3.5" />}
+                                    Mark Received
+                                  </Button>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {!col.received_at && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-600 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
+                                  >
+                                    <Trash2 className="size-4" />
+                                    <span className="sr-only">Delete collection</span>
+                                  </Button>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1511,14 +1564,18 @@ export default function TechnicianDetailPage() {
                   ) : (
                     <div className="rounded-lg border bg-card divide-y divide-border overflow-hidden">
                       {filteredCollections.map((col) => (
-                        <div key={col.id} className="flex items-start gap-3 px-4 py-3">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 mt-0.5">
-                            <HandCoins className="size-4 text-emerald-600" />
+                        <div key={col.id} className={`flex items-start gap-3 px-4 py-3 ${col.received_at ? 'opacity-60' : ''}`}>
+                          <div className={`flex size-8 shrink-0 items-center justify-center rounded-full mt-0.5 ${col.received_at ? 'bg-green-100' : 'bg-emerald-100'}`}>
+                            {col.received_at
+                              ? <CheckCircle2 className="size-4 text-green-600" />
+                              : <HandCoins className="size-4 text-emerald-600" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <p className="text-sm font-semibold text-emerald-700">{formatCurrency(col.amount)}</p>
+                                <p className={`text-sm font-semibold ${col.received_at ? 'text-muted-foreground line-through' : 'text-emerald-700'}`}>
+                                  {formatCurrency(col.amount)}
+                                </p>
                                 <p className="text-xs text-muted-foreground">{new Date(col.collected_date).toLocaleDateString('en-IN')}</p>
                               </div>
                               <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal bg-emerald-50 text-emerald-800 border-emerald-200">
@@ -1526,16 +1583,37 @@ export default function TechnicianDetailPage() {
                               </Badge>
                             </div>
                             {col.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{col.notes}</p>}
+                            {col.received_at ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium mt-1">
+                                <CheckCircle2 className="size-3" />
+                                Received
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="mt-2 h-7 gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                disabled={markingReceivedId === col.id}
+                                onClick={() => handleMarkReceived(col)}
+                              >
+                                {markingReceivedId === col.id
+                                  ? <Loader2 className="size-3 animate-spin" />
+                                  : <CheckCircle2 className="size-3.5" />}
+                                Mark Received
+                              </Button>
+                            )}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
-                            onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
-                          >
-                            <Trash2 className="size-4" />
-                            <span className="sr-only">Delete</span>
-                          </Button>
+                          {!col.received_at && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0 -mr-2"
+                              onClick={() => { setCollectionToDelete(col); setDeleteCollectionDialogOpen(true) }}
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
