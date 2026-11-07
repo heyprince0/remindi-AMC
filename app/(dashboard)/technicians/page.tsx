@@ -17,7 +17,17 @@ import { supabase, type Technician, type TechnicianJob } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { usePlanLimits } from "@/lib/hooks/use-plan-limits"
 import LimitReachedModal from "@/components/billing/limit-reached-modal"
-import { Plus, Search, MoreHorizontal, Edit, Phone, Briefcase, Trash2, ArrowUpRight } from "lucide-react"
+import {
+  Plus,
+  Search,
+  MoreHorizontal,
+  Edit,
+  Phone,
+  Briefcase,
+  Trash2,
+  ArrowUpRight,
+  CalendarDays,
+} from "lucide-react"
 import { toast } from "sonner"
 import { AddTechnicianModal } from "@/components/add-technician-modal"
 
@@ -253,10 +263,22 @@ export default function TechniciansPage() {
             <h1 className="text-2xl font-bold text-foreground">Technicians</h1>
             <p className="text-muted-foreground">Manage your service technicians and their assignments</p>
           </div>
-          <Button onClick={handleAddClick} disabled={limitsLoading}>
-            <Plus className="mr-2 size-4" />
-            Add Technician
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Owners / managers only: quick jump to Attendance */}
+            {role === 'admin' && (
+              <Button
+                variant="outline"
+                onClick={() => router.push('/attendance')}
+              >
+                <CalendarDays className="mr-2 size-4" />
+                Attendance
+              </Button>
+            )}
+            <Button onClick={handleAddClick} disabled={limitsLoading}>
+              <Plus className="mr-2 size-4" />
+              Add Technician
+            </Button>
+          </div>
         </div>
 
         {/* ── Standalone Search Bar (no card) ── */}
