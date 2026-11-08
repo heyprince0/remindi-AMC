@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare, ImagePlus, X } from "lucide-react"
+import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare, ImagePlus, X, Camera, RefreshCw, ZoomIn } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import SignaturePad, { type SignaturePadRef } from "@/components/SignaturePad"
 import { supabase, type DailyWorkItem, type DailyWorkReport } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
@@ -75,6 +76,16 @@ export function DailyWorkReportForm({ edit = false }: Props) {
   // ── Site images ───────────────────────────────────────────────────────
   const [reportImages, setReportImages] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
+
+  // ── Camera ────────────────────────────────────────────────────────────
+  const videoRef    = useRef<HTMLVideoElement>(null)
+  const canvasRef   = useRef<HTMLCanvasElement>(null)
+  const streamRef   = useRef<MediaStream | null>(null)
+  const [cameraOpen,    setCameraOpen]    = useState(false)
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null)   // base64 preview after capture
+  const [savingPhoto,   setSavingPhoto]   = useState(false)
+  const [facingMode,    setFacingMode]    = useState<'environment' | 'user'>('environment')
+  const [cameraError,   setCameraError]   = useState<string | null>(null)
 
   // ⭐ Only columns that ACTUALLY exist in daily_work_reports
   const [form, setForm] = useState({
@@ -281,6 +292,101 @@ export function DailyWorkReportForm({ edit = false }: Props) {
 
   const handleRemoveImage = (index: number) => {
     setReportImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // ── Camera helpers ────────────────────────────────────────────────────
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+  }, [])
+
+  const startCamera = useCallback(async (facing: 'environment' | 'user' = 'environment') => {
+    stopStream()
+    setCameraError(null)
+    setCapturedPhoto(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+    } catch (err: any) {
+      console.error("Camera error:", err)
+      if (err.name === 'NotAllowedError') {
+        setCameraError("Camera permission denied. Please allow camera access and try again.")
+      } else if (err.name === 'NotFoundError') {
+        setCameraError("No camera found on this device.")
+      } else {
+        setCameraError("Could not open camera. Try uploading an image instead.")
+      }
+    }
+  }, [stopStream])
+
+  const handleOpenCamera = async () => {
+    if (reportImages.length >= 8) { toast.error("Maximum 8 images allowed"); return }
+    setCameraOpen(true)
+    await startCamera(facingMode)
+  }
+
+  const handleFlipCamera = async () => {
+    const next = facingMode === 'environment' ? 'user' : 'environment'
+    setFacingMode(next)
+    await startCamera(next)
+  }
+
+  const handleCapture = () => {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width  = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    const dataURL = canvas.toDataURL('image/jpeg', 0.92)
+    setCapturedPhoto(dataURL)
+    stopStream()   // pause camera after capture — save battery
+  }
+
+  const handleRetake = async () => {
+    setCapturedPhoto(null)
+    await startCamera(facingMode)
+  }
+
+  const handleUsePhoto = async () => {
+    if (!capturedPhoto || !orgId) return
+    setSavingPhoto(true)
+    try {
+      const res  = await fetch(capturedPhoto)
+      const blob = await res.blob()
+      const path = `${orgId}/report-images/cam-${Date.now()}.jpg`
+      const { error } = await supabase.storage
+        .from("work-report-signatures")
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+      if (error) throw error
+      const { data } = supabase.storage.from("work-report-signatures").getPublicUrl(path)
+      setReportImages((prev) => [...prev, data.publicUrl])
+      toast.success("Photo added")
+      setCapturedPhoto(null)
+      setCameraOpen(false)
+      stopStream()
+    } catch (err: any) {
+      console.error("Photo save failed:", err)
+      toast.error("Failed to save photo")
+    } finally {
+      setSavingPhoto(false)
+    }
+  }
+
+  const handleCloseCamera = () => {
+    stopStream()
+    setCapturedPhoto(null)
+    setCameraError(null)
+    setCameraOpen(false)
   }
 
   const handleSave = async () => {
@@ -765,61 +871,73 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         {/* Site Images */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <ImagePlus className="size-5 text-primary" />
-              <div>
-                <CardTitle className="text-base">Site Images</CardTitle>
-                <CardDescription className="text-xs">
-                  Add photos of the work done — they will appear on a separate page in the PDF
-                  <span className="ml-1 text-muted-foreground">(max 8 images)</span>
-                </CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ImagePlus className="size-5 text-primary" />
+                <div>
+                  <CardTitle className="text-base">Site Images</CardTitle>
+                  <CardDescription className="text-xs">
+                    Add photos of the work done — printed on page 2 of the PDF
+                    <span className="ml-1 text-muted-foreground">({reportImages.length}/8)</span>
+                  </CardDescription>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Upload button */}
-            <label
-              className={`flex flex-col items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed border-border bg-muted/30 py-6 cursor-pointer transition-colors hover:bg-muted/50 ${reportImages.length >= 8 ? 'opacity-50 pointer-events-none' : ''}`}
-            >
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="sr-only"
-                onChange={handleImageUpload}
+
+            {/* Action buttons row */}
+            <div className={`grid grid-cols-2 gap-3 ${reportImages.length >= 8 ? 'opacity-50 pointer-events-none' : ''}`}>
+              {/* Camera capture */}
+              <button
+                type="button"
+                onClick={handleOpenCamera}
                 disabled={uploadingImage || reportImages.length >= 8}
-              />
-              {uploadingImage ? (
-                <>
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Uploading...</span>
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="size-6 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {reportImages.length >= 8 ? 'Maximum 8 images reached' : 'Click to upload images'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">JPG, PNG, WEBP supported</span>
-                </>
-              )}
-            </label>
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800 py-5 transition-colors hover:bg-blue-100/60 dark:hover:bg-blue-950/40 disabled:opacity-50"
+              >
+                <Camera className="size-7 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Take Photo</span>
+                <span className="text-[11px] text-blue-500 dark:text-blue-500">Use camera</span>
+              </button>
+
+              {/* File upload */}
+              <label
+                className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 py-5 cursor-pointer transition-colors hover:bg-muted/50 ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="sr-only"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage || reportImages.length >= 8}
+                />
+                {uploadingImage ? (
+                  <>
+                    <Loader2 className="size-7 animate-spin text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="size-7 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">Upload Files</span>
+                    <span className="text-[11px] text-muted-foreground">JPG, PNG, WEBP</span>
+                  </>
+                )}
+              </label>
+            </div>
 
             {/* Image preview grid */}
             {reportImages.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {reportImages.map((url, index) => (
                   <div key={index} className="relative group rounded-lg overflow-hidden border border-border aspect-square bg-muted">
-                    <img
-                      src={url}
-                      alt={`Site image ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <img src={url} alt={`Site image ${index + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(index)}
-                        className="rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700"
+                        className="rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700 transition-colors"
                         aria-label="Remove image"
                       >
                         <X className="size-3.5" />
@@ -834,6 +952,105 @@ export function DailyWorkReportForm({ edit = false }: Props) {
             )}
           </CardContent>
         </Card>
+
+        {/* ── Camera Dialog ────────────────────────────────────────────────── */}
+        <Dialog open={cameraOpen} onOpenChange={(open) => { if (!open) handleCloseCamera() }}>
+          <DialogContent className="max-w-lg p-0 overflow-hidden rounded-2xl gap-0">
+
+            {/* Hidden canvas for capturing frames */}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {cameraError ? (
+              /* ── Error state ── */
+              <div className="flex flex-col items-center justify-center gap-4 p-8 text-center min-h-[320px]">
+                <Camera className="size-12 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground max-w-xs">{cameraError}</p>
+                <Button variant="outline" onClick={handleCloseCamera}>Close</Button>
+              </div>
+
+            ) : capturedPhoto ? (
+              /* ── Preview captured photo ── */
+              <div className="flex flex-col">
+                <div className="relative bg-black">
+                  <img src={capturedPhoto} alt="Captured" className="w-full max-h-[65dvh] object-contain" />
+                </div>
+                <div className="flex gap-3 p-4 bg-background">
+                  <Button
+                    variant="outline"
+                    className="flex-1 gap-2"
+                    onClick={handleRetake}
+                    disabled={savingPhoto}
+                  >
+                    <RefreshCw className="size-4" />
+                    Retake
+                  </Button>
+                  <Button
+                    className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={handleUsePhoto}
+                    disabled={savingPhoto}
+                  >
+                    {savingPhoto
+                      ? <Loader2 className="size-4 animate-spin" />
+                      : <ZoomIn className="size-4" />}
+                    {savingPhoto ? 'Saving...' : 'Use Photo'}
+                  </Button>
+                </div>
+              </div>
+
+            ) : (
+              /* ── Live camera preview ── */
+              <div className="flex flex-col">
+                {/* Video preview */}
+                <div className="relative bg-black flex items-center justify-center min-h-[55dvh]">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full max-h-[65dvh] object-cover"
+                  />
+                  {/* Close button overlay */}
+                  <button
+                    type="button"
+                    onClick={handleCloseCamera}
+                    className="absolute top-3 right-3 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 transition-colors"
+                    aria-label="Close camera"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+
+                {/* Controls bar */}
+                <div className="flex items-center justify-between gap-4 px-6 py-4 bg-background">
+                  {/* Flip camera */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-11 rounded-full"
+                    onClick={handleFlipCamera}
+                    title="Flip camera"
+                  >
+                    <RefreshCw className="size-5" />
+                  </Button>
+
+                  {/* Capture button — large, prominent for field use */}
+                  <button
+                    type="button"
+                    onClick={handleCapture}
+                    className="size-16 rounded-full bg-white border-4 border-blue-500 shadow-lg hover:border-blue-600 active:scale-95 transition-all flex items-center justify-center"
+                    aria-label="Capture photo"
+                  >
+                    <div className="size-11 rounded-full bg-blue-500 hover:bg-blue-600 transition-colors" />
+                  </button>
+
+                  {/* Spacer to balance layout */}
+                  <div className="size-11" />
+                </div>
+              </div>
+            )}
+
+          </DialogContent>
+        </Dialog>
 
         {/* Actions */}
         <div className="flex gap-3 justify-end">
