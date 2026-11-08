@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare } from "lucide-react"
+import { ArrowLeft, Loader2, Plus, Save, Trash2, CheckSquare, ImagePlus, X } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -71,6 +71,10 @@ export function DailyWorkReportForm({ edit = false }: Props) {
 
   const [techSignDataURL,     setTechSignDataURL]     = useState<string | null>(null)
   const [customerSignDataURL, setCustomerSignDataURL] = useState<string | null>(null)
+
+  // ── Site images ───────────────────────────────────────────────────────
+  const [reportImages, setReportImages] = useState<string[]>([])
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   // ⭐ Only columns that ACTUALLY exist in daily_work_reports
   const [form, setForm] = useState({
@@ -152,6 +156,10 @@ export function DailyWorkReportForm({ edit = false }: Props) {
           customer_sign_datetime: toDatetimeLocal(r.customer_sign_datetime),
         })
         setItems(r.work_items?.length ? r.work_items : [emptyItem(1)])
+        // Load existing images
+        if (Array.isArray((r as any).report_images)) {
+          setReportImages((r as any).report_images as string[])
+        }
         setLoading(false)
       })
   }, [edit, params.id, orgId, router])
@@ -238,6 +246,43 @@ export function DailyWorkReportForm({ edit = false }: Props) {
     }
   }
 
+  // ── Image upload ──────────────────────────────────────────────────────
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length || !orgId) return
+    if (reportImages.length + files.length > 8) {
+      toast.error("Maximum 8 images allowed")
+      e.target.value = ""
+      return
+    }
+    setUploadingImage(true)
+    const uploaded: string[] = []
+    try {
+      for (const file of files) {
+        const ext  = file.name.split(".").pop() ?? "jpg"
+        const path = `${orgId}/report-images/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const { error } = await supabase.storage
+          .from("work-report-signatures")
+          .upload(path, file, { contentType: file.type, upsert: false })
+        if (error) throw error
+        const { data } = supabase.storage.from("work-report-signatures").getPublicUrl(path)
+        uploaded.push(data.publicUrl)
+      }
+      setReportImages((prev) => [...prev, ...uploaded])
+      toast.success(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} uploaded`)
+    } catch (err: any) {
+      console.error("Image upload failed:", err)
+      toast.error("Image upload failed")
+    } finally {
+      setUploadingImage(false)
+      e.target.value = ""
+    }
+  }
+
+  const handleRemoveImage = (index: number) => {
+    setReportImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const handleSave = async () => {
     if (!user?.id || !orgId) return
 
@@ -304,6 +349,7 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         report_no:                reportNo,
         work_items:               items.map((item, i) => ({ ...item, sr_no: i + 1 })),
         checklist_responses:      checklistResponses.length > 0 ? checklistResponses : null,
+        report_images:            reportImages.length > 0 ? reportImages : null,
         org_id:                   orgId,
         user_id:                  user.id,
         status:                   edit ? report?.status || "Draft" : "Draft",
@@ -713,6 +759,79 @@ export function DailyWorkReportForm({ edit = false }: Props) {
                 onChange={(dataURL) => setCustomerSignDataURL(dataURL)}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Site Images */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ImagePlus className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Site Images</CardTitle>
+                <CardDescription className="text-xs">
+                  Add photos of the work done — they will appear on a separate page in the PDF
+                  <span className="ml-1 text-muted-foreground">(max 8 images)</span>
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Upload button */}
+            <label
+              className={`flex flex-col items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed border-border bg-muted/30 py-6 cursor-pointer transition-colors hover:bg-muted/50 ${reportImages.length >= 8 ? 'opacity-50 pointer-events-none' : ''}`}
+            >
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                onChange={handleImageUpload}
+                disabled={uploadingImage || reportImages.length >= 8}
+              />
+              {uploadingImage ? (
+                <>
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="size-6 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {reportImages.length >= 8 ? 'Maximum 8 images reached' : 'Click to upload images'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">JPG, PNG, WEBP supported</span>
+                </>
+              )}
+            </label>
+
+            {/* Image preview grid */}
+            {reportImages.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {reportImages.map((url, index) => (
+                  <div key={index} className="relative group rounded-lg overflow-hidden border border-border aspect-square bg-muted">
+                    <img
+                      src={url}
+                      alt={`Site image ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700"
+                        aria-label="Remove image"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                    <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white font-medium">
+                      {index + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
