@@ -15,6 +15,7 @@ import {
   Stamp,
   Upload,
   CheckSquare,
+  ImagePlus,
 } from "lucide-react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
@@ -308,10 +309,9 @@ export default function DailyWorkReportDetailPage() {
             day: "2-digit", month: "2-digit", year: "numeric",
           })
 
-      const renderReport = (doc: jsPDF): number => {
-        let y = margin
-
-        // ── HEADER ──
+      // ── Reusable header renderer — used on both page 1 and the image page ──
+      const renderPageHeader = (doc: jsPDF, startY: number): number => {
+        let y = startY
         if (headerStyle === "thumbnail" && bannerBase64) {
           doc.addImage(bannerBase64, bannerFormat, margin, y, pageW - margin * 2, bannerH)
           y += bannerH + 6
@@ -336,6 +336,14 @@ export default function DailyWorkReportDetailPage() {
           doc.line(margin, y, pageW - margin, y)
           y += 6
         }
+        return y
+      }
+
+      const renderReport = (doc: jsPDF): number => {
+        let y = margin
+
+        // ── HEADER ──
+        y = renderPageHeader(doc, y)
 
         // ── TITLE ──
         doc.setFontSize(15); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
@@ -541,6 +549,95 @@ export default function DailyWorkReportDetailPage() {
       const measuredH = renderReport(scratch)
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, Math.max(measuredH, 100)] })
       renderReport(doc)
+
+      // ── PAGE 2: Site Images ───────────────────────────────────────────
+      const rawImages: string[] = Array.isArray((report as any).report_images)
+        ? (report as any).report_images as string[]
+        : []
+
+      if (rawImages.length > 0) {
+        // Load all images as base64 in parallel
+        const imgEntries = await Promise.all(
+          rawImages.map(async (url, idx) => {
+            try {
+              const blob = await (await fetch(url)).blob()
+              const fmt: "JPEG" | "PNG" = blob.type.includes("png") ? "PNG" : "JPEG"
+              const b64 = await new Promise<string>((res) => {
+                const r = new FileReader(); r.onloadend = () => res(r.result as string); r.readAsDataURL(blob)
+              })
+              // Get natural dimensions to calculate aspect ratio
+              const dims = await new Promise<{ w: number; h: number }>((res, rej) => {
+                const img = new Image()
+                img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight })
+                img.onerror = rej
+                img.src = b64
+              })
+              return { b64, fmt, dims, idx }
+            } catch (e) {
+              console.warn(`[DWR PDF] image ${idx + 1}:`, e)
+              return null
+            }
+          })
+        )
+        const loaded = imgEntries.filter(Boolean) as { b64: string; fmt: "JPEG" | "PNG"; dims: { w: number; h: number }; idx: number }[]
+
+        if (loaded.length > 0) {
+          // Add a true A4 page
+          const a4H = 297
+          doc.addPage([pageW, a4H])
+
+          // Render same header on page 2
+          let imgY = renderPageHeader(doc, margin)
+
+          // Section title
+          imgY += 4
+          doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(tr, tg, tb)
+          doc.text("SITE IMAGES / PHOTOGRAPHS", pageW / 2, imgY, { align: "center" })
+          doc.setDrawColor(tr, tg, tb); doc.setLineWidth(0.3)
+          doc.line(margin, imgY + 3, pageW - margin, imgY + 3)
+          imgY += 10
+
+          // 2-column grid layout
+          const cols      = 2
+          const gap       = 5                              // mm between images
+          const colW      = (pageW - margin * 2 - gap * (cols - 1)) / cols  // ~85mm each
+          const maxImgH   = 65                             // mm — cap image height
+          const captionH  = 6                              // mm below each image
+          let col         = 0
+
+          for (const { b64, fmt, dims, idx } of loaded) {
+            // Calculate proportional height capped at maxImgH
+            const aspect  = dims.w / dims.h
+            const imgH    = Math.min(maxImgH, Math.round(colW / aspect))
+            const x       = margin + col * (colW + gap)
+
+            // Page overflow guard — if next row would go past A4 bottom, stop
+            if (imgY + imgH + captionH > a4H - margin) break
+
+            doc.addImage(b64, fmt, x, imgY, colW, imgH)
+            // Thin border around image
+            doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.2)
+            doc.rect(x, imgY, colW, imgH)
+
+            // Caption: "Image 1", "Image 2", …
+            doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(120, 120, 120)
+            doc.text(`Image ${idx + 1}`, x + colW / 2, imgY + imgH + 4, { align: "center" })
+
+            col++
+            if (col === cols) {
+              // Move to next row — use the tallest image in this row
+              col = 0
+              imgY += imgH + captionH + gap
+            }
+          }
+
+          // Footer on image page
+          const footerY = a4H - 6
+          doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(180, 180, 180)
+          doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
 
       const filename = `DWR-${safeStr(report.report_no)}.pdf`
       return { doc, filename }
@@ -958,6 +1055,32 @@ export default function DailyWorkReportDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* ── Site Images ──────────────────────────────────────────────── */}
+        {Array.isArray((report as any).report_images) && (report as any).report_images.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <ImagePlus className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">
+                Site Images
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  — printed on page 2 of the PDF
+                </span>
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {((report as any).report_images as string[]).map((url: string, i: number) => (
+                <div key={i} className="relative rounded-lg overflow-hidden border border-border aspect-square bg-muted">
+                  <img src={url} alt={`Site image ${i + 1}`} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white font-medium">
+                    {i + 1}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Subscription Limit Modal */}
