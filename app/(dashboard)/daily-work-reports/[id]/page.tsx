@@ -309,7 +309,7 @@ export default function DailyWorkReportDetailPage() {
             day: "2-digit", month: "2-digit", year: "numeric",
           })
 
-      // ── Reusable header renderer — used on both page 1 and the image page ──
+      // ── Reusable header renderer — used on page 1 only ──
       const renderPageHeader = (doc: jsPDF, startY: number): number => {
         let y = startY
         if (headerStyle === "thumbnail" && bannerBase64) {
@@ -586,8 +586,8 @@ export default function DailyWorkReportDetailPage() {
           const a4H = 297
           doc.addPage([pageW, a4H])
 
-          // Render same header on page 2
-          let imgY = renderPageHeader(doc, margin)
+          // No header on page 2 — start directly with the section title
+          let imgY = margin
 
           // Section title
           imgY += 4
