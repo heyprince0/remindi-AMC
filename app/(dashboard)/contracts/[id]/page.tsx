@@ -546,7 +546,7 @@ export default function ContractDetailPage() {
         head: [["CONTRACT & CUSTOMER DETAILS", ""]],
         body: [
           ["Contract Name", safeStr(contract.contract_name)],
-          ...(contract.icr_no ? [["ICR No.", safeStr(contract.icr_no)]] : []),
+          ["ICR No.", contract.icr_no ?? "—"],
           ["Customer", safeStr(contract.customerName)],
           ["Phone", safeStr(customer?.phone)],
           ["Location", safeStr(contract.location)],
@@ -1067,18 +1067,16 @@ export default function ContractDetailPage() {
                 </div>
               </div>
 
-              {/* ICR No. — shown only when set */}
-              {contract.icr_no && (
-                <div className="mt-3 flex items-start gap-2.5">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
-                    <FileText className="size-3.5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">ICR No.</p>
-                    <p className="font-medium text-foreground text-sm">{contract.icr_no}</p>
-                  </div>
+              {/* ICR No. — always visible */}
+              <div className="mt-3 flex items-start gap-2.5">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
+                  <FileText className="size-3.5 text-muted-foreground" />
                 </div>
-              )}
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">ICR No.</p>
+                  <p className="font-medium text-foreground text-sm">{contract.icr_no ?? '—'}</p>
+                </div>
+              </div>
             </div>
 
             {/* ⭐ Section: Assigned Technician — reflects reassignment */}
