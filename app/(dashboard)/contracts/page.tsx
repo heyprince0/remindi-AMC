@@ -84,6 +84,17 @@ interface ContractDisplay extends Contract {
   customerName: string
   customerPhone: string | null
   endDate: string | null
+  icr_no?: string | null
+}
+
+// ── Sort contracts by ICR number (ICR-0001 → ICR-0002 → ...) ─────────────────
+function sortByIcrNo(a: ContractDisplay, b: ContractDisplay): number {
+  const extract = (icr: string | null | undefined): number => {
+    if (!icr) return Infinity
+    const match = icr.match(/(\d+)$/)
+    return match ? parseInt(match[1], 10) : Infinity
+  }
+  return extract(a.icr_no) - extract(b.icr_no)
 }
 
 // ── Contract import: column alias map ─────────────────────────────────────────
@@ -427,7 +438,7 @@ export default function ContractsPage() {
       filtered = filtered.filter(c => c.location === filterLocation)
     }
 
-    setFilteredContracts(filtered)
+    setFilteredContracts([...filtered].sort(sortByIcrNo))
   }
 
   useEffect(() => {
@@ -535,8 +546,9 @@ export default function ContractsPage() {
         }
       })
 
-      setContracts(displayed)
-      setFilteredContracts(displayed)
+      const sorted = [...displayed].sort(sortByIcrNo)
+      setContracts(sorted)
+      setFilteredContracts(sorted)
     } catch (error) {
       console.error('Error loading contracts:', error)
       toast.error('Failed to load contracts')
@@ -1110,6 +1122,7 @@ export default function ContractsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[90px]">ICR No.</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Contract Name</TableHead>
                       <TableHead>Frequency</TableHead>
@@ -1131,6 +1144,9 @@ export default function ContractsPage() {
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => router.push(`/contracts/${contract.id}`)}
                         >
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {contract.icr_no ?? '—'}
+                          </TableCell>
                           <TableCell className="font-medium">{contract.customerName}</TableCell>
                           <TableCell>{contract.contract_name}</TableCell>
                           <TableCell>{frequencyMonths} months</TableCell>
@@ -1315,9 +1331,16 @@ export default function ContractsPage() {
                             <FileText className="size-4 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold leading-tight break-words text-foreground">
-                              {contract.customerName}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-sm font-semibold leading-tight break-words text-foreground">
+                                {contract.customerName}
+                              </p>
+                              {contract.icr_no && (
+                                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                                  {contract.icr_no}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground break-words mt-0.5">
                               {contract.contract_name}
                             </p>
