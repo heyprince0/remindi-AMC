@@ -88,6 +88,7 @@ interface ContractDisplay extends Contract {
 }
 
 // ── Sort contracts by ICR number (ICR-0001 → ICR-0002 → ...) ─────────────────
+// (Sorting logic kept untouched — only the column display is hidden)
 function sortByIcrNo(a: ContractDisplay, b: ContractDisplay): number {
   const extract = (icr: string | null | undefined): number => {
     if (!icr) return Infinity
@@ -1122,7 +1123,7 @@ export default function ContractsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[90px]">ICR No.</TableHead>
+                      {/* ❌ ICR No. column removed (logic still intact) */}
                       <TableHead>Customer</TableHead>
                       <TableHead>Contract Name</TableHead>
                       <TableHead>Frequency</TableHead>
@@ -1144,9 +1145,7 @@ export default function ContractsPage() {
                           className="cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => router.push(`/contracts/${contract.id}`)}
                         >
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {contract.icr_no ?? '—'}
-                          </TableCell>
+                          {/* ❌ ICR No. cell removed */}
                           <TableCell className="font-medium">{contract.customerName}</TableCell>
                           <TableCell>{contract.contract_name}</TableCell>
                           <TableCell>{frequencyMonths} months</TableCell>
@@ -1335,11 +1334,7 @@ export default function ContractsPage() {
                               <p className="text-sm font-semibold leading-tight break-words text-foreground">
                                 {contract.customerName}
                               </p>
-                              {contract.icr_no && (
-                                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                                  {contract.icr_no}
-                                </span>
-                              )}
+                              {/* ❌ ICR badge removed (logic still intact) */}
                             </div>
                             <p className="text-xs text-muted-foreground break-words mt-0.5">
                               {contract.contract_name}
