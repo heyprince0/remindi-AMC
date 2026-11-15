@@ -16,7 +16,7 @@ interface AddCustomerModalProps {
   onSuccess: () => void
   editingCustomer?: Customer | null
   userId: string
-  orgId: string   // <-- added
+  orgId: string
 }
 
 export function AddCustomerModal({
@@ -34,6 +34,9 @@ export function AddCustomerModal({
     name: '',
     phone: '',
     address: '',
+    district: '',
+    state: '',
+    pin_code: '',
     notes: ''
   })
 
@@ -43,6 +46,9 @@ export function AddCustomerModal({
         name: editingCustomer.name || '',
         phone: editingCustomer.phone || '',
         address: editingCustomer.address || '',
+        district: (editingCustomer as any).district || '',
+        state: (editingCustomer as any).state || '',
+        pin_code: (editingCustomer as any).pin_code || '',
         notes: editingCustomer.notes || ''
       })
     } else {
@@ -50,6 +56,9 @@ export function AddCustomerModal({
         name: '',
         phone: '',
         address: '',
+        district: '',
+        state: '',
+        pin_code: '',
         notes: ''
       })
     }
@@ -75,8 +84,11 @@ export function AddCustomerModal({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
+        district: formData.district.trim() || null,
+        state: formData.state.trim() || null,
+        pin_code: formData.pin_code.trim() || null,
         notes: formData.notes.trim() || null,
-        org_id: orgId   // <-- include org_id
+        org_id: orgId
       }
 
       if (editingCustomer) {
@@ -108,63 +120,111 @@ export function AddCustomerModal({
     }
   }
 
+  const field = (key: keyof typeof formData, value: string) =>
+    setFormData(prev => ({ ...prev, [key]: value }))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add New Customer'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Name <span className="text-red-500">*</span></Label>
             <Input
               id="name"
               placeholder="Customer name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => field('name', e.target.value)}
               className={errors.name ? 'border-red-500' : ''}
             />
             {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
           </div>
+
+          {/* Phone */}
           <div className="space-y-2">
             <Label htmlFor="phone">Phone <span className="text-red-500">*</span></Label>
             <Input
               id="phone"
               placeholder="Phone number"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => field('phone', e.target.value)}
               className={errors.phone ? 'border-red-500' : ''}
             />
             {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
           </div>
+
+          {/* Address */}
           <div className="space-y-2">
             <Label htmlFor="address">Address <span className="text-red-500">*</span></Label>
             <Textarea
               id="address"
-              placeholder="Customer address"
+              placeholder="Street / building address"
               value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              onChange={(e) => field('address', e.target.value)}
               className={errors.address ? 'border-red-500' : ''}
-              rows={3}
+              rows={2}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
           </div>
+
+          {/* District · State · Pin Code */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="district">District</Label>
+              <Input
+                id="district"
+                placeholder="e.g. Pune"
+                value={formData.district}
+                onChange={(e) => field('district', e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="state">State</Label>
+              <Input
+                id="state"
+                placeholder="e.g. Maharashtra"
+                value={formData.state}
+                onChange={(e) => field('state', e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pin_code">Pin Code</Label>
+              <Input
+                id="pin_code"
+                placeholder="411001"
+                value={formData.pin_code}
+                onChange={(e) => field('pin_code', e.target.value)}
+                maxLength={6}
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Label htmlFor="notes">
+              Notes <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
             <Textarea
               id="notes"
               placeholder="Any additional notes about this customer"
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
+              onChange={(e) => field('notes', e.target.value)}
+              rows={2}
             />
           </div>
-          <div className="flex gap-2 justify-end pt-4">
+
+          <div className="flex gap-2 justify-end pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : 'Save Customer'}
+              {loading
+                ? <Loader2 className="mr-2 size-4 animate-spin" />
+                : editingCustomer ? 'Update Customer' : 'Save Customer'}
             </Button>
           </div>
         </form>
