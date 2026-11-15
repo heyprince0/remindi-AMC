@@ -590,28 +590,10 @@ export function AddContractModal({
 
           {/* Location (Optional) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="location">Location (Optional)</Label>
-              <button
-                type="button"
-                onClick={() => toggleDictation('location')}
-                title={dictatingField === 'location' ? 'Stop recording' : 'Speak to fill this field'}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  dictatingField === 'location'
-                    ? 'bg-red-100 text-red-600 hover:bg-red-200 animate-pulse'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-                }`}
-              >
-                {dictatingField === 'location' ? (
-                  <><MicOff className="size-3.5" />Stop</>
-                ) : (
-                  <><Mic className="size-3.5" />🎙 Speak</>
-                )}
-              </button>
-            </div>
+            <Label htmlFor="location">Location (Optional)</Label>
             <Input
               id="location"
-              placeholder={dictatingField === 'location' ? '🎙 Listening...' : 'e.g., Andheri West'}
+              placeholder={dictatingField === 'location' ? 'Listening...' : 'e.g., Andheri West'}
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
               className={dictatingField === 'location' ? 'border-red-400 ring-1 ring-red-300' : ''}
@@ -886,28 +868,10 @@ export function AddContractModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <button
-                type="button"
-                onClick={() => toggleDictation('notes')}
-                title={dictatingField === 'notes' ? 'Stop recording' : 'Speak to fill this field'}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  dictatingField === 'notes'
-                    ? 'bg-red-100 text-red-600 hover:bg-red-200 animate-pulse'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-                }`}
-              >
-                {dictatingField === 'notes' ? (
-                  <><MicOff className="size-3.5" />Stop</>
-                ) : (
-                  <><Mic className="size-3.5" />🎙 Speak</>
-                )}
-              </button>
-            </div>
+            <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder={dictatingField === 'notes' ? '🎙 Listening...' : 'Add any additional notes, or tap 🎙 Speak to say them.'}
+              placeholder={dictatingField === 'notes' ? 'Listening...' : 'Add any additional notes.'}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
