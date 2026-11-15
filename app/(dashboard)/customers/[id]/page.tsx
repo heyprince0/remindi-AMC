@@ -767,6 +767,13 @@ export default function CustomerDetailPage() {
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Address</p>
                 <p className="font-medium text-foreground text-sm">{customer.address}</p>
+                {((customer as any).district || (customer as any).state || (customer as any).pin_code) && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {[(customer as any).district, (customer as any).state, (customer as any).pin_code]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
               </div>
             </div>
 
