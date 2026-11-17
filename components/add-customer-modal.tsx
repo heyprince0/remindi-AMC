@@ -34,9 +34,6 @@ export function AddCustomerModal({
     name: '',
     phone: '',
     address: '',
-    district: '',
-    state: '',
-    pin_code: '',
     notes: ''
   })
 
@@ -46,9 +43,6 @@ export function AddCustomerModal({
         name: editingCustomer.name || '',
         phone: editingCustomer.phone || '',
         address: editingCustomer.address || '',
-        district: (editingCustomer as any).district || '',
-        state: (editingCustomer as any).state || '',
-        pin_code: (editingCustomer as any).pin_code || '',
         notes: editingCustomer.notes || ''
       })
     } else {
@@ -56,9 +50,6 @@ export function AddCustomerModal({
         name: '',
         phone: '',
         address: '',
-        district: '',
-        state: '',
-        pin_code: '',
         notes: ''
       })
     }
@@ -84,9 +75,6 @@ export function AddCustomerModal({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
-        district: formData.district.trim() || null,
-        state: formData.state.trim() || null,
-        pin_code: formData.pin_code.trim() || null,
         notes: formData.notes.trim() || null,
         org_id: orgId
       }
@@ -168,39 +156,6 @@ export function AddCustomerModal({
               rows={2}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
-          </div>
-
-          {/* District · State · Pin Code */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="district">District</Label>
-              <Input
-                id="district"
-                placeholder="e.g. Pune"
-                value={formData.district}
-                onChange={(e) => field('district', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state">State</Label>
-              <Input
-                id="state"
-                placeholder="e.g. Maharashtra"
-                value={formData.state}
-                onChange={(e) => field('state', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pin_code">Pin Code</Label>
-              <Input
-                id="pin_code"
-                placeholder="411001"
-                value={formData.pin_code}
-                onChange={(e) => field('pin_code', e.target.value)}
-                maxLength={6}
-                inputMode="numeric"
-              />
-            </div>
           </div>
 
           {/* Notes */}
