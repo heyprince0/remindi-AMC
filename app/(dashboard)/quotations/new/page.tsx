@@ -30,9 +30,6 @@ interface CustomerRecord {
   name: string
   phone: string | null
   address: string | null
-  district: string | null
-  state: string | null
-  pin_code: string | null
 }
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -91,7 +88,7 @@ function CustomerAutocomplete({
     try {
       const { data, error } = await supabase
         .from("customers")
-        .select("id, name, phone, address, district, state, pin_code")
+        .select("id, name, phone, address")
         .eq("org_id", orgId)
         .ilike("name", `%${query.trim()}%`)
         .order("name", { ascending: true })
@@ -156,7 +153,7 @@ function CustomerAutocomplete({
             >
               <span className="font-medium text-foreground">{c.name}</span>
               <span className="text-xs text-muted-foreground mt-0.5 truncate">
-                {[c.address, c.district, c.state, c.pin_code].filter(Boolean).join(", ") || c.phone || "—"}
+                {c.address || c.phone || "—"}
               </span>
             </button>
           ))}
@@ -250,13 +247,57 @@ export default function NewQuotationPage() {
   }, [currentOrgId])
 
   // ── autofill handler ──────────────────────────────────────────────────────
-  const handleCustomerSelect = (customer: CustomerRecord) => {
+  // Fills address from the customers table, then looks up district / state /
+  // pin_code from the most recent quotation or invoice for that customer name.
+  const handleCustomerSelect = async (customer: CustomerRecord) => {
     setSelectedCustomerId(customer.id)
     setCustomerName(customer.name)
     setCustomerAddress(customer.address ?? "")
-    setCustomerDistrict(customer.district ?? "")
-    setCustomerState(customer.state ?? "")
-    setCustomerPinCode(customer.pin_code ?? "")
+    // Reset location fields while we fetch
+    setCustomerDistrict("")
+    setCustomerState("")
+    setCustomerPinCode("")
+
+    if (!currentOrgId) return
+
+    // 1. Check quotations first (most recent 5, pick first with any location data)
+    const { data: prevQuotes } = await supabase
+      .from("quotations")
+      .select("client_district, client_state, client_pin_code")
+      .eq("org_id", currentOrgId)
+      .eq("client_name", customer.name)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    const fromQuote = prevQuotes?.find(
+      (q) => q.client_district || q.client_state || q.client_pin_code
+    )
+
+    if (fromQuote) {
+      setCustomerDistrict(fromQuote.client_district ?? "")
+      setCustomerState(fromQuote.client_state ?? "")
+      setCustomerPinCode(fromQuote.client_pin_code ?? "")
+      return
+    }
+
+    // 2. Fall back to invoices if no quotation had location data
+    const { data: prevInvoices } = await supabase
+      .from("invoices")
+      .select("client_district, client_state, client_pin_code")
+      .eq("org_id", currentOrgId)
+      .eq("client_name", customer.name)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    const fromInvoice = prevInvoices?.find(
+      (i) => i.client_district || i.client_state || i.client_pin_code
+    )
+
+    if (fromInvoice) {
+      setCustomerDistrict(fromInvoice.client_district ?? "")
+      setCustomerState(fromInvoice.client_state ?? "")
+      setCustomerPinCode(fromInvoice.client_pin_code ?? "")
+    }
   }
 
   const handleCustomerClear = () => {
@@ -266,6 +307,7 @@ export default function NewQuotationPage() {
     setCustomerDistrict("")
     setCustomerState("")
     setCustomerPinCode("")
+    // Note: district/state/pin still cleared so user can re-pick a different customer
   }
 
   // ── totals ────────────────────────────────────────────────────────────────
