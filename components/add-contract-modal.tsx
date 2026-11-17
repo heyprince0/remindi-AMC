@@ -697,7 +697,7 @@ export function AddContractModal({
 
           {/* Start Date */}
           <div className="space-y-2">
-            <Label htmlFor="startDate">{contractMode === 'old' ? 'Last Service Date' : 'Start Date'} <span className="text-red-500">*</span></Label>
+            <Label htmlFor="startDate">{contractMode === 'old' ? 'Last Service Date' : 'Last Service Date'} <span className="text-red-500">*</span></Label>
             <Input
               id="startDate"
               type="date"
