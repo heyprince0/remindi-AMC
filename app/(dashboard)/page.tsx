@@ -66,14 +66,14 @@ function getStatusBadge(status: string) {
 export default function DashboardPage() {
   const { user, loading: authLoading, role, orgId, technicianId } = useAuth()
   const router = useRouter()
-  const [stats, setStats] = useState({ 
-    contracts: 0, 
-    todayServicing: 0, 
+  const [stats, setStats] = useState({
+    contracts: 0,
+    todayServicing: 0,
     monthServicing: 0,
-    expiringSoon: 0, 
+    expiringSoon: 0,
     expired: 0,
-    customers: 0, 
-    technicians: 0 
+    customers: 0,
+    technicians: 0,
   })
   const [upcomingServices, setUpcomingServices] = useState<UpcomingService[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,7 +86,7 @@ export default function DashboardPage() {
   const [plan, setPlan] = useState<any>(null)
   const [contractCount, setContractCount] = useState(0)
   const [showLimitModal, setShowLimitModal] = useState(false)
-  const [limitModalType, setLimitModalType] = useState<LimitModalType>('expired')
+  const [limitModalType, setLimitModalType] = useState<LimitModalType>("expired")
   const [limitModalCustom, setLimitModalCustom] = useState<{ title?: string; description?: string }>({})
   const [limitValue, setLimitValue] = useState(0)
 
@@ -103,10 +103,7 @@ export default function DashboardPage() {
   const loadCategories = async () => {
     if (!currentOrgId) return
     try {
-      const { data, error } = await supabase
-        .from("inventory_categories")
-        .select("*")
-        .eq("org_id", currentOrgId)
+      const { data, error } = await supabase.from("inventory_categories").select("*").eq("org_id", currentOrgId)
       if (error) throw error
       setCategories(data || [])
     } catch (error) {
@@ -117,6 +114,7 @@ export default function DashboardPage() {
   const [isRedirecting, setIsRedirecting] = useState(true)
   const [orgCheckDone, setOrgCheckDone] = useState(false)
 
+  // ── Load current org ─────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
       supabase
@@ -142,14 +140,15 @@ export default function DashboardPage() {
     }
   }, [user?.id])
 
+  // ── Load subscription + plan ─────────────────────────────────────
   useEffect(() => {
     const fetchSubscription = async () => {
       if (!currentOrgId) return
       try {
         const { data: subData, error } = await supabase
-          .from('subscriptions')
-          .select('*, plan:plan_id(*)')
-          .eq('org_id', currentOrgId)
+          .from("subscriptions")
+          .select("*, plan:plan_id(*)")
+          .eq("org_id", currentOrgId)
           .maybeSingle()
         if (error) throw error
         if (subData) {
@@ -157,14 +156,14 @@ export default function DashboardPage() {
           setPlan(subData.plan)
         } else {
           const { data: freePlan } = await supabase
-            .from('subscription_plans')
-            .select('*')
-            .eq('id', 'free')
+            .from("subscription_plans")
+            .select("*")
+            .eq("id", "free")
             .single()
           setPlan(freePlan)
         }
       } catch (error) {
-        console.error('Error fetching subscription:', error)
+        console.error("Error fetching subscription:", error)
       }
     }
     fetchSubscription()
@@ -174,13 +173,13 @@ export default function DashboardPage() {
     if (!currentOrgId) return
     try {
       const { count, error } = await supabase
-        .from('contracts')
-        .select('*', { count: 'exact', head: true })
-        .eq('org_id', currentOrgId)
+        .from("contracts")
+        .select("*", { count: "exact", head: true })
+        .eq("org_id", currentOrgId)
       if (error) throw error
       setContractCount(count || 0)
     } catch (error) {
-      console.error('Error fetching contract count:', error)
+      console.error("Error fetching contract count:", error)
     }
   }
 
@@ -202,7 +201,7 @@ export default function DashboardPage() {
       ).length
       const outOfStockCount = items.filter((item) => item.current_stock <= 0).length
       const totalInventoryValue = items.reduce((sum, item) => {
-        return sum + (item.current_stock * (item.purchase_price || 0))
+        return sum + item.current_stock * (item.purchase_price || 0)
       }, 0)
 
       const now = new Date()
@@ -248,18 +247,24 @@ export default function DashboardPage() {
       }
 
       const { data: contractsData, error: contractsError } = await supabase
-        .from('contracts').select('*').eq('org_id', currentOrgId)
+        .from("contracts")
+        .select("*")
+        .eq("org_id", currentOrgId)
       if (contractsError) throw contractsError
 
       const { data: customersData, error: customersError } = await supabase
-        .from('customers').select('*').eq('org_id', currentOrgId)
+        .from("customers")
+        .select("*")
+        .eq("org_id", currentOrgId)
       if (customersError) throw customersError
 
       const { data: techniciansData, error: techniciansError } = await supabase
-        .from('technicians').select('*').eq('org_id', currentOrgId)
+        .from("technicians")
+        .select("*")
+        .eq("org_id", currentOrgId)
       if (techniciansError) throw techniciansError
 
-      const activeContracts = (contractsData as Contract[]).filter(c => c.status === 'active').length
+      const activeContracts = (contractsData as Contract[]).filter((c) => c.status === "active").length
       let todayServicing = 0
       let monthServicing = 0
       let expiringSoon = 0
@@ -268,7 +273,7 @@ export default function DashboardPage() {
       const now = new Date()
 
       for (const contract of (contractsData as Contract[]) || []) {
-        const customer = (customersData as Customer[])?.find(c => c.id === contract.customer_id)
+        const customer = (customersData as Customer[])?.find((c) => c.id === contract.customer_id)
         const days = getDaysUntilService(contract.next_service_date)
 
         if (contract.next_service_date) {
@@ -280,13 +285,37 @@ export default function DashboardPage() {
 
         if (days < 0) {
           expired++
-          services.push({ id: contract.id, customer: customer?.name || 'Unknown', service: contract.contract_name, date: 'Expired', time: '', technician: null, status: 'expired' })
+          services.push({
+            id: contract.id,
+            customer: customer?.name || "Unknown",
+            service: contract.contract_name,
+            date: "Expired",
+            time: "",
+            technician: null,
+            status: "expired",
+          })
         } else if (days === 0) {
           todayServicing++
-          services.push({ id: contract.id, customer: customer?.name || 'Unknown', service: contract.contract_name, date: 'Today', time: '', technician: null, status: 'today-servicing' })
+          services.push({
+            id: contract.id,
+            customer: customer?.name || "Unknown",
+            service: contract.contract_name,
+            date: "Today",
+            time: "",
+            technician: null,
+            status: "today-servicing",
+          })
         } else if (days <= 3) {
           expiringSoon++
-          services.push({ id: contract.id, customer: customer?.name || 'Unknown', service: contract.contract_name, date: new Date(contract.next_service_date).toLocaleDateString(), time: '', technician: null, status: 'expiring-soon' })
+          services.push({
+            id: contract.id,
+            customer: customer?.name || "Unknown",
+            service: contract.contract_name,
+            date: new Date(contract.next_service_date).toLocaleDateString(),
+            time: "",
+            technician: null,
+            status: "expiring-soon",
+          })
         }
       }
 
@@ -306,7 +335,7 @@ export default function DashboardPage() {
       await loadCategories()
       setDataReady(true)
     } catch (error) {
-      console.error('Error loading dashboard data:', error)
+      console.error("Error loading dashboard data:", error)
     } finally {
       setLoading(false)
     }
@@ -321,33 +350,40 @@ export default function DashboardPage() {
     }
   }, [user?.id, currentOrgId])
 
+  // ── FIX Bug 3: require `max_contracts > 0` before firing the modal,
+  //    so a brand-new org on a "free" plan with max_contracts=0 doesn't
+  //    immediately see "contracts-limit" on first login.
   const checkAndShowLimitModal = (showOnLoad = false) => {
     if (showOnLoad && autoShown) return
 
     let isExpired = false
     if (subscription) {
-      if (subscription.status === 'expired') {
+      if (subscription.status === "expired") {
         isExpired = true
       } else if (subscription.trial_end_date) {
         const trialEnd = new Date(subscription.trial_end_date)
         const today = new Date()
-        if (trialEnd < today && subscription.status !== 'active') {
+        if (trialEnd < today && subscription.status !== "active") {
           isExpired = true
         }
       }
     }
 
     if (isExpired) {
-      setLimitModalType('expired')
-      setLimitModalCustom({ title: `Your ${plan?.name || 'current'} plan has expired`, description: `Renew your ${plan?.name || 'current'} plan to keep using all features.` })
+      setLimitModalType("expired")
+      setLimitModalCustom({
+        title: `Your ${plan?.name || "current"} plan has expired`,
+        description: `Renew your ${plan?.name || "current"} plan to keep using all features.`,
+      })
       setShowLimitModal(true)
       if (showOnLoad) setAutoShown(true)
       return true
     }
 
-    const maxContracts = plan?.max_contracts ?? 99999
-    if (contractCount >= maxContracts) {
-      setLimitModalType('contracts-limit')
+    const maxContracts: number | null | undefined = plan?.max_contracts
+    // FIX: only enforce when the plan actually declares a positive limit
+    if (maxContracts != null && maxContracts > 0 && contractCount >= maxContracts) {
+      setLimitModalType("contracts-limit")
       setLimitModalCustom({})
       setLimitValue(maxContracts)
       setShowLimitModal(true)
@@ -358,28 +394,43 @@ export default function DashboardPage() {
     return false
   }
 
+  // FIX Bug 3 (cont.): don't auto-show until subscription & plan have resolved,
+  // otherwise a null/free-plan race can flag a fresh org as "at limit".
   useEffect(() => {
-    if (dataReady && !autoShown) {
-      checkAndShowLimitModal(true)
-    }
+    if (!dataReady || autoShown) return
+    if (subscription === null && plan === null) return // still loading subscription/plan
+    checkAndShowLimitModal(true)
   }, [dataReady, autoShown, subscription, plan, contractCount])
 
+  // ── Realtime subscriptions ───────────────────────────────────────
   useEffect(() => {
     if (!user?.id || !currentOrgId) return
 
     const contractsSubscription = supabase
-      .channel('contracts_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
+      .channel("contracts_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "contracts", filter: `org_id=eq.${currentOrgId}` },
+        () => loadData()
+      )
       .subscribe()
 
     const customersSubscription = supabase
-      .channel('customers_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
+      .channel("customers_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customers", filter: `org_id=eq.${currentOrgId}` },
+        () => loadData()
+      )
       .subscribe()
 
     const techniciansSubscription = supabase
-      .channel('technicians_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'technicians', filter: `org_id=eq.${currentOrgId}` }, () => loadData())
+      .channel("technicians_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "technicians", filter: `org_id=eq.${currentOrgId}` },
+        () => loadData()
+      )
       .subscribe()
 
     return () => {
@@ -390,13 +441,16 @@ export default function DashboardPage() {
   }, [user?.id, currentOrgId])
 
   const handleEnableNotifications = async () => {
-    if (!user?.id) { toast.error('User not found'); return }
+    if (!user?.id) {
+      toast.error("User not found")
+      return
+    }
     setNotificationLoading(true)
     const result = await subscribeToNotifications(user.id)
     if (result.success) {
-      toast.success('Notifications enabled successfully!')
+      toast.success("Notifications enabled successfully!")
     } else {
-      toast.error(result.error || 'Failed to enable notifications')
+      toast.error(result.error || "Failed to enable notifications")
     }
     setNotificationLoading(false)
   }
@@ -412,29 +466,72 @@ export default function DashboardPage() {
     setShowPlanModal(true)
   }
 
-  const handleSelectPlan = (plan: any, billingCycle: any) => {
-    alert(`Selected plan: ${plan.name} (${billingCycle})`)
-    setShowPlanModal(false)
+  // FIX Bug 2: actually do something when a plan is selected.
+  // Adjust the endpoint / payload to match your checkout API.
+  const handleSelectPlan = async (selectedPlan: any, billingCycle: any) => {
+    if (!currentOrgId) {
+      toast.error("No organization found")
+      setShowPlanModal(false)
+      return
+    }
+    try {
+      const res = await fetch("/api/subscriptions/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orgId: currentOrgId,
+          planId: selectedPlan.id,
+          billingCycle,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url // redirect to Stripe / Razorpay checkout
+        return
+      }
+      window.location.reload()
+    } catch (error) {
+      console.error("Checkout failed:", error)
+      toast.error("Could not start checkout. Please try again.")
+    } finally {
+      setShowPlanModal(false)
+    }
   }
 
-  const handleModalSuccess = () => { loadData() }
+  const handleModalSuccess = () => {
+    loadData()
+  }
 
+  // ── FIX Bug 1: role redirect. A new user with role===null was stuck
+  //    in the skeleton forever because the old code returned early on
+  //    `!role` and never set `isRedirecting(false)`. Now we only bail
+  //    for authLoading, redirect technicians, and let everyone else through.
   useEffect(() => {
-    if (authLoading || !user || !role) return
-    if (role === 'technician') {
-      if (technicianId) {
-        router.push(`/technicians/${technicianId}`)
-      } else {
-        router.push('/technicians')
-      }
-    } else {
-      setIsRedirecting(false)
+    if (authLoading) return
+    if (!user) return // the anonymous-redirect effect below handles this
+
+    if (role === "technician") {
+      router.push(technicianId ? `/technicians/${technicianId}` : "/technicians")
+      return
     }
+
+    // Any non-technician role (including `null` for brand-new users) → render dashboard
+    setIsRedirecting(false)
   }, [authLoading, user, role, technicianId, router])
 
+  // FIX Bug 1 (cont.): safety net — if for any reason `isRedirecting`
+  // is still true after 5s, force-render so users never see an endless skeleton.
+  useEffect(() => {
+    if (!isRedirecting) return
+    const t = setTimeout(() => setIsRedirecting(false), 5000)
+    return () => clearTimeout(t)
+  }, [isRedirecting])
+
+  // ── Anonymous redirect ──────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && !user) {
-      window.location.href = '/landing.html'
+      window.location.href = "/landing.html"
     }
   }, [user, authLoading])
 
@@ -496,7 +593,9 @@ export default function DashboardPage() {
         <div className="flex flex-col items-center justify-center py-12">
           <div className="max-w-md text-center">
             <p className="text-muted-foreground">You are not part of any organization yet.</p>
-            <p className="text-sm text-muted-foreground mt-2">Please complete your profile setup or contact your administrator.</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Please complete your profile setup or contact your administrator.
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -506,8 +605,7 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6 pb-20 md:pb-0">
-
-        {/* ── MOBILE header: compact with icon-only buttons ── */}
+        {/* ── MOBILE header ── */}
         <div className="flex items-center justify-between md:hidden">
           <div>
             <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
@@ -517,7 +615,12 @@ export default function DashboardPage() {
             <Button size="icon" variant="outline" onClick={() => setScanDialogOpen(true)} title="Scan Barcode">
               <ScanBarcode className="size-4" />
             </Button>
-            <Button size="icon" variant="outline" onClick={() => router.push('/stocks?tab=movements')} title="Stock Movements">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => router.push("/stocks?tab=movements")}
+              title="Stock Movements"
+            >
               <ArrowLeftRight className="size-4" />
             </Button>
             <Button size="icon" onClick={handleAddClick} title="Add Contract">
@@ -526,7 +629,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── DESKTOP header: full layout ── */}
+        {/* ── DESKTOP header ── */}
         <div className="hidden md:flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
@@ -537,7 +640,7 @@ export default function DashboardPage() {
               <ScanBarcode className="mr-2 size-4" />
               Scan Barcode
             </Button>
-            <Button size="sm" variant="outline" onClick={() => router.push('/stocks?tab=movements')}>
+            <Button size="sm" variant="outline" onClick={() => router.push("/stocks?tab=movements")}>
               <ArrowLeftRight className="mr-2 size-4" />
               Stock Movements
             </Button>
@@ -550,29 +653,31 @@ export default function DashboardPage() {
 
         {/* ── MOBILE: 2-row stat grid ── */}
         <div className="md:hidden flex flex-col gap-2">
-
-          {/* Row 1 — urgent alerts */}
           <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={() => router.push('/alerts')}
+              onClick={() => router.push("/alerts")}
               className="flex flex-col gap-1.5 rounded-xl border border-alert-due-today/30 bg-alert-due-today/5 p-3 text-left active:scale-95 transition-all"
             >
               <CalendarCheck className="size-4 text-alert-due-today" />
-              <p className="text-[22px] font-bold leading-none text-alert-due-today">{loading ? "—" : stats.todayServicing}</p>
+              <p className="text-[22px] font-bold leading-none text-alert-due-today">
+                {loading ? "—" : stats.todayServicing}
+              </p>
               <p className="text-[10px] text-muted-foreground leading-tight">Due Today</p>
             </button>
 
             <button
-              onClick={() => router.push('/alerts')}
+              onClick={() => router.push("/alerts")}
               className="flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/30 dark:bg-amber-900/10 p-3 text-left active:scale-95 transition-all"
             >
               <CalendarClock className="size-4 text-amber-500" />
-              <p className="text-[22px] font-bold leading-none text-amber-600">{loading ? "—" : stats.expiringSoon}</p>
+              <p className="text-[22px] font-bold leading-none text-amber-600">
+                {loading ? "—" : stats.expiringSoon}
+              </p>
               <p className="text-[10px] text-muted-foreground leading-tight">Upcoming</p>
             </button>
 
             <button
-              onClick={() => router.push('/contracts')}
+              onClick={() => router.push("/contracts")}
               className="flex flex-col gap-1.5 rounded-xl border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 text-left active:scale-95 transition-all"
             >
               <Clock className="size-4 text-red-500" />
@@ -581,10 +686,9 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Row 2 — general info */}
           <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={() => router.push('/contracts')}
+              onClick={() => router.push("/contracts")}
               className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
               <FileText className="size-4 text-muted-foreground" />
@@ -593,7 +697,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push('/customers')}
+              onClick={() => router.push("/customers")}
               className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
               <Users className="size-4 text-muted-foreground" />
@@ -602,7 +706,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push('/contracts')}
+              onClick={() => router.push("/contracts")}
               className="flex flex-col gap-1.5 rounded-xl border bg-card p-3 text-left active:scale-95 transition-all"
             >
               <CalendarClock className="size-4 text-blue-500" />
@@ -610,22 +714,32 @@ export default function DashboardPage() {
               <p className="text-[10px] text-muted-foreground leading-tight">This Month</p>
             </button>
           </div>
-
         </div>
 
         {/* ── DESKTOP: 6 StatCards grid ── */}
         <div className="hidden md:grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard title="Active Contracts" value={stats.contracts} icon={FileText} description="Total" />
-          <StatCard title="This Month Servicing" value={stats.monthServicing} icon={CalendarClock} description="This month" iconClassName="bg-alert-due-today/10" />
+          <StatCard
+            title="This Month Servicing"
+            value={stats.monthServicing}
+            icon={CalendarClock}
+            description="This month"
+            iconClassName="bg-alert-due-today/10"
+          />
           <StatCard title="Upcoming" value={stats.expiringSoon} icon={CalendarCheck} description="In next 3 days" />
-          <StatCard title="Overdue" value={stats.expired} icon={Clock} description="Overdue contracts" iconClassName="bg-alert-overdue/10" />
+          <StatCard
+            title="Overdue"
+            value={stats.expired}
+            icon={Clock}
+            description="Overdue contracts"
+            iconClassName="bg-alert-overdue/10"
+          />
           <StatCard title="Total Customers" value={stats.customers} icon={Users} description="All customers" />
           <StatCard title="Technicians" value={stats.technicians} icon={Wrench} description="Available" />
         </div>
 
-        {/* ── Two-column section: Upcoming Services + Inventory Overview ── */}
+        {/* ── Two-column section ── */}
         <div className="grid gap-4 lg:grid-cols-2">
-
           {/* ── Upcoming Services ── */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 pt-4">
@@ -637,7 +751,7 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="sm"
                 className="text-primary h-8 px-2 gap-1 text-xs shrink-0"
-                onClick={() => router.push('/alerts')}
+                onClick={() => router.push("/alerts")}
               >
                 View All <ArrowRight className="size-3" />
               </Button>
@@ -645,10 +759,7 @@ export default function DashboardPage() {
             <CardContent className="px-4 pb-4">
               <div className="flex flex-col gap-2.5">
                 {loading ? (
-                  /* Loading skeleton */
-                  [1, 2, 3].map((i) => (
-                    <div key={i} className="h-[68px] rounded-lg bg-muted animate-pulse" />
-                  ))
+                  [1, 2, 3].map((i) => <div key={i} className="h-[68px] rounded-lg bg-muted animate-pulse" />)
                 ) : upcomingServices.length > 0 ? (
                   upcomingServices.map((service) => (
                     <button
@@ -688,7 +799,7 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="sm"
                 className="text-primary h-8 px-2 gap-1 text-xs shrink-0"
-                onClick={() => router.push('/stocks')}
+                onClick={() => router.push("/stocks")}
               >
                 View All <ArrowRight className="size-3" />
               </Button>
@@ -702,11 +813,9 @@ export default function DashboardPage() {
                 </div>
               ) : inventoryMetrics ? (
                 <div className="grid grid-cols-2 gap-3">
-
-                  {/* Total Items */}
                   <div
                     className="flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
-                    onClick={() => router.push('/stocks')}
+                    onClick={() => router.push("/stocks")}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <Package className="size-4" />
@@ -717,52 +826,54 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* Low Stock */}
                   <div
                     className="flex items-center gap-2.5 rounded-lg border border-yellow-200 bg-yellow-50/50 dark:border-yellow-900/30 dark:bg-yellow-900/10 p-3 cursor-pointer active:scale-95 transition-all"
-                    onClick={() => router.push('/stocks')}
+                    onClick={() => router.push("/stocks")}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-yellow-500/10 text-yellow-600">
                       <AlertTriangle className="size-4" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground leading-tight">Low Stock</p>
-                      <p className="text-lg font-bold leading-tight text-yellow-600">{inventoryMetrics.lowStockCount}</p>
+                      <p className="text-lg font-bold leading-tight text-yellow-600">
+                        {inventoryMetrics.lowStockCount}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Out of Stock */}
                   <div
                     className="flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10 p-3 cursor-pointer active:scale-95 transition-all"
-                    onClick={() => router.push('/stocks')}
+                    onClick={() => router.push("/stocks")}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600">
                       <AlertTriangle className="size-4" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground leading-tight">Out of Stock</p>
-                      <p className="text-lg font-bold leading-tight text-red-600">{inventoryMetrics.outOfStockCount}</p>
+                      <p className="text-lg font-bold leading-tight text-red-600">
+                        {inventoryMetrics.outOfStockCount}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Total Value */}
                   <div
                     className="flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
-                    onClick={() => router.push('/stocks')}
+                    onClick={() => router.push("/stocks")}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-green-500/10 text-green-600">
                       <DollarSign className="size-4" />
                     </div>
                     <div className="min-w-0 overflow-hidden">
                       <p className="text-[10px] text-muted-foreground leading-tight">Total Value</p>
-                      <p className="text-lg font-bold leading-tight truncate">₹{inventoryMetrics.totalInventoryValue.toLocaleString('en-IN')}</p>
+                      <p className="text-lg font-bold leading-tight truncate">
+                        ₹{inventoryMetrics.totalInventoryValue.toLocaleString("en-IN")}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Parts Used — full width */}
                   <div
                     className="col-span-2 flex items-center gap-2.5 rounded-lg border bg-secondary/20 p-3 cursor-pointer active:scale-95 transition-all"
-                    onClick={() => router.push('/stocks')}
+                    onClick={() => router.push("/stocks")}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
                       <TrendingUp className="size-4" />
@@ -772,7 +883,6 @@ export default function DashboardPage() {
                       <p className="text-lg font-bold leading-tight">{inventoryMetrics.partsUsedThisMonth}</p>
                     </div>
                   </div>
-
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
