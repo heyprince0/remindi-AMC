@@ -373,6 +373,7 @@ export default function ViewInvoicePage() {
       const renderInvoice = (doc: jsPDF): number => {
         let y = margin
 
+        // ── LEFT COLUMN: Company / logo header ────────────────────────────
         if (headerStyle === "thumbnail" && bannerBase64) {
           const bannerW = pageW - (margin * 2)
           doc.addImage(bannerBase64, bannerFormat, margin, y, bannerW, bannerH)
@@ -380,18 +381,17 @@ export default function ViewInvoicePage() {
         } else if (headerStyle === "single_logo") {
           y = renderSingleLogoHeader(doc, profile, y, logoBase64, pageW, margin, [tr, tg, tb])
         } else {
-          let logoX = margin
+          // Default style: track actual rendered content height
           let logoAdded = false
           if (logoBase64) {
-            doc.addImage(logoBase64, logoFormat, logoX, y, 22, 22)
+            doc.addImage(logoBase64, logoFormat, margin, y, 22, 22)
             logoAdded = true
           }
-          const infoX = logoAdded ? logoX + 24 : logoX
+          const infoX = logoAdded ? margin + 24 : margin
           doc.setFontSize(14)
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
           doc.text(safeStr(profile?.company_name), infoX, y + 2)
-
           doc.setFontSize(9)
           doc.setFont("helvetica", "normal")
           doc.setTextColor(120, 120, 120)
@@ -404,49 +404,70 @@ export default function ViewInvoicePage() {
           }
           if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
           if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
-          y += 31
-
-          doc.setDrawColor(tr, tg, tb)
-          doc.setLineWidth(0.5)
-          doc.line(margin, y, pageW - margin, y)
-          y += 6
+          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY); infoY += 4 }
+          // FIX: use actual content height — was hardcoded y += 31 which broke with varying info
+          y = infoY + 2
         }
+
+        // ── RIGHT COLUMN: Invoice metadata at FIXED positions from page top ──
+        // Always anchored to margin so position never shifts between invoices
+        let metaY = margin + 2
 
         doc.setFontSize(16)
         doc.setFont("helvetica", "bold")
         doc.setTextColor(tr, tg, tb)
-        doc.text('TAX INVOICE', pageW - margin, y, { align: 'right' })
+        doc.text('TAX INVOICE', pageW - margin, metaY, { align: 'right' })
+        metaY += 7
 
-        y += 6
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
         const formattedDate = invoice.invoice_date
           ? new Date(invoice.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
           : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        doc.text('DATE: ' + formattedDate, pageW - margin, y, { align: 'right' })
 
-        y += 5
+        doc.setFontSize(9)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(0, 0, 0)
+        doc.text('DATE: ' + formattedDate, pageW - margin, metaY, { align: 'right' })
+        metaY += 5
+
         if (invoice.due_date) {
           doc.setFontSize(9)
           doc.setTextColor(220, 38, 38)
-          doc.text('Due Date: ' + safeDate(invoice.due_date), pageW - margin, y, { align: 'right' })
-          y += 5
+          doc.text('Due Date: ' + safeDate(invoice.due_date), pageW - margin, metaY, { align: 'right' })
+          metaY += 5
         }
         if (invoice.order_no) {
           doc.setFontSize(9)
           doc.setFont("helvetica", "normal")
           doc.setTextColor(0, 0, 0)
-          doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, y, { align: 'right' })
-          y += 5
+          doc.text('Order No: ' + safeStr(invoice.order_no), pageW - margin, metaY, { align: 'right' })
+          metaY += 5
         }
         if (invoice.order_date) {
           const orderDateFormatted = new Date(invoice.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          doc.text('Order Date: ' + orderDateFormatted, pageW - margin, y, { align: 'right' })
+          doc.text('Order Date: ' + orderDateFormatted, pageW - margin, metaY, { align: 'right' })
+          metaY += 5
         }
         doc.setTextColor(0, 0, 0)
+
+        // ── Separator: always BELOW both left and right columns ───────────
+        // Math.max ensures we clear both the company header AND the meta block
+        y = Math.max(y, metaY) + 2
+        if (headerStyle !== "single_logo" && !(headerStyle === "thumbnail" && bannerBase64)) {
+          // Default style draws its separator here.
+          // single_logo: renderSingleLogoHeader already drew its separator above.
+          // thumbnail: banner image serves as the visual divider.
+          doc.setDrawColor(tr, tg, tb)
+          doc.setLineWidth(0.5)
+          doc.line(margin, y, pageW - margin, y)
+        }
+        y += 6
+
+        // ── Invoice number ─────────────────────────────────────────────────
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.setTextColor(0, 0, 0)
+        doc.text(safeStr(invoice.invoice_no ?? ("INV-" + invoice.id)), margin, y)
+        y += 10
 
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
