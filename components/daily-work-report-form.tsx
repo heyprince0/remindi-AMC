@@ -59,6 +59,7 @@ export function DailyWorkReportForm({ edit = false }: Props) {
   const [loading, setLoading] = useState(edit)
   const [saving, setSaving] = useState(false)
   const [report, setReport] = useState<DailyWorkReport | null>(null)
+  const [generatingWO, setGeneratingWO] = useState(false)
 
   // ⭐ Checklist state
   const [checklistTemplates, setChecklistTemplates] = useState<
@@ -134,6 +135,26 @@ export function DailyWorkReportForm({ edit = false }: Props) {
         })
     }
   }, [user?.id])
+
+  // ⭐ Auto-generate Work Order No on create
+  useEffect(() => {
+    if (edit || !orgId) return
+    setGeneratingWO(true)
+    supabase
+      .from("daily_work_reports")
+      .select("work_order_no")
+      .eq("org_id", orgId)
+      .is("deleted_at", null)
+      .then(({ data }) => {
+        const max = (data || []).reduce((n, row) => {
+          const match = (row.work_order_no || "").match(/(\d+)$/)
+          return Math.max(n, match ? Number(match[1]) : 0)
+        }, 0)
+        const next = `WO-${String(max + 1).padStart(3, "0")}`
+        setForm((prev) => ({ ...prev, work_order_no: next }))
+        setGeneratingWO(false)
+      })
+  }, [orgId, edit])
 
   useEffect(() => {
     if (!edit || !params.id || !orgId) return
@@ -555,14 +576,14 @@ export function DailyWorkReportForm({ edit = false }: Props) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="work-order-no">
-                  Work Order No{" "}
-                  <span className="text-xs text-muted-foreground">(Optional)</span>
+                  Work Order No
                 </Label>
                 <Input
                   id="work-order-no"
-                  value={form.work_order_no}
+                  value={generatingWO ? "" : form.work_order_no}
                   onChange={(e) => setField("work_order_no", e.target.value)}
-                  placeholder="e.g. WO-2026-001"
+                  placeholder={generatingWO ? "Generating..." : "e.g. WO-001"}
+                  disabled={generatingWO}
                 />
               </div>
               <div className="space-y-2">
