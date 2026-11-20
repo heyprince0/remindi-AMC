@@ -291,6 +291,7 @@ export default function ViewInvoicePage() {
 
     try {
       const pageW = 210
+      const pageH = 297          // A4 height in mm
       const margin = 15
       const themeColor = profile?.theme_color ?? "#185FA5"
       const [tr, tg, tb] = hexToRgb(themeColor)
@@ -404,9 +405,8 @@ export default function ViewInvoicePage() {
           }
           if (profile?.phone) { doc.text(`Phone: ${safeStr(profile.phone)}`, infoX, infoY); infoY += 4 }
           if (profile?.email) { doc.text(`Email: ${safeStr(profile.email)}`, infoX, infoY); infoY += 4 }
-          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY); infoY += 4 }
-          // FIX: use actual rendered content height so separator never overlaps company info
-          y = Math.max(infoY + 2, y + 31)
+          if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, infoX, infoY) }
+          y += 31
 
           doc.setDrawColor(tr, tg, tb)
           doc.setLineWidth(0.5)
@@ -538,6 +538,17 @@ export default function ViewInvoicePage() {
 
         y = (doc as any).lastAutoTable.finalY + 8
 
+        // Helper: if remaining space on page is less than `needed` mm, add a new page
+        const checkY = (currentY: number, needed: number = 12): number => {
+          if (currentY + needed > pageH - margin) {
+            doc.addPage()
+            return margin
+          }
+          return currentY
+        }
+
+        // ── Totals block ─────────────────────────────────────────────────
+        y = checkY(y, 30)
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
@@ -584,10 +595,12 @@ export default function ViewInvoicePage() {
         doc.setFontSize(9)
         doc.setTextColor(0, 0, 0)
         doc.text(('RUPEES ' + toWords(Math.round(grandTotal)) + ' ONLY').toUpperCase(), margin, y)
-        y += 20
+        y += 10
 
+        // ── Payment details ───────────────────────────────────────────────
         if (profile?.bank_name || profile?.account_no || profile?.ifsc_code || profile?.upi_id || invoice.payment_terms) {
-          y += 10
+          y = checkY(y, 30)
+          y += 6
           doc.setFontSize(9)
           doc.setFont("helvetica", "bold")
           doc.setTextColor(0, 0, 0)
@@ -602,7 +615,9 @@ export default function ViewInvoicePage() {
           if (invoice.payment_terms) { doc.text(`Payment Terms: ${safeStr(invoice.payment_terms)}`, margin, y); y += 4 }
         }
 
+        // ── Tax information ───────────────────────────────────────────────
         if (invoice.include_gst) {
+          y = checkY(y, 25)
           y += 6
           doc.setFontSize(9)
           doc.setFont("helvetica", "bold")
@@ -614,11 +629,13 @@ export default function ViewInvoicePage() {
           if (profile?.gstin) { doc.text(`GSTIN: ${safeStr(profile.gstin)}`, margin, y); y += 4 }
           if (profile?.pan_number) { doc.text(`PAN: ${safeStr(profile.pan_number)}`, margin, y); y += 4 }
           doc.text("GST @ 18% will be charged as per applicable rules.", margin, y)
-          y += 4
-          y += 6
+          y += 10
         }
 
+        // ── Terms & conditions ────────────────────────────────────────────
         if (invoice.notes) {
+          const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
+          y = checkY(y, Math.min(noteLines.length * 4 + 10, 40))
           y += 3
           doc.setFontSize(9)
           doc.setFont("helvetica", "bold")
@@ -627,11 +644,13 @@ export default function ViewInvoicePage() {
           y += 4
           doc.setFont("helvetica", "normal")
           doc.setTextColor(80, 80, 80)
-          const noteLines = doc.splitTextToSize(safeStr(invoice.notes), pageW - 2 * margin)
           doc.text(noteLines, margin, y)
           y += (noteLines.length * 4)
         }
 
+        // ── Signature / closing ───────────────────────────────────────────
+        const sigBlockH = shouldIncludeStamp && stampBase64 ? 60 : 30
+        y = checkY(y, sigBlockH)
         y += 10
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
@@ -640,8 +659,6 @@ export default function ViewInvoicePage() {
         doc.text('Yours faithfully,', 195, y + 6, { align: 'right' })
         doc.setFont('helvetica', 'bold')
         doc.text('For ' + safeStr(profile?.company_name), 195, y + 12, { align: 'right' })
-
-        let contentBottom = y + 12
 
         if (shouldIncludeStamp && stampBase64) {
           let stampY = y + 18
@@ -660,23 +677,21 @@ export default function ViewInvoicePage() {
           doc.setFontSize(8)
           doc.setTextColor(120, 120, 120)
           doc.text('Authorized Signatory', pageW - margin, stampY, { align: 'right' })
-
-          contentBottom = Math.max(contentBottom, stampY)
         }
 
-        const footerY = contentBottom + 12
+        // ── Footer: pinned to bottom of last page ─────────────────────────
+        const lastPageH = doc.internal.pageSize.getHeight()
         doc.setFontSize(8)
         doc.setTextColor(150, 150, 150)
         doc.setFont("helvetica", "normal")
-        doc.text("Generated by Remindi · remindi.online", pageW / 2, footerY, { align: "center" })
+        doc.text("Generated by Remindi · remindi.online", pageW / 2, lastPageH - 8, { align: "center" })
 
-        return footerY + 8
+        return 0
       }
 
-      const scratchDoc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, 2000] })
-      const measuredHeight = renderInvoice(scratchDoc)
-      const finalPageHeight = Math.max(measuredHeight, 100)
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [pageW, finalPageHeight] })
+      // Always A4 — autoTable handles page breaks for the table automatically;
+      // checkY handles page breaks for all text sections below the table.
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
       renderInvoice(doc)
 
       const filename = `Invoice-${safeStr(invoice.invoice_no ?? invoice.id)}-${safeStr(invoice.client_name ?? "Client")}.pdf`
