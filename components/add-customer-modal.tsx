@@ -34,6 +34,8 @@ export function AddCustomerModal({
     name: '',
     phone: '',
     address: '',
+    brand: '',
+    machine_name: '',
     notes: ''
   })
 
@@ -43,6 +45,8 @@ export function AddCustomerModal({
         name: editingCustomer.name || '',
         phone: editingCustomer.phone || '',
         address: editingCustomer.address || '',
+        brand: editingCustomer.brand || '',
+        machine_name: editingCustomer.machine_name || '',
         notes: editingCustomer.notes || ''
       })
     } else {
@@ -50,6 +54,8 @@ export function AddCustomerModal({
         name: '',
         phone: '',
         address: '',
+        brand: '',
+        machine_name: '',
         notes: ''
       })
     }
@@ -75,6 +81,8 @@ export function AddCustomerModal({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
+        brand: formData.brand.trim() || null,
+        machine_name: formData.machine_name.trim() || null,
         notes: formData.notes.trim() || null,
         org_id: orgId
       }
@@ -156,6 +164,32 @@ export function AddCustomerModal({
               rows={2}
             />
             {errors.address && <p className="text-xs text-red-500">{errors.address}</p>}
+          </div>
+
+          {/* Brand & Machine Name — side by side */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="brand">
+                Brand <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="brand"
+                placeholder="e.g. Otis, Kent"
+                value={formData.brand}
+                onChange={(e) => field('brand', e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="machine_name">
+                Machine Name <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="machine_name"
+                placeholder="e.g. MRL-01, Excella"
+                value={formData.machine_name}
+                onChange={(e) => field('machine_name', e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Notes */}
