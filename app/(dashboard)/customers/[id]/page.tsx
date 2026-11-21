@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Customer, type Contract, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2, Banknote } from "lucide-react"
+import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2, Banknote, Tag, Cpu } from "lucide-react"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -292,6 +292,8 @@ export default function CustomerDetailPage() {
           ["Name", safeStr(customer.name)],
           ["Phone", safeStr(customer.phone)],
           ["Address", safeStr(customer.address)],
+          ...((customer as any).brand ? [["Brand", safeStr((customer as any).brand)]] : []),
+          ...((customer as any).machine_name ? [["Machine Name", safeStr((customer as any).machine_name)]] : []),
           ["Notes", safeStr(customer.notes)],
         ],
         theme: "grid",
@@ -776,6 +778,33 @@ export default function CustomerDetailPage() {
                 )}
               </div>
             </div>
+
+            {((customer as any).brand || (customer as any).machine_name) && (
+              <div className="grid grid-cols-2 gap-3">
+                {(customer as any).brand && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
+                      <Tag className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Brand</p>
+                      <p className="font-medium text-foreground text-sm">{(customer as any).brand}</p>
+                    </div>
+                  </div>
+                )}
+                {(customer as any).machine_name && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted mt-0.5">
+                      <Cpu className="size-3.5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Machine Name</p>
+                      <p className="font-medium text-foreground text-sm">{(customer as any).machine_name}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {customer.notes && (
               <div className="flex items-start gap-3">
