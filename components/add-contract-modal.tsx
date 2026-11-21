@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { supabase, type Customer, type Contract, type Technician, calculateNextServiceDate } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { Loader2, X, Search, ChevronsUpDown, Mic, MicOff } from 'lucide-react'
+import { Loader2, X, Search, ChevronsUpDown } from 'lucide-react'
 
 interface AddContractModalProps {
   open: boolean
@@ -72,8 +72,6 @@ export function AddContractModal({
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const customerDropdownRef = useRef<HTMLDivElement>(null)
-  const [dictatingField, setDictatingField] = useState<keyof typeof formData | null>(null)
-  const recognitionRef = useRef<any>(null)
 
   const [formData, setFormData] = useState({
     contractName: '',
@@ -87,7 +85,6 @@ export function AddContractModal({
     startYear: '',
     endYear: '',
     location: '',
-    // ── NEW: payment tracking fields ──
     paymentFrequencyMonths: '',
     paymentInstallmentAmount: '',
   })
@@ -102,7 +99,6 @@ export function AddContractModal({
     }
   }, [open])
 
-  // Close the customer search dropdown when clicking outside it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
@@ -115,7 +111,6 @@ export function AddContractModal({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [customerDropdownOpen])
 
-  // Auto‑calculate next service date
   useEffect(() => {
     if (formData.startDate && formData.frequencyMonths) {
       const months = parseInt(formData.frequencyMonths)
@@ -131,7 +126,6 @@ export function AddContractModal({
     }
   }, [formData.startDate, formData.frequencyMonths])
 
-  // Auto‑calculate contract end date
   useEffect(() => {
     if (formData.startDate && formData.durationYears) {
       const years = parseInt(formData.durationYears)
@@ -148,7 +142,6 @@ export function AddContractModal({
     }
   }, [formData.startDate, formData.durationYears])
 
-  // Populate form when editing
   useEffect(() => {
     if (editingContract && open) {
       const ec = editingContract as any
@@ -258,64 +251,6 @@ export function AddContractModal({
     }
   }
 
-  const toggleDictation = (field: keyof typeof formData) => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      toast.error('Speech recognition is not supported in this browser. Try Chrome or Edge.')
-      return
-    }
-
-    // If already recording this field — stop it
-    if (dictatingField === field) {
-      recognitionRef.current?.stop()
-      setDictatingField(null)
-      return
-    }
-
-    // If recording a different field — stop that first
-    if (dictatingField !== null) {
-      recognitionRef.current?.stop()
-    }
-
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-IN'
-    // Use continuous only for notes (long text); single-shot for name/location
-    recognition.continuous = field === 'notes'
-    recognition.interimResults = false
-
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .map((result: any) => result[0].transcript)
-        .join(' ')
-      setFormData((prev) => {
-        const current = prev[field] as string
-        return {
-          ...prev,
-          [field]: field === 'notes'
-            ? (current ? current + ' ' + transcript : transcript)
-            : transcript, // overwrite for short fields
-        }
-      })
-    }
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error)
-      if (event.error !== 'aborted') {
-        toast.error('Microphone error: ' + event.error)
-      }
-      setDictatingField(null)
-    }
-
-    recognition.onend = () => {
-      setDictatingField(null)
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-    setDictatingField(field)
-  }
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
     if (!formData.contractName.trim()) newErrors.contractName = 'Contract Name is required'
@@ -362,7 +297,6 @@ export function AddContractModal({
       }
     }
 
-    // ── Payment fields — optional but if one is filled both must be valid ──
     if (formData.paymentFrequencyMonths) {
       const pf = parseInt(formData.paymentFrequencyMonths)
       if (isNaN(pf) || pf < 1 || pf > 12) {
@@ -389,7 +323,6 @@ export function AddContractModal({
       const months = parseInt(formData.frequencyMonths)
       const frequencyDays = months * 30
 
-      // ── Shared payment fields ──
       const paymentFields = {
         payment_frequency_months: formData.paymentFrequencyMonths ? parseInt(formData.paymentFrequencyMonths) : null,
         payment_installment_amount: formData.paymentInstallmentAmount ? parseFloat(formData.paymentInstallmentAmount) : null,
@@ -547,7 +480,6 @@ export function AddContractModal({
         <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
           <DialogHeader className="flex flex-row items-center justify-between">
             <DialogTitle>{editingContract ? 'Edit Contract' : 'Add New Contract'}</DialogTitle>
-            {/* Mode Toggle */}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -593,17 +525,10 @@ export function AddContractModal({
             <Label htmlFor="location">Location (Optional)</Label>
             <Input
               id="location"
-              placeholder={dictatingField === 'location' ? 'Listening...' : 'e.g., Andheri West'}
+              placeholder="e.g., Andheri West"
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className={dictatingField === 'location' ? 'border-red-400 ring-1 ring-red-300' : ''}
             />
-            {dictatingField === 'location' && (
-              <p className="text-xs text-red-500 flex items-center gap-1">
-                <span className="inline-block size-2 rounded-full bg-red-500 animate-pulse" />
-                Recording — speak now. Stops automatically when you pause.
-              </p>
-            )}
           </div>
 
           {/* Customer (searchable) */}
@@ -697,7 +622,7 @@ export function AddContractModal({
 
           {/* Start Date */}
           <div className="space-y-2">
-            <Label htmlFor="startDate">{contractMode === 'old' ? 'Last Service Date' : 'Last Service Date'} <span className="text-red-500">*</span></Label>
+            <Label htmlFor="startDate">Last Service Date <span className="text-red-500">*</span></Label>
             <Input
               id="startDate"
               type="date"
@@ -726,7 +651,6 @@ export function AddContractModal({
                 {errors.durationYears && <p className="text-xs text-red-500">{errors.durationYears}</p>}
               </div>
 
-              {/* End Date (auto) */}
               <div className="space-y-2">
                 <Label htmlFor="endDate">Contract End Date (Auto‑calculated)</Label>
                 <Input
@@ -804,7 +728,7 @@ export function AddContractModal({
             />
           </div>
 
-          {/* ── Payment Tracking ── */}
+          {/* Payment Tracking */}
           <div className="rounded-lg border border-dashed border-border p-4 space-y-4 bg-muted/30">
             <div>
               <p className="text-sm font-medium text-foreground">Payment Collection (Optional)</p>
@@ -871,18 +795,11 @@ export function AddContractModal({
             <Label htmlFor="notes">Notes (Optional)</Label>
             <Textarea
               id="notes"
-              placeholder={dictatingField === 'notes' ? 'Listening...' : 'Add any additional notes.'}
+              placeholder="Add any additional notes."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className={dictatingField === 'notes' ? 'border-red-400 ring-1 ring-red-300' : ''}
             />
-            {dictatingField === 'notes' && (
-              <p className="text-xs text-red-500 flex items-center gap-1">
-                <span className="inline-block size-2 rounded-full bg-red-500 animate-pulse" />
-                Recording — speak now. Click Stop when done.
-              </p>
-            )}
           </div>
 
           {/* Add Completed Services (Old mode only) */}
