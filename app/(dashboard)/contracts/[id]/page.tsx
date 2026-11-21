@@ -786,7 +786,7 @@ export default function ContractDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-5 pb-20 md:pb-6">
+      <div className="flex flex-col gap-5 pb-40 md:pb-6">
 
         {/* ── Page Header ── */}
         <div className="flex items-start justify-between gap-3">
@@ -927,15 +927,6 @@ export default function ContractDetailPage() {
             >
               <UserPlus className="size-3.5" />
               Assign
-            </Button>
-          )}
-          {!isTechnician && (
-            <Button
-              className="flex-1 gap-1.5 h-10 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setRenewModalOpen(true)}
-            >
-              <RefreshCw className="size-3.5" />
-              Renew
             </Button>
           )}
         </div>
@@ -1484,6 +1475,18 @@ export default function ContractDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── MOBILE FAB — Renew Contract ── */}
+        {!isTechnician && (
+          <button
+            className="fixed bottom-[80px] right-4 z-50 md:hidden flex items-center gap-2 bg-blue-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all rounded-full px-5 py-3 text-sm font-medium disabled:opacity-60"
+            onClick={() => setRenewModalOpen(true)}
+            aria-label="Renew Contract"
+          >
+            <RefreshCw className="size-4" />
+            Renew
+          </button>
+        )}
 
         {/* ── Renew Contract Modal ── */}
         <MarkCompleteModal
