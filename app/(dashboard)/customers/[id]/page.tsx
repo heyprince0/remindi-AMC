@@ -16,11 +16,12 @@ import {
 } from "@/components/ui/table"
 import { supabase, type Customer, type Contract, type ServiceHistory, type Technician, type CompanyProfile, getDaysUntilService } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
-import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2, Banknote, Tag, Cpu } from "lucide-react"
+import { ArrowLeft, Phone, MapPin, Mail, FileText, Wrench, Calendar, CalendarDays, CalendarRange, MessageSquare, PhoneCall, StickyNote, ArrowUpRight, CheckCircle2, Clock, AlertTriangle, Timer, RefreshCw, Download, Share2, Loader2, Banknote, Tag, Cpu, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { renderSingleLogoHeader } from "@/lib/pdf-header-utils"
+import { AddCustomerModal } from "@/components/add-customer-modal"
 
 interface ServiceRecord extends ServiceHistory {
   technicianName: string
@@ -99,6 +100,7 @@ export default function CustomerDetailPage() {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [sharingPdf, setSharingPdf] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
 
   // ── Payment state: keyed by contract_id ─────────────────────────────────────
   const [payments, setPayments] = useState<Record<string, ContractPayment[]>>({})
@@ -671,12 +673,10 @@ export default function CustomerDetailPage() {
               {sharingPdf ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}
               Share
             </Button>
-            <a href={`tel:${customer.phone}`}>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <PhoneCall className="size-4" />
-                Call
-              </Button>
-            </a>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditModalOpen(true)}>
+              <Pencil className="size-4" />
+              Edit
+            </Button>
             {whatsappUrl && (
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
                 <Button variant="outline" size="sm" className="gap-1.5 border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10">
@@ -690,12 +690,10 @@ export default function CustomerDetailPage() {
 
         {/* ── Mobile quick-action buttons ── */}
         <div className="flex gap-2 md:hidden">
-          <a href={`tel:${customer.phone}`} className="flex-1">
-            <Button variant="outline" className="w-full h-10 gap-1.5 text-xs">
-              <PhoneCall className="size-3.5" />
-              Call
-            </Button>
-          </a>
+          <Button variant="outline" className="flex-1 h-10 gap-1.5 text-xs" onClick={() => setEditModalOpen(true)}>
+            <Pencil className="size-3.5" />
+            Edit
+          </Button>
           {whatsappUrl && (
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
               <Button variant="outline" className="w-full h-10 gap-1.5 text-xs border-[#25D366] text-[#25D366] hover:bg-[#25D366]/10">
@@ -1292,6 +1290,20 @@ export default function CustomerDetailPage() {
         </div>
 
       </div>
+
+      {currentOrgId && (
+        <AddCustomerModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          editingCustomer={customer}
+          userId={user?.id ?? ''}
+          orgId={currentOrgId}
+          onSuccess={() => {
+            setEditModalOpen(false)
+            loadCustomerDetails()
+          }}
+        />
+      )}
     </DashboardLayout>
   )
 }
